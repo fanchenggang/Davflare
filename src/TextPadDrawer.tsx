@@ -42,14 +42,14 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
     <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
       <Box sx={{ width: 400, padding: 2, display: "flex", flexDirection: "column", height: "100%" }}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-          <Typography variant="h6">TextPad</Typography>
+          <Typography variant="h6">记事本</Typography>
           <IconButton onClick={() => setOpen(false)}>
             <CloseIcon />
           </IconButton>
         </Box>
 
         <TextField
-          label="File Name"
+          label="文件名"
           value={noteName}
           onChange={(e) => setNoteName(e.target.value)}
           fullWidth
@@ -57,7 +57,7 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
         />
 
         <TextField
-          label="Write your note..."
+          label="写下你的笔记…"
           multiline
           rows={15}
           variant="outlined"
@@ -72,7 +72,7 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
           onClick={handleSaveNote}
           disabled={!noteText.trim()}
         >
-          Save & Upload Note
+          保存并上传
         </Button>
       </Box>
     </Drawer>

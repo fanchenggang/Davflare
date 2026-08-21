@@ -9,11 +9,9 @@ export async function handleRequestDelete({
     const obj = await bucket.head(path);
     if (obj === null) return notFound();
     await bucket.delete(path);
-    if (obj.httpMetadata?.contentType !== "application/x-directory")
-      return new Response(null, { status: 204 });
   }
 
-  const children = listAll(bucket, path === "" ? undefined : `${path}/`);
+  const children = listAll(bucket, path === "" ? undefined : `${path}/`, true);
   for await (const child of children) {
     await bucket.delete(child.key);
   }

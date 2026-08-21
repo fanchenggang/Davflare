@@ -1,0 +1,10 @@
+name = "flaredrive"
+pages_build_output_dir = "build"
+compatibility_date = "2024-06-20"
+
+[vars]
+WEBDAV_PUBLIC_READ = "0"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "webdav"

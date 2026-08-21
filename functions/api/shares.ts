@@ -1,0 +1,129 @@
+interface SharesEnv {
+  BUCKET: R2Bucket;
+  WEBDAV_USERNAME: string;
+  WEBDAV_PASSWORD: string;
+}
+
+const SHARES_PREFIX = "_$flaredrive$/shares/";
+
+function isAuthorized(request: Request, env: SharesEnv) {
+  const authorization = request.headers.get("Authorization");
+  const expected = `Basic ${btoa(
+    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
+  )}`;
+  return Boolean(authorization && authorization === expected);
+}
+
+function basename(key: string) {
+  return key.replace(/\/$/, "").split("/").pop() ?? "";
+}
+
+async function readShares(
+  bucket: R2Bucket,
+  request: Request
+): Promise<Array<Record<string, unknown>>> {
+  const shares: Array<Record<string, unknown>> = [];
+  let cursor: string | undefined;
+
+  do {
+    const listing = await bucket.list({
+      prefix: SHARES_PREFIX,
+      cursor,
+    });
+    for (const object of listing.objects) {
+      if (!object.key.endsWith(".json")) continue;
+      const data = await bucket.get(object.key);
+      if (data === null) continue;
+      const parsed = (await data.json()) as Record<string, unknown>;
+      const token = object.key
+        .slice(SHARES_PREFIX.length)
+        .replace(/\.json$/, "");
+      shares.push({
+        token,
+        key: parsed.key,
+        name: parsed.name || basename(String(parsed.key || "")),
+        expiresAt: parsed.expiresAt || null,
+        createdAt: parsed.createdAt,
+        url: `${new URL(request.url).origin}/share/${token}`,
+      });
+    }
+    if (!listing.truncated) break;
+    cursor = listing.cursor;
+  } while (true);
+
+  return shares;
+}
+
+export const onRequestGet: PagesFunction<SharesEnv> = async (context) => {
+  const { request, env } = context;
+  if (!isAuthorized(request, env)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+  return new Response(JSON.stringify(await readShares(env.BUCKET, request)), {
+    headers: { "Content-Type": "application/json" },
+  });
+};
+
+export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
+  const { request, env } = context;
+  if (!isAuthorized(request, env)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  let body: { key?: string; expiresInHours?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return new Response("Bad Request", { status: 400 });
+  }
+
+  const key = String(body.key || "").trim();
+  if (!key) return new Response("Bad Request", { status: 400 });
+
+  const object = await env.BUCKET.head(key);
+  if (object === null) return new Response("File not found", { status: 404 });
+  if (object.httpMetadata?.contentType === "application/x-directory") {
+    return new Response("文件夹暂不支持公开分享", { status: 400 });
+  }
+
+  const token =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().replace(/-/g, "")
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const expiresInHours = Number(body.expiresInHours);
+  const expiresAt = expiresInHours
+    ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000).toISOString()
+    : null;
+  const createdAt = new Date().toISOString();
+  const name = basename(key);
+
+  await env.BUCKET.put(
+    `${SHARES_PREFIX}${token}.json`,
+    JSON.stringify({ key, name, expiresAt, createdAt }),
+    { httpMetadata: { contentType: "application/json" } }
+  );
+
+  return new Response(
+    JSON.stringify({
+      token,
+      key,
+      name,
+      expiresAt,
+      createdAt,
+      url: `${new URL(request.url).origin}/share/${token}`,
+    }),
+    { headers: { "Content-Type": "application/json" } }
+  );
+};
+
+export const onRequestDelete: PagesFunction<SharesEnv> = async (context) => {
+  const { request, env } = context;
+  if (!isAuthorized(request, env)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const token = new URL(request.url).searchParams.get("token");
+  if (!token) return new Response("Bad Request", { status: 400 });
+  await env.BUCKET.delete(`${SHARES_PREFIX}${token}.json`);
+  return new Response(null, { status: 204 });
+};

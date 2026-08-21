@@ -47,9 +47,15 @@ export const onRequest: PagesFunction<{
   const request: Request = context.request;
   if (request.method === "OPTIONS") return handleRequestOptions();
 
+  const [bucket, path] = parseBucketPath(context);
+  if (!bucket) return notFound();
+
+  const isThumbnail =
+    request.method === "GET" && path.startsWith("_$flaredrive$/thumbnails/");
   const skipAuth =
-    env.WEBDAV_PUBLIC_READ === "1" &&
-    ["GET", "HEAD", "PROPFIND"].includes(request.method);
+    isThumbnail ||
+    (env.WEBDAV_PUBLIC_READ === "1" &&
+      ["GET", "HEAD", "PROPFIND"].includes(request.method));
 
   if (!skipAuth) {
     if (!env.WEBDAV_USERNAME || !env.WEBDAV_PASSWORD)
@@ -68,9 +74,6 @@ export const onRequest: PagesFunction<{
     if (auth !== expectedAuth)
       return new Response("Unauthorized", { status: 401 });
   }
-
-  const [bucket, path] = parseBucketPath(context);
-  if (!bucket) return notFound();
 
   const method: string = (context.request as Request).method;
   const handler = HANDLERS[method] ?? handleMethodNotAllowed;

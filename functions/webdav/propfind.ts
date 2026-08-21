@@ -1,7 +1,9 @@
 import {
+  FsEntry,
   listAll,
   RequestHandlerParams,
   ROOT_OBJECT,
+  toFsEntry,
   WEBDAV_ENDPOINT,
 } from "./utils";
 
@@ -17,19 +19,18 @@ type DavProperties = {
   "fd:thumbnail": string | undefined;
 };
 
-function fromR2Object(object: R2Object | typeof ROOT_OBJECT): DavProperties {
+function fromR2Object(object: FsEntry): DavProperties {
   return {
     creationdate: object.uploaded.toUTCString(),
     displayname: object.httpMetadata?.contentDisposition,
     getcontentlanguage: object.httpMetadata?.contentLanguage,
     getcontentlength: object.size.toString(),
-    getcontenttype: object.httpMetadata?.contentType,
+    getcontenttype: object.isDir
+      ? "application/x-directory"
+      : object.httpMetadata?.contentType,
     getetag: object.etag,
     getlastmodified: object.uploaded.toUTCString(),
-    resourcetype:
-      object.httpMetadata?.contentType === "application/x-directory"
-        ? "<collection />"
-        : "",
+    resourcetype: object.isDir ? "<collection />" : "",
     "fd:thumbnail": object.customMetadata?.thumbnail,
   };
 }
@@ -45,7 +46,7 @@ async function findChildren({
 }) {
   if (!["1", "infinity"].includes(depth)) return [];
 
-  const objects: Array<R2Object> = [];
+  const objects: FsEntry[] = [];
 
   const prefix = path === "" ? path : `${path}/`;
   for await (const object of listAll(bucket, prefix, depth === "infinity")) {
@@ -65,14 +66,23 @@ export async function handleRequestPropfind({
 {{items}}
 </multistatus>`;
 
-  const rootObject = path === "" ? ROOT_OBJECT : await bucket.head(path);
-  if (!rootObject) return new Response("Not found", { status: 404 });
-  const isDirectory =
-    rootObject === ROOT_OBJECT ||
-    rootObject.httpMetadata?.contentType === "application/x-directory";
+  const head = path === "" ? null : await bucket.head(path);
+  if (path !== "") {
+    if (head === null) return new Response("Not found", { status: 404 });
+  }
+  let isRootDir = path === "";
+  if (!isRootDir) {
+    // A path is also a folder when it has children, even if its placeholder
+    // object has no directory content-type (e.g. folders created by other tools).
+    isRootDir = head?.httpMetadata?.contentType === "application/x-directory";
+    if (!isRootDir) {
+      const list = await bucket.list({ prefix: `${path}/`, limit: 1 });
+      isRootDir = list.objects.length > 0 || list.delimitedPrefixes.length > 0;
+    }
+  }
   const depth = request.headers.get("Depth") ?? "infinity";
 
-  const children = !isDirectory
+  const children = !isRootDir
     ? []
     : await findChildren({
         bucket,
@@ -80,7 +90,10 @@ export async function handleRequestPropfind({
         depth,
       });
 
-  const items = [rootObject, ...children].map((child) => {
+  const rootEntry: FsEntry =
+    path === "" ? ROOT_OBJECT : toFsEntry(head as R2Object, isRootDir);
+
+  const items = [rootEntry, ...children].map((child) => {
     const properties = fromR2Object(child);
     return `
   <response>

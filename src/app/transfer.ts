@@ -1,12 +1,13 @@
 import pLimit from "p-limit";
 
-import { encodeKey, FileItem } from "../FileGrid";
-import { TransferTask } from "./transferQueue";
+import { authFetch, basicAuthHeader } from "./auth";
+import { FileItem, TransferTask } from "./types";
+import { basename, encodeKey } from "./utils";
 
 const WEBDAV_ENDPOINT = "/webdav/";
 
 export async function fetchPath(path: string) {
-  const res = await fetch(`${WEBDAV_ENDPOINT}${encodeKey(path)}`, {
+  const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(path)}`, {
     method: "PROPFIND",
     headers: { Depth: "1" },
   });
@@ -36,15 +37,94 @@ export async function fetchPath(path: string) {
         "flaredrive",
         "thumbnail"
       )[0]?.textContent;
+      const key = decodeURIComponent(href).replace(/^\/webdav\//, "");
       return {
-        key: decodeURI(href).replace(/^\/webdav\//, ""),
+        key,
+        name: basename(key),
+        isDir: contentType === "application/x-directory",
         size: size ? Number(size) : 0,
-        uploaded: lastModified!,
-        httpMetadata: { contentType: contentType! },
-        customMetadata: { thumbnail },
+        uploaded: lastModified || new Date().toUTCString(),
+        contentType: contentType || "",
+        thumbnail: thumbnail || undefined,
       } as FileItem;
     });
   return items;
+}
+
+export interface SearchResponse {
+  items: FileItem[];
+  hasMore: boolean;
+  nextCursor?: string;
+}
+
+export async function searchFiles(
+  query: string,
+  cursor?: string,
+  limit = 100
+): Promise<SearchResponse> {
+  const params: Record<string, string> = { q: query, limit: String(limit) };
+  if (cursor) params.cursor = cursor;
+  const res = await authFetch(`/api/search?${new URLSearchParams(params)}`);
+  if (!res.ok) throw new Error("Search failed");
+  const data = (await res.json()) as {
+    items: Array<Record<string, any>>;
+    hasMore: boolean;
+    nextCursor?: string;
+  };
+  return {
+    items: data.items.map((item) => ({
+      key: item.key,
+      name: basename(item.key),
+      isDir: item.contentType === "application/x-directory",
+      size: item.size,
+      uploaded: item.uploaded,
+      contentType: item.contentType || "",
+      thumbnail: item.thumbnail || undefined,
+    })),
+    hasMore: data.hasMore,
+    nextCursor: data.nextCursor,
+  };
+}
+
+export async function openFile(key: string) {
+  const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
+  if (!res.ok) throw new Error("打开文件失败");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank", "noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadFile(key: string) {
+  const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
+  if (!res.ok) throw new Error("下载文件失败");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = basename(key) || "download";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export async function downloadArchive(keys: string[], name = "archive.zip") {
+  const res = await authFetch("/api/archive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keys }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || "打包下载失败");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 const THUMBNAIL_SIZE = 144;
@@ -111,9 +191,127 @@ export async function blobDigest(blob: Blob) {
 
 export const SIZE_LIMIT = 100 * 1000 * 1000; // 100MB
 
+// Folders already ensured this session (so we don't send redundant MKCOLs)
+const ensuredDirs = new Set<string>();
+
+export async function ensureParentDirs(remoteKey: string) {
+  const segments = remoteKey.split("/").filter(Boolean);
+  segments.pop(); // remove the file name itself
+  let current = "";
+  for (const segment of segments) {
+    current = current ? `${current}/${segment}` : segment;
+    if (ensuredDirs.has(current)) continue;
+    try {
+      await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(current)}`, {
+        method: "MKCOL",
+      });
+    } catch {
+      // ignore: the folder may already exist (MKCOL returns 405 there)
+    }
+    ensuredDirs.add(current);
+  }
+}
+
+// Collects files from a drop event. Browsers that keep folder structure
+// (Chrome) populate dataTransfer.files with webkitRelativePath already set.
+// Others expose the folder as an entry, which we walk to rebuild the path.
+export async function collectFilesFromDataTransfer(
+  dt: DataTransfer
+): Promise<File[]> {
+  const files = Array.from(dt.files || []);
+  if (files.length > 0) return files;
+
+  const items = Array.from(dt.items || []);
+  if (items.length === 0) return files;
+
+  type AnyEntry = any;
+  const result: File[] = [];
+  const walk = async (entry: AnyEntry, path: string) => {
+    if (entry.isFile) {
+      const file: File = await new Promise((resolve, reject) =>
+        entry.file(resolve, reject)
+      );
+      try {
+        Object.defineProperty(file, "webkitRelativePath", {
+          value: `${path}${entry.name}`,
+          configurable: true,
+        });
+      } catch {
+        // ignore
+      }
+      result.push(file);
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const readAll = async (): Promise<AnyEntry[]> => {
+        const batch: AnyEntry[] = await new Promise((resolve, reject) =>
+          reader.readEntries(resolve, reject)
+        );
+        if (batch.length === 0) return [];
+        return [...batch, ...(await readAll())];
+      };
+      for (const child of await readAll()) {
+        await walk(child, `${path}${entry.name}/`);
+      }
+    }
+  };
+
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) await walk(entry, "");
+  }
+  return result;
+}
+
+export async function selectDirectoryFiles(): Promise<File[]> {
+  const picker = (window as any).showDirectoryPicker;
+
+  if (picker) {
+    try {
+      const rootHandle = await picker();
+      const files: File[] = [];
+
+      const walk = async (handle: any, path: string) => {
+        for await (const entry of handle.values()) {
+          if (entry.kind === "file") {
+            const file: File = await entry.getFile();
+            try {
+              Object.defineProperty(file, "webkitRelativePath", {
+                value: `${path}${entry.name}`,
+                configurable: true,
+              });
+            } catch {
+              // ignore
+            }
+            files.push(file);
+          } else if (entry.kind === "directory") {
+            await walk(entry, `${path}${entry.name}/`);
+          }
+        }
+      };
+
+      await walk(rootHandle, "");
+      return files;
+    } catch (error) {
+      if ((error as any)?.name === "AbortError") return [];
+      // Fall through to the webkitdirectory fallback on other failures.
+    }
+  }
+
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.webkitdirectory = true;
+    input.multiple = true;
+    input.onchange = () => resolve(Array.from(input.files || []));
+    input.oncancel = () => resolve([]);
+    input.click();
+  });
+}
+
 function xhrFetch(
   url: RequestInfo | URL,
   requestInit: RequestInit & {
+    signal?: AbortSignal;
     onUploadProgress?: (progressEvent: ProgressEvent) => void;
   }
 ) {
@@ -125,8 +323,25 @@ function xhrFetch(
       url instanceof Request ? url.url : url
     );
     const headers = new Headers(requestInit.headers);
+    const authorization = basicAuthHeader();
+    if (authorization) headers.set("Authorization", authorization);
     headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+
+    const abort = () => {
+      xhr.abort();
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+
+    if (requestInit.signal) {
+      if (requestInit.signal.aborted) {
+        abort();
+        return;
+      }
+      requestInit.signal.addEventListener("abort", abort, { once: true });
+    }
+
     xhr.onload = () => {
+      requestInit.signal?.removeEventListener("abort", abort);
       const headers = xhr
         .getAllResponseHeaders()
         .trim()
@@ -138,7 +353,14 @@ function xhrFetch(
         }, {} as Record<string, string>);
       resolve(new Response(xhr.responseText, { status: xhr.status, headers }));
     };
-    xhr.onerror = reject;
+    xhr.onerror = () => {
+      requestInit.signal?.removeEventListener("abort", abort);
+      reject(new Error("网络请求失败"));
+    };
+    xhr.onabort = () => {
+      requestInit.signal?.removeEventListener("abort", abort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
     if (
       requestInit.body instanceof Blob ||
       typeof requestInit.body === "string"
@@ -153,6 +375,7 @@ export async function multipartUpload(
   file: File,
   options?: {
     headers?: Record<string, string>;
+    signal?: AbortSignal;
     onUploadProgress?: (progressEvent: {
       loaded: number;
       total: number;
@@ -162,7 +385,7 @@ export async function multipartUpload(
   const headers = options?.headers || {};
   headers["content-type"] = file.type;
 
-  const uploadResponse = await fetch(`/webdav/${encodeKey(key)}?uploads`, {
+  const uploadResponse = await authFetch(`/webdav/${encodeKey(key)}?uploads`, {
     headers,
     method: "POST",
   });
@@ -174,6 +397,9 @@ export async function multipartUpload(
   const partsLoaded = Array.from({ length: totalChunks + 1 }, () => 0);
   const promises = parts.map((i) =>
     limit(async () => {
+      if (options?.signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
       const chunk = file.slice((i - 1) * SIZE_LIMIT, i * SIZE_LIMIT);
       const searchParams = new URLSearchParams({
         partNumber: i.toString(),
@@ -188,6 +414,7 @@ export async function multipartUpload(
           method: "PUT",
           headers,
           body: chunk,
+          signal: options?.signal,
           onUploadProgress: (progressEvent) => {
             partsLoaded[i] = progressEvent.loaded;
             options?.onUploadProgress?.({
@@ -211,7 +438,7 @@ export async function multipartUpload(
   );
   const uploadedParts = await Promise.all(promises);
   const completeParams = new URLSearchParams({ uploadId });
-  const response = await fetch(`/webdav/${encodeKey(key)}?${completeParams}`, {
+  const response = await authFetch(`/webdav/${encodeKey(key)}?${completeParams}`, {
     method: "POST",
     body: JSON.stringify({ parts: uploadedParts }),
   });
@@ -225,38 +452,40 @@ export async function copyPaste(source: string, target: string, move = false) {
     `${WEBDAV_ENDPOINT}${encodeKey(target)}`,
     window.location.href
   );
-  await fetch(uploadUrl, {
+  const response = await authFetch(uploadUrl, {
     method: move ? "MOVE" : "COPY",
     headers: { Destination: destinationUrl.href },
   });
+  if (!response.ok) {
+    throw new Error(move ? "移动失败" : "复制失败");
+  }
 }
 
-export async function createFolder(cwd: string) {
-  try {
-    const folderName = window.prompt("Folder name");
-    if (!folderName) return;
-    if (folderName.includes("/")) {
-      window.alert("Invalid folder name");
-      return;
-    }
-    const folderKey = `${cwd}${folderName}`;
-    const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
-    await fetch(uploadUrl, { method: "MKCOL" });
-  } catch (error) {
-    console.log(`Create folder failed`);
-  }
+export async function createFolder(cwd: string, folderName: string) {
+  const name = folderName.trim();
+  if (!name) throw new Error("请输入文件夹名称");
+  if (name.includes("/")) throw new Error("文件夹名称不能包含 /");
+  const folderKey = `${cwd}${name}`;
+  const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
+  const response = await authFetch(uploadUrl, { method: "MKCOL" });
+  if (!response.ok) throw new Error("新建文件夹失败");
 }
 
 export async function processTransferTask({
   task,
   onTaskProgress,
+  signal,
 }: {
   task: TransferTask;
   onTaskProgress?: (event: { loaded: number; total: number }) => void;
+  signal?: AbortSignal;
 }) {
   const { remoteKey, file } = task;
   if (task.type !== "upload" || !file) throw new Error("Invalid task");
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   let thumbnailDigest = null;
+
+  await ensureParentDirs(remoteKey);
 
   if (
     file.type.startsWith("image/") ||
@@ -269,7 +498,7 @@ export async function processTransferTask({
 
       const thumbnailUploadUrl = `/webdav/_$flaredrive$/thumbnails/${digestHex}.png`;
       try {
-        await fetch(thumbnailUploadUrl, {
+        await authFetch(thumbnailUploadUrl, {
           method: "PUT",
           body: thumbnailBlob,
         });
@@ -287,6 +516,7 @@ export async function processTransferTask({
   if (file.size >= SIZE_LIMIT) {
     return await multipartUpload(remoteKey, file, {
       headers,
+      signal,
       onUploadProgress: onTaskProgress,
     });
   } else {
@@ -295,6 +525,7 @@ export async function processTransferTask({
       method: "PUT",
       headers,
       body: file,
+      signal,
       onUploadProgress: onTaskProgress,
     });
   }

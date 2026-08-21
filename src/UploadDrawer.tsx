@@ -4,10 +4,13 @@ import { Button, Card, Drawer, Fab, Grid, Typography } from "@mui/material";
 import {
   Camera as CameraIcon,
   CreateNewFolder as CreateNewFolderIcon,
+  Folder as FolderIcon,
   Image as ImageIcon,
   Upload as UploadIcon,
 } from "@mui/icons-material";
-import { createFolder } from "./app/transfer";
+import CreateFolderDialog from "./CreateFolderDialog";
+import { strings } from "./app/strings";
+import { createFolder, selectDirectoryFiles } from "./app/transfer";
 import { useUploadEnqueue } from "./app/transferQueue";
 
 function IconCaptionButton({
@@ -59,16 +62,29 @@ function UploadDrawer({
   setOpen,
   cwd,
   onUpload,
+  onError,
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
   cwd: string;
   onUpload: () => void;
+  onError: (error: Error) => void;
 }) {
   const uploadEnqueue = useUploadEnqueue();
+  const [showCreateFolder, setShowCreateFolder] = React.useState(false);
 
   const handleUpload = useCallback(
-    (action: string) => () => {
+    (action: string) => async () => {
+      if (action === "folder") {
+        const files = await selectDirectoryFiles();
+        if (files.length) {
+          uploadEnqueue(...files.map((file) => ({ file, basedir: cwd })));
+          setOpen(false);
+          onUpload();
+        }
+        return;
+      }
+
       const input = document.createElement("input");
       input.type = "file";
       switch (action) {
@@ -112,37 +128,54 @@ function UploadDrawer({
           <Grid item xs={3}>
             <IconCaptionButton
               icon={<CameraIcon fontSize="large" />}
-              caption="Camera"
+              caption={strings.takePhoto}
               onClick={takePhoto}
             />
           </Grid>
           <Grid item xs={3}>
             <IconCaptionButton
               icon={<ImageIcon fontSize="large" />}
-              caption="Image/Video"
+              caption={strings.uploadImageVideo}
               onClick={uploadImage}
             />
           </Grid>
           <Grid item xs={3}>
             <IconCaptionButton
               icon={<UploadIcon fontSize="large" />}
-              caption="Upload"
+              caption={strings.uploadFile}
               onClick={uploadFile}
             />
           </Grid>
           <Grid item xs={3}>
             <IconCaptionButton
+              icon={<FolderIcon fontSize="large" />}
+              caption={strings.uploadFolder}
+              onClick={() => handleUpload("folder")()}
+            />
+          </Grid>
+          <Grid item xs={3}>
+            <IconCaptionButton
               icon={<CreateNewFolderIcon fontSize="large" />}
-              caption="Create Folder"
-              onClick={async () => {
-                setOpen(false);
-                await createFolder(cwd);
-                onUpload();
-              }}
+              caption={strings.createFolder}
+              onClick={() => setShowCreateFolder(true)}
             />
           </Grid>
         </Grid>
       </Card>
+      <CreateFolderDialog
+        open={showCreateFolder}
+        onClose={() => setShowCreateFolder(false)}
+        onSubmit={async (name) => {
+          try {
+            await createFolder(cwd, name);
+            setShowCreateFolder(false);
+            setOpen(false);
+            onUpload();
+          } catch (error) {
+            onError(error as Error);
+          }
+        }}
+      />
     </Drawer>
   );
 }
