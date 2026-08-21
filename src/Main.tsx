@@ -47,6 +47,7 @@ import {
   searchFiles,
 } from "./app/transfer";
 import { moveToTrash } from "./app/trash";
+import { useAuth } from "./app/auth";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
 import { basename, isDirectory } from "./app/utils";
@@ -158,6 +159,7 @@ function Main({
   } = useClipboard();
   const transferQueue = useTransferQueue();
   const uploadEnqueue = useUploadEnqueue();
+  const { username } = useAuth();
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,6 +195,11 @@ function Main({
       setLoading(false);
       return;
     }
+    if (username === null) {
+      setFiles([]);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -212,7 +219,7 @@ function Main({
     } finally {
       setLoading(false);
     }
-  }, [cwd, debouncedSearch, onError, route.kind]);
+  }, [cwd, debouncedSearch, onError, route.kind, username]);
 
   useEffect(() => {
     loadListing();
