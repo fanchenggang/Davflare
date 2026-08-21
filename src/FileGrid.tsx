@@ -247,7 +247,8 @@ function FileGrid({
         alignItems: "center",
         justifyContent: "center",
         gap: 0.5,
-        "&:hover": { backgroundColor: "whitesmoke" },
+        transition: "background-color 0.2s ease, box-shadow 0.2s ease",
+        "&:hover": { backgroundColor: "whitesmoke", boxShadow: 1 },
       }}
     >
       {multiSelected !== null && (

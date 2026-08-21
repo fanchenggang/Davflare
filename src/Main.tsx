@@ -18,11 +18,15 @@ import {
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
+  CloudUpload as CloudUploadIcon,
+  CreateNewFolder as CreateNewFolderIcon,
+  Folder as FolderIcon,
   Home as HomeIcon,
   NoteAdd as NoteAddIcon,
 } from "@mui/icons-material";
 
 import ConfirmDialog from "./ConfirmDialog";
+import CreateFolderDialog from "./CreateFolderDialog";
 import FileGrid from "./FileGrid";
 import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
@@ -30,9 +34,9 @@ import PreviewDialog from "./PreviewDialog";
 import RenameDialog from "./RenameDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
+import SpeedDial from "./SpeedDial";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
-import UploadDrawer, { UploadFab } from "./UploadDrawer";
 import { useClipboard } from "./app/clipboard";
 import { Route } from "./app/route";
 import { SortPref, ViewMode } from "./app/prefs";
@@ -40,11 +44,13 @@ import { strings } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
   copyPaste,
+  createFolder,
   downloadArchive,
   downloadFile,
   fetchPath,
   openFile,
   searchFiles,
+  selectDirectoryFiles,
 } from "./app/transfer";
 import { moveToTrash } from "./app/trash";
 import { useAuth } from "./app/auth";
@@ -167,7 +173,8 @@ function Main({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchCursor, setSearchCursor] = useState<string | undefined>();
-  const [showUploadDrawer, setShowUploadDrawer] = useState(false);
+  const [speedDialOpen, setSpeedDialOpen] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -447,6 +454,27 @@ function Main({
     }
   };
 
+  const openFilePicker = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "*/*";
+    input.multiple = true;
+    input.onchange = async () => {
+      if (!input.files) return;
+      uploadEnqueue(
+        ...Array.from(input.files).map((file) => ({ file, basedir: cwd }))
+      );
+    };
+    input.click();
+  };
+
+  const openFolderPicker = async () => {
+    const files = await selectDirectoryFiles();
+    if (files.length) {
+      uploadEnqueue(...files.map((file) => ({ file, basedir: cwd })));
+    }
+  };
+
   if (route.kind === "trash") {
     return (
       <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
@@ -535,30 +563,63 @@ function Main({
       )}
 
       {multiSelected === null && (
-        <>
-          <UploadFab onClick={() => setShowUploadDrawer(true)} />
-          <Button
-            variant="contained"
-            startIcon={<NoteAddIcon />}
-            sx={{
-              position: "fixed",
-              bottom: 88,
-              right: 24,
-              zIndex: 999,
-            }}
-            onClick={() => setShowTextPadDrawer(true)}
-          >
-            {strings.openTextPad}
-          </Button>
-        </>
+        <SpeedDial
+          open={speedDialOpen}
+          onToggle={() => setSpeedDialOpen((prev) => !prev)}
+          onClose={() => setSpeedDialOpen(false)}
+          actions={[
+            {
+              id: "upload-file",
+              label: "上传文件",
+              icon: <CloudUploadIcon />,
+              onClick: () => {
+                setSpeedDialOpen(false);
+                openFilePicker();
+              },
+            },
+            {
+              id: "upload-folder",
+              label: "上传文件夹",
+              icon: <FolderIcon />,
+              onClick: () => {
+                setSpeedDialOpen(false);
+                openFolderPicker();
+              },
+            },
+            {
+              id: "create-folder",
+              label: "新建文件夹",
+              icon: <CreateNewFolderIcon />,
+              onClick: () => {
+                setSpeedDialOpen(false);
+                setShowCreateFolder(true);
+              },
+            },
+            {
+              id: "textpad",
+              label: strings.openTextPad,
+              icon: <NoteAddIcon />,
+              onClick: () => {
+                setSpeedDialOpen(false);
+                setShowTextPadDrawer(true);
+              },
+            },
+          ]}
+        />
       )}
 
-      <UploadDrawer
-        open={showUploadDrawer}
-        setOpen={setShowUploadDrawer}
-        cwd={cwd}
-        onUpload={loadListing}
-        onError={onError}
+      <CreateFolderDialog
+        open={showCreateFolder}
+        onClose={() => setShowCreateFolder(false)}
+        onSubmit={async (name) => {
+          try {
+            await createFolder(cwd, name);
+            setShowCreateFolder(false);
+            await loadListing();
+          } catch (error) {
+            onError(error as Error);
+          }
+        }}
       />
 
       <TextPadDrawer

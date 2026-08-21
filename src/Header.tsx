@@ -117,6 +117,7 @@ function Header({
       <Tooltip title="排序">
         <IconButton
           aria-label="排序"
+          color={sortAnchor ? "primary" : "default"}
           onClick={(event) => setSortAnchor(event.currentTarget)}
         >
           <SortIcon />

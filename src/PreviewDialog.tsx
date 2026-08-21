@@ -27,11 +27,13 @@ function PreviewDialog({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!file) {
       setUrl(null);
+      setZoomed(false);
       return;
     }
 
@@ -98,7 +100,14 @@ function PreviewDialog({
             <img
               src={url}
               alt={file?.name}
-              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+              onClick={() => setZoomed((prev) => !prev)}
+              style={{
+                maxWidth: zoomed ? "200%" : "100%",
+                maxHeight: zoomed ? "200%" : "100%",
+                objectFit: "contain",
+                cursor: zoomed ? "zoom-out" : "zoom-in",
+                transition: "max-width 0.2s ease, max-height 0.2s ease",
+              }}
             />
           ) : isVideo ? (
             <video src={url} controls style={{ maxWidth: "100%", maxHeight: "100%" }} />
