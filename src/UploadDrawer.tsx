@@ -2,10 +2,8 @@ import React, { forwardRef, useCallback, useMemo } from "react";
 
 import { Button, Card, Drawer, Fab, Grid, Typography } from "@mui/material";
 import {
-  Camera as CameraIcon,
   CreateNewFolder as CreateNewFolderIcon,
   Folder as FolderIcon,
-  Image as ImageIcon,
   Upload as UploadIcon,
 } from "@mui/icons-material";
 import CreateFolderDialog from "./CreateFolderDialog";
@@ -87,18 +85,7 @@ function UploadDrawer({
 
       const input = document.createElement("input");
       input.type = "file";
-      switch (action) {
-        case "photo":
-          input.accept = "image/*";
-          input.capture = "environment";
-          break;
-        case "image":
-          input.accept = "image/*,video/*";
-          break;
-        case "file":
-          input.accept = "*/*";
-          break;
-      }
+      input.accept = "*/*";
       input.multiple = true;
       input.onchange = async () => {
         if (!input.files) return;
@@ -112,8 +99,6 @@ function UploadDrawer({
     [cwd, onUpload, setOpen, uploadEnqueue]
   );
 
-  const takePhoto = useMemo(() => handleUpload("photo"), [handleUpload]);
-  const uploadImage = useMemo(() => handleUpload("image"), [handleUpload]);
   const uploadFile = useMemo(() => handleUpload("file"), [handleUpload]);
 
   return (
@@ -125,20 +110,6 @@ function UploadDrawer({
     >
       <Card sx={{ padding: 2 }}>
         <Grid container spacing={2}>
-          <Grid item xs={3}>
-            <IconCaptionButton
-              icon={<CameraIcon fontSize="large" />}
-              caption={strings.takePhoto}
-              onClick={takePhoto}
-            />
-          </Grid>
-          <Grid item xs={3}>
-            <IconCaptionButton
-              icon={<ImageIcon fontSize="large" />}
-              caption={strings.uploadImageVideo}
-              onClick={uploadImage}
-            />
-          </Grid>
           <Grid item xs={3}>
             <IconCaptionButton
               icon={<UploadIcon fontSize="large" />}
