@@ -15,7 +15,11 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import MimeIcon from "./MimeIcon";
 import { ViewMode } from "./app/prefs";
 import { FileItem } from "./app/types";
-import { humanReadableSize, isDirectory } from "./app/utils";
+import {
+  formatDateTime,
+  humanReadableSize,
+  isDirectory,
+} from "./app/utils";
 
 interface FileGridProps {
   files: FileItem[];
@@ -165,7 +169,7 @@ function FileGrid({
               component="span"
               sx={{ display: "inline-block", minWidth: "160px", marginRight: 1 }}
             >
-              {new Date(file.uploaded).toLocaleString()}
+              {formatDateTime(file.uploaded)}
             </Box>
             {!isDirectory(file) && humanReadableSize(file.size)}
           </React.Fragment>
@@ -301,6 +305,20 @@ function FileGrid({
       </Typography>
       <Typography variant="caption" color="text.secondary">
         {isDirectory(file) ? "文件夹" : humanReadableSize(file.size)}
+      </Typography>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          fontSize: 11,
+          width: "100%",
+          textAlign: "center",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {formatDateTime(file.uploaded)}
       </Typography>
       {multiSelected === null && (
         <IconButton

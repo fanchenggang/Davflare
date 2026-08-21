@@ -10,6 +10,11 @@ export function humanReadableSize(size: number) {
   return `${size.toFixed(1)} ${units[i]}`;
 }
 
+export function formatDateTime(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
 export function encodeKey(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");
 }
