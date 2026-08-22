@@ -661,6 +661,23 @@ function timingSafeEqual(left: Uint8Array, right: Uint8Array): boolean {
   return mismatch === 0;
 }
 
+function getConditionalHeaders(source: Headers): Headers {
+  const headers = new Headers();
+  for (const name of [
+    "if-match",
+    "if-none-match",
+    "if-modified-since",
+    "if-unmodified-since",
+    "if-range",
+  ]) {
+    const value = source.get(name);
+    if (value !== null) {
+      headers.set(name, value);
+    }
+  }
+  return headers;
+}
+
 function extractLockOwner(body: string): string | undefined {
   const owner = body.match(
     /<(?:[A-Za-z_][\w.-]*:)?owner(?:\s[^>]*)?>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?owner>/i,
@@ -1008,7 +1025,7 @@ async function handleGet({
   }
 
   const object = await bucket.get(path, {
-    onlyIf: request.headers,
+    onlyIf: getConditionalHeaders(request.headers),
     range: request.headers,
   });
   if (object === null) {
@@ -1140,7 +1157,7 @@ async function handlePut({
   }
 
   const result = await bucket.put(path, body, {
-    onlyIf: request.headers,
+    onlyIf: getConditionalHeaders(request.headers),
     httpMetadata: request.headers,
     customMetadata: preservedMetadata,
   });
@@ -1367,7 +1384,10 @@ async function handlePropfind({
   page += "\n</multistatus>\n";
   return new Response(page, {
     status: 207,
-    headers: { "Content-Type": "application/xml; charset=utf-8" },
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Content-Length": new TextEncoder().encode(page).byteLength.toString(),
+    },
   });
 }
 
@@ -2064,6 +2084,12 @@ async function handleRequest(context: PagesContext): Promise<Response> {
   const [bucket, path] = parseBucketPath(context);
   if (!bucket) {
     return new Response("Not Found", { status: 404 });
+  }
+
+  const requestUrl = new URL(request.url);
+  if (path === "" && requestUrl.pathname === DAV_ENDPOINT) {
+    requestUrl.pathname = DAV_ENDPOINT_WITH_SLASH;
+    return Response.redirect(requestUrl.toString(), 308);
   }
 
   const env = context.env;
