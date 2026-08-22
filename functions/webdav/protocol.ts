@@ -2089,7 +2089,10 @@ async function handleRequest(context: PagesContext): Promise<Response> {
   const requestUrl = new URL(request.url);
   if (path === "" && requestUrl.pathname === DAV_ENDPOINT) {
     requestUrl.pathname = DAV_ENDPOINT_WITH_SLASH;
-    return Response.redirect(requestUrl.toString(), 307);
+    return new Response(null, {
+      status: 307,
+      headers: { Location: requestUrl.toString() },
+    });
   }
 
   const env = context.env;
