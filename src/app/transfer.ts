@@ -21,10 +21,14 @@ export async function fetchPath(path: string) {
   const document = parser.parseFromString(text, "application/xml");
   const items: FileItem[] = Array.from(document.querySelectorAll("response"))
     .filter(
-      (response) =>
-        decodeURIComponent(
+      (response) => {
+        const hrefPath = decodeURIComponent(
           response.querySelector("href")?.textContent ?? ""
-        ).slice(WEBDAV_ENDPOINT.length) !== path.replace(/\/$/, "")
+        )
+          .slice(WEBDAV_ENDPOINT.length)
+          .replace(/\/$/, "");
+        return hrefPath !== path.replace(/\/$/, "");
+      }
     )
     .map((response) => {
       const href = response.querySelector("href")?.textContent;
@@ -37,7 +41,9 @@ export async function fetchPath(path: string) {
         "flaredrive",
         "thumbnail"
       )[0]?.textContent;
-      const key = decodeURIComponent(href).replace(/^\/webdav\//, "");
+      const key = decodeURIComponent(href)
+        .replace(/^\/webdav\//, "")
+        .replace(/\/$/, "");
       return {
         key,
         name: basename(key),
