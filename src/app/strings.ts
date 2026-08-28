@@ -50,6 +50,12 @@ export const strings = {
   colSize: "大小",
   colDate: "修改时间",
   folderLabel: "文件夹",
+  dropToUpload: "松手上传到当前目录",
+  prevFile: "上一个",
+  nextFile: "下一个",
+  create: "新建",
+  newFolderOrNote: "新建文件夹或记事本",
+  pastedImage: "粘贴图片",
 };
 
 export default strings;

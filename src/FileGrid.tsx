@@ -423,7 +423,7 @@ function FileGrid({
 
   if (view === "list") {
     return (
-      <Box sx={{ pb: "72px" }}>
+      <Box sx={{ pb: { xs: "136px", sm: "72px" } }}>
         <Box
           sx={{
             display: { xs: "none", sm: "flex" },
@@ -482,7 +482,7 @@ function FileGrid({
     <Grid
       container
       spacing={2}
-      sx={{ padding: 2, paddingBottom: "72px", overflow: "visible" }}
+      sx={{ padding: 2, paddingBottom: { xs: "136px", sm: "72px" }, overflow: "visible" }}
     >
       {files.map((file) => (
         <Grid

@@ -156,7 +156,7 @@ function ExplorerBar({
         {inFolder && (
           <Box
             sx={{
-              display: "flex",
+              display: { xs: "none", sm: "flex" },
               alignItems: "center",
               gap: 0.75,
               flexGrow: 1,
