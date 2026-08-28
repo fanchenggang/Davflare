@@ -4,31 +4,39 @@ import {
   Box,
   Button,
   Checkbox,
-  CircularProgress,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 import {
   DeleteForever as DeleteForeverIcon,
+  DeleteOutline as DeleteOutlineIcon,
   Restore as RestoreIcon,
 } from "@mui/icons-material";
 
 import ConfirmDialog from "./ConfirmDialog";
+import EmptyState from "./EmptyState";
 import {
   listTrash,
   permanentDeleteTrash,
   restoreTrash,
 } from "./app/trash";
 import { NotifyFn } from "./app/notify";
-import { TrashItem } from "./app/types";
 import { strings } from "./app/strings";
+import { TrashItem } from "./app/types";
 import { humanReadableSize } from "./app/utils";
 
-function TrashView({ onNotify }: { onNotify: NotifyFn }) {
+function TrashView({
+  onNotify,
+  onGoFiles,
+}: {
+  onNotify: NotifyFn;
+  onGoFiles?: () => void;
+}) {
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
@@ -108,8 +116,16 @@ function TrashView({ onNotify }: { onNotify: NotifyFn }) {
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", padding: 4 }}>
-        <CircularProgress />
+      <Box sx={{ px: 2, py: 2 }}>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Box key={index} sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1 }}>
+            <Skeleton variant="rounded" width={20} height={20} />
+            <Box sx={{ flex: 1 }}>
+              <Skeleton variant="text" width="45%" height={24} />
+              <Skeleton variant="text" width="70%" />
+            </Box>
+          </Box>
+        ))}
       </Box>
     );
   }
@@ -121,7 +137,7 @@ function TrashView({ onNotify }: { onNotify: NotifyFn }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: 1.5,
+          padding: 2,
           gap: 1,
         }}
       >
@@ -135,9 +151,18 @@ function TrashView({ onNotify }: { onNotify: NotifyFn }) {
         </Button>
       </Box>
       {items.length === 0 ? (
-        <Box sx={{ textAlign: "center", padding: 4 }}>
-          <Typography color="text.secondary">{strings.emptyTrash}</Typography>
-        </Box>
+        <EmptyState
+          icon={<DeleteOutlineIcon />}
+          title={strings.emptyTrash}
+          description={strings.emptyTrashHint}
+          actions={
+            onGoFiles ? (
+              <Button variant="contained" onClick={onGoFiles}>
+                {strings.goToFiles}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <List>
@@ -146,6 +171,18 @@ function TrashView({ onNotify }: { onNotify: NotifyFn }) {
                 key={item.trashKey}
                 button
                 onClick={() => toggle(item.trashKey)}
+                sx={{
+                  mx: 1,
+                  mb: 0.5,
+                  borderRadius: 2,
+                  border: "1px solid",
+                  borderColor: selected.includes(item.trashKey)
+                    ? "primary.main"
+                    : "divider",
+                  backgroundColor: selected.includes(item.trashKey)
+                    ? "action.selected"
+                    : "background.paper",
+                }}
               >
                 <ListItemIcon>
                   <Checkbox
@@ -159,6 +196,7 @@ function TrashView({ onNotify }: { onNotify: NotifyFn }) {
                 </ListItemIcon>
                 <ListItemText
                   primary={item.name}
+                  primaryTypographyProps={{ fontWeight: 600 }}
                   secondary={`原路径：${item.originalKey} · 删除于 ${new Date(
                     item.deletedAt
                   ).toLocaleString()} · ${humanReadableSize(item.size)}`}
@@ -169,7 +207,14 @@ function TrashView({ onNotify }: { onNotify: NotifyFn }) {
           <Stack
             direction="row"
             spacing={1}
-            sx={{ position: "sticky", bottom: 0, padding: 1, backgroundColor: "white" }}
+            sx={{
+              position: "sticky",
+              bottom: 0,
+              padding: 1.5,
+              backgroundColor: "background.paper",
+              borderTop: "1px solid",
+              borderColor: "divider",
+            }}
           >
             <Button
               startIcon={<RestoreIcon />}

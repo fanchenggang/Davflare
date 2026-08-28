@@ -3,22 +3,30 @@ import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
-  CircularProgress,
   List,
   ListItem,
   ListItemText,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
 
+import EmptyState from "./EmptyState";
 import { listShares, revokeShare } from "./app/share";
 import { NotifyFn } from "./app/notify";
-import { ShareInfo } from "./app/types";
 import { strings } from "./app/strings";
+import { ShareInfo } from "./app/types";
 
-function SharesView({ onNotify }: { onNotify: NotifyFn }) {
+function SharesView({
+  onNotify,
+  onGoFiles,
+}: {
+  onNotify: NotifyFn;
+  onGoFiles?: () => void;
+}) {
   const [shares, setShares] = useState<ShareInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,26 +57,48 @@ function SharesView({ onNotify }: { onNotify: NotifyFn }) {
 
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", padding: 4 }}>
-        <CircularProgress />
+      <Box sx={{ px: 2, py: 2 }}>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Box key={index} sx={{ py: 1.25 }}>
+            <Skeleton variant="text" width="40%" height={28} />
+            <Skeleton variant="text" width="80%" />
+          </Box>
+        ))}
       </Box>
     );
   }
 
   return (
     <>
-      <Box sx={{ padding: 1.5 }}>
+      <Box sx={{ padding: 2 }}>
         <Typography variant="h6">{strings.shares}</Typography>
       </Box>
       {shares.length === 0 ? (
-        <Box sx={{ textAlign: "center", padding: 4 }}>
-          <Typography color="text.secondary">{strings.emptyShares}</Typography>
-        </Box>
+        <EmptyState
+          icon={<LinkOffIcon />}
+          title={strings.emptyShares}
+          description={strings.emptySharesHint}
+          actions={
+            onGoFiles ? (
+              <Button variant="contained" onClick={onGoFiles}>
+                {strings.goToFiles}
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <List>
           {shares.map((share) => (
             <ListItem
               key={share.token}
+              sx={{
+                mx: 1,
+                mb: 0.5,
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "background.paper",
+              }}
               secondaryAction={
                 <Stack direction="row" spacing={0.5}>
                   <Button
@@ -99,6 +129,7 @@ function SharesView({ onNotify }: { onNotify: NotifyFn }) {
             >
               <ListItemText
                 primary={share.name}
+                primaryTypographyProps={{ fontWeight: 600 }}
                 secondary={
                   <>
                     <Typography

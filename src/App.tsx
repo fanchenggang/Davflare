@@ -1,11 +1,9 @@
-import { ThemeProvider } from "@emotion/react";
 import {
   Alert,
-  createTheme,
   CssBaseline,
-  GlobalStyles,
   Snackbar,
   Stack,
+  ThemeProvider,
 } from "@mui/material";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
@@ -18,19 +16,23 @@ import { ClipboardProvider } from "./app/clipboard";
 import { NoticeSeverity, NotifyFn } from "./app/notify";
 import { SortPref, usePersistedState, ViewMode } from "./app/prefs";
 import { useHashRoute } from "./app/route";
+import { appTheme } from "./app/theme";
 import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
-
-const globalStyles = (
-  <GlobalStyles styles={{ "html, body, #root": { height: "100%" } }} />
-);
-
-const theme = createTheme({
-  palette: { primary: { main: "#f38020" } },
-});
 
 interface SnackbarMessage {
   message: string;
   severity: NoticeSeverity;
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    target.isContentEditable
+  );
 }
 
 function AppContent() {
@@ -45,6 +47,7 @@ function AppContent() {
     field: "name",
     order: "asc",
   });
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const notified = useRef(new Set<string>());
 
   useEffect(() => {
@@ -64,11 +67,28 @@ function AppContent() {
     setSnackbar({ message, severity });
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const cmdK =
+        (event.key === "k" || event.key === "K") &&
+        (event.metaKey || event.ctrlKey);
+      const slash = event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
+      if (cmdK || (slash && !isTypingTarget(event.target))) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
-    <Stack sx={{ height: "100%" }}>
+    <Stack sx={{ height: "100%", backgroundColor: "background.default" }}>
       <Header
         search={search}
         onSearchChange={setSearch}
+        searchInputRef={searchInputRef}
         username={username}
         onLogout={logout}
         onOpenTransfers={() => setShowTransfers(true)}
@@ -106,9 +126,8 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={appTheme}>
         <CssBaseline />
-        {globalStyles}
         <TransferQueueProvider>
           <ClipboardProvider>
             <AppContent />
