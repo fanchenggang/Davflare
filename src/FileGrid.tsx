@@ -92,30 +92,60 @@ function FileGrid({
     />
   );
 
-  const moreButton = (file: FileItem, sx?: object) => (
-    <IconButton
-      size="small"
-      aria-label={`${file.name} 操作`}
-      sx={{ zIndex: 2, ...(sx || {}) }}
-      onPointerDown={(event) => {
-        event.stopPropagation();
-      }}
-      onMouseDown={(event) => {
-        event.stopPropagation();
-        event.preventDefault();
-      }}
-      onClick={(event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        const { clientX, clientY } = event;
-        window.setTimeout(() => {
-          onOpenMenu({ clientX, clientY }, file);
-        }, 0);
-      }}
-    >
-      <MoreHorizIcon />
-    </IconButton>
-  );
+  const moreButton = (file: FileItem, corner?: "tile") => {
+    const button = (
+      <IconButton
+        size="small"
+        aria-label={`${file.name} 操作`}
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenMenu(
+            { clientX: event.clientX, clientY: event.clientY },
+            file
+          );
+        }}
+        sx={{
+          width: 36,
+          height: 36,
+          padding: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <MoreHorizIcon fontSize="small" />
+      </IconButton>
+    );
+
+    if (corner !== "tile") return button;
+
+    // Position a wrapping box, not the IconButton itself. Absolute + flex
+    // centering on the tile offset the visible SVG from the real hit target
+    // (~35px), so clicks on the glyph hit the breadcrumb instead.
+    return (
+      <Box
+        sx={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          zIndex: 3,
+          width: 36,
+          height: 36,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "auto",
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {button}
+      </Box>
+    );
+  };
 
   const folderDrop = (file: FileItem) =>
     isDirectory(file) && onDropOnFolder
@@ -186,9 +216,14 @@ function FileGrid({
       {...folderDrop(file)}
       sx={{
         position: "relative",
+        isolation: "isolate",
+        overflow: "visible",
+        width: "100%",
         height: "100%",
         minHeight: 128,
+        boxSizing: "border-box",
         padding: 1,
+        paddingTop: 4.5,
         cursor: "pointer",
         border: (theme) =>
           isSelected(file)
@@ -249,7 +284,7 @@ function FileGrid({
       >
         {formatDateTime(file.uploaded)}
       </Typography>
-      {moreButton(file, { position: "absolute", top: 0, right: 0 })}
+      {moreButton(file, "tile")}
     </Box>
   );
 
@@ -266,9 +301,21 @@ function FileGrid({
   }
 
   return (
-    <Grid container spacing={1.5} sx={{ paddingBottom: "72px", padding: 1 }}>
+    <Grid
+      container
+      spacing={1.5}
+      sx={{ padding: 1, paddingBottom: "72px", overflow: "visible" }}
+    >
       {files.map((file) => (
-        <Grid item key={file.key} xs={6} sm={4} md={3} lg={2}>
+        <Grid
+          item
+          key={file.key}
+          xs={6}
+          sm={4}
+          md={3}
+          lg={2}
+          sx={{ display: "flex", overflow: "visible" }}
+        >
           {itemTile(file)}
         </Grid>
       ))}

@@ -348,16 +348,23 @@ function xhrFetch(
 
     xhr.onload = () => {
       requestInit.signal?.removeEventListener("abort", abort);
-      const headers = xhr
-        .getAllResponseHeaders()
-        .trim()
-        .split("\r\n")
-        .reduce((acc, header) => {
-          const [key, value] = header.split(": ");
-          acc[key] = value;
-          return acc;
-        }, {} as Record<string, string>);
-      resolve(new Response(xhr.responseText, { status: xhr.status, headers }));
+      const parsed = new Headers();
+      const raw = xhr.getAllResponseHeaders().trim();
+      if (raw) {
+        for (const line of raw.split("\r\n")) {
+          const idx = line.indexOf(":");
+          if (idx === -1) continue;
+          const key = line.slice(0, idx).trim();
+          const value = line.slice(idx + 1).trim();
+          if (key) parsed.append(key, value);
+        }
+      }
+      resolve(
+        new Response(xhr.responseText, {
+          status: xhr.status || 0,
+          headers: parsed,
+        })
+      );
     };
     xhr.onerror = () => {
       requestInit.signal?.removeEventListener("abort", abort);
@@ -583,12 +590,16 @@ export async function processTransferTask({
     });
   } else {
     const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(remoteKey)}`;
-    return await xhrFetch(uploadUrl, {
+    const response = await xhrFetch(uploadUrl, {
       method: "PUT",
       headers,
       body: file,
       signal,
       onUploadProgress: onTaskProgress,
     });
+    if (!response.ok) {
+      throw new Error((await response.text()) || "上传失败");
+    }
+    return response;
   }
 }
