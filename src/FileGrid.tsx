@@ -25,6 +25,7 @@ interface FileGridProps {
   files: FileItem[];
   view: ViewMode;
   density?: Density;
+  folderCounts?: Record<string, number>;
   selectedKeys: string[];
   dimmedKeys?: ReadonlySet<string>;
   onToggleSelect: (key: string) => void;
@@ -103,6 +104,7 @@ function FileGrid({
   files,
   view,
   density = "standard",
+  folderCounts,
   selectedKeys,
   dimmedKeys,
   onToggleSelect,
@@ -113,6 +115,11 @@ function FileGrid({
   emptyMessage,
 }: FileGridProps) {
   const isSelected = (file: FileItem) => selectedKeys.includes(file.key);
+  const folderMeta = (file: FileItem) => {
+    const count = folderCounts?.[file.key];
+    if (typeof count === "number") return `${count} ${strings.folderItems}`;
+    return strings.folderLabel;
+  };
 
   const openMenu = (
     event: { clientX: number; clientY: number; preventDefault?: () => void },
@@ -299,7 +306,7 @@ function FileGrid({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        {isDirectory(file) ? "—" : humanReadableSize(file.size)}
+        {isDirectory(file) ? folderMeta(file) : humanReadableSize(file.size)}
       </Typography>
       <Typography
         variant="caption"
@@ -408,7 +415,7 @@ function FileGrid({
         {file.name}
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        {isDirectory(file) ? strings.folderLabel : humanReadableSize(file.size)}
+        {isDirectory(file) ? folderMeta(file) : humanReadableSize(file.size)}
       </Typography>
       {density !== "compact" && (
       <Typography

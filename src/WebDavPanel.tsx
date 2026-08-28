@@ -15,6 +15,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 import { authFetch } from "./app/auth";
 import { NotifyFn } from "./app/notify";
+import { strings } from "./app/strings";
 
 interface WebDavInfo {
   username: string;
@@ -64,6 +65,17 @@ function WebDavPanel({
     }
   };
 
+  const guide = [
+    `地址：${webdavUrl}`,
+    `用户名：${info?.username || "（未配置）"}`,
+    "单次上传限制约 128MB，更大的文件请用网页端分块上传。",
+    "macOS Finder：菜单「前往」→「连接服务器」，粘贴上述地址。",
+    "密码与网页登录密码相同，此处不显示。",
+    info?.publicRead
+      ? "公开读取：已开启（未登录也可读取）。"
+      : "公开读取：未开启（需要登录才能读取）。",
+  ].join("\n");
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>WebDAV 连接</DialogTitle>
@@ -112,14 +124,41 @@ function WebDavPanel({
                   : "未开启（需要登录才能读取）"}
               </Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary">
-              密码与网页登录密码相同，此处不显示。单次 WebDAV
-              上传请勿超过 Cloudflare 约 128MB 限制；更大的文件请用网页端分块上传。
-            </Typography>
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                backgroundColor: "#f7f5f1",
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+              >
+                {guide}
+              </Typography>
+              <Button
+                size="small"
+                startIcon={<ContentCopyIcon />}
+                onClick={() => copy(guide, "完整说明")}
+                sx={{ mt: 1 }}
+              >
+                {strings.copyWebDavGuide}
+              </Button>
+            </Box>
           </Stack>
         )}
       </DialogContent>
       <DialogActions>
+        <Button
+          startIcon={<ContentCopyIcon />}
+          onClick={() => copy(guide, "完整说明")}
+          disabled={loading}
+        >
+          {strings.copyWebDavGuide}
+        </Button>
         <Button onClick={onClose}>关闭</Button>
       </DialogActions>
     </Dialog>

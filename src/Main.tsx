@@ -344,6 +344,7 @@ function Main({
     "standard"
   );
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
   const recents = useRecent();
   const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [contextMenu, setContextMenu] = useState<{
@@ -416,7 +417,12 @@ function Main({
         setSearchHasMore(result.hasMore);
         setSearchCursor(result.nextCursor);
       } else {
-        setFiles(await fetchPath(cwd));
+        const items = await fetchPath(cwd);
+        setFiles(items);
+        setFolderCounts((prev) => ({
+          ...prev,
+          [cwd.replace(/\/$/, "")]: items.length,
+        }));
         setSearchHasMore(false);
         setSearchCursor(undefined);
       }
@@ -999,6 +1005,7 @@ function Main({
                 files={visibleFiles}
                 view={view}
                 density={density}
+                folderCounts={folderCounts}
                 selectedKeys={selectedKeys}
                 dimmedKeys={cutKeys}
                 onToggleSelect={toggleSelect}
