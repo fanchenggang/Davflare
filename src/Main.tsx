@@ -568,8 +568,17 @@ function Main({
             </Typography>
           )}
 
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", padding: 4 }}>
+          {loading ||
+          (route.kind === "folder" && loadedListingKey.current !== listingKey) ? (
+            <Box
+              sx={{
+                flexGrow: 1,
+                minHeight: 200,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
               <CircularProgress />
             </Box>
           ) : (

@@ -78,8 +78,16 @@ export function TransferQueueProvider({
     tasksRef.current = transferTasks;
   }, [transferTasks]);
 
+  const commitTasks = (updater: (tasks: TransferTask[]) => TransferTask[]) => {
+    setTransferTasks((tasks) => {
+      const next = updater(tasks);
+      tasksRef.current = next;
+      return next;
+    });
+  };
+
   const updateTask = (id: string, patch: Partial<TransferTask>) => {
-    setTransferTasks((tasks) =>
+    commitTasks((tasks) =>
       tasks.map((task) => (task.id === id ? { ...task, ...patch } : task))
     );
   };
@@ -96,7 +104,7 @@ export function TransferQueueProvider({
       loaded: 0,
       total: file.size,
     }));
-    setTransferTasks((tasks) => [...tasks, ...newTasks]);
+    commitTasks((tasks) => [...tasks, ...newTasks]);
   };
 
   const startTask = (task: TransferTask) => {
@@ -105,6 +113,9 @@ export function TransferQueueProvider({
     const controller = new AbortController();
     runningRef.current.add(task.id);
     controllersRef.current.set(task.id, controller);
+    tasksRef.current = tasksRef.current.map((item) =>
+      item.id === task.id ? { ...item, status: "in-progress" } : item
+    );
     updateTask(task.id, { status: "in-progress", error: undefined });
 
     const latest = tasksRef.current.find((item) => item.id === task.id) ?? task;
@@ -149,16 +160,19 @@ export function TransferQueueProvider({
   };
 
   useEffect(() => {
-    const startAvailable = () => {
-      if (runningRef.current.size >= CONCURRENCY) return;
+    // Never recurse on the same pending task: startTask leaves status
+    // "pending" in tasksRef until React commits updateTask. The old
+    // recursive finder re-picked that task forever and overflowed the
+    // stack, unmounting the whole tree (blank page) while XHR may or
+    // may not have already left the browser (the two save failure modes).
+    while (runningRef.current.size < CONCURRENCY) {
       const next = tasksRef.current.find(
-        (task) => task.status === "pending"
+        (task) =>
+          task.status === "pending" && !runningRef.current.has(task.id)
       );
-      if (!next) return;
+      if (!next) break;
       startTask(next);
-      startAvailable();
-    };
-    startAvailable();
+    }
   }, [transferTasks]);
 
   const actions = useMemo<TransferQueueActions>(
@@ -205,17 +219,17 @@ export function TransferQueueProvider({
         }
       },
       remove: (id) => {
-        setTransferTasks((tasks) => tasks.filter((task) => task.id !== id));
+        commitTasks((tasks) => tasks.filter((task) => task.id !== id));
       },
       clearCompleted: () => {
-        setTransferTasks((tasks) =>
+        commitTasks((tasks) =>
           tasks.filter(
             (task) => task.status !== "completed" && task.status !== "canceled"
           )
         );
       },
       clearFailed: () => {
-        setTransferTasks((tasks) =>
+        commitTasks((tasks) =>
           tasks.filter((task) => task.status !== "failed")
         );
       },
