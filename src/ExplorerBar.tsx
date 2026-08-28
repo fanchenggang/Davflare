@@ -3,9 +3,11 @@ import {
   Box,
   Button,
   ButtonGroup,
+  FormControlLabel,
   IconButton,
   Menu,
   MenuItem,
+  Switch,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -46,6 +48,8 @@ function ExplorerBar({
   onOpenWebDav,
   typeFilter,
   onTypeFilterChange,
+  showHidden,
+  onShowHiddenChange,
 }: {
   section: ExplorerSection;
   onSectionChange: (section: ExplorerSection) => void;
@@ -64,6 +68,8 @@ function ExplorerBar({
   onOpenWebDav: () => void;
   typeFilter: FileTypeFilter;
   onTypeFilterChange: (filter: FileTypeFilter) => void;
+  showHidden: boolean;
+  onShowHiddenChange: (show: boolean) => void;
 }) {
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
@@ -221,6 +227,20 @@ function ExplorerBar({
             <ToggleButton value="doc">{strings.typeDoc}</ToggleButton>
             <ToggleButton value="other">{strings.typeOther}</ToggleButton>
           </ToggleButtonGroup>
+          <FormControlLabel
+            sx={{ marginLeft: 0.5, marginRight: 0.5, whiteSpace: "nowrap" }}
+            control={
+              <Switch
+                size="small"
+                checked={showHidden}
+                onChange={(event) => onShowHiddenChange(event.target.checked)}
+                inputProps={{ "aria-label": strings.showHidden }}
+              />
+            }
+            label={
+              <Typography variant="caption">{strings.showHidden}</Typography>
+            }
+          />
           <Tooltip title={view === "grid" ? "切换到列表视图" : "切换到网格视图"}>
             <IconButton
               size="small"

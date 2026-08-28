@@ -12,6 +12,8 @@ import {
   CircularProgress,
   IconButton,
   Link,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { ArrowBack as ArrowBackIcon } from "@mui/icons-material";
@@ -33,7 +35,7 @@ import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
-import { FileTypeFilter, SortPref, ViewMode } from "./app/prefs";
+import { FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
 import { strings } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
@@ -50,61 +52,122 @@ import { moveToTrash } from "./app/trash";
 import { useAuth } from "./app/auth";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
-import { basename, fileTypeCategory, isDirectory } from "./app/utils";
+import {
+  basename,
+  fileTypeCategory,
+  formatListingSize,
+  isDirectory,
+  isJunkFileName,
+} from "./app/utils";
+
+export type SearchScope = "folder" | "global";
 
 function PathBar({
   cwd,
   onNavigate,
+  stats,
+  searchScope,
+  onSearchScopeChange,
+  searchQuery,
 }: {
   cwd: string;
   onNavigate: (path: string) => void;
+  stats: string;
+  searchScope: SearchScope;
+  onSearchScopeChange: (scope: SearchScope) => void;
+  searchQuery: string;
 }) {
   const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
   const atRoot = parts.length === 0;
 
   return (
-    <Box sx={{ padding: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
-      <IconButton
-        size="small"
-        aria-label="返回上一级"
-        disabled={atRoot}
-        onClick={() =>
-          onNavigate(parts.slice(0, -1).join("/") + (parts.length > 1 ? "/" : ""))
-        }
+    <Box
+      sx={{
+        padding: "4px 8px 8px",
+        borderBottom: "1px solid",
+        borderColor: "divider",
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <IconButton
+          size="small"
+          aria-label="返回上一级"
+          disabled={atRoot}
+          onClick={() =>
+            onNavigate(parts.slice(0, -1).join("/") + (parts.length > 1 ? "/" : ""))
+          }
+          sx={{
+            visibility: atRoot ? "hidden" : "visible",
+            opacity: atRoot ? 0 : 1,
+            pointerEvents: atRoot ? "none" : "auto",
+          }}
+        >
+          <ArrowBackIcon fontSize="small" />
+        </IconButton>
+        <Breadcrumbs separator="›" sx={{ flexGrow: 1 }}>
+          {parts.length === 0 ? (
+            <Typography color="text.primary">{strings.allFiles}</Typography>
+          ) : (
+            <Link component="button" onClick={() => onNavigate("")}>
+              {strings.allFiles}
+            </Link>
+          )}
+          {parts.map((part, index) =>
+            index === parts.length - 1 ? (
+              <Typography key={index} color="text.primary">
+                {part}
+              </Typography>
+            ) : (
+              <Link
+                key={index}
+                component="button"
+                onClick={() =>
+                  onNavigate(parts.slice(0, index + 1).join("/") + "/")
+                }
+              >
+                {part}
+              </Link>
+            )
+          )}
+        </Breadcrumbs>
+      </Box>
+      <Box
         sx={{
-          visibility: atRoot ? "hidden" : "visible",
-          opacity: atRoot ? 0 : 1,
-          pointerEvents: atRoot ? "none" : "auto",
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          flexWrap: "wrap",
+          paddingLeft: "40px",
+          minHeight: 32,
         }}
       >
-        <ArrowBackIcon fontSize="small" />
-      </IconButton>
-      <Breadcrumbs separator="›" sx={{ flexGrow: 1 }}>
-        {parts.length === 0 ? (
-          <Typography color="text.primary">{strings.allFiles}</Typography>
-        ) : (
-          <Link component="button" onClick={() => onNavigate("")}>
-            {strings.allFiles}
-          </Link>
-        )}
-        {parts.map((part, index) =>
-          index === parts.length - 1 ? (
-            <Typography key={index} color="text.primary">
-              {part}
-            </Typography>
-          ) : (
-            <Link
-              key={index}
-              component="button"
-              onClick={() =>
-                onNavigate(parts.slice(0, index + 1).join("/") + "/")
-              }
-            >
-              {part}
-            </Link>
-          )
-        )}
-      </Breadcrumbs>
+        <Typography variant="caption" color="text.secondary">
+          {stats}
+        </Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={searchScope}
+          onChange={(_, value: SearchScope | null) => {
+            if (value) onSearchScopeChange(value);
+          }}
+          aria-label="搜索范围"
+        >
+          <ToggleButton value="folder">{strings.searchHere}</ToggleButton>
+          <ToggleButton value="global">{strings.searchAll}</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
+      {searchQuery ? (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ paddingLeft: "40px", paddingTop: 0.5 }}
+        >
+          {searchScope === "global" ? strings.searchAll : strings.searchHere}：
+          {searchQuery}
+        </Typography>
+      ) : null}
     </Box>
   );
 }
@@ -185,6 +248,11 @@ function Main({
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [showWebDav, setShowWebDav] = useState(false);
   const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
+  const [showHidden, setShowHidden] = usePersistedState(
+    "flaredrive.showHidden",
+    false
+  );
+  const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -207,6 +275,10 @@ function Main({
   }, [route]);
 
   useEffect(() => {
+    setSearchScope(cwd ? "folder" : "global");
+  }, [cwd]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
     }, 300);
@@ -219,8 +291,13 @@ function Main({
     }
   }, [navigate, route.kind, search]);
 
+  const isGlobalSearch = Boolean(debouncedSearch) && searchScope === "global";
   const listingKey =
-    route.kind === "folder" ? `folder:${cwd}||${debouncedSearch}` : route.kind;
+    route.kind === "folder"
+      ? isGlobalSearch
+        ? `folder:${cwd}||search:${debouncedSearch}`
+        : `folder:${cwd}`
+      : route.kind;
 
   const loadListing = useCallback(async () => {
     if (route.kind !== "folder") {
@@ -240,7 +317,7 @@ function Main({
     const silent = loadedListingKey.current === listingKey;
     if (!silent) setLoading(true);
     try {
-      if (debouncedSearch) {
+      if (isGlobalSearch) {
         const result = await searchFiles(debouncedSearch);
         setFiles(result.items);
         setSearchHasMore(result.hasMore);
@@ -257,7 +334,15 @@ function Main({
     } finally {
       setLoading(false);
     }
-  }, [cwd, debouncedSearch, listingKey, onNotify, route.kind, username]);
+  }, [
+    cwd,
+    debouncedSearch,
+    listingKey,
+    onNotify,
+    route.kind,
+    isGlobalSearch,
+    username,
+  ]);
 
   useEffect(() => {
     loadListing();
@@ -278,7 +363,7 @@ function Main({
   }, [activeUploads, loadListing]);
 
   const loadMore = async () => {
-    if (!debouncedSearch || !searchCursor) return;
+    if (!isGlobalSearch || !searchCursor) return;
     try {
       const result = await searchFiles(debouncedSearch, searchCursor);
       setFiles((prev) => [...prev, ...result.items]);
@@ -310,12 +395,43 @@ function Main({
   }, [files, sort]);
 
   const visibleFiles = useMemo(() => {
-    if (typeFilter === "all") return sortedFiles;
-    return sortedFiles.filter((file) => {
-      if (file.isDir) return true;
-      return fileTypeCategory(file) === typeFilter;
-    });
-  }, [sortedFiles, typeFilter]);
+    let items = sortedFiles;
+    if (!showHidden) {
+      items = items.filter((file) => !isJunkFileName(file.name));
+    }
+    if (typeFilter !== "all") {
+      items = items.filter((file) => {
+        if (file.isDir) return true;
+        return fileTypeCategory(file) === typeFilter;
+      });
+    }
+    if (debouncedSearch && searchScope === "folder") {
+      const q = debouncedSearch.toLowerCase();
+      items = items.filter(
+        (file) =>
+          file.name.toLowerCase().includes(q) ||
+          file.key.toLowerCase().includes(q)
+      );
+    }
+    return items;
+  }, [debouncedSearch, searchScope, showHidden, sortedFiles, typeFilter]);
+
+  const listingStats = useMemo(() => {
+    let folders = 0;
+    let fileCount = 0;
+    let bytes = 0;
+    for (const file of visibleFiles) {
+      if (file.isDir) {
+        folders += 1;
+      } else {
+        fileCount += 1;
+        bytes += file.size || 0;
+      }
+    }
+    return `${folders} 个文件夹 · ${fileCount} 个文件 · 共 ${formatListingSize(
+      bytes
+    )}`;
+  }, [visibleFiles]);
 
   const navigateFolder = useCallback(
     (path: string) => {
@@ -546,6 +662,8 @@ function Main({
         onOpenWebDav={() => setShowWebDav(true)}
         typeFilter={typeFilter}
         onTypeFilterChange={setTypeFilter}
+        showHidden={showHidden}
+        onShowHiddenChange={setShowHidden}
       />
 
       {route.kind === "trash" && (
@@ -561,12 +679,14 @@ function Main({
 
       {route.kind === "folder" && (
         <>
-          <PathBar cwd={cwd} onNavigate={navigateFolder} />
-          {debouncedSearch && (
-            <Typography variant="body2" sx={{ padding: 1 }} color="text.secondary">
-              搜索：{debouncedSearch}
-            </Typography>
-          )}
+          <PathBar
+            cwd={cwd}
+            onNavigate={navigateFolder}
+            stats={listingStats}
+            searchScope={searchScope}
+            onSearchScopeChange={setSearchScope}
+            searchQuery={debouncedSearch}
+          />
 
           {loading ||
           (route.kind === "folder" && loadedListingKey.current !== listingKey) ? (
