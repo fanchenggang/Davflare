@@ -23,7 +23,7 @@ import {
   ViewList as ViewListIcon,
 } from "@mui/icons-material";
 
-import { SortField, SortPref, ViewMode } from "./app/prefs";
+import { FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
 import { strings } from "./app/strings";
 
 export type ExplorerSection = "folder" | "shares" | "trash";
@@ -44,6 +44,8 @@ function ExplorerBar({
   sort,
   onSortChange,
   onOpenWebDav,
+  typeFilter,
+  onTypeFilterChange,
 }: {
   section: ExplorerSection;
   onSectionChange: (section: ExplorerSection) => void;
@@ -60,6 +62,8 @@ function ExplorerBar({
   sort: SortPref;
   onSortChange: (sort: SortPref) => void;
   onOpenWebDav: () => void;
+  typeFilter: FileTypeFilter;
+  onTypeFilterChange: (filter: FileTypeFilter) => void;
 }) {
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
@@ -201,7 +205,22 @@ function ExplorerBar({
       )}
 
       {inFolder && (
-        <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto" }}>
+        <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto", gap: 1, flexWrap: "wrap" }}>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={typeFilter}
+            onChange={(_, value: FileTypeFilter | null) => {
+              if (value) onTypeFilterChange(value);
+            }}
+            aria-label="类型筛选"
+          >
+            <ToggleButton value="all">{strings.typeAll}</ToggleButton>
+            <ToggleButton value="image">{strings.typeImage}</ToggleButton>
+            <ToggleButton value="video">{strings.typeVideo}</ToggleButton>
+            <ToggleButton value="doc">{strings.typeDoc}</ToggleButton>
+            <ToggleButton value="other">{strings.typeOther}</ToggleButton>
+          </ToggleButtonGroup>
           <Tooltip title={view === "grid" ? "切换到列表视图" : "切换到网格视图"}>
             <IconButton
               size="small"

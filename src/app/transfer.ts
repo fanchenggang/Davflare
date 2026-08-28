@@ -1,7 +1,7 @@
 import pLimit from "p-limit";
 
 import { authFetch, basicAuthHeader } from "./auth";
-import { FileItem, TransferTask } from "./types";
+import { FileItem, TransferTask, UploadPart } from "./types";
 import { basename, encodeKey } from "./utils";
 
 const WEBDAV_ENDPOINT = "/webdav/";
@@ -382,26 +382,70 @@ export async function multipartUpload(
   options?: {
     headers?: Record<string, string>;
     signal?: AbortSignal;
+    uploadId?: string;
+    uploadedParts?: UploadPart[];
     onUploadProgress?: (progressEvent: {
       loaded: number;
       total: number;
+    }) => void;
+    onState?: (state: {
+      uploadId: string;
+      uploadedParts: UploadPart[];
+      loaded: number;
     }) => void;
   }
 ) {
   const headers = options?.headers || {};
   headers["content-type"] = file.type;
 
-  const uploadResponse = await authFetch(`/webdav/${encodeKey(key)}?uploads`, {
-    headers,
-    method: "POST",
-  });
-  const { uploadId } = await uploadResponse.json<{ uploadId: string }>();
-  const totalChunks = Math.ceil(file.size / SIZE_LIMIT);
+  let uploadId = options?.uploadId;
+  const uploadedParts: UploadPart[] = [...(options?.uploadedParts || [])];
+  const done = new Set(uploadedParts.map((part) => part.partNumber));
+  const totalChunks = Math.ceil(file.size / SIZE_LIMIT) || 1;
+  const partsLoaded = Array.from({ length: totalChunks + 1 }, () => 0);
+
+  for (const part of uploadedParts) {
+    const start = (part.partNumber - 1) * SIZE_LIMIT;
+    const end = Math.min(part.partNumber * SIZE_LIMIT, file.size);
+    partsLoaded[part.partNumber] = Math.max(0, end - start);
+  }
+
+  const emitProgress = (persist = false) => {
+    const loaded = partsLoaded.reduce((a, b) => a + b, 0);
+    options?.onUploadProgress?.({ loaded, total: file.size });
+    if (persist && uploadId) {
+      options?.onState?.({
+        uploadId,
+        uploadedParts: [...uploadedParts],
+        loaded,
+      });
+    }
+  };
+  emitProgress(true);
+
+  if (!uploadId) {
+    const uploadResponse = await authFetch(`/webdav/${encodeKey(key)}?uploads`, {
+      headers,
+      method: "POST",
+    });
+    if (!uploadResponse.ok) {
+      throw new Error((await uploadResponse.text()) || "无法创建分块上传");
+    }
+    const created = await uploadResponse.json<{ uploadId: string }>();
+    uploadId = created.uploadId;
+    options?.onState?.({
+      uploadId,
+      uploadedParts: [...uploadedParts],
+      loaded: partsLoaded.reduce((a, b) => a + b, 0),
+    });
+  }
+
+  const remaining = Array.from({ length: totalChunks }, (_, i) => i + 1).filter(
+    (partNumber) => !done.has(partNumber)
+  );
 
   const limit = pLimit(2);
-  const parts = Array.from({ length: totalChunks }, (_, i) => i + 1);
-  const partsLoaded = Array.from({ length: totalChunks + 1 }, () => 0);
-  const promises = parts.map((i) =>
+  const promises = remaining.map((i) =>
     limit(async () => {
       if (options?.signal?.aborted) {
         throw new DOMException("Aborted", "AbortError");
@@ -409,11 +453,9 @@ export async function multipartUpload(
       const chunk = file.slice((i - 1) * SIZE_LIMIT, i * SIZE_LIMIT);
       const searchParams = new URLSearchParams({
         partNumber: i.toString(),
-        uploadId,
+        uploadId: uploadId!,
       });
       const uploadUrl = `/webdav/${encodeKey(key)}?${searchParams}`;
-      if (i === limit.concurrency)
-        await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const uploadPart = () =>
         xhrFetch(uploadUrl, {
@@ -423,10 +465,7 @@ export async function multipartUpload(
           signal: options?.signal,
           onUploadProgress: (progressEvent) => {
             partsLoaded[i] = progressEvent.loaded;
-            options?.onUploadProgress?.({
-              loaded: partsLoaded.reduce((a, b) => a + b),
-              total: file.size,
-            });
+            emitProgress();
           },
         });
 
@@ -439,10 +478,22 @@ export async function multipartUpload(
           })
           .catch(uploadPart);
       const response = await [1, 2].reduce(retryReducer, uploadPart());
-      return { partNumber: i, etag: response.headers.get("etag")! };
+      if (!response.ok) {
+        throw new Error((await response.text()) || `分块 ${i} 上传失败`);
+      }
+      const etag = response.headers.get("etag");
+      if (!etag) throw new Error(`分块 ${i} 缺少 ETag`);
+      const finished = { partNumber: i, etag };
+      uploadedParts.push(finished);
+      done.add(i);
+      partsLoaded[i] = chunk.size;
+      emitProgress(true);
+      return finished;
     })
   );
-  const uploadedParts = await Promise.all(promises);
+  await Promise.all(promises);
+
+  uploadedParts.sort((a, b) => a.partNumber - b.partNumber);
   const completeParams = new URLSearchParams({ uploadId });
   const response = await authFetch(`/webdav/${encodeKey(key)}?${completeParams}`, {
     method: "POST",
@@ -480,10 +531,12 @@ export async function createFolder(cwd: string, folderName: string) {
 export async function processTransferTask({
   task,
   onTaskProgress,
+  onTaskState,
   signal,
 }: {
   task: TransferTask;
   onTaskProgress?: (event: { loaded: number; total: number }) => void;
+  onTaskState?: (patch: Partial<TransferTask>) => void;
   signal?: AbortSignal;
 }) {
   const { remoteKey, file } = task;
@@ -523,7 +576,10 @@ export async function processTransferTask({
     return await multipartUpload(remoteKey, file, {
       headers,
       signal,
+      uploadId: task.uploadId,
+      uploadedParts: task.uploadedParts,
       onUploadProgress: onTaskProgress,
+      onState: (state) => onTaskState?.(state),
     });
   } else {
     const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(remoteKey)}`;

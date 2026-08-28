@@ -26,3 +26,28 @@ export function basename(key: string) {
 export function isDirectory(file: Pick<FileItem, "isDir">) {
   return file.isDir;
 }
+
+export function fileTypeCategory(
+  file: FileItem
+): "folder" | "image" | "video" | "doc" | "other" {
+  if (file.isDir) return "folder";
+  const type = (file.contentType || "").toLowerCase();
+  const name = file.name.toLowerCase();
+  if (type.startsWith("image/")) return "image";
+  if (type.startsWith("video/")) return "video";
+  const office =
+    type.includes("wordprocessing") ||
+    type.includes("spreadsheet") ||
+    type.includes("presentation") ||
+    type.includes("opendocument") ||
+    [
+      "application/pdf",
+      "application/msword",
+      "application/rtf",
+      "application/vnd.ms-excel",
+      "application/vnd.ms-powerpoint",
+    ].includes(type);
+  const docName = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|md|csv|rtf)$/.test(name);
+  if (type.startsWith("text/") || office || docName) return "doc";
+  return "other";
+}

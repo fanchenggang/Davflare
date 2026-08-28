@@ -107,11 +107,15 @@ export function TransferQueueProvider({
     controllersRef.current.set(task.id, controller);
     updateTask(task.id, { status: "in-progress", error: undefined });
 
+    const latest = tasksRef.current.find((item) => item.id === task.id) ?? task;
     processTransferTask({
-      task,
+      task: latest,
       signal: controller.signal,
       onTaskProgress: ({ loaded, total }) => {
         updateTask(task.id, { loaded, total });
+      },
+      onTaskState: (patch) => {
+        updateTask(task.id, patch);
       },
     })
       .then(() => {
@@ -125,9 +129,16 @@ export function TransferQueueProvider({
           updateTask(task.id, { status: "canceled" });
           canceledIdsRef.current.delete(task.id);
         } else {
+          const message = error?.message || "上传失败";
+          const staleUpload =
+            Boolean(latest.uploadId) &&
+            /nosuchupload|not found|no such upload|invalid/i.test(message);
           updateTask(task.id, {
             status: "failed",
-            error: error?.message || "上传失败",
+            error: message,
+            ...(staleUpload
+              ? { uploadId: undefined, uploadedParts: undefined, loaded: 0 }
+              : {}),
           });
         }
       })
@@ -166,19 +177,21 @@ export function TransferQueueProvider({
       resume: (id) => {
         pausedIdsRef.current.delete(id);
         canceledIdsRef.current.delete(id);
+        const current = tasksRef.current.find((item) => item.id === id);
         updateTask(id, {
           status: "pending",
           error: undefined,
-          loaded: 0,
+          loaded: current?.uploadId ? current.loaded : 0,
         });
       },
       retry: (id) => {
         pausedIdsRef.current.delete(id);
         canceledIdsRef.current.delete(id);
+        const current = tasksRef.current.find((item) => item.id === id);
         updateTask(id, {
           status: "pending",
           error: undefined,
-          loaded: 0,
+          loaded: current?.uploadId ? current.loaded : 0,
         });
       },
       cancel: (id) => {

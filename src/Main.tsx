@@ -33,7 +33,7 @@ import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
-import { SortPref, ViewMode } from "./app/prefs";
+import { FileTypeFilter, SortPref, ViewMode } from "./app/prefs";
 import { strings } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
@@ -50,7 +50,7 @@ import { moveToTrash } from "./app/trash";
 import { useAuth } from "./app/auth";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
-import { basename, isDirectory } from "./app/utils";
+import { basename, fileTypeCategory, isDirectory } from "./app/utils";
 
 function PathBar({
   cwd,
@@ -178,6 +178,7 @@ function Main({
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [showWebDav, setShowWebDav] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -293,6 +294,14 @@ function Main({
     return items;
   }, [files, sort]);
 
+  const visibleFiles = useMemo(() => {
+    if (typeFilter === "all") return sortedFiles;
+    return sortedFiles.filter((file) => {
+      if (file.isDir) return true;
+      return fileTypeCategory(file) === typeFilter;
+    });
+  }, [sortedFiles, typeFilter]);
+
   const navigateFolder = useCallback(
     (path: string) => {
       setDebouncedSearch("");
@@ -311,11 +320,11 @@ function Main({
 
   const selectAll = useCallback(() => {
     setSelectedKeys((prev) => {
-      const all = sortedFiles.map((file) => file.key);
+      const all = visibleFiles.map((file) => file.key);
       if (prev.length === all.length) return [];
       return all;
     });
-  }, [sortedFiles]);
+  }, [visibleFiles]);
 
   const isPreviewable = (file: FileItem) =>
     !file.isDir &&
@@ -509,6 +518,8 @@ function Main({
         sort={sort}
         onSortChange={onSortChange}
         onOpenWebDav={() => setShowWebDav(true)}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
       />
 
       {route.kind === "trash" && (
@@ -558,7 +569,7 @@ function Main({
               }}
             >
               <FileGrid
-                files={sortedFiles}
+                files={visibleFiles}
                 view={view}
                 selectedKeys={selectedKeys}
                 dimmedKeys={cutKeys}

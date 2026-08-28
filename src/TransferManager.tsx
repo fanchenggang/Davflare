@@ -6,11 +6,7 @@ import {
   DialogContent,
   DialogTitle,
   LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import {
@@ -23,7 +19,27 @@ import {
 } from "@mui/icons-material";
 
 import { useTransferQueue, useTransferQueueActions } from "./app/transferQueue";
+import { TransferStatus } from "./app/types";
 import { humanReadableSize } from "./app/utils";
+
+function statusLabel(status: TransferStatus, resumable: boolean) {
+  switch (status) {
+    case "pending":
+      return "等待中";
+    case "in-progress":
+      return resumable ? "分块上传中" : "上传中";
+    case "paused":
+      return resumable ? "已暂停，点「继续」从已上传分块续传" : "已暂停";
+    case "failed":
+      return resumable ? "失败，点「重试」可从断点续传" : "失败，可重试";
+    case "completed":
+      return "已完成";
+    case "canceled":
+      return "已取消";
+    default:
+      return status;
+  }
+}
 
 function TransferManager({
   open,
@@ -60,100 +76,98 @@ function TransferManager({
             <Typography variant="body2" color="text.secondary">
               总进度：{humanReadableSize(loaded)} / {humanReadableSize(total)}
             </Typography>
-            <List disablePadding>
-              {uploads.map((task) => (
-                <ListItem
-                  key={task.id}
-                  secondaryAction={
-                    <Stack direction="row" spacing={0.5}>
+            <Stack spacing={2}>
+              {uploads.map((task) => {
+                const resumable = Boolean(task.uploadId);
+                return (
+                  <Stack
+                    key={task.id}
+                    spacing={0.75}
+                    sx={{
+                      padding: 1.5,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center">
                       {task.status === "failed" && (
-                        <Tooltip title="重试">
-                          <span>
-                            <Button
-                              size="small"
-                              startIcon={<RefreshIcon />}
-                              onClick={() => actions.retry(task.id)}
-                            />
-                          </span>
-                        </Tooltip>
+                        <ErrorOutlineIcon color="error" fontSize="small" />
+                      )}
+                      {task.status === "completed" && (
+                        <CheckCircleOutlineIcon color="success" fontSize="small" />
+                      )}
+                      {task.status === "in-progress" && (
+                        <CircularProgress size={16} />
+                      )}
+                      <Typography sx={{ flexGrow: 1 }} noWrap title={task.name}>
+                        {task.name}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {humanReadableSize(task.loaded)} / {humanReadableSize(task.total)}
+                      {" · "}
+                      {statusLabel(task.status, resumable)}
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={
+                        task.total > 0 ? (task.loaded / task.total) * 100 : 0
+                      }
+                    />
+                    {task.error && (
+                      <Typography variant="caption" color="error">
+                        {task.error}
+                      </Typography>
+                    )}
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {task.status === "failed" && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<RefreshIcon />}
+                          onClick={() => actions.retry(task.id)}
+                        >
+                          重试
+                        </Button>
                       )}
                       {(task.status === "pending" ||
                         task.status === "in-progress") && (
-                        <Tooltip title="暂停">
-                          <span>
-                            <Button
-                              size="small"
-                              startIcon={<PauseIcon />}
-                              onClick={() => actions.pause(task.id)}
-                            />
-                          </span>
-                        </Tooltip>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<PauseIcon />}
+                          onClick={() => actions.pause(task.id)}
+                        >
+                          暂停
+                        </Button>
                       )}
                       {task.status === "paused" && (
-                        <Tooltip title="继续">
-                          <span>
-                            <Button
-                              size="small"
-                              startIcon={<PlayArrowIcon />}
-                              onClick={() => actions.resume(task.id)}
-                            />
-                          </span>
-                        </Tooltip>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<PlayArrowIcon />}
+                          onClick={() => actions.resume(task.id)}
+                        >
+                          继续
+                        </Button>
                       )}
                       {task.status !== "completed" &&
                         task.status !== "canceled" && (
-                          <Tooltip title="取消">
-                            <span>
-                              <Button
-                                size="small"
-                                color="error"
-                                startIcon={<CancelIcon />}
-                                onClick={() => actions.cancel(task.id)}
-                              />
-                            </span>
-                          </Tooltip>
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<CancelIcon />}
+                            onClick={() => actions.cancel(task.id)}
+                          >
+                            取消
+                          </Button>
                         )}
                     </Stack>
-                  }
-                >
-                  <ListItemText
-                    primary={task.name}
-                    secondary={
-                      <Stack spacing={0.5} sx={{ marginTop: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {humanReadableSize(task.loaded)} /{" "}
-                          {humanReadableSize(task.total)}
-                        </Typography>
-                        <LinearProgress
-                          variant="determinate"
-                          value={
-                            task.total > 0
-                              ? (task.loaded / task.total) * 100
-                              : 0
-                          }
-                        />
-                        {task.error && (
-                          <Typography variant="caption" color="error">
-                            {task.error}
-                          </Typography>
-                        )}
-                      </Stack>
-                    }
-                  />
-                  {task.status === "failed" && (
-                    <Tooltip title={task.error || "上传失败"}>
-                      <ErrorOutlineIcon color="error" />
-                    </Tooltip>
-                  )}
-                  {task.status === "completed" && (
-                    <CheckCircleOutlineIcon color="success" />
-                  )}
-                  {task.status === "in-progress" && (
-                    <CircularProgress size={20} />
-                  )}
-                </ListItem>
-              ))}
-            </List>
+                  </Stack>
+                );
+              })}
+            </Stack>
           </Stack>
         )}
       </DialogContent>
