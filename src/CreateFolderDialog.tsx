@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Button,
   Dialog,
@@ -19,6 +19,13 @@ function CreateFolderDialog({
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setName("");
+      setError(null);
+    }
+  }, [open]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();

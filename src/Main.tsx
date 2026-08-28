@@ -12,21 +12,14 @@ import {
   CircularProgress,
   IconButton,
   Link,
-  Menu,
-  MenuItem,
   Typography,
 } from "@mui/material";
-import {
-  ArrowBack as ArrowBackIcon,
-  CloudUpload as CloudUploadIcon,
-  CreateNewFolder as CreateNewFolderIcon,
-  Folder as FolderIcon,
-  Home as HomeIcon,
-  NoteAdd as NoteAddIcon,
-} from "@mui/icons-material";
+import { ArrowBack as ArrowBackIcon } from "@mui/icons-material";
 
 import ConfirmDialog from "./ConfirmDialog";
 import CreateFolderDialog from "./CreateFolderDialog";
+import ExplorerBar, { ExplorerSection } from "./ExplorerBar";
+import FileActionSheet, { FileAction } from "./FileActionSheet";
 import FileGrid from "./FileGrid";
 import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
@@ -34,12 +27,13 @@ import PreviewDialog from "./PreviewDialog";
 import RenameDialog from "./RenameDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
-import SpeedDial from "./SpeedDial";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
+import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
+import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
-import { SortPref, ViewMode } from "./app/prefs";
+import { FileTypeFilter, SortPref, ViewMode } from "./app/prefs";
 import { strings } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
@@ -56,7 +50,7 @@ import { moveToTrash } from "./app/trash";
 import { useAuth } from "./app/auth";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
-import { basename, isDirectory } from "./app/utils";
+import { basename, fileTypeCategory, isDirectory } from "./app/utils";
 
 function PathBar({
   cwd,
@@ -80,9 +74,13 @@ function PathBar({
         <ArrowBackIcon fontSize="small" />
       </IconButton>
       <Breadcrumbs separator="›" sx={{ flexGrow: 1 }}>
-        <Button size="small" onClick={() => onNavigate("")} sx={{ minWidth: 0 }}>
-          <HomeIcon fontSize="small" />
-        </Button>
+        {parts.length === 0 ? (
+          <Typography color="text.primary">{strings.allFiles}</Typography>
+        ) : (
+          <Link component="button" onClick={() => onNavigate("")}>
+            {strings.allFiles}
+          </Link>
+        )}
         {parts.map((part, index) =>
           index === parts.length - 1 ? (
             <Typography key={index} color="text.primary">
@@ -143,17 +141,21 @@ async function transferKeys(
 function Main({
   search,
   onSearchChange,
-  onError,
+  onNotify,
   view,
+  onViewChange,
   sort,
+  onSortChange,
   route,
   navigate,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
-  onError: (error: Error) => void;
+  onNotify: NotifyFn;
   view: ViewMode;
+  onViewChange: (view: ViewMode) => void;
   sort: SortPref;
+  onSortChange: (sort: SortPref) => void;
   route: Route;
   navigate: (route: Route) => void;
 }) {
@@ -169,13 +171,14 @@ function Main({
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [multiSelected, setMultiSelected] = useState<string[] | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [searchHasMore, setSearchHasMore] = useState(false);
   const [searchCursor, setSearchCursor] = useState<string | undefined>();
-  const [speedDialOpen, setSpeedDialOpen] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
+  const [showWebDav, setShowWebDav] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -186,8 +189,15 @@ function Main({
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
+  const lastFolderPath = useRef("");
 
-  const cwd = route.kind === "folder" ? route.path : "";
+  const cwd = route.kind === "folder" ? route.path : lastFolderPath.current;
+  const section: ExplorerSection =
+    route.kind === "shares" || route.kind === "trash" ? route.kind : "folder";
+
+  useEffect(() => {
+    if (route.kind === "folder") lastFolderPath.current = route.path;
+  }, [route]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -195,6 +205,12 @@ function Main({
     }, 300);
     return () => window.clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    if (search.trim() && route.kind !== "folder") {
+      navigate({ kind: "folder", path: lastFolderPath.current });
+    }
+  }, [navigate, route.kind, search]);
 
   const loadListing = useCallback(async () => {
     if (route.kind !== "folder") {
@@ -220,13 +236,13 @@ function Main({
         setSearchHasMore(false);
         setSearchCursor(undefined);
       }
-      setMultiSelected(null);
+      setSelectedKeys([]);
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
-  }, [cwd, debouncedSearch, onError, route.kind, username]);
+  }, [cwd, debouncedSearch, onNotify, route.kind, username]);
 
   useEffect(() => {
     loadListing();
@@ -254,7 +270,7 @@ function Main({
       setSearchHasMore(result.hasMore);
       setSearchCursor(result.nextCursor);
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     }
   };
 
@@ -278,11 +294,18 @@ function Main({
     return items;
   }, [files, sort]);
 
+  const visibleFiles = useMemo(() => {
+    if (typeFilter === "all") return sortedFiles;
+    return sortedFiles.filter((file) => {
+      if (file.isDir) return true;
+      return fileTypeCategory(file) === typeFilter;
+    });
+  }, [sortedFiles, typeFilter]);
+
   const navigateFolder = useCallback(
     (path: string) => {
       setDebouncedSearch("");
-      const normalized =
-        path && !path.endsWith("/") ? `${path}/` : path;
+      const normalized = path && !path.endsWith("/") ? `${path}/` : path;
       navigate({ kind: "folder", path: normalized });
       if (search) onSearchChange("");
     },
@@ -290,23 +313,18 @@ function Main({
   );
 
   const toggleSelect = useCallback((key: string) => {
-    setMultiSelected((prev) => {
-      if (prev === null) return [key];
-      if (prev.includes(key)) {
-        const next = prev.filter((item) => item !== key);
-        return next.length ? next : null;
-      }
-      return [...prev, key];
-    });
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
   }, []);
 
   const selectAll = useCallback(() => {
-    setMultiSelected((prev) => {
-      const all = sortedFiles.map((file) => file.key);
-      if (prev && prev.length === all.length) return null;
+    setSelectedKeys((prev) => {
+      const all = visibleFiles.map((file) => file.key);
+      if (prev.length === all.length) return [];
       return all;
     });
-  }, [sortedFiles]);
+  }, [visibleFiles]);
 
   const isPreviewable = (file: FileItem) =>
     !file.isDir &&
@@ -322,25 +340,14 @@ function Main({
       if (isPreviewable(file)) {
         setPreviewFile(file);
       } else {
-        openFile(key).catch(onError);
+        openFile(key).catch((error) => onNotify((error as Error).message, "error"));
       }
     },
-    [files, onError]
+    [files, onNotify]
   );
 
   const handleContextAction = useCallback(
-    async (
-      action:
-        | "open"
-        | "download"
-        | "rename"
-        | "delete"
-        | "share"
-        | "copy"
-        | "cut"
-        | "select",
-      file: FileItem
-    ) => {
+    async (action: FileAction, file: FileItem) => {
       setContextMenu(null);
       try {
         if (action === "open") {
@@ -351,22 +358,24 @@ function Main({
           else await downloadFile(file.key);
         } else if (action === "rename") {
           setRenameTarget(file);
+        } else if (action === "move") {
+          setMoveTarget([file.key]);
         } else if (action === "delete") {
           setConfirmDelete([file.key]);
         } else if (action === "share") {
           setShareTarget(file);
         } else if (action === "copy") {
           copyToClipboard([file.key]);
+          onNotify("已复制到剪贴板", "success");
         } else if (action === "cut") {
           cutToClipboard([file.key]);
-        } else if (action === "select") {
-          setMultiSelected([file.key]);
+          onNotify("已剪切到剪贴板", "success");
         }
       } catch (error) {
-        onError(error as Error);
+        onNotify((error as Error).message, "error");
       }
     },
-    [copyToClipboard, cutToClipboard, handleOpen, navigateFolder, onError]
+    [copyToClipboard, cutToClipboard, handleOpen, navigateFolder, onNotify]
   );
 
   const handleRenameSubmit = async (name: string) => {
@@ -378,9 +387,9 @@ function Main({
     const target = `${parent}${name}`;
     try {
       await copyPaste(renameTarget.key, target, true);
-      onError(new Error("重命名成功"));
+      onNotify("重命名成功", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setRenameTarget(null);
       await loadListing();
@@ -391,12 +400,13 @@ function Main({
     if (!confirmDelete) return;
     try {
       await moveToTrash(confirmDelete);
-      onError(new Error("已移入回收站"));
+      onNotify("已移入回收站", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setConfirmDelete(null);
-      setMultiSelected(null);
+      setSelectedKeys([]);
+      setPreviewFile(null);
       await loadListing();
     }
   };
@@ -406,9 +416,9 @@ function Main({
     try {
       await transferKeys(clipboard.keys, cwd, clipboard.mode);
       if (clipboard.mode === "cut") clearClipboard();
-      onError(new Error("粘贴完成"));
+      onNotify("粘贴完成", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       await loadListing();
     }
@@ -418,10 +428,10 @@ function Main({
     if (!moveTarget?.length) return;
     try {
       await transferKeys(moveTarget, destination, "cut");
-      setMultiSelected(null);
-      onError(new Error("移动完成"));
+      setSelectedKeys([]);
+      onNotify("移动完成", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setMoveTarget(null);
       await loadListing();
@@ -438,7 +448,7 @@ function Main({
         await transferKeys([internalKey], `${folder.key}/`, "cut");
         await loadListing();
       } catch (error) {
-        onError(error as Error);
+        onNotify((error as Error).message, "error");
       }
       return;
     }
@@ -475,138 +485,147 @@ function Main({
     }
   };
 
-  if (route.kind === "trash") {
-    return (
-      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-        <TrashView onError={onError} />
-      </Box>
-    );
-  }
-  if (route.kind === "shares") {
-    return (
-      <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-        <SharesView onError={onError} />
-      </Box>
-    );
-  }
+  const handleSectionChange = (next: ExplorerSection) => {
+    onSearchChange("");
+    if (next === "folder") {
+      navigate({ kind: "folder", path: lastFolderPath.current });
+    } else {
+      navigate({ kind: next });
+    }
+  };
 
   const cutKeys =
     clipboard?.mode === "cut" ? new Set(clipboard.keys) : undefined;
+  const canPaste = Boolean(
+    clipboard && clipboard.keys.length > 0 && route.kind === "folder"
+  );
 
   return (
     <>
-      {!debouncedSearch && cwd && (
-        <PathBar cwd={cwd} onNavigate={navigateFolder} />
+      <ExplorerBar
+        section={section}
+        onSectionChange={handleSectionChange}
+        onUploadFile={openFilePicker}
+        onUploadFolder={openFolderPicker}
+        onCreateFolder={() => setShowCreateFolder(true)}
+        onOpenTextPad={() => setShowTextPadDrawer(true)}
+        onPaste={handlePaste}
+        canPaste={canPaste}
+        clipboardCount={clipboard?.keys.length ?? 0}
+        clipboardMode={clipboard?.mode ?? null}
+        view={view}
+        onViewChange={onViewChange}
+        sort={sort}
+        onSortChange={onSortChange}
+        onOpenWebDav={() => setShowWebDav(true)}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+      />
+
+      {route.kind === "trash" && (
+        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+          <TrashView onNotify={onNotify} />
+        </Box>
       )}
-      {debouncedSearch && (
-        <Typography variant="body2" sx={{ padding: 1 }} color="text.secondary">
-          搜索：{debouncedSearch}
-        </Typography>
+      {route.kind === "shares" && (
+        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+          <SharesView onNotify={onNotify} />
+        </Box>
       )}
 
-      {loading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", padding: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Box
-          sx={{
-            flexGrow: 1,
-            overflowY: "auto",
-            backgroundColor: (theme) => theme.palette.background.default,
-          }}
-          onDragOver={(event) => {
-            event.preventDefault();
-          }}
-          onDrop={async (event) => {
-            event.preventDefault();
-            const droppedFiles = await collectFilesFromDataTransfer(
-              event.dataTransfer
-            );
-            if (droppedFiles.length) {
-              uploadEnqueue(
-                ...droppedFiles.map((file) => ({ file, basedir: cwd }))
-              );
-            }
-          }}
-        >
-          <FileGrid
-            files={sortedFiles}
-            view={view}
-            multiSelected={multiSelected}
-            dimmedKeys={cutKeys}
-            onToggleSelect={toggleSelect}
-            onNavigate={navigateFolder}
-            onOpen={handleOpen}
-            onOpenMenu={(position, file) =>
-              setContextMenu({ x: position.clientX, y: position.clientY, file })
-            }
-            onDropOnFolder={handleDropOnFolder}
-            emptyMessage={
-              <Box sx={{ textAlign: "center", padding: 4 }}>
-                {debouncedSearch
-                  ? strings.noSearchResult
-                  : strings.noFiles}
-              </Box>
-            }
-          />
-          {searchHasMore && (
-            <Button
-              fullWidth
-              onClick={loadMore}
-              sx={{ marginBottom: "48px" }}
-            >
-              加载更多
-            </Button>
+      {route.kind === "folder" && (
+        <>
+          <PathBar cwd={cwd} onNavigate={navigateFolder} />
+          {debouncedSearch && (
+            <Typography variant="body2" sx={{ padding: 1 }} color="text.secondary">
+              搜索：{debouncedSearch}
+            </Typography>
           )}
-        </Box>
+
+          {loading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", padding: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                flexGrow: 1,
+                overflowY: "auto",
+                backgroundColor: (theme) => theme.palette.background.default,
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+              }}
+              onDrop={async (event) => {
+                event.preventDefault();
+                const droppedFiles = await collectFilesFromDataTransfer(
+                  event.dataTransfer
+                );
+                if (droppedFiles.length) {
+                  uploadEnqueue(
+                    ...droppedFiles.map((file) => ({ file, basedir: cwd }))
+                  );
+                }
+              }}
+            >
+              <FileGrid
+                files={visibleFiles}
+                view={view}
+                selectedKeys={selectedKeys}
+                dimmedKeys={cutKeys}
+                onToggleSelect={toggleSelect}
+                onNavigate={navigateFolder}
+                onOpen={handleOpen}
+                onOpenMenu={(position, file) =>
+                  setContextMenu({
+                    x: position.clientX,
+                    y: position.clientY,
+                    file,
+                  })
+                }
+                onDropOnFolder={handleDropOnFolder}
+                emptyMessage={
+                  <Box sx={{ textAlign: "center", padding: 4 }}>
+                    <Typography color="text.secondary" sx={{ marginBottom: 2 }}>
+                      {debouncedSearch
+                        ? strings.noSearchResult
+                        : strings.noFiles}
+                    </Typography>
+                    {!debouncedSearch && (
+                      <Box sx={{ display: "flex", justifyContent: "center", gap: 1 }}>
+                        <Button variant="contained" onClick={openFilePicker}>
+                          {strings.upload}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          onClick={() => setShowCreateFolder(true)}
+                        >
+                          {strings.createFolder}
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                }
+              />
+              {searchHasMore && (
+                <Button
+                  fullWidth
+                  onClick={loadMore}
+                  sx={{ marginBottom: "48px" }}
+                >
+                  加载更多
+                </Button>
+              )}
+            </Box>
+          )}
+        </>
       )}
 
-      {multiSelected === null && (
-        <SpeedDial
-          open={speedDialOpen}
-          onToggle={() => setSpeedDialOpen((prev) => !prev)}
-          onClose={() => setSpeedDialOpen(false)}
-          actions={[
-            {
-              id: "upload-file",
-              label: "上传文件",
-              icon: <CloudUploadIcon />,
-              onClick: () => {
-                setSpeedDialOpen(false);
-                openFilePicker();
-              },
-            },
-            {
-              id: "upload-folder",
-              label: "上传文件夹",
-              icon: <FolderIcon />,
-              onClick: () => {
-                setSpeedDialOpen(false);
-                openFolderPicker();
-              },
-            },
-            {
-              id: "create-folder",
-              label: "新建文件夹",
-              icon: <CreateNewFolderIcon />,
-              onClick: () => {
-                setSpeedDialOpen(false);
-                setShowCreateFolder(true);
-              },
-            },
-            {
-              id: "textpad",
-              label: strings.openTextPad,
-              icon: <NoteAddIcon />,
-              onClick: () => {
-                setSpeedDialOpen(false);
-                setShowTextPadDrawer(true);
-              },
-            },
-          ]}
-        />
-      )}
+      <WebDavPanel
+        open={showWebDav}
+        onClose={() => setShowWebDav(false)}
+        onNotify={onNotify}
+      />
 
       <CreateFolderDialog
         open={showCreateFolder}
@@ -615,9 +634,10 @@ function Main({
           try {
             await createFolder(cwd, name);
             setShowCreateFolder(false);
+            onNotify("文件夹已创建", "success");
             await loadListing();
           } catch (error) {
-            onError(error as Error);
+            onNotify((error as Error).message, "error");
           }
         }}
       />
@@ -629,71 +649,14 @@ function Main({
         onUpload={loadListing}
       />
 
-      <Menu
-        open={Boolean(contextMenu)}
-        onClose={() => setContextMenu(null)}
-        anchorReference="anchorPosition"
+      <FileActionSheet
+        file={contextMenu?.file ?? null}
         anchorPosition={
-          contextMenu ? { top: contextMenu.y, left: contextMenu.x } : undefined
+          contextMenu ? { top: contextMenu.y, left: contextMenu.x } : null
         }
-      >
-        {contextMenu && !contextMenu.file.isDir && (
-          <MenuItem
-            onClick={() => handleContextAction("open", contextMenu.file)}
-          >
-            打开 / 预览
-          </MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem
-            onClick={() => handleContextAction("download", contextMenu.file)}
-          >
-            下载
-          </MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem
-            onClick={() => handleContextAction("rename", contextMenu.file)}
-          >
-            重命名
-          </MenuItem>
-        )}
-        {contextMenu && !contextMenu.file.isDir && (
-          <MenuItem
-            onClick={() => handleContextAction("share", contextMenu.file)}
-          >
-            分享
-          </MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem
-            onClick={() => handleContextAction("copy", contextMenu.file)}
-          >
-            复制
-          </MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem
-            onClick={() => handleContextAction("cut", contextMenu.file)}
-          >
-            剪切
-          </MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem
-            onClick={() => handleContextAction("delete", contextMenu.file)}
-          >
-            删除
-          </MenuItem>
-        )}
-        {contextMenu && (
-          <MenuItem
-            onClick={() => handleContextAction("select", contextMenu.file)}
-          >
-            多选
-          </MenuItem>
-        )}
-      </Menu>
+        onClose={() => setContextMenu(null)}
+        onAction={handleContextAction}
+      />
 
       <RenameDialog
         open={Boolean(renameTarget)}
@@ -706,13 +669,27 @@ function Main({
         open={Boolean(shareTarget)}
         file={shareTarget}
         onClose={() => setShareTarget(null)}
-        onError={onError}
+        onNotify={onNotify}
       />
 
       <PreviewDialog
         file={previewFile}
         onClose={() => setPreviewFile(null)}
-        onError={onError}
+        onNotify={onNotify}
+        onShare={() => {
+          if (previewFile) setShareTarget(previewFile);
+        }}
+        onRename={() => {
+          if (previewFile) {
+            setRenameTarget(previewFile);
+            setPreviewFile(null);
+          }
+        }}
+        onDelete={() => {
+          if (previewFile) {
+            setConfirmDelete([previewFile.key]);
+          }
+        }}
       />
 
       <MoveDialog
@@ -720,7 +697,7 @@ function Main({
         sourceKeys={moveTarget ?? []}
         onClose={() => setMoveTarget(null)}
         onMove={handleMove}
-        onError={onError}
+        onError={(error) => onNotify(error.message, "error")}
       />
 
       <ConfirmDialog
@@ -733,42 +710,44 @@ function Main({
       />
 
       <MultiSelectToolbar
-        multiSelected={multiSelected}
-        onClose={() => setMultiSelected(null)}
+        selectedKeys={selectedKeys}
+        onClose={() => setSelectedKeys([])}
         onSelectAll={selectAll}
         onDownload={async () => {
-          if (!multiSelected?.length) return;
+          if (!selectedKeys.length) return;
           try {
             if (
-              multiSelected.length === 1 &&
-              files.find((file) => file.key === multiSelected[0])?.isDir === false
+              selectedKeys.length === 1 &&
+              files.find((file) => file.key === selectedKeys[0])?.isDir === false
             ) {
-              await downloadFile(multiSelected[0]);
+              await downloadFile(selectedKeys[0]);
             } else {
-              await downloadArchive(multiSelected);
+              await downloadArchive(selectedKeys);
             }
           } catch (error) {
-            onError(error as Error);
+            onNotify((error as Error).message, "error");
           }
         }}
         onRename={() => {
-          if (multiSelected?.length !== 1) return;
-          const file = files.find((item) => item.key === multiSelected[0]);
+          if (selectedKeys.length !== 1) return;
+          const file = files.find((item) => item.key === selectedKeys[0]);
           if (file) setRenameTarget(file);
         }}
-        onDelete={() => setConfirmDelete(multiSelected)}
+        onDelete={() => setConfirmDelete(selectedKeys)}
         onShare={() => {
-          if (multiSelected?.length !== 1) return;
-          const file = files.find((item) => item.key === multiSelected[0]);
+          if (selectedKeys.length !== 1) return;
+          const file = files.find((item) => item.key === selectedKeys[0]);
           if (file && !file.isDir) setShareTarget(file);
         }}
-        onCopy={() => copyToClipboard(multiSelected ?? [])}
-        onCut={() => cutToClipboard(multiSelected ?? [])}
-        onPaste={handlePaste}
-        onMove={() => setMoveTarget(multiSelected)}
-        canPaste={Boolean(
-          clipboard && clipboard.keys.length > 0 && route.kind === "folder"
-        )}
+        onCopy={() => {
+          copyToClipboard(selectedKeys);
+          onNotify("已复制到剪贴板", "success");
+        }}
+        onCut={() => {
+          cutToClipboard(selectedKeys);
+          onNotify("已剪切到剪贴板", "success");
+        }}
+        onMove={() => setMoveTarget(selectedKeys)}
       />
     </>
   );

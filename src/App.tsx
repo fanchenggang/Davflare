@@ -15,6 +15,7 @@ import Main from "./Main";
 import TransferManager from "./TransferManager";
 import { AuthProvider, useAuth } from "./app/auth";
 import { ClipboardProvider } from "./app/clipboard";
+import { NoticeSeverity, NotifyFn } from "./app/notify";
 import { SortPref, usePersistedState, ViewMode } from "./app/prefs";
 import { useHashRoute } from "./app/route";
 import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
@@ -29,7 +30,7 @@ const theme = createTheme({
 
 interface SnackbarMessage {
   message: string;
-  severity: "error" | "success" | "info";
+  severity: NoticeSeverity;
 }
 
 function AppContent() {
@@ -59,14 +60,8 @@ function AppContent() {
     });
   }, [transferQueue]);
 
-  const goTrash = () => {
-    setSearch("");
-    navigate({ kind: "trash" });
-  };
-
-  const goShares = () => {
-    setSearch("");
-    navigate({ kind: "shares" });
+  const onNotify: NotifyFn = (message, severity = "info") => {
+    setSnackbar({ message, severity });
   };
 
   return (
@@ -74,24 +69,18 @@ function AppContent() {
       <Header
         search={search}
         onSearchChange={setSearch}
-        view={view}
-        onViewChange={setView}
-        sort={sort}
-        onSortChange={setSort}
         username={username}
         onLogout={logout}
         onOpenTransfers={() => setShowTransfers(true)}
-        onNavigateTrash={goTrash}
-        onNavigateShares={goShares}
       />
       <Main
         search={search}
         onSearchChange={setSearch}
-        onError={(error) =>
-          setSnackbar({ message: error.message, severity: "error" })
-        }
+        onNotify={onNotify}
         view={view}
+        onViewChange={setView}
         sort={sort}
+        onSortChange={setSort}
         route={route}
         navigate={navigate}
       />

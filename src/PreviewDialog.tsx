@@ -10,20 +10,30 @@ import {
   DialogTitle,
   Typography,
 } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
+import EditIcon from "@mui/icons-material/Edit";
+import ShareIcon from "@mui/icons-material/Share";
 
 import { authFetch } from "./app/auth";
+import { NotifyFn } from "./app/notify";
 import { FileItem } from "./app/types";
 import { encodeKey } from "./app/utils";
 
 function PreviewDialog({
   file,
   onClose,
-  onError,
+  onNotify,
+  onShare,
+  onRename,
+  onDelete,
 }: {
   file: FileItem | null;
   onClose: () => void;
-  onError: (error: Error) => void;
+  onNotify: NotifyFn;
+  onShare: () => void;
+  onRename: () => void;
+  onDelete: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,7 +61,7 @@ function PreviewDialog({
         setUrl(objectUrl);
       })
       .catch((error) => {
-        if (!canceled) onError(error as Error);
+        if (!canceled) onNotify((error as Error).message, "error");
       })
       .finally(() => {
         if (!canceled) setLoading(false);
@@ -124,7 +134,16 @@ function PreviewDialog({
           )
         ) : null}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ flexWrap: "wrap", gap: 0.5 }}>
+        <Button startIcon={<ShareIcon />} onClick={onShare}>
+          分享
+        </Button>
+        <Button startIcon={<EditIcon />} onClick={onRename}>
+          重命名
+        </Button>
+        <Button color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
+          删除
+        </Button>
         <Button startIcon={<DownloadIcon />} onClick={download}>
           下载
         </Button>

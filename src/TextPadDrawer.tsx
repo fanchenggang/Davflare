@@ -1,4 +1,3 @@
-// TextPadDrawer.tsx
 import React, { useState } from "react";
 import {
   Box,
@@ -32,15 +31,24 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
     const fileBlob = new Blob([noteText], { type: "text/plain" });
     const file = new File([fileBlob], noteName, { type: "text/plain" });
     uploadEnqueue({ file, basedir: cwd });
-    onUpload(); // Refresh file list after upload
-    setOpen(false); // Close drawer
-    setNoteText(""); // Reset
+    onUpload();
+    setOpen(false);
+    setNoteText("");
     setNoteName("note.txt");
   };
 
   return (
     <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
-      <Box sx={{ width: 400, padding: 2, display: "flex", flexDirection: "column", height: "100%" }}>
+      <Box
+        sx={{
+          width: { xs: "100vw", sm: 400 },
+          maxWidth: "100vw",
+          padding: 2,
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+        }}
+      >
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
           <Typography variant="h6">记事本</Typography>
           <IconButton onClick={() => setOpen(false)}>

@@ -14,10 +14,11 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 import { listShares, revokeShare } from "./app/share";
+import { NotifyFn } from "./app/notify";
 import { ShareInfo } from "./app/types";
 import { strings } from "./app/strings";
 
-function SharesView({ onError }: { onError: (error: Error) => void }) {
+function SharesView({ onNotify }: { onNotify: NotifyFn }) {
   const [shares, setShares] = useState<ShareInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,7 +27,7 @@ function SharesView({ onError }: { onError: (error: Error) => void }) {
     try {
       setShares(await listShares());
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -40,9 +41,9 @@ function SharesView({ onError }: { onError: (error: Error) => void }) {
   const copy = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      onError(new Error("链接已复制"));
+      onNotify("链接已复制", "success");
     } catch {
-      onError(new Error("复制失败"));
+      onNotify("复制失败", "error");
     }
   };
 
@@ -54,67 +55,70 @@ function SharesView({ onError }: { onError: (error: Error) => void }) {
     );
   }
 
-  if (shares.length === 0) {
-    return (
-      <Box sx={{ textAlign: "center", padding: 4 }}>
-        <Typography color="text.secondary">{strings.emptyShares}</Typography>
-      </Box>
-    );
-  }
-
   return (
-    <List>
-      {shares.map((share) => (
-        <ListItem
-          key={share.token}
-          secondaryAction={
-            <Stack direction="row" spacing={0.5}>
-              <Button
-                size="small"
-                startIcon={<ContentCopyIcon />}
-                onClick={() => copy(share.url)}
-              >
-                复制
-              </Button>
-              <Button
-                size="small"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={async () => {
-                  try {
-                    await revokeShare(share.token);
-                    onError(new Error("已撤销分享"));
-                    await load();
-                  } catch (error) {
-                    onError(error as Error);
-                  }
-                }}
-              >
-                撤销
-              </Button>
-            </Stack>
-          }
-        >
-          <ListItemText
-            primary={share.name}
-            secondary={
-              <>
-                <Typography
-                  component="span"
-                  variant="body2"
-                  sx={{ display: "block", wordBreak: "break-all" }}
-                >
-                  {share.url}
-                </Typography>
-                {share.expiresAt
-                  ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
-                  : "永久有效"}
-              </>
-            }
-          />
-        </ListItem>
-      ))}
-    </List>
+    <>
+      <Box sx={{ padding: 1.5 }}>
+        <Typography variant="h6">{strings.shares}</Typography>
+      </Box>
+      {shares.length === 0 ? (
+        <Box sx={{ textAlign: "center", padding: 4 }}>
+          <Typography color="text.secondary">{strings.emptyShares}</Typography>
+        </Box>
+      ) : (
+        <List>
+          {shares.map((share) => (
+            <ListItem
+              key={share.token}
+              secondaryAction={
+                <Stack direction="row" spacing={0.5}>
+                  <Button
+                    size="small"
+                    startIcon={<ContentCopyIcon />}
+                    onClick={() => copy(share.url)}
+                  >
+                    复制
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={async () => {
+                      try {
+                        await revokeShare(share.token);
+                        onNotify("已撤销分享", "success");
+                        await load();
+                      } catch (error) {
+                        onNotify((error as Error).message, "error");
+                      }
+                    }}
+                  >
+                    撤销
+                  </Button>
+                </Stack>
+              }
+            >
+              <ListItemText
+                primary={share.name}
+                secondary={
+                  <>
+                    <Typography
+                      component="span"
+                      variant="body2"
+                      sx={{ display: "block", wordBreak: "break-all" }}
+                    >
+                      {share.url}
+                    </Typography>
+                    {share.expiresAt
+                      ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
+                      : "永久有效"}
+                  </>
+                }
+              />
+            </ListItem>
+          ))}
+        </List>
+      )}
+    </>
   );
 }
 
