@@ -90,7 +90,7 @@ curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
   -o snapshot.json
 ```
 
-`GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded? }] }` for the current folder only. Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns 400 and tells you to use `/api/download`. Missing folder: 404. Bad/expired key: 401.
+`GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded, etag }] }` for the current folder only. Files always include numeric `size`, ISO `uploaded` (and alias `updated`), and R2 `etag`. Delimited-prefix folders have `isDir: true`, `size: 0`, and `uploaded: null` (unknown; no fake mtime). Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns 400 and tells you to use `/api/download`. Missing folder: 404. Bad/expired key: 401.
 
 `GET /api/download` `path` is the object key. HTTP 200 streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns 400; unknown object 404; bad/expired key 401. Internal `_$flaredrive$/` keys are rejected.
 
