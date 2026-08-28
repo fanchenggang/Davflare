@@ -13,6 +13,7 @@ Free serverless backend with a limit of 100,000 invocation requests per day.
 - WebDAV Class 1/2
 - Drag and drop upload
 - Share links with expiry and trash
+- API keys for scripted uploads
 
 ## Usage
 
@@ -51,6 +52,25 @@ Fill the endpoint URL as `https://<your-domain.com>/webdav` and use the username
 However, the standard WebDAV protocol does not support large file (≥128MB) uploads due to the limitation of Cloudflare Workers.
 You must upload large files through the web interface which supports chunked uploads.
 The in-app WebDAV panel shows URL, username, and whether public-read is on. It does not display the secret. Oversized single PUTs return HTTP 413 with a Chinese message to use the web uploader.
+
+### API upload
+
+Create keys in the web UI: ExplorerBar 「API」 or account menu 「开放接口」. Full keys are shown once; only SHA-256 hashes are stored.
+
+```bash
+# multipart
+curl -X POST "https://<your-domain.com>/api/upload?path=folder/" \
+  -H "Authorization: Bearer <apiKey>" \
+  -F "file=@photo.jpg"
+
+# also accepts X-Api-Key, or a raw body with X-File-Name
+curl -X POST "https://<your-domain.com>/api/upload?path=docs/" \
+  -H "X-Api-Key: <apiKey>" \
+  -H "X-File-Name: notes.txt" \
+  --data-binary @notes.txt
+```
+
+Single-request uploads are limited to about 100MB (HTTP 413 otherwise). Larger files still need the web chunked uploader. Manage keys via session-authenticated `GET/POST/DELETE /api/keys`. Usage docs are also shown on the API settings page.
 
 ## Acknowledgments
 

@@ -26,6 +26,7 @@ import {
   DensitySmall as DensitySmallIcon,
   History as HistoryIcon,
   Storage as WebDavIcon,
+  VpnKey as ApiIcon,
   ViewList as ViewListIcon,
 } from "@mui/icons-material";
 
@@ -59,6 +60,7 @@ function ExplorerBar({
   sort,
   onSortChange,
   onOpenWebDav,
+  onOpenApi,
   typeFilter,
   onTypeFilterChange,
   showHidden,
@@ -83,6 +85,7 @@ function ExplorerBar({
   sort: SortPref;
   onSortChange: (sort: SortPref) => void;
   onOpenWebDav: () => void;
+  onOpenApi: () => void;
   typeFilter: FileTypeFilter;
   onTypeFilterChange: (filter: FileTypeFilter) => void;
   showHidden: boolean;
@@ -198,6 +201,15 @@ function ExplorerBar({
           sx={{ color: "text.secondary" }}
         >
           {strings.webdav}
+        </Button>
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<ApiIcon />}
+          onClick={onOpenApi}
+          sx={{ color: "text.secondary" }}
+        >
+          {strings.api}
         </Button>
 
         {inFolder && (

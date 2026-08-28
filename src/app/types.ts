@@ -56,3 +56,15 @@ export interface TrashItem {
   deletedAt: string;
   size: number;
 }
+
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  expiresAt: string | null;
+  createdBy?: string | null;
+  lastUsedAt?: string | null;
+  key?: string;
+}
+
