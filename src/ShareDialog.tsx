@@ -20,18 +20,19 @@ import {
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 import { createShare, listShares, revokeShare } from "./app/share";
+import { NotifyFn } from "./app/notify";
 import { FileItem, ShareInfo } from "./app/types";
 
 function ShareDialog({
   open,
   file,
   onClose,
-  onError,
+  onNotify,
 }: {
   open: boolean;
   file: FileItem | null;
   onClose: () => void;
-  onError: (error: Error) => void;
+  onNotify: NotifyFn;
 }) {
   const [expiry, setExpiry] = useState<string>("never");
   const [shares, setShares] = useState<ShareInfo[]>([]);
@@ -43,7 +44,7 @@ function ShareDialog({
       const all = await listShares();
       setShares(all.filter((share) => share.key === file.key));
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     }
   };
 
@@ -59,13 +60,12 @@ function ShareDialog({
     setLoading(true);
     try {
       const expiresInHours =
-        expiry === "never"
-          ? undefined
-          : Number(expiry);
+        expiry === "never" ? undefined : Number(expiry);
       await createShare(file.key, expiresInHours);
       await refresh();
+      onNotify("分享链接已创建", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -74,9 +74,9 @@ function ShareDialog({
   const copy = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      onError(new Error("链接已复制"));
+      onNotify("链接已复制", "success");
     } catch {
-      onError(new Error("复制失败"));
+      onNotify("复制失败", "error");
     }
   };
 
@@ -121,7 +121,7 @@ function ShareDialog({
                             await revokeShare(share.token);
                             await refresh();
                           } catch (error) {
-                            onError(error as Error);
+                            onNotify((error as Error).message, "error");
                           }
                         }}
                       >

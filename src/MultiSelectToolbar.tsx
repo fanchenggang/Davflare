@@ -4,7 +4,6 @@ import {
   Close as CloseIcon,
   ContentCopy as CopyIcon,
   ContentCut as CutIcon,
-  ContentPaste as PasteIcon,
   Delete as DeleteIcon,
   Download as DownloadIcon,
   DriveFileMove as MoveIcon,
@@ -41,7 +40,7 @@ function ActionButton({
 }
 
 function MultiSelectToolbar({
-  multiSelected,
+  selectedKeys,
   onClose,
   onSelectAll,
   onDownload,
@@ -50,11 +49,9 @@ function MultiSelectToolbar({
   onShare,
   onCopy,
   onCut,
-  onPaste,
   onMove,
-  canPaste,
 }: {
-  multiSelected: string[] | null;
+  selectedKeys: string[];
   onClose: () => void;
   onSelectAll: () => void;
   onDownload: () => void;
@@ -63,14 +60,12 @@ function MultiSelectToolbar({
   onShare: () => void;
   onCopy: () => void;
   onCut: () => void;
-  onPaste: () => void;
   onMove: () => void;
-  canPaste: boolean;
 }) {
-  const count = multiSelected?.length ?? 0;
+  const count = selectedKeys.length;
 
   return (
-    <Slide direction="up" in={multiSelected !== null}>
+    <Slide direction="up" in={count > 0}>
       <Toolbar
         sx={{
           position: "fixed",
@@ -88,11 +83,7 @@ function MultiSelectToolbar({
           gap: 0.5,
         }}
       >
-        <ActionButton
-          icon={<CloseIcon />}
-          label="关闭"
-          onClick={onClose}
-        />
+        <ActionButton icon={<CloseIcon />} label="关闭" onClick={onClose} />
         <ActionButton
           icon={<SelectAllIcon />}
           label={`${count} 项`}
@@ -109,12 +100,6 @@ function MultiSelectToolbar({
           label="剪切"
           disabled={count === 0}
           onClick={onCut}
-        />
-        <ActionButton
-          icon={<PasteIcon />}
-          label="粘贴"
-          disabled={!canPaste}
-          onClick={onPaste}
         />
         <ActionButton
           icon={<MoveIcon />}

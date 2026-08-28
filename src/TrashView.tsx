@@ -23,11 +23,12 @@ import {
   permanentDeleteTrash,
   restoreTrash,
 } from "./app/trash";
+import { NotifyFn } from "./app/notify";
 import { TrashItem } from "./app/types";
 import { strings } from "./app/strings";
 import { humanReadableSize } from "./app/utils";
 
-function TrashView({ onError }: { onError: (error: Error) => void }) {
+function TrashView({ onNotify }: { onNotify: NotifyFn }) {
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
@@ -41,7 +42,7 @@ function TrashView({ onError }: { onError: (error: Error) => void }) {
       setItems(await listTrash());
       setSelected([]);
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
@@ -65,18 +66,17 @@ function TrashView({ onError }: { onError: (error: Error) => void }) {
       const results = await restoreTrash(selected);
       const failed = results.filter((result) => result.status !== "restored");
       if (failed.length) {
-        onError(
-          new Error(
-            failed
-              .map((result) => result.message || "部分项目恢复失败")
-              .join("\n")
-          )
+        onNotify(
+          failed
+            .map((result) => result.message || "部分项目恢复失败")
+            .join("\n"),
+          "error"
         );
       } else {
-        onError(new Error("已恢复所选项目"));
+        onNotify("已恢复所选项目", "success");
       }
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       await load();
     }
@@ -85,9 +85,9 @@ function TrashView({ onError }: { onError: (error: Error) => void }) {
   const handlePermanentDelete = async () => {
     try {
       await permanentDeleteTrash(selected);
-      onError(new Error("已彻底删除所选项目"));
+      onNotify("已彻底删除所选项目", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setConfirm(null);
       await load();
@@ -97,9 +97,9 @@ function TrashView({ onError }: { onError: (error: Error) => void }) {
   const handleEmpty = async () => {
     try {
       await permanentDeleteTrash([], true);
-      onError(new Error("回收站已清空"));
+      onNotify("回收站已清空", "success");
     } catch (error) {
-      onError(error as Error);
+      onNotify((error as Error).message, "error");
     } finally {
       setConfirm(null);
       await load();
@@ -114,63 +114,81 @@ function TrashView({ onError }: { onError: (error: Error) => void }) {
     );
   }
 
-  if (items.length === 0) {
-    return (
-      <Box sx={{ textAlign: "center", padding: 4 }}>
-        <Typography color="text.secondary">{strings.emptyTrash}</Typography>
-      </Box>
-    );
-  }
-
   return (
     <>
-      <List>
-        {items.map((item) => (
-          <ListItem
-            key={item.trashKey}
-            button
-            onClick={() => toggle(item.trashKey)}
-          >
-            <ListItemIcon>
-              <Checkbox
-                size="small"
-                checked={selected.includes(item.trashKey)}
-                onClick={(event) => event.stopPropagation()}
-              />
-            </ListItemIcon>
-            <ListItemText
-              primary={item.name}
-              secondary={`原路径：${item.originalKey} · 删除于 ${new Date(
-                item.deletedAt
-              ).toLocaleString()} · ${humanReadableSize(item.size)}`}
-            />
-          </ListItem>
-        ))}
-      </List>
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{ position: "sticky", bottom: 0, padding: 1, backgroundColor: "white" }}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: 1.5,
+          gap: 1,
+        }}
       >
-        <Button
-          startIcon={<RestoreIcon />}
-          disabled={selected.length === 0}
-          onClick={handleRestore}
-        >
-          恢复
-        </Button>
+        <Typography variant="h6">{strings.trash}</Typography>
         <Button
           color="error"
-          startIcon={<DeleteForeverIcon />}
-          disabled={selected.length === 0}
-          onClick={() => setConfirm({ kind: "delete" })}
+          disabled={items.length === 0}
+          onClick={() => setConfirm({ kind: "empty" })}
         >
-          彻底删除
-        </Button>
-        <Button color="error" onClick={() => setConfirm({ kind: "empty" })}>
           清空回收站
         </Button>
-      </Stack>
+      </Box>
+      {items.length === 0 ? (
+        <Box sx={{ textAlign: "center", padding: 4 }}>
+          <Typography color="text.secondary">{strings.emptyTrash}</Typography>
+        </Box>
+      ) : (
+        <>
+          <List>
+            {items.map((item) => (
+              <ListItem
+                key={item.trashKey}
+                button
+                onClick={() => toggle(item.trashKey)}
+              >
+                <ListItemIcon>
+                  <Checkbox
+                    size="small"
+                    checked={selected.includes(item.trashKey)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggle(item.trashKey);
+                    }}
+                  />
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.name}
+                  secondary={`原路径：${item.originalKey} · 删除于 ${new Date(
+                    item.deletedAt
+                  ).toLocaleString()} · ${humanReadableSize(item.size)}`}
+                />
+              </ListItem>
+            ))}
+          </List>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ position: "sticky", bottom: 0, padding: 1, backgroundColor: "white" }}
+          >
+            <Button
+              startIcon={<RestoreIcon />}
+              disabled={selected.length === 0}
+              onClick={handleRestore}
+            >
+              恢复
+            </Button>
+            <Button
+              color="error"
+              startIcon={<DeleteForeverIcon />}
+              disabled={selected.length === 0}
+              onClick={() => setConfirm({ kind: "delete" })}
+            >
+              彻底删除
+            </Button>
+          </Stack>
+        </>
+      )}
       <ConfirmDialog
         open={confirm !== null}
         title={confirm?.kind === "empty" ? "清空回收站" : "彻底删除"}

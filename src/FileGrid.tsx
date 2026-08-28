@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React from "react";
 import {
   Box,
   Checkbox,
@@ -24,7 +24,7 @@ import {
 interface FileGridProps {
   files: FileItem[];
   view: ViewMode;
-  multiSelected: string[] | null;
+  selectedKeys: string[];
   dimmedKeys?: ReadonlySet<string>;
   onToggleSelect: (key: string) => void;
   onNavigate: (key: string) => void;
@@ -40,7 +40,7 @@ interface FileGridProps {
 function FileGrid({
   files,
   view,
-  multiSelected,
+  selectedKeys,
   dimmedKeys,
   onToggleSelect,
   onNavigate,
@@ -49,113 +49,81 @@ function FileGrid({
   onDropOnFolder,
   emptyMessage,
 }: FileGridProps) {
-  const longPressTimer = useRef<number | null>(null);
+  const isSelected = (file: FileItem) => selectedKeys.includes(file.key);
 
-  const cancelLongPress = () => {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const startLongPress = (
-    event: React.TouchEvent,
+  const openMenu = (
+    event: { clientX: number; clientY: number; preventDefault?: () => void },
     file: FileItem
   ) => {
-    cancelLongPress();
-    const touch = event.touches[0];
-    longPressTimer.current = window.setTimeout(() => {
-      onOpenMenu(
-        { clientX: touch.clientX, clientY: touch.clientY },
-        file
-      );
-      longPressTimer.current = null;
-    }, 550);
+    event.preventDefault?.();
+    onOpenMenu({ clientX: event.clientX, clientY: event.clientY }, file);
   };
-
-  const selectionControls = (file: FileItem) => {
-    if (multiSelected === null) return null;
-    return (
-      <Checkbox
-        size="small"
-        checked={multiSelected.includes(file.key)}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleSelect(file.key);
-        }}
-      />
-    );
-  };
-
-  const thumbnail = (file: FileItem) =>
-    file.thumbnail ? (
-      <img
-        src={`/webdav/_$flaredrive$/thumbnails/${file.thumbnail}.png`}
-        alt={file.name}
-        style={{
-          width: 36,
-          height: 36,
-          objectFit: "cover",
-          borderRadius: 4,
-        }}
-      />
-    ) : (
-      <MimeIcon contentType={file.contentType} />
-    );
 
   const clickItem = (file: FileItem) => {
-    if (multiSelected !== null) {
-      onToggleSelect(file.key);
-    } else if (isDirectory(file)) {
-      onNavigate(file.key);
-    } else {
-      onOpen(file.key);
-    }
+    if (isDirectory(file)) onNavigate(file.key);
+    else onOpen(file.key);
   };
+
+  const checkbox = (file: FileItem, sx?: object) => (
+    <Checkbox
+      size="small"
+      checked={isSelected(file)}
+      inputProps={{ "aria-label": `选择 ${file.name}` }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggleSelect(file.key);
+      }}
+      sx={sx}
+    />
+  );
+
+  const moreButton = (file: FileItem, sx?: object) => (
+    <IconButton
+      size="small"
+      aria-label={`${file.name} 操作`}
+      sx={sx}
+      onClick={(event) => {
+        event.stopPropagation();
+        openMenu(event, file);
+      }}
+    >
+      <MoreHorizIcon />
+    </IconButton>
+  );
+
+  const folderDrop = (file: FileItem) =>
+    isDirectory(file) && onDropOnFolder
+      ? {
+          onDragOver: (event: React.DragEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+          },
+          onDrop: (event: React.DragEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDropOnFolder(file, event.dataTransfer);
+          },
+        }
+      : {};
 
   const itemList = (file: FileItem) => (
     <ListItemButton
-      selected={multiSelected?.includes(file.key)}
+      selected={isSelected(file)}
       onClick={() => clickItem(file)}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onOpenMenu(
-          { clientX: event.clientX, clientY: event.clientY },
-          file
-        );
-      }}
-      onTouchStart={(event) => startLongPress(event, file)}
-      onTouchEnd={cancelLongPress}
-      onTouchMove={cancelLongPress}
-      draggable={multiSelected === null}
+      onContextMenu={(event) => openMenu(event, file)}
+      draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-flaredrive", file.key);
         event.dataTransfer.effectAllowed = "move";
       }}
-      onDragOver={
-        isDirectory(file) && onDropOnFolder
-          ? (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }
-          : undefined
-      }
-      onDrop={
-        isDirectory(file) && onDropOnFolder
-          ? (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onDropOnFolder?.(file, event.dataTransfer);
-            }
-          : undefined
-      }
+      {...folderDrop(file)}
       sx={{
         userSelect: "none",
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
       }}
     >
-      {selectionControls(file)}
-      <ListItemIcon>{thumbnail(file)}</ListItemIcon>
+      {checkbox(file)}
+      <ListItemIcon>{thumbnail(file, 36)}</ListItemIcon>
       <ListItemText
         primary={file.name}
         primaryTypographyProps={{
@@ -175,21 +143,7 @@ function FileGrid({
           </React.Fragment>
         }
       />
-      {multiSelected === null && (
-        <IconButton
-          size="small"
-          aria-label={`${file.name} 操作`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenMenu(
-              { clientX: event.clientX, clientY: event.clientY },
-              file
-            );
-          }}
-        >
-          <MoreHorizIcon />
-        </IconButton>
-      )}
+      {moreButton(file)}
     </ListItemButton>
   );
 
@@ -201,38 +155,13 @@ function FileGrid({
       onKeyDown={(event) => {
         if (event.key === "Enter") clickItem(file);
       }}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onOpenMenu(
-          { clientX: event.clientX, clientY: event.clientY },
-          file
-        );
-      }}
-      onTouchStart={(event) => startLongPress(event, file)}
-      onTouchEnd={cancelLongPress}
-      onTouchMove={cancelLongPress}
-      draggable={multiSelected === null}
+      onContextMenu={(event) => openMenu(event, file)}
+      draggable
       onDragStart={(event) => {
         event.dataTransfer.setData("application/x-flaredrive", file.key);
         event.dataTransfer.effectAllowed = "move";
       }}
-      onDragOver={
-        isDirectory(file) && onDropOnFolder
-          ? (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }
-          : undefined
-      }
-      onDrop={
-        isDirectory(file) && onDropOnFolder
-          ? (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onDropOnFolder?.(file, event.dataTransfer);
-            }
-          : undefined
-      }
+      {...folderDrop(file)}
       sx={{
         position: "relative",
         height: "100%",
@@ -240,7 +169,7 @@ function FileGrid({
         padding: 1,
         cursor: "pointer",
         border: (theme) =>
-          multiSelected?.includes(file.key)
+          isSelected(file)
             ? `2px solid ${theme.palette.primary.main}`
             : "1px solid transparent",
         borderRadius: 2,
@@ -255,17 +184,7 @@ function FileGrid({
         "&:hover": { backgroundColor: "whitesmoke", boxShadow: 1 },
       }}
     >
-      {multiSelected !== null && (
-        <Checkbox
-          size="small"
-          checked={multiSelected.includes(file.key)}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleSelect(file.key);
-          }}
-          sx={{ position: "absolute", top: 0, left: 0 }}
-        />
-      )}
+      {checkbox(file, { position: "absolute", top: 0, left: 0 })}
       <Box
         sx={{
           width: 64,
@@ -275,20 +194,7 @@ function FileGrid({
           justifyContent: "center",
         }}
       >
-        {file.thumbnail ? (
-          <img
-            src={`/webdav/_$flaredrive$/thumbnails/${file.thumbnail}.png`}
-            alt={file.name}
-            style={{
-              width: 64,
-              height: 64,
-              objectFit: "cover",
-              borderRadius: 8,
-            }}
-          />
-        ) : (
-          <MimeIcon contentType={file.contentType} />
-        )}
+        {thumbnail(file, 64)}
       </Box>
       <Typography
         variant="body2"
@@ -320,22 +226,7 @@ function FileGrid({
       >
         {formatDateTime(file.uploaded)}
       </Typography>
-      {multiSelected === null && (
-        <IconButton
-          size="small"
-          aria-label={`${file.name} 操作`}
-          sx={{ position: "absolute", top: 0, right: 0 }}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenMenu(
-              { clientX: event.clientX, clientY: event.clientY },
-              file
-            );
-          }}
-        >
-          <MoreHorizIcon />
-        </IconButton>
-      )}
+      {moreButton(file, { position: "absolute", top: 0, right: 0 })}
     </Box>
   );
 
@@ -343,7 +234,7 @@ function FileGrid({
 
   if (view === "list") {
     return (
-      <List sx={{ paddingBottom: "48px" }}>
+      <List sx={{ paddingBottom: "72px" }}>
         {files.map((file) => (
           <React.Fragment key={file.key}>{itemList(file)}</React.Fragment>
         ))}
@@ -352,13 +243,30 @@ function FileGrid({
   }
 
   return (
-    <Grid container spacing={1.5} sx={{ paddingBottom: "48px", padding: 1 }}>
+    <Grid container spacing={1.5} sx={{ paddingBottom: "72px", padding: 1 }}>
       {files.map((file) => (
         <Grid item key={file.key} xs={6} sm={4} md={3} lg={2}>
           {itemTile(file)}
         </Grid>
       ))}
     </Grid>
+  );
+}
+
+function thumbnail(file: FileItem, size: number) {
+  return file.thumbnail ? (
+    <img
+      src={`/webdav/_$flaredrive$/thumbnails/${file.thumbnail}.png`}
+      alt={file.name}
+      style={{
+        width: size,
+        height: size,
+        objectFit: "cover",
+        borderRadius: size >= 48 ? 8 : 4,
+      }}
+    />
+  ) : (
+    <MimeIcon contentType={file.contentType} />
   );
 }
 
