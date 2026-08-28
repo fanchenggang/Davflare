@@ -13,7 +13,7 @@ Free serverless backend with a limit of 100,000 invocation requests per day.
 - WebDAV Class 1/2
 - Drag and drop upload
 - Share links with expiry and trash
-- API keys for scripted uploads
+- API keys for scripted uploads and downloads
 
 ## Usage
 
@@ -71,6 +71,30 @@ curl -X POST "https://<your-domain.com>/api/upload?path=docs/" \
 ```
 
 Single-request uploads are limited to about 100MB (HTTP 413 otherwise). Larger files still need the web chunked uploader. Manage keys via session-authenticated `GET/POST/DELETE /api/keys`. Usage docs are also shown on the API settings page.
+
+The same keys can download a single object (folders are not a zip; fetch each file):
+
+```bash
+curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
+  -H "Authorization: Bearer <apiKey>" \
+  -o snapshot.json
+
+# also accepts X-Api-Key
+curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
+  -H "X-Api-Key: <apiKey>" \
+  -o snapshot.json
+```
+
+`path` is the object key. HTTP 200 streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns 400; unknown object 404; bad/expired key 401. Internal `_$flaredrive$/` keys are rejected.
+
+Optional Depth-1 listing:
+
+```bash
+curl "https://<your-domain.com>/api/list?path=folder/" \
+  -H "Authorization: Bearer <apiKey>"
+```
+
+Returns `{ items: [{ key, name, size, isDir }] }`.
 
 ## Acknowledgments
 

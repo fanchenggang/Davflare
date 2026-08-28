@@ -25,6 +25,7 @@ import VpnKeyIcon from "@mui/icons-material/VpnKey";
 
 import {
   createApiKey,
+  downloadCurlExample,
   formatApiUsage,
   listApiKeys,
   revokeApiKey,
@@ -345,6 +346,22 @@ function ApiKeysPanel({
                   }
                 >
                   复制 curl
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={() =>
+                    copy(
+                      downloadCurlExample(
+                        origin,
+                        usageKey,
+                        "DBX/sync/snapshot.json"
+                      ),
+                      "下载 curl"
+                    )
+                  }
+                >
+                  复制下载 curl
                 </Button>
               </Stack>
             </Box>
