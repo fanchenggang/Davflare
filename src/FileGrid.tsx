@@ -328,7 +328,7 @@ function FileGrid({
         overflow: "visible",
         width: "100%",
         height: "100%",
-        minHeight: 156,
+        minHeight: 168,
         boxSizing: "border-box",
         padding: 1.5,
         paddingTop: "44px",
@@ -356,6 +356,9 @@ function FileGrid({
             : "#faf8f5",
           boxShadow: "0 6px 16px rgba(26, 23, 20, 0.08)",
           borderColor: "rgba(243, 128, 32, 0.35)",
+        },
+        "&:focus": {
+          outline: "none",
         },
         "&:focus-visible": {
           outline: "2px solid",
@@ -387,6 +390,9 @@ function FileGrid({
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
           lineHeight: 1.35,
+          height: "2.7em",
+          minHeight: "2.7em",
+          wordBreak: "break-word",
         }}
         title={file.name}
       >

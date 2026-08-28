@@ -6,6 +6,49 @@ import { basename, encodeKey } from "./utils";
 
 const WEBDAV_ENDPOINT = "/webdav/";
 
+function decodeHrefSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+/** Object key from a PROPFIND href, whether relative (`/webdav/a/b`) or absolute. */
+export function davHrefToKey(href: string): string {
+  const raw = (href || "").trim();
+  if (!raw) return "";
+
+  let pathname = raw;
+  try {
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+      pathname = new URL(raw).pathname;
+    }
+  } catch {
+    const fallback = raw.indexOf("/webdav/");
+    if (fallback >= 0) pathname = raw.slice(fallback);
+  }
+
+  const marker = "/webdav/";
+  const at = pathname.indexOf(marker);
+  let rest: string;
+  if (at >= 0) {
+    rest = pathname.slice(at + marker.length);
+  } else if (pathname === "/webdav") {
+    rest = "";
+  } else if (pathname.startsWith("/")) {
+    rest = pathname.slice(1);
+  } else {
+    rest = pathname;
+  }
+
+  return rest.split("/").map(decodeHrefSegment).join("/").replace(/\/$/, "");
+}
+
+function firstTag(parent: Element, localName: string): Element | undefined {
+  return parent.getElementsByTagName(localName)[0];
+}
+
 export async function fetchPath(path: string) {
   const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(path)}`, {
     method: "PROPFIND",
@@ -19,41 +62,36 @@ export async function fetchPath(path: string) {
   const parser = new DOMParser();
   const text = await res.text();
   const document = parser.parseFromString(text, "application/xml");
-  const items: FileItem[] = Array.from(document.querySelectorAll("response"))
-    .filter(
-      (response) => {
-        const hrefPath = decodeURIComponent(
-          response.querySelector("href")?.textContent ?? ""
-        )
-          .slice(WEBDAV_ENDPOINT.length)
-          .replace(/\/$/, "");
-        return hrefPath !== path.replace(/\/$/, "");
-      }
-    )
-    .map((response) => {
-      const href = response.querySelector("href")?.textContent;
-      if (!href) throw new Error("Invalid response");
-      const contentType = response.querySelector("getcontenttype")?.textContent;
-      const size = response.querySelector("getcontentlength")?.textContent;
-      const lastModified =
-        response.querySelector("getlastmodified")?.textContent;
-      const thumbnail = response.getElementsByTagNameNS(
-        "flaredrive",
-        "thumbnail"
-      )[0]?.textContent;
-      const key = decodeURIComponent(href)
-        .replace(/^\/webdav\//, "")
-        .replace(/\/$/, "");
-      return {
-        key,
-        name: basename(key),
-        isDir: contentType === "application/x-directory",
-        size: size ? Number(size) : 0,
-        uploaded: lastModified || new Date().toUTCString(),
-        contentType: contentType || "",
-        thumbnail: thumbnail || undefined,
-      } as FileItem;
+  const cwdKey = path.replace(/\/$/, "");
+  const items: FileItem[] = [];
+
+  for (const response of Array.from(document.getElementsByTagName("response"))) {
+    const href = firstTag(response, "href")?.textContent ?? "";
+    const key = davHrefToKey(href);
+    if (!href) continue;
+    if (key === cwdKey) continue;
+
+    const contentType = firstTag(response, "getcontenttype")?.textContent || "";
+    const size = firstTag(response, "getcontentlength")?.textContent;
+    const lastModified = firstTag(response, "getlastmodified")?.textContent;
+    const thumbnail =
+      response.getElementsByTagNameNS("flaredrive", "thumbnail")[0]
+        ?.textContent || undefined;
+    const resourceType = firstTag(response, "resourcetype");
+    const isDir =
+      contentType === "application/x-directory" ||
+      Boolean(resourceType?.getElementsByTagName("collection").length);
+
+    items.push({
+      key,
+      name: basename(key),
+      isDir,
+      size: size ? Number(size) : 0,
+      uploaded: lastModified || new Date().toUTCString(),
+      contentType: contentType || (isDir ? "application/x-directory" : ""),
+      thumbnail: thumbnail || undefined,
     });
+  }
   return items;
 }
 

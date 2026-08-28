@@ -307,22 +307,31 @@ function ExplorerBar({
             flexWrap: "wrap",
           }}
         >
-          {TYPE_FILTERS.map((item) => (
+          {TYPE_FILTERS.map((item) => {
+            const active = typeFilter === item.value;
+            const filtering = typeFilter !== "all";
+            return (
             <Chip
               key={item.value}
               size="small"
               label={item.label}
               clickable
-              color={typeFilter === item.value ? "primary" : "default"}
-              variant={typeFilter === item.value ? "filled" : "outlined"}
+              color={active ? "primary" : "default"}
+              variant={active ? "filled" : "outlined"}
               onClick={() => onTypeFilterChange(item.value)}
               sx={{
                 borderRadius: "999px",
-                height: 26,
-                "& .MuiChip-label": { px: 1.1 },
+                height: 28,
+                fontWeight: 700,
+                boxShadow:
+                  active && filtering
+                    ? "0 0 0 2px rgba(243, 128, 32, 0.45)"
+                    : "none",
+                "& .MuiChip-label": { px: 1.25 },
               }}
             />
-          ))}
+            );
+          })}
           <FormControlLabel
             sx={{ marginLeft: 0.5, marginRight: 0, whiteSpace: "nowrap" }}
             control={

@@ -1,3 +1,4 @@
+import { isTextPreviewable } from "./preview";
 import { FileItem } from "./types";
 
 export function humanReadableSize(size: number) {
@@ -28,28 +29,41 @@ export function isDirectory(file: Pick<FileItem, "isDir">) {
   return file.isDir;
 }
 
+const OFFICE_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/rtf",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+]);
+
+const DOC_NAME =
+  /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|md|markdown|csv|tsv|rtf|json|jsonc|xml|html|htm|yaml|yml)$/;
+
 export function fileTypeCategory(
   file: FileItem
 ): "folder" | "image" | "video" | "doc" | "other" {
   if (file.isDir) return "folder";
-  const type = (file.contentType || "").toLowerCase();
+  const type = (file.contentType || "").toLowerCase().split(";")[0].trim();
   const name = file.name.toLowerCase();
-  if (type.startsWith("image/")) return "image";
   if (type.startsWith("video/")) return "video";
+  // svg+xml is text-previewable and should count as a document, not an image.
+  if (type.startsWith("image/") && type !== "image/svg+xml") return "image";
   const office =
     type.includes("wordprocessing") ||
     type.includes("spreadsheet") ||
     type.includes("presentation") ||
     type.includes("opendocument") ||
-    [
-      "application/pdf",
-      "application/msword",
-      "application/rtf",
-      "application/vnd.ms-excel",
-      "application/vnd.ms-powerpoint",
-    ].includes(type);
-  const docName = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|md|csv|rtf)$/.test(name);
-  if (type.startsWith("text/") || office || docName) return "doc";
+    OFFICE_TYPES.has(type);
+  const docName = DOC_NAME.test(name);
+  if (
+    type.startsWith("text/") ||
+    office ||
+    docName ||
+    isTextPreviewable(file)
+  ) {
+    return "doc";
+  }
   return "other";
 }
 
