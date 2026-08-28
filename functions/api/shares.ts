@@ -38,6 +38,7 @@ async function readShares(
       const token = object.key
         .slice(SHARES_PREFIX.length)
         .replace(/\.json$/, "");
+      const extractCode = typeof parsed.extractCode === "string" ? parsed.extractCode : "";
       shares.push({
         token,
         key: parsed.key,
@@ -45,6 +46,8 @@ async function readShares(
         expiresAt: parsed.expiresAt || null,
         createdAt: parsed.createdAt,
         url: `${new URL(request.url).origin}/share/${token}`,
+        extractCode: extractCode || null,
+        hasExtractCode: Boolean(extractCode),
       });
     }
     if (!listing.truncated) break;
@@ -70,7 +73,7 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  let body: { key?: string; expiresInHours?: number };
+  let body: { key?: string; expiresInHours?: number; extractCode?: string };
   try {
     body = await request.json();
   } catch {
@@ -96,10 +99,17 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
     : null;
   const createdAt = new Date().toISOString();
   const name = basename(key);
+  const extractCode = String(body.extractCode || "").trim().slice(0, 32);
 
   await env.BUCKET.put(
     `${SHARES_PREFIX}${token}.json`,
-    JSON.stringify({ key, name, expiresAt, createdAt }),
+    JSON.stringify({
+      key,
+      name,
+      expiresAt,
+      createdAt,
+      ...(extractCode ? { extractCode } : {}),
+    }),
     { httpMetadata: { contentType: "application/json" } }
   );
 
@@ -111,6 +121,8 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
       expiresAt,
       createdAt,
       url: `${new URL(request.url).origin}/share/${token}`,
+      extractCode: extractCode || null,
+      hasExtractCode: Boolean(extractCode),
     }),
     { headers: { "Content-Type": "application/json" } }
   );

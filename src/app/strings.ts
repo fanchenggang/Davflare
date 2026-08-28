@@ -56,6 +56,16 @@ export const strings = {
   create: "新建",
   newFolderOrNote: "新建文件夹或记事本",
   pastedImage: "粘贴图片",
+  copyPath: "复制路径",
+  recent: "最近",
+  noRecent: "暂无最近打开",
+  densityStandard: "标准",
+  densityCompact: "紧凑",
+  extractCode: "提取码",
+  extractCodeOptional: "提取码（可选）",
+  extractCodeHint: "留空则无需提取码",
+  folderItems: "项",
+  copyWebDavGuide: "复制完整说明",
 };
 
 export default strings;

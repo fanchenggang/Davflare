@@ -21,20 +21,76 @@ function tokenFromParams(params: Record<string, unknown>): string | null {
   return null;
 }
 
+function extractForm(error?: string) {
+  const message = error
+    ? `<p class="err">${error}</p>`
+    : "<p>请输入提取码后查看文件</p>";
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>提取文件</title>
+  <style>
+    :root { color-scheme: light; }
+    body { margin: 0; font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f4f1ec; color: #1a1714; min-height: 100vh; display: flex;
+      align-items: center; justify-content: center; }
+    .card { background: #fff; border-radius: 16px; padding: 28px 24px; width: min(92vw, 360px);
+      box-shadow: 0 8px 24px rgba(26,23,20,.08); }
+    h1 { font-size: 1.15rem; margin: 0 0 8px; }
+    p { color: rgba(26,23,20,.64); font-size: .9rem; margin: 0 0 16px; }
+    .err { color: #c4472c; }
+    input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid rgba(28,22,16,.16); font-size: 1rem; margin-bottom: 12px; }
+    button { width: 100%; border: 0; border-radius: 8px; padding: 10px 12px;
+      background: #f38020; color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <form class="card" method="GET">
+    <h1>提取文件</h1>
+    ${message}
+    <input name="code" type="text" maxlength="32" autocomplete="off" placeholder="提取码" autofocus />
+    <button type="submit">提取</button>
+  </form>
+</body>
+</html>`;
+  return new Response(html, {
+    status: error ? 403 : 200,
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+  });
+}
+
+type ShareMeta = {
+  key?: string;
+  expiresAt?: string | null;
+  extractCode?: string;
+};
+
+async function loadMeta(bucket: R2Bucket, token: string): Promise<ShareMeta | null> {
+  const metadataObject = await bucket.get(`${SHARES_PREFIX}${token}.json`);
+  if (metadataObject === null) return null;
+  return (await metadataObject.json()) as ShareMeta;
+}
+
+function gateExtractCode(request: Request, metadata: ShareMeta) {
+  const required = String(metadata.extractCode || "").trim();
+  if (!required) return null;
+  const provided = new URL(request.url).searchParams.get("code") || "";
+  if (provided === required) return null;
+  return extractForm(provided ? "提取码不正确" : undefined);
+}
+
 export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   const { request, env, params } = context;
   const token = tokenFromParams(params);
   if (!token) return new Response("Not found", { status: 404 });
 
-  const metadataObject = await env.BUCKET.get(`${SHARES_PREFIX}${token}.json`);
-  if (metadataObject === null) {
+  const metadata = await loadMeta(env.BUCKET, token);
+  if (metadata === null) {
     return new Response("分享链接不存在或已撤销", { status: 404 });
   }
-
-  const metadata = (await metadataObject.json()) as {
-    key?: string;
-    expiresAt?: string | null;
-  };
   if (!metadata.key) return new Response("Not found", { status: 404 });
 
   if (
@@ -43,6 +99,9 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   ) {
     return new Response("分享链接已过期", { status: 410 });
   }
+
+  const gated = gateExtractCode(request, metadata);
+  if (gated) return gated;
 
   const object = await env.BUCKET.get(metadata.key, {
     range: request.headers,
@@ -73,10 +132,9 @@ export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
   const token = tokenFromParams(params);
   if (!token) return new Response(null, { status: 404 });
 
-  const metadataObject = await env.BUCKET.get(`${SHARES_PREFIX}${token}.json`);
-  if (metadataObject === null) return new Response(null, { status: 404 });
-  const metadata = (await metadataObject.json()) as { key?: string };
-  if (!metadata.key) return new Response(null, { status: 404 });
+  const metadata = await loadMeta(env.BUCKET, token);
+  if (metadata === null || !metadata.key) return new Response(null, { status: 404 });
+  if (gateExtractCode(request, metadata)) return new Response(null, { status: 403 });
 
   const object = await env.BUCKET.head(metadata.key);
   if (object === null) return new Response(null, { status: 404 });

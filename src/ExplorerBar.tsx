@@ -22,11 +22,15 @@ import {
   GridView as GridViewIcon,
   NoteAdd as NoteAddIcon,
   Sort as SortIcon,
+  DensityMedium as DensityMediumIcon,
+  DensitySmall as DensitySmallIcon,
+  History as HistoryIcon,
   Storage as WebDavIcon,
   ViewList as ViewListIcon,
 } from "@mui/icons-material";
 
-import { FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
+import { Density, FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
+import { RecentEntry } from "./app/recent";
 import { strings } from "./app/strings";
 
 export type ExplorerSection = "folder" | "shares" | "trash";
@@ -59,6 +63,10 @@ function ExplorerBar({
   onTypeFilterChange,
   showHidden,
   onShowHiddenChange,
+  density,
+  onDensityChange,
+  recents,
+  onOpenRecent,
 }: {
   section: ExplorerSection;
   onSectionChange: (section: ExplorerSection) => void;
@@ -79,9 +87,14 @@ function ExplorerBar({
   onTypeFilterChange: (filter: FileTypeFilter) => void;
   showHidden: boolean;
   onShowHiddenChange: (show: boolean) => void;
+  density: Density;
+  onDensityChange: (density: Density) => void;
+  recents: RecentEntry[];
+  onOpenRecent: (entry: RecentEntry) => void;
 }) {
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
+  const [recentAnchor, setRecentAnchor] = useState<null | HTMLElement>(null);
 
   const changeSort = (field: SortField) => {
     onSortChange({
@@ -143,6 +156,40 @@ function ExplorerBar({
           </ToggleButton>
         </ToggleButtonGroup>
 
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<HistoryIcon />}
+          onClick={(event) => setRecentAnchor(event.currentTarget)}
+          sx={{ color: "text.secondary" }}
+        >
+          {strings.recent}
+        </Button>
+        <Menu
+          anchorEl={recentAnchor}
+          open={Boolean(recentAnchor)}
+          onClose={() => setRecentAnchor(null)}
+          PaperProps={{ sx: { minWidth: 240, maxWidth: 360 } }}
+        >
+          {recents.length === 0 ? (
+            <MenuItem disabled>{strings.noRecent}</MenuItem>
+          ) : (
+            recents.map((entry) => (
+              <MenuItem
+                key={entry.key}
+                onClick={() => {
+                  setRecentAnchor(null);
+                  onOpenRecent(entry);
+                }}
+              >
+                <Typography noWrap title={entry.key} sx={{ maxWidth: 320 }}>
+                  {entry.name}
+                  {entry.isDir ? " /" : ""}
+                </Typography>
+              </MenuItem>
+            ))
+          )}
+        </Menu>
         <Button
           size="small"
           variant="text"
@@ -253,6 +300,27 @@ function ExplorerBar({
                 onClick={() => onViewChange(view === "grid" ? "list" : "grid")}
               >
                 {view === "grid" ? <ViewListIcon /> : <GridViewIcon />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip
+              title={
+                density === "compact"
+                  ? strings.densityStandard
+                  : strings.densityCompact
+              }
+            >
+              <IconButton
+                size="small"
+                aria-label="显示密度"
+                onClick={() =>
+                  onDensityChange(density === "compact" ? "standard" : "compact")
+                }
+              >
+                {density === "compact" ? (
+                  <DensityMediumIcon />
+                ) : (
+                  <DensitySmallIcon />
+                )}
               </IconButton>
             </Tooltip>
             <Tooltip title="排序">

@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
+  ContentCopy as ContentCopyIcon,
   FolderOpen as FolderOpenIcon,
   SearchOff as SearchOffIcon,
 } from "@mui/icons-material";
@@ -41,7 +42,8 @@ import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
-import { FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
@@ -120,6 +122,7 @@ function PathBar({
   searchScope,
   onSearchScopeChange,
   searchQuery,
+  onNotify,
 }: {
   cwd: string;
   onNavigate: (path: string) => void;
@@ -127,9 +130,19 @@ function PathBar({
   searchScope: SearchScope;
   onSearchScopeChange: (scope: SearchScope) => void;
   searchQuery: string;
+  onNotify: NotifyFn;
 }) {
   const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
   const atRoot = parts.length === 0;
+  const pathText = atRoot ? "/" : `/${parts.join("/")}/`;
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(pathText);
+      onNotify("路径已复制", "success");
+    } catch {
+      onNotify("复制失败", "error");
+    }
+  };
 
   return (
     <Box sx={{ px: 1.5, pb: 1.25, pt: 0.25 }}>
@@ -182,6 +195,14 @@ function PathBar({
             )
           )}
         </Breadcrumbs>
+        <IconButton
+          size="small"
+          aria-label={strings.copyPath}
+          onClick={copyPath}
+          sx={{ flexShrink: 0 }}
+        >
+          <ContentCopyIcon fontSize="small" />
+        </IconButton>
       </Box>
       <Box
         sx={{
@@ -318,6 +339,12 @@ function Main({
     "flaredrive.showHidden",
     false
   );
+  const [density, setDensity] = usePersistedState<Density>(
+    "flaredrive.density",
+    "standard"
+  );
+  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const recents = useRecent();
   const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -509,6 +536,26 @@ function Main({
     [navigate, onSearchChange, search]
   );
 
+  const openRecent = useCallback(
+    (entry: RecentEntry) => {
+      if (entry.isDir) {
+        navigateFolder(entry.key);
+        return;
+      }
+      navigateFolder(parentKey(entry.key));
+      setPendingOpen(entry.key);
+    },
+    [navigateFolder]
+  );
+
+  const rememberFolder = useCallback((key: string) => {
+    const file = files.find((item) => item.key === key);
+    if (file?.isDir) {
+      pushRecent({ key: file.key, name: file.name, isDir: true });
+    }
+    navigateFolder(key);
+  }, [files, navigateFolder]);
+
   const toggleSelect = useCallback((key: string) => {
     setSelectedKeys((prev) =>
       prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
@@ -538,6 +585,7 @@ function Main({
     (key: string) => {
       const file = files.find((item) => item.key === key);
       if (!file) return;
+      pushRecent({ key: file.key, name: file.name, isDir: false });
       if (isPreviewable(file)) {
         setPreviewFile(file);
       } else {
@@ -839,6 +887,22 @@ function Main({
     loading ||
     (route.kind === "folder" && loadedListingKey.current !== listingKey);
 
+  useEffect(() => {
+    if (!pendingOpen || listingPending) return;
+    const found = files.find((item) => item.key === pendingOpen);
+    if (found) {
+      if (isPreviewable(found)) setPreviewFile(found);
+      else {
+        openFile(found.key).catch((error) =>
+          onNotify((error as Error).message, "error")
+        );
+      }
+    } else {
+      onNotify("最近项目不存在或已移动", "error");
+    }
+    setPendingOpen(null);
+  }, [files, listingPending, onNotify, pendingOpen]);
+
   return (
     <Box
       sx={{
@@ -877,6 +941,10 @@ function Main({
           onTypeFilterChange={setTypeFilter}
           showHidden={showHidden}
           onShowHiddenChange={setShowHidden}
+          density={density}
+          onDensityChange={setDensity}
+          recents={recents}
+          onOpenRecent={openRecent}
         />
         {route.kind === "folder" && (
           <PathBar
@@ -886,6 +954,7 @@ function Main({
             searchScope={searchScope}
             onSearchScopeChange={setSearchScope}
             searchQuery={debouncedSearch}
+            onNotify={onNotify}
           />
         )}
       </Box>
@@ -915,7 +984,7 @@ function Main({
         <>
           {listingPending ? (
             <Box sx={{ flexGrow: 1, overflowY: "auto", minHeight: 220 }}>
-              <FileGridSkeleton view={view} />
+              <FileGridSkeleton view={view} density={density} />
             </Box>
           ) : (
             <Box
@@ -929,10 +998,11 @@ function Main({
               <FileGrid
                 files={visibleFiles}
                 view={view}
+                density={density}
                 selectedKeys={selectedKeys}
                 dimmedKeys={cutKeys}
                 onToggleSelect={toggleSelect}
-                onNavigate={navigateFolder}
+                onNavigate={rememberFolder}
                 onOpen={handleOpen}
                 onOpenMenu={handleOpenMenu}
                 onDropOnFolder={handleDropOnFolder}
@@ -1072,7 +1142,10 @@ function Main({
       <PreviewDialog
         file={previewFile}
         siblings={previewSiblings}
-        onSibling={setPreviewFile}
+        onSibling={(file) => {
+          pushRecent({ key: file.key, name: file.name, isDir: false });
+          setPreviewFile(file);
+        }}
         onClose={() => setPreviewFile(null)}
         onNotify={onNotify}
         onShare={() => {
