@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   Box,
   Checkbox,
@@ -59,7 +59,20 @@ function FileGrid({
     onOpenMenu({ clientX: event.clientX, clientY: event.clientY }, file);
   };
 
+  const pointer = useRef({ x: 0, y: 0, dragging: false });
+
+  const markPointer = (event: { clientX: number; clientY: number }) => {
+    pointer.current = { x: event.clientX, y: event.clientY, dragging: false };
+  };
+
+  const beginDrag = (event: React.DragEvent, file: FileItem) => {
+    pointer.current.dragging = true;
+    event.dataTransfer.setData("application/x-flaredrive", file.key);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
   const clickItem = (file: FileItem) => {
+    if (pointer.current.dragging) return;
     if (isDirectory(file)) onNavigate(file.key);
     else onOpen(file.key);
   };
@@ -69,6 +82,8 @@ function FileGrid({
       size="small"
       checked={isSelected(file)}
       inputProps={{ "aria-label": `选择 ${file.name}` }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
         onToggleSelect(file.key);
@@ -81,10 +96,21 @@ function FileGrid({
     <IconButton
       size="small"
       aria-label={`${file.name} 操作`}
-      sx={sx}
+      sx={{ zIndex: 2, ...(sx || {}) }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+      }}
       onClick={(event) => {
         event.stopPropagation();
-        openMenu(event, file);
+        event.preventDefault();
+        const { clientX, clientY } = event;
+        window.setTimeout(() => {
+          onOpenMenu({ clientX, clientY }, file);
+        }, 0);
       }}
     >
       <MoreHorizIcon />
@@ -109,13 +135,11 @@ function FileGrid({
   const itemList = (file: FileItem) => (
     <ListItemButton
       selected={isSelected(file)}
+      onPointerDown={markPointer}
       onClick={() => clickItem(file)}
       onContextMenu={(event) => openMenu(event, file)}
       draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData("application/x-flaredrive", file.key);
-        event.dataTransfer.effectAllowed = "move";
-      }}
+      onDragStart={(event) => beginDrag(event, file)}
       {...folderDrop(file)}
       sx={{
         userSelect: "none",
@@ -151,16 +175,14 @@ function FileGrid({
     <Box
       role="button"
       tabIndex={0}
+      onPointerDown={markPointer}
       onClick={() => clickItem(file)}
       onKeyDown={(event) => {
         if (event.key === "Enter") clickItem(file);
       }}
       onContextMenu={(event) => openMenu(event, file)}
       draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData("application/x-flaredrive", file.key);
-        event.dataTransfer.effectAllowed = "move";
-      }}
+      onDragStart={(event) => beginDrag(event, file)}
       {...folderDrop(file)}
       sx={{
         position: "relative",
@@ -180,6 +202,7 @@ function FileGrid({
         alignItems: "center",
         justifyContent: "center",
         gap: 0.5,
+        userSelect: "none",
         transition: "background-color 0.2s ease, box-shadow 0.2s ease",
         "&:hover": { backgroundColor: "whitesmoke", boxShadow: 1 },
       }}

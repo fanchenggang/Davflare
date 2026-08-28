@@ -123,7 +123,10 @@ function FileActionSheet({
       open={open}
       onClose={onClose}
       anchorReference="anchorPosition"
-      anchorPosition={anchorPosition ?? undefined}
+      anchorPosition={anchorPosition ?? { top: 0, left: 0 }}
+      disableAutoFocusItem
+      onClick={(event) => event.stopPropagation()}
+      MenuListProps={{ dense: false, sx: { minWidth: 180 } }}
     >
       {file &&
         actions.map((action) => (

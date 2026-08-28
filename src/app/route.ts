@@ -36,10 +36,41 @@ function decodeRoute(hash: string): Route {
   return { kind: "folder", path: path ? `${path}/` : "" };
 }
 
+function hashIsEmpty(hash: string) {
+  return !hash || hash === "#" || hash === "#/";
+}
+
+/**
+ * Shared links may use `?p=folder` instead of `#/folder/`.
+ * Map that query onto the hash router and drop `p` so hash stays canonical.
+ */
+function applyQueryPathToHash(): Route | null {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("p")) return null;
+
+  const queryPath = url.searchParams.get("p") ?? "";
+  const hashEmpty = hashIsEmpty(url.hash);
+
+  url.searchParams.delete("p");
+
+  if (!hashEmpty || !queryPath) {
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState(null, "", next);
+    return null;
+  }
+
+  const route = decodeRoute(`#/${queryPath.replace(/^\/+/, "")}`);
+  const nextHash = encodeRoute(route);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${nextHash}`);
+  return route;
+}
+
+function resolveInitialRoute(): Route {
+  return applyQueryPathToHash() ?? decodeRoute(window.location.hash);
+}
+
 export function useHashRoute(): [Route, (route: Route) => void] {
-  const [route, setRoute] = useState<Route>(() =>
-    decodeRoute(window.location.hash)
-  );
+  const [route, setRoute] = useState<Route>(() => resolveInitialRoute());
 
   useEffect(() => {
     const onHashChange = () => setRoute(decodeRoute(window.location.hash));
