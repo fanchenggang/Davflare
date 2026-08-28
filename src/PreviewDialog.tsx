@@ -236,6 +236,12 @@ function PreviewDialog({
     }
   };
 
+  const closePreview = () => {
+    onClose();
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+  };
+
   const contentType = mimeType(file?.contentType);
   const isImage =
     contentType.startsWith("image/") && contentType !== "image/svg+xml";
@@ -253,10 +259,12 @@ function PreviewDialog({
   return (
     <Dialog
       open={Boolean(file)}
-      onClose={onClose}
+      onClose={closePreview}
       fullWidth
       fullScreen={isPhone}
       maxWidth="xl"
+      transitionDuration={0}
+      disableRestoreFocus
       PaperProps={{
         sx: {
           display: "flex",
@@ -265,8 +273,10 @@ function PreviewDialog({
           maxHeight: isPhone ? "100%" : "92vh",
           width: isPhone ? "100%" : "96vw",
           maxWidth: isPhone ? "100%" : 1280,
+          opacity: 1,
         },
       }}
+      BackdropProps={{ transitionDuration: 0 }}
     >
       <DialogTitle
         sx={{
@@ -394,7 +404,7 @@ function PreviewDialog({
         <Button startIcon={<DownloadIcon />} onClick={download}>
           下载
         </Button>
-        <Button onClick={onClose}>关闭</Button>
+        <Button onClick={closePreview}>关闭</Button>
       </DialogActions>
     </Dialog>
   );

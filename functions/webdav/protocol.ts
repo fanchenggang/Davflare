@@ -715,7 +715,7 @@ function fromR2Object(object: R2Object | DavObject | null | undefined): DavPrope
     getcontentlength: object.size.toString(),
     getcontenttype: isCollection
       ? "application/x-directory"
-      : object.httpMetadata?.contentType,
+      : object.httpMetadata?.contentType || "application/octet-stream",
     getetag: object.etag,
     getlastmodified: object.uploaded.toUTCString(),
     resourcetype: isCollection ? "<collection />" : "",
@@ -772,10 +772,14 @@ async function* listAll(
   do {
     // The `include` option is intentionally typed loosely here because some
     // @cloudflare/workers-types versions lag behind the Workers runtime.
+    // Paginate every page (truncated/cursor). Never drop later objects or
+    // delimited prefixes — a missing snapshot.json is a client-filter bug,
+    // not a reason to silently cap the listing.
     const r2Objects: R2Objects = await (bucket as any).list({
       prefix,
       delimiter: isRecursive ? undefined : "/",
       cursor,
+      limit: 1000,
       include: ["httpMetadata", "customMetadata"],
     });
 
