@@ -45,6 +45,8 @@ export interface ShareInfo {
   expiresAt: string | null;
   createdAt: string;
   url: string;
+  extractCode?: string | null;
+  hasExtractCode?: boolean;
 }
 
 export interface TrashItem {

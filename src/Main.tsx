@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
+  ContentCopy as ContentCopyIcon,
   FolderOpen as FolderOpenIcon,
   SearchOff as SearchOffIcon,
 } from "@mui/icons-material";
@@ -28,6 +29,7 @@ import EmptyState from "./EmptyState";
 import ExplorerBar, { ExplorerSection } from "./ExplorerBar";
 import FileActionSheet, { FileAction } from "./FileActionSheet";
 import FileGrid, { FileGridSkeleton } from "./FileGrid";
+import MobileNav from "./MobileNav";
 import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import PreviewDialog from "./PreviewDialog";
@@ -40,7 +42,8 @@ import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
-import { FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
@@ -63,6 +66,8 @@ import {
   formatListingSize,
   isDirectory,
   isJunkFileName,
+  uniqueName,
+  uniquifyUploadFiles,
 } from "./app/utils";
 
 export type SearchScope = "folder" | "global";
@@ -76,6 +81,30 @@ function isTypingTarget(target: EventTarget | null) {
     tag === "SELECT" ||
     target.isContentEditable
   );
+}
+
+function parentKey(key: string) {
+  const trimmed = key.replace(/\/$/, "");
+  const index = trimmed.lastIndexOf("/");
+  return index >= 0 ? trimmed.slice(0, index + 1) : "";
+}
+
+function stampPastedName(file: File) {
+  const subtype = (file.type.split("/")[1] || "png").replace("jpeg", "jpg");
+  const ext = subtype.split("+")[0] || "png";
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${strings.pastedImage} ${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
+    now.getDate()
+  )}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.${ext}`;
+}
+
+function dragHasFiles(event: DragEvent | React.DragEvent) {
+  const types = event.dataTransfer?.types;
+  if (!types) return false;
+  const list = Array.from(types as ArrayLike<string>);
+  if (list.includes("application/x-flaredrive")) return false;
+  return list.includes("Files");
 }
 
 function hasOpenOverlay() {
@@ -93,6 +122,7 @@ function PathBar({
   searchScope,
   onSearchScopeChange,
   searchQuery,
+  onNotify,
 }: {
   cwd: string;
   onNavigate: (path: string) => void;
@@ -100,9 +130,19 @@ function PathBar({
   searchScope: SearchScope;
   onSearchScopeChange: (scope: SearchScope) => void;
   searchQuery: string;
+  onNotify: NotifyFn;
 }) {
   const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
   const atRoot = parts.length === 0;
+  const pathText = atRoot ? "/" : `/${parts.join("/")}/`;
+  const copyPath = async () => {
+    try {
+      await navigator.clipboard.writeText(pathText);
+      onNotify("路径已复制", "success");
+    } catch {
+      onNotify("复制失败", "error");
+    }
+  };
 
   return (
     <Box sx={{ px: 1.5, pb: 1.25, pt: 0.25 }}>
@@ -155,6 +195,14 @@ function PathBar({
             )
           )}
         </Breadcrumbs>
+        <IconButton
+          size="small"
+          aria-label={strings.copyPath}
+          onClick={copyPath}
+          sx={{ flexShrink: 0 }}
+        >
+          <ContentCopyIcon fontSize="small" />
+        </IconButton>
       </Box>
       <Box
         sx={{
@@ -219,16 +267,6 @@ function PathBar({
       ) : null}
     </Box>
   );
-}
-
-function uniqueName(name: string, taken: Set<string>) {
-  if (!taken.has(name)) return name;
-  const dot = name.lastIndexOf(".");
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot) : "";
-  let index = 2;
-  while (taken.has(`${stem} (${index})${ext}`)) index++;
-  return `${stem} (${index})${ext}`;
 }
 
 async function transferKeys(
@@ -301,6 +339,13 @@ function Main({
     "flaredrive.showHidden",
     false
   );
+  const [density, setDensity] = usePersistedState<Density>(
+    "flaredrive.density",
+    "standard"
+  );
+  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
+  const recents = useRecent();
   const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -312,8 +357,10 @@ function Main({
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
+  const [dropActive, setDropActive] = useState(false);
   const lastFolderPath = useRef("");
   const loadedListingKey = useRef<string | null>(null);
+  const dropDepth = useRef(0);
 
   const cwd = route.kind === "folder" ? route.path : lastFolderPath.current;
   const section: ExplorerSection =
@@ -370,7 +417,12 @@ function Main({
         setSearchHasMore(result.hasMore);
         setSearchCursor(result.nextCursor);
       } else {
-        setFiles(await fetchPath(cwd));
+        const items = await fetchPath(cwd);
+        setFiles(items);
+        setFolderCounts((prev) => ({
+          ...prev,
+          [cwd.replace(/\/$/, "")]: items.length,
+        }));
         setSearchHasMore(false);
         setSearchCursor(undefined);
       }
@@ -490,6 +542,26 @@ function Main({
     [navigate, onSearchChange, search]
   );
 
+  const openRecent = useCallback(
+    (entry: RecentEntry) => {
+      if (entry.isDir) {
+        navigateFolder(entry.key);
+        return;
+      }
+      navigateFolder(parentKey(entry.key));
+      setPendingOpen(entry.key);
+    },
+    [navigateFolder]
+  );
+
+  const rememberFolder = useCallback((key: string) => {
+    const file = files.find((item) => item.key === key);
+    if (file?.isDir) {
+      pushRecent({ key: file.key, name: file.name, isDir: true });
+    }
+    navigateFolder(key);
+  }, [files, navigateFolder]);
+
   const toggleSelect = useCallback((key: string) => {
     setSelectedKeys((prev) =>
       prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
@@ -519,6 +591,7 @@ function Main({
     (key: string) => {
       const file = files.find((item) => item.key === key);
       if (!file) return;
+      pushRecent({ key: file.key, name: file.name, isDir: false });
       if (isPreviewable(file)) {
         setPreviewFile(file);
       } else {
@@ -526,6 +599,45 @@ function Main({
       }
     },
     [files, onNotify]
+  );
+
+  const previewSiblings = useMemo(() => {
+    if (!previewFile) return [];
+    const parent = parentKey(previewFile.key);
+    return visibleFiles.filter(
+      (item) =>
+        !item.isDir &&
+        isPreviewable(item) &&
+        parentKey(item.key) === parent
+    );
+  }, [previewFile, visibleFiles]);
+
+  const takenForCwd = useMemo(() => {
+    const taken = new Set(files.map((item) => item.name));
+    for (const task of transferQueue) {
+      if (task.type !== "upload") continue;
+      if (task.basedir !== cwd) continue;
+      if (task.status === "canceled" || task.status === "completed") continue;
+      const rest = task.remoteKey.startsWith(cwd)
+        ? task.remoteKey.slice(cwd.length)
+        : task.name;
+      taken.add(rest.split("/").filter(Boolean)[0] || task.name);
+    }
+    return taken;
+  }, [cwd, files, transferQueue]);
+
+  const enqueueToDir = useCallback(
+    (incoming: File[], basedir: string, taken: Iterable<string>) => {
+      if (!incoming.length) return;
+      const unique = uniquifyUploadFiles(incoming, taken);
+      uploadEnqueue(...unique.map((file) => ({ file, basedir })));
+    },
+    [uploadEnqueue]
+  );
+
+  const enqueueToCwd = useCallback(
+    (incoming: File[]) => enqueueToDir(incoming, cwd, takenForCwd),
+    [cwd, enqueueToDir, takenForCwd]
   );
 
   useEffect(() => {
@@ -552,6 +664,79 @@ function Main({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleOpen, navigateFolder, selectedKeys, visibleFiles]);
+
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (route.kind !== "folder") return;
+      if (isTypingTarget(event.target)) return;
+      if (hasOpenOverlay()) return;
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      const pasted: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind !== "file") continue;
+        const file = item.getAsFile();
+        if (file) pasted.push(file);
+      }
+      if (!pasted.length) return;
+      event.preventDefault();
+      const named = pasted.map((file) => {
+        const generic =
+          file.type.startsWith("image/") &&
+          (!file.name || /^image\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name));
+        if (!generic) return file;
+        return new File([file], stampPastedName(file), {
+          type: file.type,
+          lastModified: file.lastModified,
+        });
+      });
+      enqueueToCwd(named);
+      onNotify(`已加入 ${named.length} 个上传任务`, "success");
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [enqueueToCwd, onNotify, route.kind]);
+
+  useEffect(() => {
+    if (route.kind !== "folder") {
+      dropDepth.current = 0;
+      setDropActive(false);
+      return;
+    }
+    const onEnter = (event: DragEvent) => {
+      if (!dragHasFiles(event)) return;
+      dropDepth.current += 1;
+      setDropActive(true);
+    };
+    const onLeave = () => {
+      dropDepth.current = Math.max(0, dropDepth.current - 1);
+      if (dropDepth.current === 0) setDropActive(false);
+    };
+    const onOver = (event: DragEvent) => {
+      if (!dragHasFiles(event)) return;
+      event.preventDefault();
+    };
+    const onDrop = async (event: DragEvent) => {
+      const wasFiles = dragHasFiles(event);
+      dropDepth.current = 0;
+      setDropActive(false);
+      if (!wasFiles || !event.dataTransfer) return;
+      event.preventDefault();
+      const dropped = await collectFilesFromDataTransfer(event.dataTransfer);
+      if (dropped.length) enqueueToCwd(dropped);
+    };
+    window.addEventListener("dragenter", onEnter);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragenter", onEnter);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [enqueueToCwd, route.kind]);
 
   const handleContextAction = useCallback(
     async (action: FileAction, file: FileItem) => {
@@ -661,14 +846,15 @@ function Main({
     }
 
     const droppedFiles = await collectFilesFromDataTransfer(dataTransfer);
-    if (droppedFiles.length) {
-      uploadEnqueue(
-        ...droppedFiles.map((file) => ({
-          file,
-          basedir: `${folder.key}/`,
-        }))
-      );
+    if (!droppedFiles.length) return;
+    const dest = `${folder.key.replace(/\/$/, "")}/`;
+    let taken: Set<string> = new Set();
+    try {
+      taken = new Set((await fetchPath(dest)).map((item) => item.name));
+    } catch {
+      taken = new Set();
     }
+    enqueueToDir(droppedFiles, dest, taken);
   };
 
   const openFilePicker = () => {
@@ -678,18 +864,14 @@ function Main({
     input.multiple = true;
     input.onchange = async () => {
       if (!input.files) return;
-      uploadEnqueue(
-        ...Array.from(input.files).map((file) => ({ file, basedir: cwd }))
-      );
+      enqueueToCwd(Array.from(input.files));
     };
     input.click();
   };
 
   const openFolderPicker = async () => {
-    const files = await selectDirectoryFiles();
-    if (files.length) {
-      uploadEnqueue(...files.map((file) => ({ file, basedir: cwd })));
-    }
+    const picked = await selectDirectoryFiles();
+    if (picked.length) enqueueToCwd(picked);
   };
 
   const handleSectionChange = (next: ExplorerSection) => {
@@ -710,6 +892,22 @@ function Main({
   const listingPending =
     loading ||
     (route.kind === "folder" && loadedListingKey.current !== listingKey);
+
+  useEffect(() => {
+    if (!pendingOpen || listingPending) return;
+    const found = files.find((item) => item.key === pendingOpen);
+    if (found) {
+      if (isPreviewable(found)) setPreviewFile(found);
+      else {
+        openFile(found.key).catch((error) =>
+          onNotify((error as Error).message, "error")
+        );
+      }
+    } else {
+      onNotify("最近项目不存在或已移动", "error");
+    }
+    setPendingOpen(null);
+  }, [files, listingPending, onNotify, pendingOpen]);
 
   return (
     <Box
@@ -749,6 +947,10 @@ function Main({
           onTypeFilterChange={setTypeFilter}
           showHidden={showHidden}
           onShowHiddenChange={setShowHidden}
+          density={density}
+          onDensityChange={setDensity}
+          recents={recents}
+          onOpenRecent={openRecent}
         />
         {route.kind === "folder" && (
           <PathBar
@@ -758,12 +960,13 @@ function Main({
             searchScope={searchScope}
             onSearchScopeChange={setSearchScope}
             searchQuery={debouncedSearch}
+            onNotify={onNotify}
           />
         )}
       </Box>
 
       {route.kind === "trash" && (
-        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+        <Box sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <TrashView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -773,7 +976,7 @@ function Main({
         </Box>
       )}
       {route.kind === "shares" && (
-        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+        <Box sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SharesView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -787,7 +990,7 @@ function Main({
         <>
           {listingPending ? (
             <Box sx={{ flexGrow: 1, overflowY: "auto", minHeight: 220 }}>
-              <FileGridSkeleton view={view} />
+              <FileGridSkeleton view={view} density={density} />
             </Box>
           ) : (
             <Box
@@ -795,29 +998,18 @@ function Main({
                 flexGrow: 1,
                 overflowY: "auto",
                 backgroundColor: "background.default",
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-              }}
-              onDrop={async (event) => {
-                event.preventDefault();
-                const droppedFiles = await collectFilesFromDataTransfer(
-                  event.dataTransfer
-                );
-                if (droppedFiles.length) {
-                  uploadEnqueue(
-                    ...droppedFiles.map((file) => ({ file, basedir: cwd }))
-                  );
-                }
+                pb: { xs: 8, sm: 0 },
               }}
             >
               <FileGrid
                 files={visibleFiles}
                 view={view}
+                density={density}
+                folderCounts={folderCounts}
                 selectedKeys={selectedKeys}
                 dimmedKeys={cutKeys}
                 onToggleSelect={toggleSelect}
-                onNavigate={navigateFolder}
+                onNavigate={rememberFolder}
                 onOpen={handleOpen}
                 onOpenMenu={handleOpenMenu}
                 onDropOnFolder={handleDropOnFolder}
@@ -923,8 +1115,44 @@ function Main({
         onNotify={onNotify}
       />
 
+      {dropActive && route.kind === "folder" && (
+        <Box
+          sx={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1400,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(244, 241, 236, 0.88)",
+            border: "3px dashed",
+            borderColor: "primary.main",
+            pointerEvents: "none",
+          }}
+        >
+          <Box
+            sx={{
+              px: 3,
+              py: 2,
+              borderRadius: 2,
+              backgroundColor: "#fff",
+              boxShadow: "0 8px 24px rgba(26,23,20,0.12)",
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {strings.dropToUpload}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
       <PreviewDialog
         file={previewFile}
+        siblings={previewSiblings}
+        onSibling={(file) => {
+          pushRecent({ key: file.key, name: file.name, isDir: false });
+          setPreviewFile(file);
+        }}
         onClose={() => setPreviewFile(null)}
         onNotify={onNotify}
         onShare={() => {
@@ -958,6 +1186,17 @@ function Main({
         confirmText="移入回收站"
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleConfirmDelete}
+      />
+
+      <MobileNav
+        visible={selectedKeys.length === 0}
+        onGoFiles={() =>
+          navigate({ kind: "folder", path: lastFolderPath.current })
+        }
+        onUploadFile={openFilePicker}
+        onUploadFolder={openFolderPicker}
+        onCreateFolder={() => setShowCreateFolder(true)}
+        onOpenTextPad={() => setShowTextPadDrawer(true)}
       />
 
       <MultiSelectToolbar

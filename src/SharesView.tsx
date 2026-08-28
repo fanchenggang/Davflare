@@ -15,7 +15,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 
 import EmptyState from "./EmptyState";
-import { listShares, revokeShare } from "./app/share";
+import { formatShareClipboard, listShares, revokeShare } from "./app/share";
 import { NotifyFn } from "./app/notify";
 import { strings } from "./app/strings";
 import { ShareInfo } from "./app/types";
@@ -46,9 +46,9 @@ function SharesView({
     load();
   }, []);
 
-  const copy = async (url: string) => {
+  const copy = async (share: ShareInfo) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(formatShareClipboard(share));
       onNotify("链接已复制", "success");
     } catch {
       onNotify("复制失败", "error");
@@ -104,7 +104,7 @@ function SharesView({
                   <Button
                     size="small"
                     startIcon={<ContentCopyIcon />}
-                    onClick={() => copy(share.url)}
+                    onClick={() => copy(share)}
                   >
                     复制
                   </Button>
@@ -113,12 +113,14 @@ function SharesView({
                     color="error"
                     startIcon={<DeleteIcon />}
                     onClick={async () => {
+                      const token = share.token;
+                      setShares((prev) => prev.filter((item) => item.token !== token));
                       try {
-                        await revokeShare(share.token);
+                        await revokeShare(token);
                         onNotify("已撤销分享", "success");
-                        await load();
                       } catch (error) {
                         onNotify((error as Error).message, "error");
+                        await load();
                       }
                     }}
                   >
@@ -139,9 +141,14 @@ function SharesView({
                     >
                       {share.url}
                     </Typography>
-                    {share.expiresAt
-                      ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
-                      : "永久有效"}
+                    {[
+                      share.expiresAt
+                        ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
+                        : "永久有效",
+                      share.extractCode ? `提取码 ${share.extractCode}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </>
                 }
               />

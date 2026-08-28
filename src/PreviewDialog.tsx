@@ -9,9 +9,12 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Typography,
   useMediaQuery,
 } from "@mui/material";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -29,6 +32,7 @@ import {
   readResponseTextCapped,
   TEXT_PREVIEW_MAX_BYTES,
 } from "./app/preview";
+import { strings } from "./app/strings";
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
 import { encodeKey, humanReadableSize } from "./app/utils";
@@ -101,6 +105,8 @@ function TextPane({ text }: { text: string }) {
 
 function PreviewDialog({
   file,
+  siblings = [],
+  onSibling,
   onClose,
   onNotify,
   onShare,
@@ -108,6 +114,8 @@ function PreviewDialog({
   onDelete,
 }: {
   file: FileItem | null;
+  siblings?: FileItem[];
+  onSibling?: (file: FileItem) => void;
   onClose: () => void;
   onNotify: NotifyFn;
   onShare: () => void;
@@ -122,6 +130,21 @@ function PreviewDialog({
   const [tooLarge, setTooLarge] = useState(false);
   const [largeSize, setLargeSize] = useState(0);
   const [jsonError, setJsonError] = useState(false);
+
+  const index = file
+    ? siblings.findIndex((item) => item.key === file.key)
+    : -1;
+  const hasPrev = Boolean(onSibling) && index > 0;
+  const hasNext =
+    Boolean(onSibling) && index >= 0 && index < siblings.length - 1;
+  const showPager = siblings.length > 1 && Boolean(onSibling);
+
+  const goSibling = (delta: number) => {
+    if (!onSibling || index < 0) return;
+    const next = index + delta;
+    if (next < 0 || next >= siblings.length) return;
+    onSibling(siblings[next]);
+  };
 
   useEffect(() => {
     if (!file) {
@@ -196,6 +219,28 @@ function PreviewDialog({
     };
   }, [file]);
 
+  useEffect(() => {
+    if (!file || !showPager) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      goSibling(event.key === "ArrowLeft" ? -1 : 1);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [file, showPager, index, siblings, onSibling]);
+
   const download = async () => {
     if (!file) return;
     try {
@@ -256,6 +301,32 @@ function PreviewDialog({
     !isPdf &&
     (tooLarge || text != null || (file ? isTextPreviewable(file) : false));
 
+  const pagerButton = (side: "left" | "right") => {
+    const prev = side === "left";
+    const enabled = prev ? hasPrev : hasNext;
+    if (!showPager) return null;
+    return (
+      <IconButton
+        aria-label={prev ? strings.prevFile : strings.nextFile}
+        disabled={!enabled}
+        onClick={() => goSibling(prev ? -1 : 1)}
+        sx={{
+          position: "absolute",
+          top: "50%",
+          [side]: 8,
+          transform: "translateY(-50%)",
+          zIndex: 2,
+          backgroundColor: "rgba(255,255,255,0.88)",
+          boxShadow: "0 2px 8px rgba(26,23,20,0.12)",
+          "&:hover": { backgroundColor: "#fff" },
+          "&.Mui-disabled": { opacity: 0.3 },
+        }}
+      >
+        {prev ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+      </IconButton>
+    );
+  };
+
   return (
     <Dialog
       open={Boolean(file)}
@@ -297,6 +368,9 @@ function PreviewDialog({
             sx={{ ml: 1.5, fontWeight: 500 }}
           >
             {humanReadableSize(file.size)}
+            {showPager && index >= 0
+              ? ` · ${index + 1}/${siblings.length}`
+              : ""}
           </Typography>
         )}
       </DialogTitle>
@@ -309,8 +383,11 @@ function PreviewDialog({
           px: showText ? 0 : 2,
           py: showText ? 0 : 2,
           flex: 1,
+          position: "relative",
         }}
       >
+        {pagerButton("left")}
+        {pagerButton("right")}
         {loading ? (
           <Box
             sx={{
@@ -365,10 +442,11 @@ function PreviewDialog({
               onClick={() => setZoomed((prev) => !prev)}
               style={{
                 maxWidth: zoomed ? "200%" : "100%",
-                maxHeight: zoomed ? "200%" : "100%",
+                maxHeight: zoomed ? "200%" : "none",
                 objectFit: "contain",
                 cursor: zoomed ? "zoom-out" : "zoom-in",
                 transition: "max-width 0.2s ease, max-height 0.2s ease",
+                margin: "0 auto",
               }}
             />
           ) : isVideo ? (
@@ -387,6 +465,16 @@ function PreviewDialog({
         ) : null}
       </DialogContent>
       <DialogActions sx={{ flexWrap: "wrap", gap: 0.5, px: 2, py: 1.25 }}>
+        {showPager && (
+          <>
+            <Button disabled={!hasPrev} onClick={() => goSibling(-1)}>
+              {strings.prevFile}
+            </Button>
+            <Button disabled={!hasNext} onClick={() => goSibling(1)}>
+              {strings.nextFile}
+            </Button>
+          </>
+        )}
         {text != null && (
           <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>
             复制全文

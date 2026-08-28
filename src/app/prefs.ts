@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type ViewMode = "grid" | "list";
+export type Density = "standard" | "compact";
 export type SortField = "name" | "size" | "date";
 export type SortOrder = "asc" | "desc";
 export type FileTypeFilter = "all" | "image" | "video" | "doc" | "other";

@@ -12,7 +12,7 @@ import {
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
 import MimeIcon from "./MimeIcon";
-import { ViewMode } from "./app/prefs";
+import { Density, ViewMode } from "./app/prefs";
 import { strings } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
@@ -24,6 +24,8 @@ import {
 interface FileGridProps {
   files: FileItem[];
   view: ViewMode;
+  density?: Density;
+  folderCounts?: Record<string, number>;
   selectedKeys: string[];
   dimmedKeys?: ReadonlySet<string>;
   onToggleSelect: (key: string) => void;
@@ -37,7 +39,14 @@ interface FileGridProps {
   emptyMessage?: React.ReactNode;
 }
 
-export function FileGridSkeleton({ view }: { view: ViewMode }) {
+export function FileGridSkeleton({
+  view,
+  density = "standard",
+}: {
+  view: ViewMode;
+  density?: Density;
+}) {
+  const compact = density === "compact";
   if (view === "list") {
     return (
       <Box sx={{ px: 1.5, py: 1 }}>
@@ -48,7 +57,7 @@ export function FileGridSkeleton({ view }: { view: ViewMode }) {
               display: "flex",
               alignItems: "center",
               gap: 1.5,
-              py: 0.85,
+              py: compact ? 0.4 : 0.85,
               px: 1,
             }}
           >
@@ -66,10 +75,10 @@ export function FileGridSkeleton({ view }: { view: ViewMode }) {
   return (
     <Grid container spacing={2} sx={{ padding: 1.5 }}>
       {Array.from({ length: 12 }).map((_, index) => (
-        <Grid item key={index} xs={6} sm={4} md={3} lg={2}>
+        <Grid item key={index} xs={compact ? 4 : 6} sm={compact ? 3 : 4} md={compact ? 2 : 3} lg={2}>
           <Box
             sx={{
-              height: 168,
+              height: compact ? 128 : 168,
               borderRadius: 2,
               border: "1px solid",
               borderColor: "divider",
@@ -94,6 +103,8 @@ export function FileGridSkeleton({ view }: { view: ViewMode }) {
 function FileGrid({
   files,
   view,
+  density = "standard",
+  folderCounts,
   selectedKeys,
   dimmedKeys,
   onToggleSelect,
@@ -104,6 +115,11 @@ function FileGrid({
   emptyMessage,
 }: FileGridProps) {
   const isSelected = (file: FileItem) => selectedKeys.includes(file.key);
+  const folderMeta = (file: FileItem) => {
+    const count = folderCounts?.[file.key];
+    if (typeof count === "number") return `${count} ${strings.folderItems}`;
+    return strings.folderLabel;
+  };
 
   const openMenu = (
     event: { clientX: number; clientY: number; preventDefault?: () => void },
@@ -239,10 +255,10 @@ function FileGrid({
       {...folderDrop(file)}
       sx={{
         userSelect: "none",
-        py: 0.5,
+        py: density === "compact" ? 0.15 : 0.5,
         px: 1,
         mx: 0.75,
-        minHeight: 44,
+        minHeight: density === "compact" ? 36 : 44,
         borderRadius: 1.5,
         gap: 0.5,
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
@@ -257,15 +273,15 @@ function FileGrid({
       {checkbox(file)}
       <Box
         sx={{
-          width: 32,
-          height: 32,
+          width: density === "compact" ? 24 : 32,
+          height: density === "compact" ? 24 : 32,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
         }}
       >
-        {thumbnail(file, 28)}
+        {thumbnail(file, density === "compact" ? 22 : 28)}
       </Box>
       <Typography
         noWrap
@@ -290,7 +306,7 @@ function FileGrid({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        {isDirectory(file) ? "—" : humanReadableSize(file.size)}
+        {isDirectory(file) ? folderMeta(file) : humanReadableSize(file.size)}
       </Typography>
       <Typography
         variant="caption"
@@ -328,9 +344,9 @@ function FileGrid({
         overflow: "visible",
         width: "100%",
         height: "100%",
-        minHeight: 168,
+        minHeight: density === "compact" ? 128 : 168,
         boxSizing: "border-box",
-        padding: 1.5,
+        padding: density === "compact" ? 1 : 1.5,
         paddingTop: "44px",
         cursor: "pointer",
         border: (theme) =>
@@ -370,14 +386,14 @@ function FileGrid({
       {checkbox(file, { position: "absolute", top: 0, left: 0 })}
       <Box
         sx={{
-          width: 64,
-          height: 64,
+          width: density === "compact" ? 48 : 64,
+          height: density === "compact" ? 48 : 64,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        {thumbnail(file, 64)}
+        {thumbnail(file, density === "compact" ? 48 : 64)}
       </Box>
       <Typography
         variant="body2"
@@ -399,8 +415,9 @@ function FileGrid({
         {file.name}
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        {isDirectory(file) ? strings.folderLabel : humanReadableSize(file.size)}
+        {isDirectory(file) ? folderMeta(file) : humanReadableSize(file.size)}
       </Typography>
+      {density !== "compact" && (
       <Typography
         variant="caption"
         color="text.secondary"
@@ -415,6 +432,7 @@ function FileGrid({
       >
         {formatDateTime(file.uploaded)}
       </Typography>
+      )}
       {moreButton(file, "tile")}
     </Box>
   );
@@ -423,7 +441,7 @@ function FileGrid({
 
   if (view === "list") {
     return (
-      <Box sx={{ pb: "72px" }}>
+      <Box sx={{ pb: { xs: "136px", sm: "72px" } }}>
         <Box
           sx={{
             display: { xs: "none", sm: "flex" },
@@ -481,16 +499,16 @@ function FileGrid({
   return (
     <Grid
       container
-      spacing={2}
-      sx={{ padding: 2, paddingBottom: "72px", overflow: "visible" }}
+      spacing={density === "compact" ? 1 : 2}
+      sx={{ padding: density === "compact" ? 1 : 2, paddingBottom: { xs: "136px", sm: "72px" }, overflow: "visible" }}
     >
       {files.map((file) => (
         <Grid
           item
           key={file.key}
-          xs={6}
-          sm={4}
-          md={3}
+          xs={density === "compact" ? 4 : 6}
+          sm={density === "compact" ? 3 : 4}
+          md={density === "compact" ? 2 : 3}
           lg={2}
           sx={{ display: "flex", overflow: "visible" }}
         >

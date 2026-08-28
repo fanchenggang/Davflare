@@ -15,11 +15,13 @@ import {
   MenuItem,
   Select,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
-import { createShare, listShares, revokeShare } from "./app/share";
+import { createShare, formatShareClipboard, listShares, revokeShare } from "./app/share";
+import { strings } from "./app/strings";
 import { NotifyFn } from "./app/notify";
 import { FileItem, ShareInfo } from "./app/types";
 
@@ -35,6 +37,7 @@ function ShareDialog({
   onNotify: NotifyFn;
 }) {
   const [expiry, setExpiry] = useState<string>("never");
+  const [extractCode, setExtractCode] = useState("");
   const [shares, setShares] = useState<ShareInfo[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -51,6 +54,7 @@ function ShareDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (open && file) {
+      setExtractCode("");
       refresh();
     }
   }, [open, file]);
@@ -61,9 +65,18 @@ function ShareDialog({
     try {
       const expiresInHours =
         expiry === "never" ? undefined : Number(expiry);
-      await createShare(file.key, expiresInHours);
+      const created = await createShare(
+        file.key,
+        expiresInHours,
+        extractCode.trim() || undefined
+      );
       await refresh();
       onNotify("分享链接已创建", "success");
+      try {
+        await navigator.clipboard.writeText(formatShareClipboard(created));
+      } catch {
+        // ignore; user can still copy from the list
+      }
     } catch (error) {
       onNotify((error as Error).message, "error");
     } finally {
@@ -71,9 +84,9 @@ function ShareDialog({
     }
   };
 
-  const copy = async (url: string) => {
+  const copy = async (share: ShareInfo) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(formatShareClipboard(share));
       onNotify("链接已复制", "success");
     } catch {
       onNotify("复制失败", "error");
@@ -98,6 +111,14 @@ function ShareDialog({
               <MenuItem value="720">30 天</MenuItem>
             </Select>
           </FormControl>
+          <TextField
+            fullWidth
+            label={strings.extractCodeOptional}
+            placeholder={strings.extractCodeHint}
+            value={extractCode}
+            onChange={(event) => setExtractCode(event.target.value.slice(0, 32))}
+            inputProps={{ maxLength: 32 }}
+          />
           <Button
             variant="contained"
             disabled={!file || loading}
@@ -118,10 +139,13 @@ function ShareDialog({
                         color="error"
                         onClick={async () => {
                           try {
+                            setShares((prev) =>
+                              prev.filter((item) => item.token !== share.token)
+                            );
                             await revokeShare(share.token);
-                            await refresh();
                           } catch (error) {
                             onNotify((error as Error).message, "error");
+                            await refresh();
                           }
                         }}
                       >
@@ -131,9 +155,16 @@ function ShareDialog({
                   >
                     <ListItemText
                       primary={
-                        share.expiresAt
-                          ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
-                          : "永久有效"
+                        [
+                          share.expiresAt
+                            ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
+                            : "永久有效",
+                          share.extractCode
+                            ? `${strings.extractCode} ${share.extractCode}`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
                       }
                       secondary={share.url}
                       secondaryTypographyProps={{
@@ -142,7 +173,7 @@ function ShareDialog({
                     />
                     <Button
                       startIcon={<ContentCopyIcon />}
-                      onClick={() => copy(share.url)}
+                      onClick={() => copy(share)}
                     >
                       复制
                     </Button>

@@ -82,3 +82,54 @@ export function formatListingSize(size: number) {
   if (size < 1024) return `${Math.round(size)} B`;
   return humanReadableSize(size);
 }
+
+export function uniqueName(name: string, taken: Set<string>) {
+  if (!taken.has(name)) return name;
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let index = 2;
+  while (taken.has(`${stem} (${index})${ext}`)) index++;
+  return `${stem} (${index})${ext}`;
+}
+
+/** Rename dropped/picked files so they do not overwrite existing names. */
+export function uniquifyUploadFiles(files: File[], taken: Iterable<string>): File[] {
+  const used = new Set(taken);
+  const topMap = new Map<string, string>();
+  return files.map((file) => {
+    const rel = file.webkitRelativePath || "";
+    const parts = rel.split("/").filter(Boolean);
+    if (parts.length > 1) {
+      const top = parts[0];
+      let mapped = topMap.get(top);
+      if (!mapped) {
+        mapped = uniqueName(top, used);
+        topMap.set(top, mapped);
+        used.add(mapped);
+      }
+      const newRel = [mapped, ...parts.slice(1)].join("/");
+      if (newRel === rel) return file;
+      const next = new File([file], parts[parts.length - 1], {
+        type: file.type,
+        lastModified: file.lastModified,
+      });
+      try {
+        Object.defineProperty(next, "webkitRelativePath", {
+          value: newRel,
+          configurable: true,
+        });
+      } catch {
+        // ignore
+      }
+      return next;
+    }
+    const unique = uniqueName(file.name, used);
+    used.add(unique);
+    if (unique === file.name) return file;
+    return new File([file], unique, {
+      type: file.type,
+      lastModified: file.lastModified,
+    });
+  });
+}
