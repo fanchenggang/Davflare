@@ -68,7 +68,7 @@ export const strings = {
   copyWebDavGuide: "复制完整说明",
   api: "API",
   apiKeys: "开放接口",
-  apiKeysHint: "用密钥通过接口上传或下载文件，完整密钥只显示一次",
+  apiKeysHint: "用密钥通过接口上传、下载、列出并双向同步（冲突时保留本地、先备份远端），完整密钥只显示一次",
   createApiKey: "创建密钥",
   revokeApiKey: "作废",
   apiKeyName: "名称",

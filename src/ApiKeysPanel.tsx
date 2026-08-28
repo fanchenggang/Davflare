@@ -24,11 +24,14 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 
 import {
+  backupCurlExample,
   createApiKey,
+  deleteCurlExample,
   downloadCurlExample,
   formatApiUsage,
   listApiKeys,
   listCurlExample,
+  overwriteCurlExample,
   revokeApiKey,
   uploadCurlExample,
 } from "./app/apikeys";
@@ -372,6 +375,42 @@ function ApiKeysPanel({
                   }
                 >
                   复制列出 curl
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={() =>
+                    copy(
+                      overwriteCurlExample(origin, usageKey, "folder/"),
+                      "覆盖上传 curl"
+                    )
+                  }
+                >
+                  复制覆盖 curl
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={() =>
+                    copy(
+                      backupCurlExample(origin, usageKey, "folder/notes.txt"),
+                      "备份 curl"
+                    )
+                  }
+                >
+                  复制备份 curl
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={() =>
+                    copy(
+                      deleteCurlExample(origin, usageKey, "folder/notes.txt"),
+                      "删除 curl"
+                    )
+                  }
+                >
+                  复制删除 curl
                 </Button>
               </Stack>
             </Box>
