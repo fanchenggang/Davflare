@@ -29,6 +29,7 @@ import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
+import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
@@ -176,6 +177,7 @@ function Main({
   const [searchCursor, setSearchCursor] = useState<string | undefined>();
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
+  const [showWebDav, setShowWebDav] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -506,6 +508,7 @@ function Main({
         onViewChange={onViewChange}
         sort={sort}
         onSortChange={onSortChange}
+        onOpenWebDav={() => setShowWebDav(true)}
       />
 
       {route.kind === "trash" && (
@@ -606,6 +609,12 @@ function Main({
           )}
         </>
       )}
+
+      <WebDavPanel
+        open={showWebDav}
+        onClose={() => setShowWebDav(false)}
+        onNotify={onNotify}
+      />
 
       <CreateFolderDialog
         open={showCreateFolder}

@@ -19,6 +19,7 @@ import {
   GridView as GridViewIcon,
   NoteAdd as NoteAddIcon,
   Sort as SortIcon,
+  Storage as WebDavIcon,
   ViewList as ViewListIcon,
 } from "@mui/icons-material";
 
@@ -42,6 +43,7 @@ function ExplorerBar({
   onViewChange,
   sort,
   onSortChange,
+  onOpenWebDav,
 }: {
   section: ExplorerSection;
   onSectionChange: (section: ExplorerSection) => void;
@@ -57,6 +59,7 @@ function ExplorerBar({
   onViewChange: (view: ViewMode) => void;
   sort: SortPref;
   onSortChange: (sort: SortPref) => void;
+  onOpenWebDav: () => void;
 }) {
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
@@ -103,6 +106,15 @@ function ExplorerBar({
           {strings.trash}
         </ToggleButton>
       </ToggleButtonGroup>
+
+      <Button
+        size="small"
+        variant="text"
+        startIcon={<WebDavIcon />}
+        onClick={onOpenWebDav}
+      >
+        {strings.webdav}
+      </Button>
 
       {inFolder && (
         <Box

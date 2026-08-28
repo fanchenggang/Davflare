@@ -6,12 +6,13 @@ Free serverless backend with a limit of 100,000 invocation requests per day.
 
 ## Features
 
-- Upload large files
+- Chunked web uploads for large files
 - Create folders
 - Search files
 - Image/video/PDF thumbnails
-- WebDAV endpoint
+- WebDAV Class 1/2
 - Drag and drop upload
+- Share links with expiry and trash
 
 ## Usage
 
@@ -26,7 +27,8 @@ Before starting, you should make sure that
 Steps:
 
 1. Fork this project and connect your fork with Cloudflare Pages
-   - Select `Docusaurus` framework preset
+   - Use `None (React CRA, not Docusaurus)` framework preset
+   - Output directory is build
    - Set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`
    - (Optional) Set `WEBDAV_PUBLIC_READ` to `1` to enable public read
 2. After initial deployment, bind your R2 bucket to `BUCKET` variable
@@ -48,6 +50,7 @@ Fill the endpoint URL as `https://<your-domain.com>/webdav` and use the username
 
 However, the standard WebDAV protocol does not support large file (≥128MB) uploads due to the limitation of Cloudflare Workers.
 You must upload large files through the web interface which supports chunked uploads.
+The in-app WebDAV panel shows URL, username, and whether public-read is on. It does not display the secret. Oversized single PUTs return HTTP 413 with a Chinese message to use the web uploader.
 
 ## Acknowledgments
 
