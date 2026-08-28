@@ -72,9 +72,14 @@ curl -X POST "https://<your-domain.com>/api/upload?path=docs/" \
 
 Single-request uploads are limited to about 100MB (HTTP 413 otherwise). Larger files still need the web chunked uploader. Manage keys via session-authenticated `GET/POST/DELETE /api/keys`. Usage docs are also shown on the API settings page.
 
-The same keys can download a single object (folders are not a zip; fetch each file):
+The same keys can list a folder and download each file (folders are not a zip):
 
 ```bash
+# Depth-1 list (empty path = root). Does not recurse.
+curl "https://<your-domain.com>/api/list?path=folder/" \
+  -H "Authorization: Bearer <apiKey>"
+
+# download each item where isDir is false
 curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
   -H "Authorization: Bearer <apiKey>" \
   -o snapshot.json
@@ -85,16 +90,9 @@ curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
   -o snapshot.json
 ```
 
-`path` is the object key. HTTP 200 streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns 400; unknown object 404; bad/expired key 401. Internal `_$flaredrive$/` keys are rejected.
+`GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded? }] }` for the current folder only. Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns 400 and tells you to use `/api/download`. Missing folder: 404. Bad/expired key: 401.
 
-Optional Depth-1 listing:
-
-```bash
-curl "https://<your-domain.com>/api/list?path=folder/" \
-  -H "Authorization: Bearer <apiKey>"
-```
-
-Returns `{ items: [{ key, name, size, isDir }] }`.
+`GET /api/download` `path` is the object key. HTTP 200 streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns 400; unknown object 404; bad/expired key 401. Internal `_$flaredrive$/` keys are rejected.
 
 ## Acknowledgments
 
