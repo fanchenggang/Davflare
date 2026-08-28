@@ -183,7 +183,7 @@ function FileGrid({
       onDragStart={(event) => beginDrag(event, file)}
       {...folderDrop(file)}
       sx={{
-        userSelect: "none",
+        userSelect: "none", py: 1.25, mx: 0.5, borderRadius: 1,
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
       }}
     >
@@ -231,9 +231,9 @@ function FileGrid({
         overflow: "visible",
         width: "100%",
         height: "100%",
-        minHeight: 128,
+        minHeight: 140,
         boxSizing: "border-box",
-        padding: 1,
+        padding: 1.25,
         paddingTop: '44px',
         cursor: "pointer",
         border: (theme) =>
@@ -247,7 +247,7 @@ function FileGrid({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 0.5,
+        gap: 0.75,
         userSelect: "none",
         transition: "background-color 0.2s ease, box-shadow 0.2s ease",
         "&:hover": { backgroundColor: "whitesmoke", boxShadow: 1 },
@@ -267,7 +267,7 @@ function FileGrid({
       </Box>
       <Typography
         variant="body2"
-        sx={{
+        sx={{ fontWeight: 500,
           width: "100%",
           textAlign: "center",
           display: "-webkit-box",
@@ -314,8 +314,8 @@ function FileGrid({
   return (
     <Grid
       container
-      spacing={1.5}
-      sx={{ padding: 1, paddingBottom: "72px", overflow: "visible" }}
+      spacing={2}
+      sx={{ padding: 1.5, paddingBottom: "72px", overflow: "visible" }}
     >
       {files.map((file) => (
         <Grid
@@ -347,7 +347,7 @@ function thumbnail(file: FileItem, size: number) {
       }}
     />
   ) : (
-    <MimeIcon contentType={file.contentType} />
+    <MimeIcon contentType={file.contentType} name={file.name} />
   );
 }
 
