@@ -60,16 +60,22 @@ function PathBar({
   onNavigate: (path: string) => void;
 }) {
   const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
+  const atRoot = parts.length === 0;
 
   return (
     <Box sx={{ padding: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
       <IconButton
         size="small"
         aria-label="返回上一级"
-        disabled={parts.length === 0}
+        disabled={atRoot}
         onClick={() =>
           onNavigate(parts.slice(0, -1).join("/") + (parts.length > 1 ? "/" : ""))
         }
+        sx={{
+          visibility: atRoot ? "hidden" : "visible",
+          opacity: atRoot ? 0 : 1,
+          pointerEvents: atRoot ? "none" : "auto",
+        }}
       >
         <ArrowBackIcon fontSize="small" />
       </IconButton>
@@ -190,6 +196,7 @@ function Main({
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
   const lastFolderPath = useRef("");
+  const loadedListingKey = useRef<string | null>(null);
 
   const cwd = route.kind === "folder" ? route.path : lastFolderPath.current;
   const section: ExplorerSection =
@@ -212,10 +219,14 @@ function Main({
     }
   }, [navigate, route.kind, search]);
 
+  const listingKey =
+    route.kind === "folder" ? `folder:${cwd}||${debouncedSearch}` : route.kind;
+
   const loadListing = useCallback(async () => {
     if (route.kind !== "folder") {
       setFiles([]);
       setLoading(false);
+      loadedListingKey.current = listingKey;
       return;
     }
     if (username === null) {
@@ -224,7 +235,10 @@ function Main({
       return;
     }
 
-    setLoading(true);
+    // Keep the current grid mounted when refreshing the same folder so a
+    // click that lands during create/rename/upload is not lost on remount.
+    const silent = loadedListingKey.current === listingKey;
+    if (!silent) setLoading(true);
     try {
       if (debouncedSearch) {
         const result = await searchFiles(debouncedSearch);
@@ -236,13 +250,14 @@ function Main({
         setSearchHasMore(false);
         setSearchCursor(undefined);
       }
+      loadedListingKey.current = listingKey;
       setSelectedKeys([]);
     } catch (error) {
       onNotify((error as Error).message, "error");
     } finally {
       setLoading(false);
     }
-  }, [cwd, debouncedSearch, onNotify, route.kind, username]);
+  }, [cwd, debouncedSearch, listingKey, onNotify, route.kind, username]);
 
   useEffect(() => {
     loadListing();
@@ -332,6 +347,17 @@ function Main({
       file.contentType.startsWith("video/") ||
       file.contentType.startsWith("audio/") ||
       file.contentType === "application/pdf");
+
+  const handleOpenMenu = useCallback(
+    (position: { clientX: number; clientY: number }, file: FileItem) => {
+      setContextMenu({
+        x: position.clientX,
+        y: position.clientY,
+        file,
+      });
+    },
+    []
+  );
 
   const handleOpen = useCallback(
     (key: string) => {
@@ -576,13 +602,7 @@ function Main({
                 onToggleSelect={toggleSelect}
                 onNavigate={navigateFolder}
                 onOpen={handleOpen}
-                onOpenMenu={(position, file) =>
-                  setContextMenu({
-                    x: position.clientX,
-                    y: position.clientY,
-                    file,
-                  })
-                }
+                onOpenMenu={handleOpenMenu}
                 onDropOnFolder={handleDropOnFolder}
                 emptyMessage={
                   <Box sx={{ textAlign: "center", padding: 4 }}>

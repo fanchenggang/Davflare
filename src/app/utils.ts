@@ -1,6 +1,7 @@
 import { FileItem } from "./types";
 
 export function humanReadableSize(size: number) {
+  if (!Number.isFinite(size) || size < 0) return "";
   const units = ["B", "KB", "MB", "GB", "TB"];
   let i = 0;
   while (size >= 1024) {

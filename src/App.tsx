@@ -7,7 +7,7 @@ import {
   Snackbar,
   Stack,
 } from "@mui/material";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import Header from "./Header";
 import LoginDialog from "./LoginDialog";
@@ -60,9 +60,9 @@ function AppContent() {
     });
   }, [transferQueue]);
 
-  const onNotify: NotifyFn = (message, severity = "info") => {
+  const onNotify: NotifyFn = useCallback((message, severity = "info") => {
     setSnackbar({ message, severity });
-  };
+  }, []);
 
   return (
     <Stack sx={{ height: "100%" }}>

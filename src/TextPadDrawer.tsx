@@ -21,20 +21,24 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
   open,
   setOpen,
   cwd,
-  onUpload,
 }) => {
   const [noteText, setNoteText] = useState("");
   const [noteName, setNoteName] = useState("note.txt");
   const uploadEnqueue = useUploadEnqueue();
 
   const handleSaveNote = () => {
+    const name = noteName.trim() || "note.txt";
     const fileBlob = new Blob([noteText], { type: "text/plain" });
-    const file = new File([fileBlob], noteName, { type: "text/plain" });
-    uploadEnqueue({ file, basedir: cwd });
-    onUpload();
+    const file = new File([fileBlob], name, { type: "text/plain" });
+    // Close first so the drawer unmounts cleanly. Do not refresh the listing
+    // here: the file is not on the server yet, and a loading remount during
+    // drawer teardown blanked the whole page. Main reloads when the queue drains.
     setOpen(false);
     setNoteText("");
     setNoteName("note.txt");
+    window.setTimeout(() => {
+      uploadEnqueue({ file, basedir: cwd });
+    }, 0);
   };
 
   return (
