@@ -13,7 +13,7 @@ Free serverless backend with a limit of 100,000 invocation requests per day.
 - WebDAV Class 1/2
 - Drag and drop upload
 - Share links with expiry and trash
-- API keys for scripted uploads and downloads
+- API keys for scripted uploads, downloads, and bidirectional sync
 
 ## Usage
 
@@ -93,6 +93,31 @@ curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
 `GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded, etag }] }` for the current folder only. Files always include numeric `size`, ISO `uploaded` (and alias `updated`), and R2 `etag`. Delimited-prefix folders have `isDir: true`, `size: 0`, and `uploaded: null` (unknown; no fake mtime). Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns 400 and tells you to use `/api/download`. Missing folder: 404. Bad/expired key: 401.
 
 `GET /api/download` `path` is the object key. HTTP 200 streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns 400; unknown object 404; bad/expired key 401. Internal `_$flaredrive$/` keys are rejected.
+
+Default `POST /api/upload` still uniqueNames collisions (`name (2).ext`). Add `?overwrite=1` (or `true`) to PUT/replace the same path+filename.
+
+```bash
+# overwrite upload
+curl -X POST "https://<your-domain.com>/api/upload?path=folder/&overwrite=1" \
+  -H "Authorization: Bearer <apiKey>" \
+  -F "file=@photo.jpg"
+
+# conflict backup: rename remote to name.conflict-YYYYMMDDTHHMMSS.ext (UTC)
+curl -X POST "https://<your-domain.com>/api/backup?path=folder/notes.txt" \
+  -H "Authorization: Bearer <apiKey>"
+
+# rename (409 if `to` exists unless overwrite=1)
+curl -X POST "https://<your-domain.com>/api/rename" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"folder/old.txt","to":"folder/new.txt"}'
+
+# delete a file only
+curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/notes.txt" \
+  -H "Authorization: Bearer <apiKey>"
+```
+
+Bidirectional sync recipe (local wins; backup remote on conflict): list with `GET /api/list` and compare local mtime/size/etag vs remote `uploaded`/`size`/`etag`. Local-only new/changed → `POST /api/upload?overwrite=1`. Remote-only new/changed → `GET /api/download`. Both changed → `POST /api/backup?path=remoteKey` then overwrite-upload local bytes to the original name. Optional local deletes: `DELETE /api/delete` (skip unless the client tracks a sync db). Extra remote-only files: download them. Same Bearer / `X-Api-Key` auth as upload; no web session. WebDAV protocol is unchanged.
 
 ## Acknowledgments
 

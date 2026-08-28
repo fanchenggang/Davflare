@@ -153,3 +153,92 @@ export function splitSafeParts(path: string): string[] | Response {
   }
   return parts;
 }
+
+export function isTruthyParam(raw: unknown): boolean {
+  if (raw === true || raw === 1) return true;
+  if (typeof raw !== "string") return false;
+  const value = raw.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+export function normalizeFileKey(raw: string | null): string | Response {
+  const decoded = decodeRawPath(raw);
+  if (!decoded) return textResponse("缺少 path 参数", 400);
+  const parts = splitSafeParts(decoded);
+  if (parts instanceof Response) return parts;
+  if (parts.length === 0) return textResponse("缺少 path 参数", 400);
+  const key = parts.join("/");
+  if (isInternalKey(key)) return textResponse("禁止访问内部目录", 400);
+  if (decoded.endsWith("/")) return textResponse("不能操作目录", 400);
+  return key;
+}
+
+export function splitNameExt(name: string): { stem: string; ext: string } {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return { stem: name, ext: "" };
+  return { stem: name.slice(0, dot), ext: name.slice(dot) };
+}
+
+export function formatConflictStamp(date = new Date()): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  const ss = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${y}${m}${d}T${hh}${mm}${ss}`;
+}
+
+export function conflictBackupKey(fromKey: string, date = new Date()): string {
+  const slash = fromKey.lastIndexOf("/");
+  const folder = slash >= 0 ? fromKey.slice(0, slash + 1) : "";
+  const name = slash >= 0 ? fromKey.slice(slash + 1) : fromKey;
+  const { stem, ext } = splitNameExt(name);
+  return `${folder}${stem}.conflict-${formatConflictStamp(date)}${ext}`;
+}
+
+export async function isPrefixOnlyFolder(
+  bucket: R2Bucket,
+  key: string
+): Promise<boolean> {
+  const listing = await bucket.list({
+    prefix: `${key}/`,
+    limit: 1,
+  });
+  const prefixes = (listing as { delimitedPrefixes?: string[] }).delimitedPrefixes;
+  return listing.objects.length > 0 || Boolean(prefixes && prefixes.length > 0);
+}
+
+export async function ensureFolderMarkers(bucket: R2Bucket, folder: string) {
+  if (!folder) return;
+  const parts = folder.replace(/\/$/, "").split("/").filter(Boolean);
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    const head = await bucket.head(current);
+    if (head === null) {
+      await bucket.put(current, new Uint8Array(), {
+        httpMetadata: { contentType: "application/x-directory" },
+        customMetadata: { resourcetype: "<collection />" },
+      });
+    }
+  }
+}
+
+export async function copyThenDelete(
+  bucket: R2Bucket,
+  from: string,
+  to: string
+): Promise<Response | null> {
+  const source = await bucket.get(from);
+  if (source === null) return textResponse("文件不存在", 404);
+  if (isCollectionObject(source)) {
+    return textResponse("只能操作文件，不能操作目录", 400);
+  }
+  await bucket.put(to, source.body, {
+    httpMetadata: source.httpMetadata,
+    customMetadata: source.customMetadata,
+  });
+  await bucket.delete(from);
+  return null;
+}

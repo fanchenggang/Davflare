@@ -1,3 +1,5 @@
+import { isCollectionObject, isTruthyParam } from "./_apikey";
+
 interface UploadEnv {
   BUCKET: R2Bucket;
 }
@@ -268,9 +270,32 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
   if (upload instanceof Response) return upload;
   if (upload.body.byteLength >= MAX_BYTES) return tooLarge();
 
+  const overwrite = isTruthyParam(
+    new URL(request.url).searchParams.get("overwrite")
+  );
+
   await ensureFolders(env.BUCKET, folder);
-  const taken = await listTakenNames(env.BUCKET, folder);
-  const fileName = uniqueName(upload.name, taken);
+  let fileName = upload.name;
+  let overwritten = false;
+  if (overwrite) {
+    const existing = await env.BUCKET.head(`${folder}${fileName}`);
+    if (existing && isCollectionObject(existing)) {
+      return textResponse("目标已存在且为目录，无法覆盖", 409);
+    }
+    if (existing) overwritten = true;
+    else {
+      const listing = await env.BUCKET.list({
+        prefix: `${folder}${fileName}/`,
+        limit: 1,
+      });
+      if (listing.objects.length > 0) {
+        return textResponse("目标已存在且为目录，无法覆盖", 409);
+      }
+    }
+  } else {
+    const taken = await listTakenNames(env.BUCKET, folder);
+    fileName = uniqueName(upload.name, taken);
+  }
   const key = `${folder}${fileName}`;
   if (key.startsWith(INTERNAL_PREFIX)) {
     return textResponse("禁止写入内部目录", 400);
@@ -287,6 +312,7 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
       name: fileName,
       size: upload.body.byteLength,
       path: folder || "/",
+      overwritten,
     },
     201
   );
