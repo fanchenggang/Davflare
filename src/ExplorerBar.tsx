@@ -90,8 +90,8 @@ function ExplorerBar({
         display: "flex",
         flexWrap: "wrap",
         alignItems: "center",
-        gap: 1,
-        padding: "6px 8px",
+        gap: 1.25,
+        padding: "8px 12px",
         borderBottom: "1px solid",
         borderColor: "divider",
         backgroundColor: "background.paper",
@@ -211,7 +211,7 @@ function ExplorerBar({
       )}
 
       {inFolder && (
-        <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto", gap: 1, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", alignItems: "center", marginLeft: "auto", gap: 1.25, flexWrap: "wrap" }}>
           <ToggleButtonGroup
             exclusive
             size="small"

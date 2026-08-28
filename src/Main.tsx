@@ -1,3 +1,4 @@
+import { isPreviewable } from "./app/preview";
 import React, {
   useCallback,
   useEffect,
@@ -83,7 +84,7 @@ function PathBar({
   return (
     <Box
       sx={{
-        padding: "4px 8px 8px",
+        padding: "8px 12px 10px",
         borderBottom: "1px solid",
         borderColor: "divider",
       }}
@@ -457,12 +458,6 @@ function Main({
     });
   }, [visibleFiles]);
 
-  const isPreviewable = (file: FileItem) =>
-    !file.isDir &&
-    (file.contentType.startsWith("image/") ||
-      file.contentType.startsWith("video/") ||
-      file.contentType.startsWith("audio/") ||
-      file.contentType === "application/pdf");
 
   const handleOpenMenu = useCallback(
     (position: { clientX: number; clientY: number }, file: FileItem) => {
