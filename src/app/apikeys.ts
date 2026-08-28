@@ -46,6 +46,10 @@ export function downloadCurlExample(
   return `curl -L "${origin}/api/download?path=${path}" -H "Authorization: Bearer ${apiKey}" -o snapshot.json`;
 }
 
+export function listCurlExample(origin: string, apiKey = "<apiKey>", path = "folder/") {
+  return `curl "${origin}/api/list?path=${path}" -H "Authorization: Bearer ${apiKey}"`;
+}
+
 export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
   const key = apiKey || "<apiKey>";
   return [
@@ -101,7 +105,7 @@ export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
     "密钥无效或已过期：401",
     "缺少 path、path 为空，或目标是目录：400",
     "文件不存在：404",
-    "文件夹不能整包下载，请逐个文件下载（与上传相同，一次一个文件）。",
+    "文件夹不能整包下载，请先 list 再逐个文件下载（与上传相同，一次一个文件）。",
     "",
     "示例（curl）：",
     `curl -L "${origin}/api/download?path=DBX/sync/snapshot.json" \\`,
@@ -120,16 +124,43 @@ export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
     `if (!res.ok) throw new Error(await res.text());`,
     `const blob = await res.blob();`,
     "",
-    "—— 列出目录（Depth 1）——",
+    "—— 列出目录（Depth 1，下载前先列出）——",
     "",
     `接口：GET ${origin}/api/list`,
-    "鉴权与上传相同。",
+    "鉴权与上传/下载相同（Authorization: Bearer 或 X-Api-Key），无需网页登录。",
     "查询参数：path=目录/ （可空，表示根目录）",
-    "成功：200，JSON { items: [{ key, name, size, isDir }] }",
-    "密钥无效或已过期：401；path 不是目录：400",
+    "只返回当前层：文件 + 直接子文件夹，不会递归整桶。",
+    "成功：200，JSON { items: [{ key, name, size, isDir, uploaded? }] }",
+    "密钥无效或已过期：401",
+    "path 是文件：400（请改用 /api/download）",
+    "路径不合法或内部目录：400",
+    "目录不存在：404",
+    "下载目录：先 list，再对 isDir 为 false 的每一项调用 /api/download。",
+    "子文件夹：再对 path=<item.key> 调用 /api/list。",
     "",
-    "示例：",
+    "示例（curl 列出）：",
     `curl "${origin}/api/list?path=folder/" \\`,
     `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "示例（列出后逐个下载文件）：",
+    `curl -L "${origin}/api/download?path=<item.key>" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -o <item.name>`,
+    "",
+    "示例（fetch：list 后下载文件，子目录再 list）：",
+    `const listRes = await fetch("${origin}/api/list?path=folder/", {`,
+    `  headers: { Authorization: "Bearer ${key}" },`,
+    `});`,
+    `if (!listRes.ok) throw new Error(await listRes.text());`,
+    `const { items } = await listRes.json();`,
+    `for (const item of items) {`,
+    `  if (item.isDir) continue; // 子目录：再 GET /api/list?path=item.key`,
+    `  const fileRes = await fetch(`,
+    `    "${origin}/api/download?path=" + encodeURIComponent(item.key),`,
+    `    { headers: { Authorization: "Bearer ${key}" } }`,
+    `  );`,
+    `  if (!fileRes.ok) throw new Error(await fileRes.text());`,
+    `  const blob = await fileRes.blob();`,
+    `}`,
   ].join("\n");
 }

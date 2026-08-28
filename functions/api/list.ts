@@ -18,6 +18,7 @@ interface ListItem {
   name: string;
   size: number;
   isDir: boolean;
+  uploaded?: string;
 }
 
 function normalizeFolder(raw: string | null): string | Response {
@@ -41,11 +42,12 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
   const folder = normalizeFolder(new URL(request.url).searchParams.get("path"));
   if (folder instanceof Response) return folder;
 
+  let folderHead: R2Object | null = null;
   if (folder) {
     const parentKey = folder.replace(/\/$/, "");
-    const head = await env.BUCKET.head(parentKey);
-    if (head !== null && !isCollectionObject(head)) {
-      return textResponse("path 不是目录", 400);
+    folderHead = await env.BUCKET.head(parentKey);
+    if (folderHead !== null && !isCollectionObject(folderHead)) {
+      return textResponse("path 是文件，请使用 /api/download 下载", 400);
     }
   }
 
@@ -65,12 +67,16 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
       const name = object.key.slice(folder.length);
       if (!name || name.includes("/")) continue;
       const isDir = isCollectionObject(object);
-      itemsByKey.set(object.key, {
+      const item: ListItem = {
         key: object.key,
         name,
         size: isDir ? 0 : object.size,
         isDir,
-      });
+      };
+      if (object.uploaded) {
+        item.uploaded = object.uploaded.toISOString();
+      }
+      itemsByKey.set(object.key, item);
     }
 
     const prefixes = (listing as { delimitedPrefixes?: string[] })
@@ -94,6 +100,10 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
     if (!listing.truncated) break;
     cursor = listing.cursor;
   } while (true);
+
+  if (folder && folderHead === null && itemsByKey.size === 0) {
+    return textResponse("目录不存在", 404);
+  }
 
   await touchLastUsed(env.BUCKET, auth);
 

@@ -28,6 +28,7 @@ import {
   downloadCurlExample,
   formatApiUsage,
   listApiKeys,
+  listCurlExample,
   revokeApiKey,
   uploadCurlExample,
 } from "./app/apikeys";
@@ -362,6 +363,15 @@ function ApiKeysPanel({
                   }
                 >
                   复制下载 curl
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={() =>
+                    copy(listCurlExample(origin, usageKey, "folder/"), "列出 curl")
+                  }
+                >
+                  复制列出 curl
                 </Button>
               </Stack>
             </Box>
