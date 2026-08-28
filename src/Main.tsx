@@ -10,20 +10,24 @@ import {
   Box,
   Breadcrumbs,
   Button,
-  CircularProgress,
   IconButton,
   Link,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { ArrowBack as ArrowBackIcon } from "@mui/icons-material";
+import {
+  ArrowBack as ArrowBackIcon,
+  FolderOpen as FolderOpenIcon,
+  SearchOff as SearchOffIcon,
+} from "@mui/icons-material";
 
 import ConfirmDialog from "./ConfirmDialog";
 import CreateFolderDialog from "./CreateFolderDialog";
+import EmptyState from "./EmptyState";
 import ExplorerBar, { ExplorerSection } from "./ExplorerBar";
 import FileActionSheet, { FileAction } from "./FileActionSheet";
-import FileGrid from "./FileGrid";
+import FileGrid, { FileGridSkeleton } from "./FileGrid";
 import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import PreviewDialog from "./PreviewDialog";
@@ -63,6 +67,25 @@ import {
 
 export type SearchScope = "folder" | "global";
 
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    target.isContentEditable
+  );
+}
+
+function hasOpenOverlay() {
+  const nodes = document.querySelectorAll(".MuiModal-root");
+  for (let i = 0; i < nodes.length; i++) { const node = nodes[i];
+    if (node.getAttribute("aria-hidden") !== "true") return true;
+  }
+  return false;
+}
+
 function PathBar({
   cwd,
   onNavigate,
@@ -82,13 +105,7 @@ function PathBar({
   const atRoot = parts.length === 0;
 
   return (
-    <Box
-      sx={{
-        padding: "8px 12px 10px",
-        borderBottom: "1px solid",
-        borderColor: "divider",
-      }}
-    >
+    <Box sx={{ px: 1.5, pb: 1.25, pt: 0.25 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
         <IconButton
           size="small"
@@ -105,7 +122,14 @@ function PathBar({
         >
           <ArrowBackIcon fontSize="small" />
         </IconButton>
-        <Breadcrumbs separator="›" sx={{ flexGrow: 1 }}>
+        <Breadcrumbs
+          separator="›"
+          sx={{
+            flexGrow: 1,
+            "& .MuiTypography-root": { fontWeight: 600, fontSize: "0.9rem" },
+            "& .MuiLink-root": { fontWeight: 500, fontSize: "0.9rem" },
+          }}
+        >
           {parts.length === 0 ? (
             <Typography color="text.primary">{strings.allFiles}</Typography>
           ) : (
@@ -142,7 +166,17 @@ function PathBar({
           minHeight: 32,
         }}
       >
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            px: 1,
+            py: 0.25,
+            borderRadius: "999px",
+            backgroundColor: "#f4f1ec",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {stats}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
@@ -154,6 +188,20 @@ function PathBar({
             if (value) onSearchScopeChange(value);
           }}
           aria-label="搜索范围"
+          sx={{
+            backgroundColor: "#f4f1ec",
+            "& .MuiToggleButton-root": {
+              border: "none",
+              px: 1.25,
+              py: 0.25,
+              fontSize: "0.75rem",
+              "&.Mui-selected": {
+                backgroundColor: "#fff",
+                color: "primary.main",
+                boxShadow: "0 1px 2px rgba(26, 23, 20, 0.08)",
+              },
+            },
+          }}
         >
           <ToggleButton value="folder">{strings.searchHere}</ToggleButton>
           <ToggleButton value="global">{strings.searchAll}</ToggleButton>
@@ -313,8 +361,6 @@ function Main({
       return;
     }
 
-    // Keep the current grid mounted when refreshing the same folder so a
-    // click that lands during create/rename/upload is not lost on remount.
     const silent = loadedListingKey.current === listingKey;
     if (!silent) setLoading(true);
     try {
@@ -458,7 +504,6 @@ function Main({
     });
   }, [visibleFiles]);
 
-
   const handleOpenMenu = useCallback(
     (position: { clientX: number; clientY: number }, file: FileItem) => {
       setContextMenu({
@@ -482,6 +527,31 @@ function Main({
     },
     [files, onNotify]
   );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      if (event.key === "Escape") {
+        if (hasOpenOverlay()) return;
+        if (selectedKeys.length) {
+          event.preventDefault();
+          setSelectedKeys([]);
+        }
+        return;
+      }
+      if (event.key === "Enter") {
+        if (hasOpenOverlay()) return;
+        if (selectedKeys.length !== 1) return;
+        const file = visibleFiles.find((item) => item.key === selectedKeys[0]);
+        if (!file) return;
+        event.preventDefault();
+        if (file.isDir) navigateFolder(file.key);
+        else handleOpen(file.key);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleOpen, navigateFolder, selectedKeys, visibleFiles]);
 
   const handleContextAction = useCallback(
     async (action: FileAction, file: FileItem) => {
@@ -637,43 +707,50 @@ function Main({
     clipboard && clipboard.keys.length > 0 && route.kind === "folder"
   );
 
+  const listingPending =
+    loading ||
+    (route.kind === "folder" && loadedListingKey.current !== listingKey);
+
   return (
-    <>
-      <ExplorerBar
-        section={section}
-        onSectionChange={handleSectionChange}
-        onUploadFile={openFilePicker}
-        onUploadFolder={openFolderPicker}
-        onCreateFolder={() => setShowCreateFolder(true)}
-        onOpenTextPad={() => setShowTextPadDrawer(true)}
-        onPaste={handlePaste}
-        canPaste={canPaste}
-        clipboardCount={clipboard?.keys.length ?? 0}
-        clipboardMode={clipboard?.mode ?? null}
-        view={view}
-        onViewChange={onViewChange}
-        sort={sort}
-        onSortChange={onSortChange}
-        onOpenWebDav={() => setShowWebDav(true)}
-        typeFilter={typeFilter}
-        onTypeFilterChange={setTypeFilter}
-        showHidden={showHidden}
-        onShowHiddenChange={setShowHidden}
-      />
-
-      {route.kind === "trash" && (
-        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-          <TrashView onNotify={onNotify} />
-        </Box>
-      )}
-      {route.kind === "shares" && (
-        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
-          <SharesView onNotify={onNotify} />
-        </Box>
-      )}
-
-      {route.kind === "folder" && (
-        <>
+    <Box
+      sx={{
+        flexGrow: 1,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      <Box
+        sx={{
+          flexShrink: 0,
+          backgroundColor: "background.paper",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <ExplorerBar
+          section={section}
+          onSectionChange={handleSectionChange}
+          onUploadFile={openFilePicker}
+          onUploadFolder={openFolderPicker}
+          onCreateFolder={() => setShowCreateFolder(true)}
+          onOpenTextPad={() => setShowTextPadDrawer(true)}
+          onPaste={handlePaste}
+          canPaste={canPaste}
+          clipboardCount={clipboard?.keys.length ?? 0}
+          clipboardMode={clipboard?.mode ?? null}
+          view={view}
+          onViewChange={onViewChange}
+          sort={sort}
+          onSortChange={onSortChange}
+          onOpenWebDav={() => setShowWebDav(true)}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          showHidden={showHidden}
+          onShowHiddenChange={setShowHidden}
+        />
+        {route.kind === "folder" && (
           <PathBar
             cwd={cwd}
             onNavigate={navigateFolder}
@@ -682,26 +759,42 @@ function Main({
             onSearchScopeChange={setSearchScope}
             searchQuery={debouncedSearch}
           />
+        )}
+      </Box>
 
-          {loading ||
-          (route.kind === "folder" && loadedListingKey.current !== listingKey) ? (
-            <Box
-              sx={{
-                flexGrow: 1,
-                minHeight: 200,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <CircularProgress />
+      {route.kind === "trash" && (
+        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+          <TrashView
+            onNotify={onNotify}
+            onGoFiles={() =>
+              navigate({ kind: "folder", path: lastFolderPath.current })
+            }
+          />
+        </Box>
+      )}
+      {route.kind === "shares" && (
+        <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+          <SharesView
+            onNotify={onNotify}
+            onGoFiles={() =>
+              navigate({ kind: "folder", path: lastFolderPath.current })
+            }
+          />
+        </Box>
+      )}
+
+      {route.kind === "folder" && (
+        <>
+          {listingPending ? (
+            <Box sx={{ flexGrow: 1, overflowY: "auto", minHeight: 220 }}>
+              <FileGridSkeleton view={view} />
             </Box>
           ) : (
             <Box
               sx={{
                 flexGrow: 1,
                 overflowY: "auto",
-                backgroundColor: (theme) => theme.palette.background.default,
+                backgroundColor: "background.default",
               }}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -729,26 +822,40 @@ function Main({
                 onOpenMenu={handleOpenMenu}
                 onDropOnFolder={handleDropOnFolder}
                 emptyMessage={
-                  <Box sx={{ textAlign: "center", padding: 4 }}>
-                    <Typography color="text.secondary" sx={{ marginBottom: 2 }}>
-                      {debouncedSearch
-                        ? strings.noSearchResult
-                        : strings.noFiles}
-                    </Typography>
-                    {!debouncedSearch && (
-                      <Box sx={{ display: "flex", justifyContent: "center", gap: 1 }}>
-                        <Button variant="contained" onClick={openFilePicker}>
-                          {strings.upload}
-                        </Button>
+                  debouncedSearch ? (
+                    <EmptyState
+                      icon={<SearchOffIcon />}
+                      title={strings.noSearchResult}
+                      description={strings.noSearchResultHint}
+                      actions={
                         <Button
                           variant="outlined"
-                          onClick={() => setShowCreateFolder(true)}
+                          onClick={() => onSearchChange("")}
                         >
-                          {strings.createFolder}
+                          {strings.clearSearch}
                         </Button>
-                      </Box>
-                    )}
-                  </Box>
+                      }
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={<FolderOpenIcon />}
+                      title={strings.noFiles}
+                      description={strings.noFilesHint}
+                      actions={
+                        <>
+                          <Button variant="contained" onClick={openFilePicker}>
+                            {strings.upload}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            onClick={() => setShowCreateFolder(true)}
+                          >
+                            {strings.createFolder}
+                          </Button>
+                        </>
+                      }
+                    />
+                  )
                 }
               />
               {searchHasMore && (
@@ -893,7 +1000,7 @@ function Main({
         }}
         onMove={() => setMoveTarget(selectedKeys)}
       />
-    </>
+    </Box>
   );
 }
 

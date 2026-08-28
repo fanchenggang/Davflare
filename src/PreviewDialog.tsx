@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -32,6 +32,72 @@ import {
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
 import { encodeKey, humanReadableSize } from "./app/utils";
+
+const LINE_NUMBER_CAP = 2000;
+
+function TextPane({ text }: { text: string }) {
+  const lines = useMemo(() => text.split("\n"), [text]);
+  const showGutter = lines.length <= LINE_NUMBER_CAP;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flex: 1,
+        minHeight: 0,
+        overflow: "auto",
+        backgroundColor: "#f7f5f1",
+        borderTop: "1px solid",
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        fontFamily:
+          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+        fontSize: 13,
+        lineHeight: 1.65,
+        color: "#1f2328",
+        tabSize: 2,
+      }}
+    >
+      {showGutter && (
+        <Box
+          aria-hidden
+          sx={{
+            flexShrink: 0,
+            userSelect: "none",
+            textAlign: "right",
+            px: 1.5,
+            py: 1.5,
+            color: "rgba(26, 23, 20, 0.38)",
+            borderRight: "1px solid",
+            borderColor: "divider",
+            minWidth: 48,
+            backgroundColor: "#f0ece6",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {lines.map((_, index) => (
+            <div key={index}>{index + 1}</div>
+          ))}
+        </Box>
+      )}
+      <Box
+        component="pre"
+        sx={{
+          flex: 1,
+          m: 0,
+          px: 2,
+          py: 1.5,
+          textAlign: "left",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "normal",
+          wordBreak: "normal",
+        }}
+      >
+        {text}
+      </Box>
+    </Box>
+  );
+}
 
 function PreviewDialog({
   file,
@@ -84,15 +150,24 @@ function PreviewDialog({
     const run = async () => {
       try {
         if (asText && listedSize > TEXT_PREVIEW_MAX_BYTES) {
-          if (!canceled) { setTooLarge(true); setLargeSize(listedSize); }
+          if (!canceled) {
+            setTooLarge(true);
+            setLargeSize(listedSize);
+          }
           return;
         }
-        const response = await authFetch("/webdav/" + encodeKey(file.key), { signal: controller.signal });
+        const response = await authFetch("/webdav/" + encodeKey(file.key), {
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error("打开文件失败");
         if (asText) {
           const result = await readResponseTextCapped(response);
           if (canceled) return;
-          if (!result.ok) { setTooLarge(true); setLargeSize(result.size); return; }
+          if (!result.ok) {
+            setTooLarge(true);
+            setLargeSize(result.size);
+            return;
+          }
           if (isJsonFile(file)) {
             const pretty = prettyJsonOrRaw(result.text);
             setText(pretty.text);
@@ -162,11 +237,18 @@ function PreviewDialog({
   };
 
   const contentType = mimeType(file?.contentType);
-  const isImage = contentType.startsWith("image/") && contentType !== "image/svg+xml";
+  const isImage =
+    contentType.startsWith("image/") && contentType !== "image/svg+xml";
   const isVideo = contentType.startsWith("video/");
   const isAudio = contentType.startsWith("audio/");
   const isPdf = contentType === "application/pdf";
-  const showText = Boolean(file) && !isImage && !isVideo && !isAudio && !isPdf && (tooLarge || text != null || (file ? isTextPreviewable(file) : false));
+  const showText =
+    Boolean(file) &&
+    !isImage &&
+    !isVideo &&
+    !isAudio &&
+    !isPdf &&
+    (tooLarge || text != null || (file ? isTextPreviewable(file) : false));
 
   return (
     <Dialog
@@ -186,38 +268,109 @@ function PreviewDialog({
         },
       }}
     >
-      <DialogTitle sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", pr: 2, fontWeight: 600 }}>
+      <DialogTitle
+        sx={{
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          pr: 2,
+          fontWeight: 700,
+          pb: 1,
+        }}
+      >
         {file?.name}
+        {file && !file.isDir && (
+          <Typography
+            component="span"
+            variant="caption"
+            color="text.secondary"
+            sx={{ ml: 1.5, fontWeight: 500 }}
+          >
+            {humanReadableSize(file.size)}
+          </Typography>
+        )}
       </DialogTitle>
-      <DialogContent sx={{ display: "flex", flexDirection: "column", overflow: "hidden", textAlign: showText ? "left" : "center", px: showText ? 0 : 2, py: showText ? 0 : 2, flex: 1 }}>
+      <DialogContent
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          textAlign: showText ? "left" : "center",
+          px: showText ? 0 : 2,
+          py: showText ? 0 : 2,
+          flex: 1,
+        }}
+      >
         {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", flex: 1, padding: 4 }}>
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              flex: 1,
+              padding: 4,
+            }}
+          >
             <CircularProgress />
           </Box>
         ) : tooLarge ? (
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, padding: 4, gap: 1.5 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              flex: 1,
+              padding: 4,
+              gap: 1.5,
+            }}
+          >
             <Typography variant="h6">文件过大，无法在线预览</Typography>
-            <Typography color="text.secondary">大小 {humanReadableSize(largeSize || file?.size || 0)}，超过 2 MB 限制。</Typography>
-            <Button startIcon={<DownloadIcon />} onClick={download} variant="contained">下载</Button>
+            <Typography color="text.secondary">
+              大小 {humanReadableSize(largeSize || file?.size || 0)}，超过 2 MB
+              限制。
+            </Typography>
+            <Button
+              startIcon={<DownloadIcon />}
+              onClick={download}
+              variant="contained"
+            >
+              下载
+            </Button>
           </Box>
         ) : text != null ? (
           <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             {jsonError && (
-              <Alert severity="warning" sx={{ borderRadius: 0 }}>无法解析为 JSON，已显示原文</Alert>
+              <Alert severity="warning" sx={{ borderRadius: 0 }}>
+                无法解析为 JSON，已显示原文
+              </Alert>
             )}
-            <Box component="pre" sx={{ flex: 1, m: 0, px: 2, py: 1.5, overflow: "auto", textAlign: "left", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontSize: 13, lineHeight: 1.65, color: "#1f2328", backgroundColor: "#f6f8fa", whiteSpace: "pre-wrap", overflowWrap: "normal", wordBreak: "normal", tabSize: 2 }}>
-              {text}
-            </Box>
+            <TextPane text={text} />
           </Box>
         ) : url ? (
           isImage ? (
-            <img src={url} alt={file?.name} onClick={() => setZoomed((prev) => !prev)} style={{ maxWidth: zoomed ? "200%" : "100%", maxHeight: zoomed ? "200%" : "100%", objectFit: "contain", cursor: zoomed ? "zoom-out" : "zoom-in", transition: "max-width 0.2s ease, max-height 0.2s ease" }} />
+            <img
+              src={url}
+              alt={file?.name}
+              onClick={() => setZoomed((prev) => !prev)}
+              style={{
+                maxWidth: zoomed ? "200%" : "100%",
+                maxHeight: zoomed ? "200%" : "100%",
+                objectFit: "contain",
+                cursor: zoomed ? "zoom-out" : "zoom-in",
+                transition: "max-width 0.2s ease, max-height 0.2s ease",
+              }}
+            />
           ) : isVideo ? (
             <video src={url} controls style={{ maxWidth: "100%", maxHeight: "100%" }} />
           ) : isAudio ? (
             <audio src={url} controls style={{ width: "100%" }} />
           ) : isPdf ? (
-            <iframe src={url} title={file?.name} style={{ width: "100%", height: "100%", border: "none" }} />
+            <iframe
+              src={url}
+              title={file?.name}
+              style={{ width: "100%", height: "100%", border: "none" }}
+            />
           ) : (
             <Typography>该文件类型暂不支持预览</Typography>
           )
@@ -225,12 +378,22 @@ function PreviewDialog({
       </DialogContent>
       <DialogActions sx={{ flexWrap: "wrap", gap: 0.5, px: 2, py: 1.25 }}>
         {text != null && (
-          <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>复制全文</Button>
+          <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>
+            复制全文
+          </Button>
         )}
-        <Button startIcon={<ShareIcon />} onClick={onShare}>分享</Button>
-        <Button startIcon={<EditIcon />} onClick={onRename}>重命名</Button>
-        <Button color="error" startIcon={<DeleteIcon />} onClick={onDelete}>删除</Button>
-        <Button startIcon={<DownloadIcon />} onClick={download}>下载</Button>
+        <Button startIcon={<ShareIcon />} onClick={onShare}>
+          分享
+        </Button>
+        <Button startIcon={<EditIcon />} onClick={onRename}>
+          重命名
+        </Button>
+        <Button color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
+          删除
+        </Button>
+        <Button startIcon={<DownloadIcon />} onClick={download}>
+          下载
+        </Button>
         <Button onClick={onClose}>关闭</Button>
       </DialogActions>
     </Dialog>

@@ -14,6 +14,7 @@ import {
   AccountCircle as AccountCircleIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
+  Logout as LogoutIcon,
   Search as SearchIcon,
 } from "@mui/icons-material";
 
@@ -23,12 +24,14 @@ import { useTransferQueue } from "./app/transferQueue";
 function Header({
   search,
   onSearchChange,
+  searchInputRef,
   username,
   onLogout,
   onOpenTransfers,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
+  searchInputRef?: React.Ref<HTMLInputElement>;
   username: string | null;
   onLogout: () => void;
   onOpenTransfers: () => void;
@@ -41,20 +44,50 @@ function Header({
   ).length;
 
   return (
-    <Toolbar disableGutters sx={{ padding: 1, gap: 0.5 }}>
-      <Typography variant="h6" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>
+    <Toolbar
+      disableGutters
+      sx={{
+        px: 1.5,
+        py: 0.75,
+        gap: 0.75,
+        minHeight: 56,
+        backgroundColor: "background.paper",
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        flexShrink: 0,
+      }}
+    >
+      <Typography
+        variant="h6"
+        sx={{
+          fontWeight: 700,
+          whiteSpace: "nowrap",
+          color: "primary.main",
+          letterSpacing: "-0.03em",
+          mr: 0.5,
+        }}
+      >
         {APP_NAME}
       </Typography>
 
       <InputBase
+        id="flaredrive-search"
+        inputRef={searchInputRef}
         fullWidth
         size="small"
         placeholder={strings.searchPlaceholder}
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            if (search) onSearchChange("");
+            (event.target as HTMLInputElement).blur();
+          }
+        }}
         startAdornment={
           <InputAdornment position="start">
-            <SearchIcon fontSize="small" />
+            <SearchIcon fontSize="small" sx={{ color: "text.secondary" }} />
           </InputAdornment>
         }
         endAdornment={
@@ -70,11 +103,22 @@ function Header({
             </InputAdornment>
           ) : null
         }
+        inputProps={{ "aria-label": strings.searchShortcutHint }}
         sx={{
-          backgroundColor: "whitesmoke",
+          backgroundColor: "#f4f1ec",
+          border: "1px solid",
+          borderColor: "divider",
           borderRadius: "999px",
-          padding: "6px 14px",
-          marginLeft: 1,
+          padding: "4px 12px",
+          marginLeft: 0.5,
+          maxWidth: 560,
+          transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+          "&:hover": { borderColor: "rgba(243, 128, 32, 0.4)" },
+          "&.Mui-focused": {
+            borderColor: "primary.main",
+            boxShadow: "0 0 0 3px rgba(243, 128, 32, 0.16)",
+            backgroundColor: "#fff",
+          },
         }}
       />
 
@@ -112,7 +156,7 @@ function Header({
               onLogout();
             }}
           >
-            <AccountCircleIcon sx={{ marginRight: 1 }} />
+            <LogoutIcon sx={{ marginRight: 1 }} />
             {strings.logout}
           </MenuItem>
         )}

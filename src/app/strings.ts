@@ -2,6 +2,7 @@ export const APP_NAME = "FlareDrive";
 
 export const strings = {
   searchPlaceholder: "搜索文件",
+  searchShortcutHint: "按 / 或 Ctrl+K 搜索",
   upload: "上传",
   uploadFile: "上传文件",
   uploadImageVideo: "上传图片/视频",
@@ -10,9 +11,15 @@ export const strings = {
   createFolder: "新建文件夹",
   openTextPad: "记事本",
   noFiles: "这里还没有文件",
+  noFilesHint: "上传文件或新建文件夹开始使用",
   noSearchResult: "没有找到匹配的文件",
+  noSearchResultHint: "试试其他关键词，或切换搜索范围",
   emptyTrash: "回收站是空的",
+  emptyTrashHint: "删除的文件会出现在这里，可随时恢复",
   emptyShares: "还没有创建分享",
+  emptySharesHint: "在文件上点「⋯」即可生成分享链接",
+  goToFiles: "去文件页",
+  clearSearch: "清空搜索",
   files: "文件",
   shares: "分享",
   trash: "回收站",
@@ -39,6 +46,10 @@ export const strings = {
   showHidden: "显示隐藏文件",
   searchHere: "当前文件夹",
   searchAll: "全盘搜索",
+  colName: "名称",
+  colSize: "大小",
+  colDate: "修改时间",
+  folderLabel: "文件夹",
 };
 
 export default strings;

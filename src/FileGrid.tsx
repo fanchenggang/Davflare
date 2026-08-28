@@ -6,14 +6,14 @@ import {
   IconButton,
   List,
   ListItemButton,
-  ListItemIcon,
-  ListItemText,
+  Skeleton,
   Typography,
 } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
 import MimeIcon from "./MimeIcon";
 import { ViewMode } from "./app/prefs";
+import { strings } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
   formatDateTime,
@@ -35,6 +35,60 @@ interface FileGridProps {
   ) => void;
   onDropOnFolder?: (folder: FileItem, dataTransfer: DataTransfer) => void;
   emptyMessage?: React.ReactNode;
+}
+
+export function FileGridSkeleton({ view }: { view: ViewMode }) {
+  if (view === "list") {
+    return (
+      <Box sx={{ px: 1.5, py: 1 }}>
+        {Array.from({ length: 10 }).map((_, index) => (
+          <Box
+            key={index}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              py: 0.85,
+              px: 1,
+            }}
+          >
+            <Skeleton variant="rounded" width={20} height={20} />
+            <Skeleton variant="rounded" width={28} height={28} />
+            <Skeleton variant="text" sx={{ flex: 1 }} height={22} />
+            <Skeleton variant="text" width={72} height={18} />
+            <Skeleton variant="text" width={140} height={18} />
+          </Box>
+        ))}
+      </Box>
+    );
+  }
+
+  return (
+    <Grid container spacing={2} sx={{ padding: 1.5 }}>
+      {Array.from({ length: 12 }).map((_, index) => (
+        <Grid item key={index} xs={6} sm={4} md={3} lg={2}>
+          <Box
+            sx={{
+              height: 168,
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              backgroundColor: "background.paper",
+              p: 1.5,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Skeleton variant="rounded" width={64} height={64} />
+            <Skeleton variant="text" width="80%" />
+            <Skeleton variant="text" width="50%" />
+          </Box>
+        </Grid>
+      ))}
+    </Grid>
+  );
 }
 
 function FileGrid({
@@ -93,20 +147,18 @@ function FileGrid({
   );
 
   const moreButton = (file: FileItem, corner?: "tile") => {
-    const openMenu = (event: React.MouseEvent) => {
+    const handle = (event: React.MouseEvent) => {
       event.stopPropagation();
       onOpenMenu({ clientX: event.clientX, clientY: event.clientY }, file);
     };
 
-    // One 44×44 box is both the visible ⋯ and the hit rect (no inner
-    // padding/offset that used to sit the glyph left/up of the click).
     const button = (
       <IconButton
         size="small"
         aria-label={`${file.name} 操作`}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
-        onClick={openMenu}
+        onClick={handle}
         sx={{
           width: "100%",
           height: "100%",
@@ -146,12 +198,12 @@ function FileGrid({
           height: 44,
           boxSizing: "border-box",
           pointerEvents: "auto",
-          backgroundColor: "rgba(255,255,255,0.86)",
+          backgroundColor: "rgba(255,255,255,0.92)",
           borderRadius: 1,
         }}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
-        onClick={openMenu}
+        onClick={handle}
       >
         {button}
       </Box>
@@ -178,36 +230,81 @@ function FileGrid({
       selected={isSelected(file)}
       onPointerDown={markPointer}
       onClick={() => clickItem(file)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") clickItem(file);
+      }}
       onContextMenu={(event) => openMenu(event, file)}
       draggable
       onDragStart={(event) => beginDrag(event, file)}
       {...folderDrop(file)}
       sx={{
-        userSelect: "none", py: 1.25, mx: 0.5, borderRadius: 1,
+        userSelect: "none",
+        py: 0.5,
+        px: 1,
+        mx: 0.75,
+        minHeight: 44,
+        borderRadius: 1.5,
+        gap: 0.5,
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
+        "&.Mui-selected": {
+          backgroundColor: "action.selected",
+        },
+        "&.Mui-selected:hover": {
+          backgroundColor: "action.selected",
+        },
       }}
     >
       {checkbox(file)}
-      <ListItemIcon>{thumbnail(file, 36)}</ListItemIcon>
-      <ListItemText
-        primary={file.name}
-        primaryTypographyProps={{
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
+      <Box
+        sx={{
+          width: 32,
+          height: 32,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
         }}
-        secondary={
-          <React.Fragment>
-            <Box
-              component="span"
-              sx={{ display: "inline-block", minWidth: "160px", marginRight: 1 }}
-            >
-              {formatDateTime(file.uploaded)}
-            </Box>
-            {!isDirectory(file) && humanReadableSize(file.size)}
-          </React.Fragment>
-        }
-      />
+      >
+        {thumbnail(file, 28)}
+      </Box>
+      <Typography
+        noWrap
+        title={file.name}
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          fontWeight: 600,
+          fontSize: "0.875rem",
+        }}
+      >
+        {file.name}
+      </Typography>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          width: 88,
+          flexShrink: 0,
+          textAlign: "right",
+          display: { xs: "none", sm: "block" },
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {isDirectory(file) ? "—" : humanReadableSize(file.size)}
+      </Typography>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          width: 168,
+          flexShrink: 0,
+          textAlign: "right",
+          display: { xs: "none", md: "block" },
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {formatDateTime(file.uploaded)}
+      </Typography>
       {moreButton(file)}
     </ListItemButton>
   );
@@ -231,17 +328,19 @@ function FileGrid({
         overflow: "visible",
         width: "100%",
         height: "100%",
-        minHeight: 140,
+        minHeight: 156,
         boxSizing: "border-box",
-        padding: 1.25,
-        paddingTop: '44px',
+        padding: 1.5,
+        paddingTop: "44px",
         cursor: "pointer",
         border: (theme) =>
           isSelected(file)
             ? `2px solid ${theme.palette.primary.main}`
-            : "1px solid transparent",
+            : "1px solid rgba(28, 22, 16, 0.08)",
         borderRadius: 2,
-        backgroundColor: (theme) => theme.palette.background.paper,
+        backgroundColor: isSelected(file)
+          ? "rgba(243, 128, 32, 0.08)"
+          : "background.paper",
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
         display: "flex",
         flexDirection: "column",
@@ -249,8 +348,20 @@ function FileGrid({
         justifyContent: "center",
         gap: 0.75,
         userSelect: "none",
-        transition: "background-color 0.2s ease, box-shadow 0.2s ease",
-        "&:hover": { backgroundColor: "whitesmoke", boxShadow: 1 },
+        boxShadow: "0 1px 2px rgba(26, 23, 20, 0.04)",
+        transition: "background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+        "&:hover": {
+          backgroundColor: isSelected(file)
+            ? "rgba(243, 128, 32, 0.12)"
+            : "#faf8f5",
+          boxShadow: "0 6px 16px rgba(26, 23, 20, 0.08)",
+          borderColor: "rgba(243, 128, 32, 0.35)",
+        },
+        "&:focus-visible": {
+          outline: "2px solid",
+          outlineColor: "primary.main",
+          outlineOffset: 2,
+        },
       }}
     >
       {checkbox(file, { position: "absolute", top: 0, left: 0 })}
@@ -267,19 +378,22 @@ function FileGrid({
       </Box>
       <Typography
         variant="body2"
-        sx={{ fontWeight: 500,
+        sx={{
+          fontWeight: 600,
           width: "100%",
           textAlign: "center",
           display: "-webkit-box",
           WebkitLineClamp: 2,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
+          lineHeight: 1.35,
         }}
+        title={file.name}
       >
         {file.name}
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        {isDirectory(file) ? "文件夹" : humanReadableSize(file.size)}
+        {isDirectory(file) ? strings.folderLabel : humanReadableSize(file.size)}
       </Typography>
       <Typography
         variant="caption"
@@ -303,11 +417,58 @@ function FileGrid({
 
   if (view === "list") {
     return (
-      <List sx={{ paddingBottom: "72px" }}>
-        {files.map((file) => (
-          <React.Fragment key={file.key}>{itemList(file)}</React.Fragment>
-        ))}
-      </List>
+      <Box sx={{ pb: "72px" }}>
+        <Box
+          sx={{
+            display: { xs: "none", sm: "flex" },
+            alignItems: "center",
+            gap: 0.5,
+            px: 2.25,
+            py: 0.75,
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+            backgroundColor: "background.default",
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            color: "text.secondary",
+          }}
+        >
+          <Box sx={{ width: 42 }} />
+          <Box sx={{ width: 32 }} />
+          <Typography variant="caption" sx={{ flex: 1, fontWeight: 700 }}>
+            {strings.colName}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              width: 88,
+              textAlign: "right",
+              fontWeight: 700,
+              display: { xs: "none", sm: "block" },
+            }}
+          >
+            {strings.colSize}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              width: 168,
+              textAlign: "right",
+              fontWeight: 700,
+              display: { xs: "none", md: "block" },
+            }}
+          >
+            {strings.colDate}
+          </Typography>
+          <Box sx={{ width: 44 }} />
+        </Box>
+        <List disablePadding sx={{ pt: 0.5 }}>
+          {files.map((file) => (
+            <React.Fragment key={file.key}>{itemList(file)}</React.Fragment>
+          ))}
+        </List>
+      </Box>
     );
   }
 
@@ -315,7 +476,7 @@ function FileGrid({
     <Grid
       container
       spacing={2}
-      sx={{ padding: 1.5, paddingBottom: "72px", overflow: "visible" }}
+      sx={{ padding: 2, paddingBottom: "72px", overflow: "visible" }}
     >
       {files.map((file) => (
         <Grid
