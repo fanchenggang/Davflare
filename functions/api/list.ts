@@ -18,7 +18,9 @@ interface ListItem {
   name: string;
   size: number;
   isDir: boolean;
-  uploaded?: string;
+  uploaded: string | null;
+  updated: string | null;
+  etag: string | null;
 }
 
 function normalizeFolder(raw: string | null): string | Response {
@@ -32,6 +34,25 @@ function normalizeFolder(raw: string | null): string | Response {
     return textResponse("禁止访问内部目录", 400);
   }
   return `${joined}/`;
+}
+
+function fileUploaded(object: R2Object): string {
+  const raw = object.uploaded;
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return raw.toISOString();
+  }
+  if (raw) {
+    const parsed = new Date(raw as unknown as string);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return new Date(0).toISOString();
+}
+
+function fileEtag(object: R2Object): string {
+  const httpEtag = (object as { httpEtag?: string }).httpEtag;
+  if (httpEtag) return httpEtag;
+  if (object.etag) return object.etag;
+  return "";
 }
 
 export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
@@ -67,15 +88,16 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
       const name = object.key.slice(folder.length);
       if (!name || name.includes("/")) continue;
       const isDir = isCollectionObject(object);
+      const uploaded = fileUploaded(object);
       const item: ListItem = {
         key: object.key,
         name,
-        size: isDir ? 0 : object.size,
+        size: isDir ? 0 : Number(object.size) || 0,
         isDir,
+        uploaded,
+        updated: uploaded,
+        etag: fileEtag(object),
       };
-      if (object.uploaded) {
-        item.uploaded = object.uploaded.toISOString();
-      }
       itemsByKey.set(object.key, item);
     }
 
@@ -92,7 +114,15 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
           existing.isDir = true;
           existing.size = 0;
         } else {
-          itemsByKey.set(key, { key, name, size: 0, isDir: true });
+          itemsByKey.set(key, {
+            key,
+            name,
+            size: 0,
+            isDir: true,
+            uploaded: null,
+            updated: null,
+            etag: null,
+          });
         }
       }
     }
