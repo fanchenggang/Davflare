@@ -93,54 +93,65 @@ function FileGrid({
   );
 
   const moreButton = (file: FileItem, corner?: "tile") => {
+    const openMenu = (event: React.MouseEvent) => {
+      event.stopPropagation();
+      onOpenMenu({ clientX: event.clientX, clientY: event.clientY }, file);
+    };
+
+    // One 44×44 box is both the visible ⋯ and the hit rect (no inner
+    // padding/offset that used to sit the glyph left/up of the click).
     const button = (
       <IconButton
         size="small"
         aria-label={`${file.name} 操作`}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpenMenu(
-            { clientX: event.clientX, clientY: event.clientY },
-            file
-          );
-        }}
+        onClick={openMenu}
         sx={{
-          width: 36,
-          height: 36,
+          width: "100%",
+          height: "100%",
+          minWidth: 0,
           padding: 0,
-          display: "inline-flex",
+          margin: 0,
+          borderRadius: 1,
+          overflow: "hidden",
+          display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          "& .MuiSvgIcon-root": {
+            fontSize: 22,
+            display: "block",
+            margin: 0,
+          },
         }}
       >
-        <MoreHorizIcon fontSize="small" />
+        <MoreHorizIcon />
       </IconButton>
     );
 
-    if (corner !== "tile") return button;
+    if (corner !== "tile") {
+      return (
+        <Box sx={{ width: 44, height: 44, flexShrink: 0 }}>{button}</Box>
+      );
+    }
 
-    // Position a wrapping box, not the IconButton itself. Absolute + flex
-    // centering on the tile offset the visible SVG from the real hit target
-    // (~35px), so clicks on the glyph hit the breadcrumb instead.
     return (
       <Box
         sx={{
           position: "absolute",
-          top: 4,
-          right: 4,
+          top: 0,
+          right: 0,
           zIndex: 3,
-          width: 36,
-          height: 36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          width: 44,
+          height: 44,
+          boxSizing: "border-box",
           pointerEvents: "auto",
+          backgroundColor: "rgba(255,255,255,0.86)",
+          borderRadius: 1,
         }}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
+        onClick={openMenu}
       >
         {button}
       </Box>
@@ -223,7 +234,7 @@ function FileGrid({
         minHeight: 128,
         boxSizing: "border-box",
         padding: 1,
-        paddingTop: 4.5,
+        paddingTop: '44px',
         cursor: "pointer",
         border: (theme) =>
           isSelected(file)

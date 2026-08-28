@@ -36,6 +36,9 @@ export const strings = {
   typeVideo: "视频",
   typeDoc: "文档",
   typeOther: "其他",
+  showHidden: "显示隐藏文件",
+  searchHere: "当前文件夹",
+  searchAll: "全盘搜索",
 };
 
 export default strings;

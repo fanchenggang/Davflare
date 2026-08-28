@@ -52,3 +52,19 @@ export function fileTypeCategory(
   if (type.startsWith("text/") || office || docName) return "doc";
   return "other";
 }
+
+const JUNK_EXACT = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+
+/** macOS/Windows junk names; hide from the grid, never delete. */
+export function isJunkFileName(name: string) {
+  const lower = name.toLowerCase();
+  if (JUNK_EXACT.has(lower)) return true;
+  if (name.startsWith("._")) return true;
+  return false;
+}
+
+export function formatListingSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return "0 B";
+  if (size < 1024) return `${Math.round(size)} B`;
+  return humanReadableSize(size);
+}
