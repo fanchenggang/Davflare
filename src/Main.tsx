@@ -304,6 +304,7 @@ function Main({
   onSortChange,
   route,
   navigate,
+  onOpenApi,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
@@ -314,6 +315,7 @@ function Main({
   onSortChange: (sort: SortPref) => void;
   route: Route;
   navigate: (route: Route) => void;
+  onOpenApi: () => void;
 }) {
   const {
     clipboard,
@@ -943,6 +945,7 @@ function Main({
           sort={sort}
           onSortChange={onSortChange}
           onOpenWebDav={() => setShowWebDav(true)}
+          onOpenApi={onOpenApi}
           typeFilter={typeFilter}
           onTypeFilterChange={setTypeFilter}
           showHidden={showHidden}

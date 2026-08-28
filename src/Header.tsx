@@ -16,6 +16,7 @@ import {
   CloudUpload as CloudUploadIcon,
   Logout as LogoutIcon,
   Search as SearchIcon,
+  VpnKey as ApiIcon,
 } from "@mui/icons-material";
 
 import { APP_NAME, strings } from "./app/strings";
@@ -28,6 +29,7 @@ function Header({
   username,
   onLogout,
   onOpenTransfers,
+  onOpenApi,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
@@ -35,6 +37,7 @@ function Header({
   username: string | null;
   onLogout: () => void;
   onOpenTransfers: () => void;
+  onOpenApi: () => void;
 }) {
   const [accountAnchor, setAccountAnchor] = useState<null | HTMLElement>(null);
   const transferQueue = useTransferQueue();
@@ -147,6 +150,17 @@ function Header({
           <MenuItem disabled>
             <AccountCircleIcon sx={{ marginRight: 1 }} />
             已登录：{username}
+          </MenuItem>
+        )}
+        {username && (
+          <MenuItem
+            onClick={() => {
+              setAccountAnchor(null);
+              onOpenApi();
+            }}
+          >
+            <ApiIcon sx={{ marginRight: 1 }} />
+            {strings.apiKeys}
           </MenuItem>
         )}
         {username && (

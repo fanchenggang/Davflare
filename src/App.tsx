@@ -7,6 +7,7 @@ import {
 } from "@mui/material";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+import ApiKeysPanel from "./ApiKeysPanel";
 import Header from "./Header";
 import LoginDialog from "./LoginDialog";
 import Main from "./Main";
@@ -41,6 +42,7 @@ function AppContent() {
   const [route, navigate] = useHashRoute();
   const [search, setSearch] = useState("");
   const [showTransfers, setShowTransfers] = useState(false);
+  const [showApiKeys, setShowApiKeys] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarMessage | null>(null);
   const [view, setView] = usePersistedState<ViewMode>("flaredrive.view", "grid");
   const [sort, setSort] = usePersistedState<SortPref>("flaredrive.sort", {
@@ -92,6 +94,7 @@ function AppContent() {
         username={username}
         onLogout={logout}
         onOpenTransfers={() => setShowTransfers(true)}
+        onOpenApi={() => setShowApiKeys(true)}
       />
       <Main
         search={search}
@@ -103,6 +106,7 @@ function AppContent() {
         onSortChange={setSort}
         route={route}
         navigate={navigate}
+        onOpenApi={() => setShowApiKeys(true)}
       />
       {username === null && <LoginDialog />}
       <Snackbar
@@ -119,6 +123,11 @@ function AppContent() {
         </Alert>
       </Snackbar>
       <TransferManager open={showTransfers} onClose={() => setShowTransfers(false)} />
+      <ApiKeysPanel
+        open={showApiKeys}
+        onClose={() => setShowApiKeys(false)}
+        onNotify={onNotify}
+      />
     </Stack>
   );
 }
