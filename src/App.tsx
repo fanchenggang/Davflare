@@ -28,12 +28,23 @@ import { useHashRoute } from "./app/route";
 import { createAppTheme } from "./app/theme";
 import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
 
-interface SnackbarMessage {
+export interface SnackbarMessage {
   key: number;
   message: string;
   severity: NoticeSeverity;
   action?: NoticeAction;
   duration?: number;
+}
+
+/** error 排队；success/info 立刻顶到队首并丢掉已排队的非 error。 */
+export function enqueueSnack(
+  queue: SnackbarMessage[],
+  next: SnackbarMessage
+): SnackbarMessage[] {
+  if (next.severity === "error") {
+    return [...queue, next];
+  }
+  return [next, ...queue.filter((s) => s.severity === "error")];
 }
 
 const DEFAULT_SNACK_MS = 5000;
@@ -83,7 +94,8 @@ function AppContent({
   const pushSnack = useCallback(
     (snack: Omit<SnackbarMessage, "key">) => {
       snackKeyRef.current += 1;
-      setSnackQueue((queue) => [...queue, { ...snack, key: snackKeyRef.current }]);
+      const next = { ...snack, key: snackKeyRef.current };
+      setSnackQueue((queue) => enqueueSnack(queue, next));
     },
     []
   );
@@ -176,6 +188,8 @@ function AppContent({
         open={snackOpen}
         onClose={() => setSnackOpen(false)}
         TransitionProps={{ onExited: () => setSnackQueue((queue) => queue.slice(1)) }}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{ top: { xs: 64, sm: 72 } }}
       >
         <Alert
           severity={currentSnack?.severity ?? "info"}
