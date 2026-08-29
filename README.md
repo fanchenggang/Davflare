@@ -2,13 +2,13 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/FlareDrive)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
 
 Cloudflare R2 file manager on Pages + Workers — free 10 GB storage and 100,000 Worker invocations per day. [R2 pricing](https://developers.cloudflare.com/r2/platform/pricing/)
 
 基于 Cloudflare R2 的网盘：免费 10GB 存储、每天 10 万次 Worker 调用。[R2 定价](https://developers.cloudflare.com/r2/platform/pricing/)
 
-Started as a fork of [longern/FlareDrive](https://github.com/longern/FlareDrive) and has been fully rewritten. The GitHub repo name is still **FlareDrive** for now so Pages and CI keep working.
+Started as a fork of [longern/FlareDrive](https://github.com/longern/FlareDrive) and has been fully rewritten. The GitHub repository is [fanchenggang/Davflare](https://github.com/fanchenggang/Davflare).
 
 ## Screenshots
 
@@ -34,7 +34,7 @@ Preview / share:
 
 One-click:
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/FlareDrive)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
 
 You need a [Cloudflare](https://dash.cloudflare.com/) account with a payment method and R2 activated (create at least one bucket).
 
