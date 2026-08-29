@@ -163,7 +163,7 @@ function ApiKeysPanel({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" scroll="paper">
       <DialogTitle>{strings.apiKeys}</DialogTitle>
       <DialogContent>
         {loading ? (
