@@ -152,6 +152,10 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 Directory notes: `/api/rename` and `/api/delete` accept directories — rename moves the whole tree, delete removes it recursively (hard delete unless `soft=1`). `/api/backup` on a directory renames the whole tree to `name.conflict-<UTCstamp>`. Operations covering more than 1000 objects return 400 and must be batched.
 
+Directory shares: `POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code & expiry apply as usual).
+
+Recycle-bin retention: soft-deleted items older than `TRASH_RETENTION_DAYS` (default 30, settable in Pages env vars; `-1` disables) are purged lazily when the trash is opened, up to 200 items per pass.
+
 Create folders from scripts (parents are auto-created):
 
 ```bash

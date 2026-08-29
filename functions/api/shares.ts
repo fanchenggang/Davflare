@@ -48,6 +48,7 @@ async function readShares(
         url: `${new URL(request.url).origin}/share/${token}`,
         extractCode: extractCode || null,
         hasExtractCode: Boolean(extractCode),
+        isDir: Boolean(parsed.isDir),
       });
     }
     if (!listing.truncated) break;
@@ -84,9 +85,14 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
   if (!key) return new Response("Bad Request", { status: 400 });
 
   const object = await env.BUCKET.head(key);
-  if (object === null) return new Response("File not found", { status: 404 });
-  if (object.httpMetadata?.contentType === "application/x-directory") {
-    return new Response("文件夹暂不支持公开分享", { status: 400 });
+  let isDir = object?.httpMetadata?.contentType === "application/x-directory";
+  if (object === null) {
+    // 目录可能没有标记对象（仅前缀），检查是否有子对象
+    const children = await env.BUCKET.list({ prefix: `${key}/`, limit: 1 });
+    if (children.objects.length === 0) {
+      return new Response("File not found", { status: 404 });
+    }
+    isDir = true;
   }
 
   const token =
@@ -106,6 +112,7 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
     JSON.stringify({
       key,
       name,
+      isDir,
       expiresAt,
       createdAt,
       ...(extractCode ? { extractCode } : {}),
@@ -123,6 +130,7 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
       url: `${new URL(request.url).origin}/share/${token}`,
       extractCode: extractCode || null,
       hasExtractCode: Boolean(extractCode),
+      isDir,
     }),
     { headers: { "Content-Type": "application/json" } }
   );

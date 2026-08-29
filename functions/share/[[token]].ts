@@ -2,6 +2,8 @@ interface ShareEnv {
   BUCKET: R2Bucket;
 }
 
+import { buildZipStream } from "../api/_zip";
+
 const SHARES_PREFIX = "_$flaredrive$/shares/";
 
 function inlineContentType(contentType: string) {
@@ -64,6 +66,7 @@ function extractForm(error?: string) {
 
 type ShareMeta = {
   key?: string;
+  isDir?: boolean;
   expiresAt?: string | null;
   extractCode?: string;
 };
@@ -103,6 +106,25 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   const gated = gateExtractCode(request, metadata);
   if (gated) return gated;
 
+  const encodedName = encodeURIComponent(
+    metadata.key.split("/").pop() || "download"
+  );
+
+  // 目录分享：提取码校验后打包整树为 zip 流下载（条目相对分享目录）
+  if (metadata.isDir) {
+    const stream = await buildZipStream(env.BUCKET, [metadata.key], {
+      stripPrefix: metadata.key,
+    });
+    const headers = new Headers();
+    headers.set("Content-Type", "application/zip");
+    headers.set("Cache-Control", "no-store");
+    headers.set(
+      "Content-Disposition",
+      `attachment; filename*=UTF-8''${encodedName}.zip`
+    );
+    return new Response(stream, { headers });
+  }
+
   const object = await env.BUCKET.get(metadata.key, {
     range: request.headers,
   });
@@ -116,9 +138,6 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
 
   const contentType = object.httpMetadata?.contentType || "application/octet-stream";
   const disposition = inlineContentType(contentType) ? "inline" : "attachment";
-  const encodedName = encodeURIComponent(
-    metadata.key.split("/").pop() || "download"
-  );
   headers.set(
     "Content-Disposition",
     `${disposition}; filename*=UTF-8''${encodedName}`

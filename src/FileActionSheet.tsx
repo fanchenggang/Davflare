@@ -45,7 +45,7 @@ const ACTIONS: Array<{
   { id: "download", label: strings.download, icon: <DownloadIcon /> },
   { id: "rename", label: strings.rename, icon: <RenameIcon /> },
   { id: "move", label: strings.move, icon: <MoveIcon /> },
-  { id: "share", label: strings.share, icon: <ShareIcon />, filesOnly: true },
+  { id: "share", label: strings.share, icon: <ShareIcon /> },
   { id: "copy", label: strings.copy, icon: <CopyIcon /> },
   { id: "cut", label: strings.cut, icon: <CutIcon /> },
   { id: "delete", label: strings.delete, icon: <DeleteIcon /> },

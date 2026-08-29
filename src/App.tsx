@@ -61,6 +61,7 @@ function AppContent({
   const [search, setSearch] = useState("");
   const [showTransfers, setShowTransfers] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
+  const [contentScrolled, setContentScrolled] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarMessage | null>(null);
   const [view, setView] = usePersistedState<ViewMode>("flaredrive.view", "grid");
   const [sort, setSort] = usePersistedState<SortPref>("flaredrive.sort", {
@@ -123,6 +124,7 @@ function AppContent({
         onOpenApi={() => setShowApiKeys(true)}
         themeMode={themeMode}
         onThemeModeChange={onThemeModeChange}
+        elevated={contentScrolled}
       />
       <Main
         search={search}
@@ -135,6 +137,7 @@ function AppContent({
         route={route}
         navigate={navigate}
         onOpenApi={() => setShowApiKeys(true)}
+        onContentScroll={setContentScrolled}
       />
       {username === null && <LoginDialog />}
       <Snackbar

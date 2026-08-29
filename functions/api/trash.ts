@@ -2,9 +2,50 @@ interface TrashEnv {
   BUCKET: R2Bucket;
   WEBDAV_USERNAME: string;
   WEBDAV_PASSWORD: string;
+  /** 回收站保留天数，默认 30；设为 -1 关闭自动清理；0 表示全部视为过期 */
+  TRASH_RETENTION_DAYS?: string;
 }
 
 const TRASH_PREFIX = "_$flaredrive$/trash/";
+const PURGE_BATCH_MAX = 200;
+
+// 惰性过期清理：打开回收站时顺手删除超龄条目（Pages Functions 无定时触发器）。
+// 每次最多清 PURGE_BATCH_MAX 条，避免长耗时；剩余的下一次打开继续。
+async function purgeExpiredTrash(bucket: R2Bucket, retentionDays: number) {
+  if (retentionDays < 0) return;
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const objects = await listObjects(bucket, TRASH_PREFIX);
+  let purged = 0;
+  for (const object of objects) {
+    if (!object.key.endsWith(".json")) continue;
+    if (purged >= PURGE_BATCH_MAX) break;
+    const data = await bucket.get(object.key);
+    if (data === null) continue;
+    let deletedAt = "";
+    try {
+      const meta = (await data.json()) as { deletedAt?: string };
+      deletedAt = String(meta.deletedAt || "");
+    } catch {
+      continue;
+    }
+    const ts = Date.parse(deletedAt);
+    if (!Number.isFinite(ts) || ts > cutoff) continue;
+    const trashId = object.key.slice(TRASH_PREFIX.length).replace(/\.json$/, "");
+    const descendants = await listObjects(bucket, `${TRASH_PREFIX}${trashId}/`);
+    for (const item of descendants) {
+      await bucket.delete(item.key);
+    }
+    await bucket.delete(object.key);
+    purged += 1;
+  }
+}
+
+function retentionDaysFrom(env: TrashEnv): number {
+  const raw = env.TRASH_RETENTION_DAYS;
+  if (raw === undefined || raw === "") return 30;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 30;
+}
 
 function isAuthorized(request: Request, env: TrashEnv) {
   const authorization = request.headers.get("Authorization");
@@ -69,6 +110,7 @@ export const onRequestGet: PagesFunction<TrashEnv> = async (context) => {
   if (!isAuthorized(request, env)) {
     return new Response("Unauthorized", { status: 401 });
   }
+  await purgeExpiredTrash(env.BUCKET, retentionDaysFrom(env));
   return new Response(
     JSON.stringify(await listTrashItems(env.BUCKET)),
     { headers: { "Content-Type": "application/json" } }

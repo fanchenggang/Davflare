@@ -36,6 +36,7 @@ function Header({
   onOpenApi,
   themeMode,
   onThemeModeChange,
+  elevated = false,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
@@ -46,6 +47,7 @@ function Header({
   onOpenApi: () => void;
   themeMode: ThemeModePreference;
   onThemeModeChange: (mode: ThemeModePreference) => void;
+  elevated?: boolean;
 }) {
   const [accountAnchor, setAccountAnchor] = useState<null | HTMLElement>(null);
   const [themeAnchor, setThemeAnchor] = useState<null | HTMLElement>(null);
@@ -74,6 +76,9 @@ function Header({
         borderBottom: "1px solid",
         borderColor: "divider",
         flexShrink: 0,
+        transition: "box-shadow 0.2s ease",
+        boxShadow: elevated ? "0 2px 12px rgba(26, 23, 20, 0.10)" : "none",
+        zIndex: 1,
       }}
     >
       <Typography

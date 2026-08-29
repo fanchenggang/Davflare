@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { keyframes } from "@emotion/react";
 import { alpha, useTheme } from "@mui/material/styles";
 import {
   Box,
@@ -8,9 +9,13 @@ import {
   List,
   ListItemButton,
   Skeleton,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import DownloadIcon from "@mui/icons-material/Download";
+import ShareIcon from "@mui/icons-material/Share";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 import AuthThumbnail from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
@@ -20,9 +25,58 @@ import { strings } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
   formatDateTime,
+  formatRelativeDateTime,
   humanReadableSize,
   isDirectory,
 } from "./app/utils";
+
+// 卡片/行的进入动效（尊重系统减弱动态偏好）
+const itemEnter = keyframes`
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const itemEnterSx = (index: number) => ({
+  animation: `${itemEnter} 0.22s ease both`,
+  animationDelay: `${Math.min(index, 24) * 14}ms`,
+  "@media (prefers-reduced-motion: reduce)": {
+    animation: "none",
+  },
+});
+
+// 搜索命中高亮：纯文本拆分（React 转义，天然防 XSS），命中片段用主色加粗
+function highlightName(name: string, query?: string): React.ReactNode {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return name;
+  const lower = name.toLowerCase();
+  if (!lower.includes(q)) return name;
+  const nodes: React.ReactNode[] = [];
+  let pos = 0;
+  let index = lower.indexOf(q);
+  let key = 0;
+  while (index >= 0) {
+    if (index > pos) nodes.push(name.slice(pos, index));
+    nodes.push(
+      <Box
+        component="mark"
+        key={key}
+        sx={{
+          backgroundColor: "transparent",
+          color: "primary.main",
+          fontWeight: 800,
+          padding: 0,
+        }}
+      >
+        {name.slice(index, index + q.length)}
+      </Box>
+    );
+    key += 1;
+    pos = index + q.length;
+    index = lower.indexOf(q, pos);
+  }
+  if (pos < name.length) nodes.push(name.slice(pos));
+  return nodes;
+}
 
 interface FileGridProps {
   files: FileItem[];
@@ -32,6 +86,7 @@ interface FileGridProps {
   selectedKeys: string[];
   dimmedKeys?: ReadonlySet<string>;
   focusedKey?: string | null;
+  highlight?: string;
   onToggleSelect: (key: string, event?: { shiftKey?: boolean }) => void;
   onNavigate: (key: string) => void;
   onOpen: (key: string) => void;
@@ -40,6 +95,9 @@ interface FileGridProps {
     file: FileItem
   ) => void;
   onDropOnFolder?: (folder: FileItem, dataTransfer: DataTransfer) => void;
+  onDownload?: (file: FileItem) => void;
+  onShareFile?: (file: FileItem) => void;
+  onDeleteFile?: (file: FileItem) => void;
   emptyMessage?: React.ReactNode;
 }
 
@@ -112,11 +170,15 @@ function FileGrid({
   selectedKeys,
   dimmedKeys,
   focusedKey,
+  highlight,
   onToggleSelect,
   onNavigate,
   onOpen,
   onOpenMenu,
   onDropOnFolder,
+  onDownload,
+  onShareFile,
+  onDeleteFile,
   emptyMessage,
 }: FileGridProps) {
   const theme = useTheme();
@@ -255,7 +317,65 @@ function FileGrid({
         }
       : {};
 
-  const itemList = (file: FileItem) => (
+  // 网格卡片 hover/focus 浮现的快捷操作（触屏设备隐藏，走 ⋯ 菜单）
+  const quickActions = (file: FileItem) => {
+    if (!onDownload && !onShareFile && !onDeleteFile) return null;
+    const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+    const actionButton = (
+      label: string,
+      icon: React.ReactNode,
+      handler: ((file: FileItem) => void) | undefined,
+      color?: "error"
+    ) =>
+      handler ? (
+        <Tooltip title={label} key={label}>
+          <IconButton
+            size="small"
+            aria-label={`${file.name} ${label}`}
+            color={color}
+            onPointerDown={stop}
+            onMouseDown={stop}
+            onClick={(event) => {
+              stop(event);
+              handler(file);
+            }}
+            sx={{ "& .MuiSvgIcon-root": { fontSize: 17 } }}
+          >
+            {icon}
+          </IconButton>
+        </Tooltip>
+      ) : null;
+
+    return (
+      <Box
+        className="quick-actions-bar"
+        sx={{
+          position: "absolute",
+          bottom: 8,
+          left: "50%",
+          transform: "translateX(-50%)",
+          display: "flex",
+          alignItems: "center",
+          zIndex: Z_INDEX.cardOverlay,
+          backgroundColor: alpha(theme.palette.background.paper, 0.95),
+          borderRadius: 999,
+          padding: "1px 4px",
+          boxShadow: "0 2px 10px rgba(26, 23, 20, 0.16)",
+          opacity: 0,
+          pointerEvents: "none",
+          transition: "opacity 0.15s ease",
+        }}
+        onPointerDown={stop}
+        onClick={stop}
+      >
+        {actionButton(strings.download, <DownloadIcon />, onDownload)}
+        {actionButton(strings.share, <ShareIcon />, onShareFile)}
+        {actionButton(strings.delete, <DeleteIcon />, onDeleteFile, "error")}
+      </Box>
+    );
+  };
+
+  const itemList = (file: FileItem, index: number) => (
     <ListItemButton
       selected={isSelected(file)}
       data-file-key={file.key}
@@ -270,6 +390,7 @@ function FileGrid({
       onDragStart={(event) => beginDrag(event, file)}
       {...folderDrop(file)}
       sx={{
+        ...itemEnterSx(index),
         userSelect: "none",
         py: density === "compact" ? 0.15 : 0.5,
         px: 1,
@@ -316,7 +437,7 @@ function FileGrid({
           fontSize: "0.875rem",
         }}
       >
-        {file.name}
+        {highlightName(file.name, highlight)}
       </Typography>
       <Typography
         variant="caption"
@@ -334,6 +455,7 @@ function FileGrid({
       <Typography
         variant="caption"
         color="text.secondary"
+        title={formatDateTime(file.uploaded)}
         sx={{
           width: 168,
           flexShrink: 0,
@@ -342,13 +464,13 @@ function FileGrid({
           fontVariantNumeric: "tabular-nums",
         }}
       >
-        {formatDateTime(file.uploaded)}
+        {formatRelativeDateTime(file.uploaded)}
       </Typography>
       {moreButton(file)}
     </ListItemButton>
   );
 
-  const itemTile = (file: FileItem) => (
+  const itemTile = (file: FileItem, index: number) => (
     <Box
       role="button"
       tabIndex={0}
@@ -363,6 +485,7 @@ function FileGrid({
       onDragStart={(event) => beginDrag(event, file)}
       {...folderDrop(file)}
       sx={{
+        ...itemEnterSx(index),
         position: "relative",
         isolation: "isolate",
         overflow: "visible",
@@ -372,6 +495,7 @@ function FileGrid({
         boxSizing: "border-box",
         padding: density === "compact" ? 1 : 1.5,
         paddingTop: "44px",
+        paddingBottom: density === "compact" ? 6 : 10,
         cursor: "pointer",
         border: (theme) =>
           isSelected(file)
@@ -389,11 +513,24 @@ function FileGrid({
         gap: 0.75,
         userSelect: "none",
         boxShadow: "0 1px 2px rgba(26, 23, 20, 0.04)",
-        transition: "background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+        transition: "background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease",
         "&:hover": {
           backgroundColor: "action.selected",
           boxShadow: "0 6px 16px rgba(26, 23, 20, 0.08)",
           borderColor: (theme) => `${theme.palette.primary.main}59`,
+          "& .quick-actions-bar": {
+            opacity: 1,
+            pointerEvents: "auto",
+          },
+        },
+        "&:focus-within .quick-actions-bar": {
+          opacity: 1,
+          pointerEvents: "auto",
+        },
+        "@media (hover: none)": {
+          "& .quick-actions-bar": {
+            display: "none",
+          },
         },
         "&:focus": {
           outline: "none",
@@ -441,12 +578,13 @@ function FileGrid({
         }}
         title={file.name}
       >
-        {file.name}
+        {highlightName(file.name, highlight)}
       </Typography>
       <Typography variant="caption" color="text.secondary">
         {isDirectory(file) ? folderMeta(file) : humanReadableSize(file.size)}
       </Typography>
       {density !== "compact" && (
+      <Tooltip title={formatDateTime(file.uploaded)} enterDelay={400}>
       <Typography
         variant="caption"
         color="text.secondary"
@@ -459,10 +597,12 @@ function FileGrid({
           textOverflow: "ellipsis",
         }}
       >
-        {formatDateTime(file.uploaded)}
+        {formatRelativeDateTime(file.uploaded)}
       </Typography>
+      </Tooltip>
       )}
       {moreButton(file, "tile")}
+      {quickActions(file)}
     </Box>
   );
 
@@ -517,8 +657,8 @@ function FileGrid({
           <Box sx={{ width: 44 }} />
         </Box>
         <List disablePadding sx={{ pt: 0.5 }}>
-          {files.map((file) => (
-            <React.Fragment key={file.key}>{itemList(file)}</React.Fragment>
+          {files.map((file, index) => (
+            <React.Fragment key={file.key}>{itemList(file, index)}</React.Fragment>
           ))}
         </List>
       </Box>
@@ -531,7 +671,7 @@ function FileGrid({
       spacing={density === "compact" ? 1 : 2}
       sx={{ padding: density === "compact" ? 1 : 2, paddingBottom: { xs: "136px", sm: "72px" }, overflow: "visible" }}
     >
-      {files.map((file) => (
+      {files.map((file, index) => (
         <Grid
           item
           key={file.key}
@@ -541,7 +681,7 @@ function FileGrid({
           lg={2}
           sx={{ display: "flex", overflow: "visible" }}
         >
-          {itemTile(file)}
+          {itemTile(file, index)}
         </Grid>
       ))}
     </Grid>

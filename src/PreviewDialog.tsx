@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { alpha, useTheme } from "@mui/material/styles";
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from "@mui/material";
@@ -18,6 +19,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
+import RotateRightIcon from "@mui/icons-material/RotateRight";
 import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
 import ShareIcon from "@mui/icons-material/Share";
@@ -197,6 +199,10 @@ function PreviewDialog({
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [rate, setRate] = useState(1);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mode = useTheme().palette.mode;
   const [text, setText] = useState<string | null>(null);
   const [tooLarge, setTooLarge] = useState(false);
   const [largeSize, setLargeSize] = useState(0);
@@ -225,6 +231,8 @@ function PreviewDialog({
       setTooLarge(false);
       setLargeSize(0);
       setJsonError(false);
+      setRotation(0);
+      setRate(1);
       return;
     }
     let objectUrl: string | null = null;
@@ -237,6 +245,8 @@ function PreviewDialog({
     setLargeSize(0);
     setJsonError(false);
     setZoomed(false);
+    setRotation(0);
+    setRate(1);
 
     const media = isMediaPreviewable(file);
     const asText = !media && isTextPreviewable(file);
@@ -526,12 +536,40 @@ function PreviewDialog({
                 maxHeight: zoomed ? "200%" : "none",
                 objectFit: "contain",
                 cursor: zoomed ? "zoom-out" : "zoom-in",
-                transition: "max-width 0.2s ease, max-height 0.2s ease",
+                transition: "max-width 0.2s ease, max-height 0.2s ease, transform 0.2s ease",
                 margin: "0 auto",
+                transform: `rotate(${rotation}deg)`,
+                // 透明 PNG 的棋盘格衬底（暗色用深色格）
+                backgroundImage:
+                  mode === "dark"
+                    ? "conic-gradient(rgba(255,255,255,0.08) 25%, transparent 0 50%, rgba(255,255,255,0.08) 0 75%, transparent 0)"
+                    : "conic-gradient(rgba(28, 22, 16, 0.08) 25%, transparent 0 50%, rgba(28, 22, 16, 0.08) 0 75%, transparent 0)",
+                backgroundSize: "16px 16px",
               }}
             />
           ) : isVideo ? (
-            <video src={url} controls style={{ maxWidth: "100%", maxHeight: "100%" }} />
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, width: "100%" }}>
+              <video
+                ref={videoRef}
+                src={url}
+                controls
+                style={{ maxWidth: "100%", maxHeight: "100%" }}
+              />
+              <Tooltip title={strings.playbackSpeed}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    const rates = [1, 1.5, 2, 0.5];
+                    const next = rates[(rates.indexOf(rate) + 1) % rates.length];
+                    setRate(next);
+                    if (videoRef.current) videoRef.current.playbackRate = next;
+                  }}
+                >
+                  {rate}x
+                </Button>
+              </Tooltip>
+            </Box>
           ) : isAudio ? (
             <audio src={url} controls style={{ width: "100%" }} />
           ) : isPdf ? (
@@ -555,6 +593,13 @@ function PreviewDialog({
               {strings.nextFile}
             </Button>
           </>
+        )}
+        {url && isImage && (
+          <Tooltip title={strings.rotate}>
+            <Button onClick={() => setRotation((prev) => (prev + 90) % 360)}>
+              <RotateRightIcon />
+            </Button>
+          </Tooltip>
         )}
         {text != null && (
           <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>

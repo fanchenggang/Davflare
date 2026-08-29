@@ -95,6 +95,8 @@ export const strings = {
   retry: "重试",
   pausedAll: "已全部暂停",
   resumedAll: "已全部恢复",
+  rotate: "旋转 90°",
+  playbackSpeed: "播放倍速",
 };
 
 export default strings;

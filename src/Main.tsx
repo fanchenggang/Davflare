@@ -333,6 +333,7 @@ function Main({
   route,
   navigate,
   onOpenApi,
+  onContentScroll,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
@@ -344,6 +345,7 @@ function Main({
   route: Route;
   navigate: (route: Route) => void;
   onOpenApi: () => void;
+  onContentScroll?: (scrolled: boolean) => void;
 }) {
   const {
     clipboard,
@@ -404,6 +406,13 @@ function Main({
   useEffect(() => {
     if (route.kind === "folder") lastFolderPath.current = route.path;
   }, [route]);
+
+  const handleContentScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onContentScroll?.(event.currentTarget.scrollTop > 8);
+    },
+    [onContentScroll]
+  );
 
   useEffect(() => {
     setSearchScope(cwd ? "folder" : "global");
@@ -1257,7 +1266,7 @@ function Main({
       </Box>
 
       {route.kind === "trash" && (
-        <Box sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <TrashView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -1267,7 +1276,7 @@ function Main({
         </Box>
       )}
       {route.kind === "shares" && (
-        <Box sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SharesView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -1285,6 +1294,7 @@ function Main({
             </Box>
           ) : (
             <Box
+              onScroll={handleContentScroll}
               sx={{
                 flexGrow: 1,
                 overflowY: "auto",
@@ -1300,11 +1310,22 @@ function Main({
                 selectedKeys={selectedKeys}
                 dimmedKeys={cutKeys}
                 focusedKey={focusedKey}
+                highlight={debouncedSearch}
                 onToggleSelect={toggleSelect}
                 onNavigate={rememberFolder}
                 onOpen={handleOpen}
                 onOpenMenu={handleOpenMenu}
                 onDropOnFolder={handleDropOnFolder}
+                onDownload={(file) => {
+                  (file.isDir
+                    ? downloadArchive([file.key])
+                    : downloadFile(file.key)
+                  ).catch((error) =>
+                    onNotify((error as Error).message, "error")
+                  );
+                }}
+                onShareFile={(file) => setShareTarget(file)}
+                onDeleteFile={(file) => setConfirmDelete([file.key])}
                 emptyMessage={
                   debouncedSearch ? (
                     <EmptyState
@@ -1493,6 +1514,7 @@ function Main({
 
       <MobileNav
         visible={selectedKeys.length === 0}
+        filesActive={route.kind === "folder"}
         onGoFiles={() =>
           navigate({ kind: "folder", path: lastFolderPath.current })
         }

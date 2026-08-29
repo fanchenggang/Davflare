@@ -33,6 +33,22 @@ export function formatDateTime(value: string | Date) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
 }
 
+// 24 小时内显示相对时间（N 分钟前），更早显示日期；「刚刚」门槛 60 秒
+export function formatRelativeDateTime(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0 || diffMs > 24 * 60 * 60 * 1000) {
+    return date.toLocaleDateString();
+  }
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return "刚刚";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} 小时前`;
+}
+
 export function encodeKey(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");
 }
