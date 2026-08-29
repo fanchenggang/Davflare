@@ -121,6 +121,39 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 `POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code and expiry apply as usual).
 
+### MCP
+
+Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). Missing or invalid keys return **HTTP 401**. v1 tools: `list`, `upload`, `download`, `mkdir`, `delete` (they wrap the Open API handlers above). MCP upload/download is capped at about 1 MiB — larger files return a tool error (mentioning **413** / the web UI). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete.
+
+```bash
+# initialize
+curl -X POST "https://<your-domain.com>/mcp" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{}}}'
+
+# tools/list
+curl -X POST "https://<your-domain.com>/mcp" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+```
+
+Cursor (`mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://<your-domain.com>/mcp",
+      "headers": {
+        "Authorization": "Bearer <apiKey>"
+      }
+    }
+  }
+}
+```
+
 ### Bidirectional sync recipe
 
 Local wins; backup remote on conflict. Same Bearer / `X-Api-Key` auth as upload; no web session. WebDAV protocol is unchanged.
