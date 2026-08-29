@@ -17,6 +17,7 @@ import TransferManager from "./TransferManager";
 import { AuthProvider, useAuth } from "./app/auth";
 import { ClipboardProvider } from "./app/clipboard";
 import { NoticeAction, NoticeOptions, NoticeSeverity, NotifyFn } from "./app/notify";
+import { translate, useLang } from "./app/strings";
 import {
   SortPref,
   ThemeModePreference,
@@ -55,6 +56,7 @@ function AppContent({
   themeMode: ThemeModePreference;
   onThemeModeChange: (mode: ThemeModePreference) => void;
 }) {
+  useLang(); // 语言切换时触发整树重渲染
   const { username, logout } = useAuth();
   const transferQueue = useTransferQueue();
   const [route, navigate] = useHashRoute();
@@ -76,10 +78,16 @@ function AppContent({
       if (notified.current.has(task.id)) return;
       if (task.status === "completed") {
         notified.current.add(task.id);
-        setSnackbar({ message: `已上传 ${task.name}`, severity: "success" });
+        setSnackbar({
+          message: translate("uploadedToast", { name: task.name }),
+          severity: "success",
+        });
       } else if (task.status === "failed") {
         notified.current.add(task.id);
-        setSnackbar({ message: `上传失败：${task.name}`, severity: "error" });
+        setSnackbar({
+          message: translate("uploadFailedToast", { name: task.name }),
+          severity: "error",
+        });
       }
     });
   }, [transferQueue]);

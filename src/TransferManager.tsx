@@ -23,22 +23,25 @@ import {
 
 import { useTransferQueue, useTransferQueueActions, useTransferQueueGlobalPaused } from "./app/transferQueue";
 import { TransferTask } from "./app/types";
+import { strings, translate } from "./app/strings";
 import { formatEta, humanReadableSize, humanReadableSpeed } from "./app/utils";
 
 function statusLabel(status: TransferTask["status"], resumable: boolean) {
   switch (status) {
     case "pending":
-      return "等待中";
+      return translate("statusPending");
     case "in-progress":
-      return resumable ? "分块上传中" : "上传中";
+      return resumable
+        ? translate("statusMultipartUploading")
+        : translate("statusUploading");
     case "paused":
-      return resumable ? "已暂停，点「继续」从已上传分块续传" : "已暂停";
+      return resumable ? translate("statusPausedResumable") : translate("statusPaused");
     case "failed":
-      return resumable ? "失败，点「重试」可从断点续传" : "失败，可重试";
+      return resumable ? translate("statusFailedResumable") : translate("statusFailed");
     case "completed":
-      return "已完成";
+      return translate("statusCompleted");
     case "canceled":
-      return "已取消";
+      return translate("statusCanceled");
     default:
       return status;
   }
@@ -133,7 +136,7 @@ function TransferManager({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>上传任务</DialogTitle>
+      <DialogTitle>{strings.transfers}</DialogTitle>
       <DialogContent sx={{ padding: 0 }}>
         {uploads.length === 0 ? (
           <Typography
@@ -141,7 +144,7 @@ function TransferManager({
             color="text.secondary"
             sx={{ padding: 3 }}
           >
-            暂无上传任务
+            {strings.noUploadTasks}
           </Typography>
         ) : (
           <Stack spacing={2} sx={{ padding: 2 }}>
@@ -150,7 +153,7 @@ function TransferManager({
               value={total > 0 ? (loaded / total) * 100 : 0}
             />
             <Typography variant="body2" color="text.secondary">
-              总进度：{humanReadableSize(loaded)} / {humanReadableSize(total)}
+              {translate("overallProgress")}：{humanReadableSize(loaded)} / {humanReadableSize(total)}
               {overallSpeed > 0 && taskStatusText(uploads, overallSpeed, overallEta)}
             </Typography>
             <Stack spacing={2}>
@@ -208,7 +211,7 @@ function TransferManager({
                           startIcon={<RefreshIcon />}
                           onClick={() => actions.retry(task.id)}
                         >
-                          重试
+                          {strings.retry}
                         </Button>
                       )}
                       {(task.status === "pending" ||
@@ -219,7 +222,7 @@ function TransferManager({
                           startIcon={<PauseIcon />}
                           onClick={() => actions.pause(task.id)}
                         >
-                          暂停
+                          {strings.pause}
                         </Button>
                       )}
                       {task.status === "paused" && (
@@ -229,7 +232,7 @@ function TransferManager({
                           startIcon={<PlayArrowIcon />}
                           onClick={() => actions.resume(task.id)}
                         >
-                          继续
+                          {strings.resume}
                         </Button>
                       )}
                       {task.status !== "completed" &&
@@ -240,7 +243,7 @@ function TransferManager({
                             startIcon={<CancelIcon />}
                             onClick={() => actions.cancel(task.id)}
                           >
-                            取消
+                            {strings.delete}
                           </Button>
                         )}
                     </Stack>
@@ -258,11 +261,11 @@ function TransferManager({
             onClick={globalPaused ? actions.resumeAll : actions.pauseAll}
             disabled={!globalPaused && activeCount === 0 && pausedCount === 0}
           >
-            {globalPaused ? "全部继续" : "全部暂停"}
+            {globalPaused ? strings.resumedAll : strings.pausedAll}
           </Button>
         )}
-        <Button onClick={actions.clearFailed}>清除失败</Button>
-        <Button onClick={actions.clearCompleted}>清除已完成</Button>
+        <Button onClick={actions.clearFailed}>{strings.clearFailed}</Button>
+        <Button onClick={actions.clearCompleted}>{strings.clearCompleted}</Button>
         <Button onClick={onClose}>关闭</Button>
       </DialogActions>
     </Dialog>

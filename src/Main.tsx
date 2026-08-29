@@ -52,7 +52,7 @@ import { Route } from "./app/route";
 import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
 import { Z_INDEX } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
   copyPaste,
@@ -185,9 +185,9 @@ function PathBar({
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(pathText);
-      onNotify("路径已复制", "success");
+      onNotify(translate("pathCopied"), "success");
     } catch {
-      onNotify("复制失败", "error");
+      onNotify(translate("copyFailed"), "error");
     }
   };
 
@@ -683,9 +683,11 @@ function Main({
         bytes += file.size || 0;
       }
     }
-    return `${folders} 个文件夹 · ${fileCount} 个文件 · 共 ${formatListingSize(
-      bytes
-    )}`;
+    return translate("listingStats", {
+      folders,
+      files: fileCount,
+      size: formatListingSize(bytes),
+    });
   }, [visibleFiles]);
 
   useEffect(() => {
@@ -1016,7 +1018,7 @@ function Main({
         });
       });
       enqueueToCwd(named);
-      onNotify(`已加入 ${named.length} 个上传任务`, "success");
+      onNotify(translate("enqueuedUploads", { count: named.length }), "success");
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -1107,7 +1109,7 @@ function Main({
     };
     try {
       await runRename();
-      onNotify("重命名成功", "success");
+      onNotify(translate("renameDone"), "success");
     } catch (error) {
       onNotify((error as Error).message, "error", {
         duration: 8000,
@@ -1124,7 +1126,7 @@ function Main({
     try {
       const result = await moveToTrash(confirmDelete);
       const trashIds = result.results.map((item) => item.id);
-      onNotify(`已移入回收站 ${trashIds.length} 项`, "success", {
+      onNotify(translate("movedToTrashCount", { count: trashIds.length }), "success", {
         duration: 7000,
         action: trashIds.length
           ? {
@@ -1132,7 +1134,7 @@ function Main({
               onClick: () => {
                 restoreTrash(trashIds)
                   .then(() => {
-                    onNotify("已撤销删除", "success");
+                    onNotify(translate("undoDeleteDone"), "success");
                   })
                   .catch((error) =>
                     onNotify((error as Error).message, "error")
@@ -1161,7 +1163,7 @@ function Main({
     };
     try {
       await runPaste();
-      onNotify("粘贴完成", "success");
+      onNotify(translate("pasteDone"), "success");
     } catch (error) {
       onNotify((error as Error).message, "error", {
         duration: 8000,
@@ -1474,7 +1476,7 @@ function Main({
           try {
             await createFolder(cwd, name);
             setShowCreateFolder(false);
-            onNotify("文件夹已创建", "success");
+            onNotify(translate("folderCreated"), "success");
             await loadListing();
           } catch (error) {
             onNotify((error as Error).message, "error");
@@ -1578,8 +1580,8 @@ function Main({
 
       <ConfirmDialog
         open={Boolean(confirmDelete)}
-        title="移入回收站"
-        message={`将删除 ${confirmDelete?.length ?? 0} 项，删除后可到回收站恢复。`}
+        title={translate("confirmDeleteTitle")}
+        message={translate("confirmDeleteMsg", { count: confirmDelete?.length ?? 0 })}
         confirmText="移入回收站"
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleConfirmDelete}

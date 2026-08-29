@@ -154,6 +154,8 @@ Directory notes: `/api/rename` and `/api/delete` accept directories — rename m
 
 Directory shares: `POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code & expiry apply as usual).
 
+UI language: 中文 / English — switch from the globe icon in the header (defaults to your browser language, persisted locally).
+
 Recycle-bin retention: soft-deleted items older than `TRASH_RETENTION_DAYS` (default 30, settable in Pages env vars; `-1` disables) are purged lazily when the trash is opened, up to 200 items per pass.
 
 Create folders from scripts (parents are auto-created):

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { strings, translate } from "./app/strings";
 import {
   Button,
   Dialog,
@@ -32,12 +33,12 @@ function LoginDialog() {
         },
       });
       if (!response.ok) {
-        setError("用户名或密码错误，请重试");
+        setError(translate("wrongCredentials"));
       } else {
         login({ username, password });
       }
     } catch {
-      setError("登录失败，请检查网络后重试");
+      setError(translate("networkError"));
     } finally {
       setSubmitting(false);
     }
@@ -45,23 +46,23 @@ function LoginDialog() {
 
   return (
     <Dialog open fullWidth maxWidth="xs">
-      <DialogTitle>登录 FlareDrive</DialogTitle>
+      <DialogTitle>{strings.loginTitle}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <DialogContentText sx={{ marginBottom: 2 }}>
-            请输入 WebDAV 用户名和密码以访问你的文件。
+            {strings.loginHint}
           </DialogContentText>
           <TextField
             autoFocus
             fullWidth
-            label="用户名"
+            label={strings.username}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             margin="dense"
           />
           <TextField
             fullWidth
-            label="密码"
+            label={strings.password}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -75,7 +76,7 @@ function LoginDialog() {
         </DialogContent>
         <DialogActions>
           <Button type="submit" variant="contained" disabled={submitting}>
-            {submitting ? "登录中…" : "登录"}
+            {submitting ? strings.loading : strings.login}
           </Button>
         </DialogActions>
       </form>

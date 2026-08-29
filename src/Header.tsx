@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { translate } from "./app/strings";
 import {
   Badge,
   IconButton,
@@ -15,6 +16,7 @@ import {
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
   DarkMode as DarkModeIcon,
+  Language as LanguageIcon,
   LightMode as LightModeIcon,
   Logout as LogoutIcon,
   Search as SearchIcon,
@@ -22,7 +24,7 @@ import {
   VpnKey as ApiIcon,
 } from "@mui/icons-material";
 
-import { APP_NAME, strings } from "./app/strings";
+import { getLang, Lang, setLang, APP_NAME, strings } from "./app/strings";
 import { ThemeModePreference } from "./app/prefs";
 import { useTransferQueue } from "./app/transferQueue";
 
@@ -51,6 +53,7 @@ function Header({
 }) {
   const [accountAnchor, setAccountAnchor] = useState<null | HTMLElement>(null);
   const [themeAnchor, setThemeAnchor] = useState<null | HTMLElement>(null);
+  const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
   const transferQueue = useTransferQueue();
 
   const activeTasks = transferQueue.filter((task) =>
@@ -157,6 +160,38 @@ function Header({
         </IconButton>
       </Tooltip>
 
+      <Tooltip title={strings.language}>
+        <IconButton
+          aria-label={strings.language}
+          onClick={(event) => setLangAnchor(event.currentTarget)}
+        >
+          <LanguageIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={langAnchor}
+        open={Boolean(langAnchor)}
+        onClose={() => setLangAnchor(null)}
+      >
+        {(
+          [
+            ["zh", strings.langZh],
+            ["en", strings.langEn],
+          ] as Array<[Lang, string]>
+        ).map(([value, label]) => (
+          <MenuItem
+            key={value}
+            selected={getLang() === value}
+            onClick={() => {
+              setLang(value);
+              setLangAnchor(null);
+            }}
+          >
+            {label}
+          </MenuItem>
+        ))}
+      </Menu>
+
       <Tooltip title={strings.theme}>
         <IconButton
           aria-label={strings.theme}
@@ -191,7 +226,13 @@ function Header({
         ))}
       </Menu>
 
-      <Tooltip title={username ? `已登录：${username}` : strings.login}>
+      <Tooltip
+        title={
+          username
+            ? translate("loggedInAs", { name: username })
+            : strings.login
+        }
+      >
         <IconButton
           aria-label="账户"
           onClick={(event) => setAccountAnchor(event.currentTarget)}
@@ -207,7 +248,7 @@ function Header({
         {username && (
           <MenuItem disabled>
             <AccountCircleIcon sx={{ marginRight: 1 }} />
-            已登录：{username}
+            {translate("loggedInAs", { name: username })}
           </MenuItem>
         )}
         {username && (

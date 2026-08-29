@@ -44,7 +44,7 @@ import {
   readResponseTextCapped,
   TEXT_PREVIEW_MAX_BYTES,
 } from "./app/preview";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 import { Z_INDEX } from "./app/theme";
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
@@ -356,7 +356,7 @@ function PreviewDialog({
     if (text == null) return;
     try {
       await navigator.clipboard.writeText(text);
-      onNotify("已复制全文", "success");
+      onNotify(translate("copiedAllToast"), "success");
     } catch {
       onNotify("复制失败", "error");
     }
@@ -503,10 +503,11 @@ function PreviewDialog({
               gap: 1.5,
             }}
           >
-            <Typography variant="h6">文件过大，无法在线预览</Typography>
+            <Typography variant="h6">{strings.previewTooLargeTitle}</Typography>
             <Typography color="text.secondary">
-              大小 {humanReadableSize(largeSize || file?.size || 0)}，超过 2 MB
-              限制。
+              {translate("previewTooLargeHint", {
+                size: humanReadableSize(largeSize || file?.size || 0),
+              })}
             </Typography>
             <Button
               startIcon={<DownloadIcon />}
@@ -579,7 +580,7 @@ function PreviewDialog({
               style={{ width: "100%", height: "100%", border: "none" }}
             />
           ) : (
-            <Typography>该文件类型暂不支持预览</Typography>
+            <Typography>{strings.unsupportedPreview}</Typography>
           )
         ) : null}
       </DialogContent>
@@ -603,7 +604,7 @@ function PreviewDialog({
         )}
         {text != null && (
           <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>
-            复制全文
+            {strings.copyAll}
           </Button>
         )}
         <Button startIcon={<ShareIcon />} onClick={onShare}>
@@ -618,7 +619,7 @@ function PreviewDialog({
         <Button startIcon={<DownloadIcon />} onClick={download}>
           下载
         </Button>
-        <Button onClick={closePreview}>关闭</Button>
+        <Button onClick={closePreview}>{strings.close}</Button>
       </DialogActions>
     </Dialog>
   );
