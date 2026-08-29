@@ -87,4 +87,15 @@ describe("FileGrid list row", () => {
     expect(props.onOpen).toHaveBeenCalledWith(file.key);
     expect(props.onNavigate).not.toHaveBeenCalled();
   });
+
+  test("⋯ 菜单按 Enter 不触发预览或进入目录", () => {
+    const { props } = renderList();
+    const more = screen.getByRole("button", {
+      name: translate("fileActionsLabel", { name: file.name }),
+    });
+    more.focus();
+    fireEvent.keyDown(more, { key: "Enter" });
+    expect(props.onOpen).not.toHaveBeenCalled();
+    expect(props.onNavigate).not.toHaveBeenCalled();
+  });
 });

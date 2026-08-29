@@ -336,7 +336,7 @@ function PreviewDialog({
   const download = async () => {
     if (!file) return;
     try {
-      if (text != null) {
+      if (text != null && !isJsonFile(file)) {
         const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
         const href = URL.createObjectURL(blob);
         const a = document.createElement("a");

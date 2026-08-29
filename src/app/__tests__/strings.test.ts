@@ -49,6 +49,13 @@ describe("strings / translate", () => {
     expect(getLang()).toBe("en");
   });
 
+  test("validForever 文案存在中英翻译", () => {
+    setLang("zh");
+    expect(translate("validForever")).toBe("永久有效");
+    setLang("en");
+    expect(translate("validForever")).toBe("Never expires");
+  });
+
   test("setLang 通知订阅者", () => {
     const seen: string[] = [];
     const unsubscribe = subscribeLang(() => seen.push(getLang()));

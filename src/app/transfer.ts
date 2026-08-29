@@ -205,10 +205,25 @@ export async function generateThumbnail(file: File) {
   var ctx = canvas.getContext("2d")!;
 
   if (file.type.startsWith("image/")) {
-    const image = await new Promise<HTMLImageElement>((resolve) => {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image();
-      image.onload = () => resolve(image);
-      image.src = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        URL.revokeObjectURL(objectUrl);
+        fn();
+      };
+      const timer = setTimeout(
+        () => settle(() => reject(new Error("Image load timeout"))),
+        2000
+      );
+      image.onload = () => settle(() => resolve(image));
+      image.onerror = () =>
+        settle(() => reject(new Error("Image load failed")));
+      image.src = objectUrl;
     });
     ctx.drawImage(image, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
   } else if (file.type === "video/mp4") {
