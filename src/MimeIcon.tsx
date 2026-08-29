@@ -1,4 +1,7 @@
 import ArticleIcon from "@mui/icons-material/Article";
+import FontDownloadIcon from "@mui/icons-material/FontDownload";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import SlideshowIcon from "@mui/icons-material/Slideshow";
 import AudioFileIcon from "@mui/icons-material/AudioFile";
 import CssIcon from "@mui/icons-material/Css";
 import DataObjectIcon from "@mui/icons-material/DataObject";
@@ -33,6 +36,9 @@ const KIND_COLOR: Record<string, string> = {
   text: "#5c6b7a",
   csv: "#3d7a4a",
   shell: "#4a5560",
+  slides: "#c9573f",
+  ebook: "#3d7a4a",
+  font: "#8e6fc0",
   other: "#6b7280",
 };
 
@@ -75,6 +81,9 @@ function MimeIcon({
   if (kind === "csv") return <TableChartIcon fontSize={fontSize} sx={sx} />;
   if (kind === "shell") return <TerminalIcon fontSize={fontSize} sx={sx} />;
   if (kind === "text") return <ArticleIcon fontSize={fontSize} sx={sx} />;
+  if (kind === "slides") return <SlideshowIcon fontSize={fontSize} sx={sx} />;
+  if (kind === "ebook") return <MenuBookIcon fontSize={fontSize} sx={sx} />;
+  if (kind === "font") return <FontDownloadIcon fontSize={fontSize} sx={sx} />;
   if (kind === "code")
     return <IntegrationInstructionsIcon fontSize={fontSize} sx={sx} />;
   return <InsertDriveFileOutlinedIcon fontSize={fontSize} sx={sx} />;

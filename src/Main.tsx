@@ -13,14 +13,19 @@ import {
   CircularProgress,
   IconButton,
   Link,
+  Menu,
+  MenuItem,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import {
   ArrowBack as ArrowBackIcon,
   ContentCopy as ContentCopyIcon,
+  ExpandMore as ExpandMoreIcon,
+  Folder as FolderIcon,
   FolderOpen as FolderOpenIcon,
   SearchOff as SearchOffIcon,
 } from "@mui/icons-material";
@@ -163,6 +168,20 @@ function PathBar({
   const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
   const atRoot = parts.length === 0;
   const pathText = atRoot ? "/" : `/${parts.join("/")}/`;
+  const parentPath =
+    atRoot || parts.length === 1 ? "" : `${parts.slice(0, -1).join("/")}/`;
+  const [siblingsAnchor, setSiblingsAnchor] = useState<null | HTMLElement>(null);
+  const [siblings, setSiblings] = useState<FileItem[] | null>(null);
+  const openSiblings = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    setSiblingsAnchor(event.currentTarget);
+    setSiblings(null);
+    try {
+      const items = await fetchPath(parentPath);
+      setSiblings(items.filter((item) => item.isDir));
+    } catch {
+      setSiblings([]);
+    }
+  };
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(pathText);
@@ -231,6 +250,44 @@ function PathBar({
         >
           <ContentCopyIcon fontSize="small" />
         </IconButton>
+        {!atRoot && (
+          <Tooltip title={strings.siblingFolders}>
+            <IconButton
+              size="small"
+              aria-label={strings.siblingFolders}
+              onClick={openSiblings}
+              sx={{ flexShrink: 0, mr: -0.5 }}
+            >
+              <ExpandMoreIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+        <Menu
+          anchorEl={siblingsAnchor}
+          open={Boolean(siblingsAnchor)}
+          onClose={() => setSiblingsAnchor(null)}
+        >
+          {siblings === null && (
+            <MenuItem disabled>{strings.loading}</MenuItem>
+          )}
+          {siblings !== null && siblings.length === 0 && (
+            <MenuItem disabled>{strings.noSiblingFolder}</MenuItem>
+          )}
+          {siblings !== null &&
+            siblings.map((item) => (
+              <MenuItem
+                key={item.key}
+                selected={item.key === cwd.replace(/\/$/, "")}
+                onClick={() => {
+                  setSiblingsAnchor(null);
+                  onNavigate(item.key);
+                }}
+              >
+                <FolderIcon fontSize="small" sx={{ mr: 1, color: "primary.main" }} />
+                {item.name}
+              </MenuItem>
+            ))}
+        </Menu>
       </Box>
       <Box
         sx={{
@@ -1135,8 +1192,24 @@ function Main({
   ) => {
     const internalKey = dataTransfer.getData("application/x-flaredrive");
     if (internalKey) {
+      // 新格式为选中组 JSON 数组；旧格式为纯 key（解析失败时回退单键）
+      let keys: string[] = [internalKey];
+      if (internalKey.trim().startsWith("[")) {
+        try {
+          const parsed = JSON.parse(internalKey) as unknown[];
+          keys = parsed.map(String);
+        } catch {
+          keys = [internalKey];
+        }
+      }
+      // 不能把目标文件夹自身或其子项拖进它自己
+      keys = keys.filter(
+        (key) => key !== folder.key && !key.startsWith(`${folder.key}/`)
+      );
+      if (!keys.length) return;
       try {
-        await transferKeys([internalKey], `${folder.key}/`, "cut");
+        await transferKeys(keys, `${folder.key}/`, "cut");
+        setSelectedKeys([]);
         await loadListing();
       } catch (error) {
         onNotify((error as Error).message, "error");

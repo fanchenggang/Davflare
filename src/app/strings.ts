@@ -97,6 +97,9 @@ export const strings = {
   resumedAll: "已全部恢复",
   rotate: "旋转 90°",
   playbackSpeed: "播放倍速",
+  siblingFolders: "同级文件夹",
+  loading: "加载中…",
+  noSiblingFolder: "暂无同级文件夹",
 };
 
 export default strings;

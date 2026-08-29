@@ -205,7 +205,12 @@ function FileGrid({
 
   const beginDrag = (event: React.DragEvent, file: FileItem) => {
     pointer.current.dragging = true;
-    event.dataTransfer.setData("application/x-flaredrive", file.key);
+    // 多选状态下拖动任一选中项 = 整组移动；单拖为旧格式（纯 key）
+    const group =
+      selectedKeys.includes(file.key) && selectedKeys.length > 1
+        ? selectedKeys
+        : [file.key];
+    event.dataTransfer.setData("application/x-flaredrive", JSON.stringify(group));
     event.dataTransfer.effectAllowed = "move";
   };
 
@@ -522,6 +527,13 @@ function FileGrid({
             opacity: 1,
             pointerEvents: "auto",
           },
+          "& .tile-thumb": {
+            transform: "scale(1.06)",
+          },
+        },
+        "@media (prefers-reduced-motion: reduce)": {
+          "& .tile-thumb": { transition: "none" },
+          "&:hover .tile-thumb": { transform: "none" },
         },
         "&:focus-within .quick-actions-bar": {
           opacity: 1,
@@ -551,12 +563,14 @@ function FileGrid({
     >
       {checkbox(file, { position: "absolute", top: 0, left: 0 })}
       <Box
+        className="tile-thumb"
         sx={{
           width: density === "compact" ? 48 : 64,
           height: density === "compact" ? 48 : 64,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          transition: "transform 0.18s ease",
         }}
       >
         {thumbnail(file, density === "compact" ? 48 : 64)}
