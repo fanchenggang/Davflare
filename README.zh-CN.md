@@ -6,8 +6,6 @@
 
 基于 Cloudflare Pages + Workers 的 R2 网盘 —— 免费 10 GB 存储、每天 10 万次 Worker 调用。[R2 定价](https://developers.cloudflare.com/r2/platform/pricing/)
 
-本项目最初 fork 自 [longern/FlareDrive](https://github.com/longern/FlareDrive)，现已全面重写。GitHub 仓库：[fanchenggang/Davflare](https://github.com/fanchenggang/Davflare)。
-
 ## 截图
 
 文件浏览器（浅色主题）：
