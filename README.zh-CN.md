@@ -8,13 +8,21 @@
 
 ## 截图
 
-文件浏览器（浅色主题）：
+网格浅色：
 
-![File browser](docs/screenshots/browser.png)
+![网格浅色](docs/screenshots/grid-light.png)
 
-预览 / 分享：
+网格深色：
 
-![Preview](docs/screenshots/preview.png)
+![网格深色](docs/screenshots/grid-dark.png)
+
+图片预览：
+
+![图片预览](docs/screenshots/preview.png)
+
+分享（有效期 + 提取码）：
+
+![分享（有效期 + 提取码）](docs/screenshots/share.png)
 
 ## 功能
 
