@@ -259,6 +259,7 @@ function FileGrid({
   const moreButton = (file: FileItem, corner?: "tile") => {
     const handle = (event: React.MouseEvent) => {
       event.stopPropagation();
+      event.preventDefault();
       onOpenMenu({ clientX: event.clientX, clientY: event.clientY }, file);
     };
 
@@ -293,7 +294,21 @@ function FileGrid({
 
     if (corner !== "tile") {
       return (
-        <Box sx={{ width: 44, height: 44, flexShrink: 0 }}>{button}</Box>
+        <Box
+          sx={{
+            width: 44,
+            height: 44,
+            flexShrink: 0,
+            position: "relative",
+            zIndex: Z_INDEX.cardOverlay,
+            pointerEvents: "auto",
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={handle}
+        >
+          {button}
+        </Box>
       );
     }
 
@@ -395,6 +410,7 @@ function FileGrid({
 
   const itemList = (file: FileItem, index: number) => (
     <ListItemButton
+      component="div"
       selected={isSelected(file)}
       data-file-key={file.key}
       onPointerDown={markPointer}
@@ -454,6 +470,8 @@ function FileGrid({
           minWidth: 0,
           fontWeight: 600,
           fontSize: "0.875rem",
+          userSelect: "none",
+          pointerEvents: "auto",
         }}
       >
         {highlightName(file.name, highlight)}
@@ -654,6 +672,7 @@ function FileGrid({
             borderBottom: "1px solid",
             borderColor: "divider",
             color: "text.secondary",
+            pointerEvents: "none",
           }}
         >
           <Box sx={{ width: 42 }} />
