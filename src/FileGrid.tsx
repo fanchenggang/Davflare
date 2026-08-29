@@ -416,6 +416,7 @@ function FileGrid({
       onPointerDown={markPointer}
       onClick={(event) => clickItem(file, event)}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter") clickItem(file);
         if (event.key === " ") event.preventDefault();
       }}
@@ -515,6 +516,7 @@ function FileGrid({
       onPointerDown={markPointer}
       onClick={(event) => clickItem(file, event)}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter") clickItem(file);
       }}
       onContextMenu={(event) => openMenu(event, file)}
@@ -672,7 +674,6 @@ function FileGrid({
             borderBottom: "1px solid",
             borderColor: "divider",
             color: "text.secondary",
-            pointerEvents: "none",
           }}
         >
           <Box sx={{ width: 42 }} />

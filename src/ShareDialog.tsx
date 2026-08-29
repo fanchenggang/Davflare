@@ -158,7 +158,7 @@ function ShareDialog({
                         [
                           share.expiresAt
                             ? translate("expiresAtLabel", { time: new Date(share.expiresAt).toLocaleString() })
-                            : "{strings.validForever}",
+                            : strings.validForever,
                           share.extractCode
                             ? `${strings.extractCode} ${share.extractCode}`
                             : "",

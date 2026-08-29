@@ -531,9 +531,13 @@ function Main({
         setSearchHasMore(false);
         setSearchCursor(undefined);
       }
+      const listingChanged = loadedListingKey.current !== listingKey;
       loadedListingKey.current = listingKey;
-      setSelectedKeys([]);
+      if (listingChanged) setSelectedKeys([]);
     } catch (error) {
+      const alreadyLoaded = loadedListingKey.current === listingKey;
+      loadedListingKey.current = listingKey;
+      if (!alreadyLoaded) setFiles([]);
       onNotify((error as Error).message, "error", {
         duration: 8000,
         action: { label: strings.retry, onClick: () => loadListing() },
@@ -1668,7 +1672,7 @@ function Main({
         onShare={() => {
           if (selectedKeys.length !== 1) return;
           const file = files.find((item) => item.key === selectedKeys[0]);
-          if (file && !file.isDir) setShareTarget(file);
+          if (file) setShareTarget(file);
         }}
         onCopy={() => {
           copyToClipboard(selectedKeys);
