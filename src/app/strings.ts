@@ -2,7 +2,7 @@ import React from "react";
 
 export type Lang = "zh" | "en";
 
-export const APP_NAME = "FlareDrive";
+export const APP_NAME = "Davflare";
 
 type Entry = { zh: string; en: string };
 
@@ -227,7 +227,7 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   language: { zh: "语言", en: "Language" },
   langZh: { zh: "中文", en: "中文" },
   langEn: { zh: "English", en: "English" },
-  loginTitle: { zh: "登录 FlareDrive", en: "Sign in to FlareDrive" },
+  loginTitle: { zh: "登录 Davflare", en: "Sign in to Davflare" },
   loginHint: {
     zh: "请输入 WebDAV 用户名和密码以访问你的文件。",
     en: "Enter your WebDAV username and password to access your files.",
