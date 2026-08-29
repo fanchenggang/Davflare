@@ -2,11 +2,11 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/FlareDrive)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
 
 基于 Cloudflare Pages + Workers 的 R2 网盘 —— 免费 10 GB 存储、每天 10 万次 Worker 调用。[R2 定价](https://developers.cloudflare.com/r2/platform/pricing/)
 
-本项目最初 fork 自 [longern/FlareDrive](https://github.com/longern/FlareDrive)，现已全面重写。GitHub 仓库名目前仍为 **FlareDrive**，以便 Pages 与 CI 继续正常工作。
+本项目最初 fork 自 [longern/FlareDrive](https://github.com/longern/FlareDrive)，现已全面重写。GitHub 仓库：[fanchenggang/Davflare](https://github.com/fanchenggang/Davflare)。
 
 ## 截图
 
@@ -32,7 +32,7 @@
 
 一键部署：
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/FlareDrive)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
 
 你需要一个已绑定支付方式、并已开通 R2 的 [Cloudflare](https://dash.cloudflare.com/) 账号（至少创建一个 bucket）。
 
