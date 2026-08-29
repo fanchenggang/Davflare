@@ -8,8 +8,6 @@ Cloudflare R2 file manager on Pages + Workers — free 10 GB storage and 100,000
 
 基于 Cloudflare R2 的网盘：免费 10GB 存储、每天 10 万次 Worker 调用。[R2 定价](https://developers.cloudflare.com/r2/platform/pricing/)
 
-Started as a fork of [longern/FlareDrive](https://github.com/longern/FlareDrive) and has been fully rewritten. The GitHub repository is [fanchenggang/Davflare](https://github.com/fanchenggang/Davflare).
-
 ## Screenshots
 
 File browser (light theme):
