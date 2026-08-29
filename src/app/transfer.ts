@@ -3,6 +3,7 @@ import pLimit from "p-limit";
 import { authFetch, basicAuthHeader } from "./auth";
 import { FileItem, TransferTask, UploadPart } from "./types";
 import { basename, encodeKey } from "./utils";
+import { translate } from "./strings";
 
 const WEBDAV_ENDPOINT = "/webdav/";
 
@@ -156,7 +157,7 @@ export async function searchFiles(
 
 export async function openFile(key: string) {
   const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
-  if (!res.ok) throw new Error("打开文件失败");
+  if (!res.ok) throw new Error(translate("openFileFailed"));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank", "noopener,noreferrer");
@@ -165,7 +166,7 @@ export async function openFile(key: string) {
 
 export async function downloadFile(key: string) {
   const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
-  if (!res.ok) throw new Error("下载文件失败");
+  if (!res.ok) throw new Error(translate("downloadFailed"));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -183,7 +184,7 @@ export async function downloadArchive(keys: string[], name = "archive.zip") {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keys }),
   });
-  if (!res.ok) throw new Error((await res.text()) || "打包下载失败");
+  if (!res.ok) throw new Error((await res.text()) || translate("archiveFailed"));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -430,7 +431,7 @@ function xhrFetch(
     };
     xhr.onerror = () => {
       requestInit.signal?.removeEventListener("abort", abort);
-      reject(new Error("网络请求失败"));
+      reject(new Error(translate("networkRequestFailed")));
     };
     xhr.onabort = () => {
       requestInit.signal?.removeEventListener("abort", abort);
@@ -498,7 +499,7 @@ export async function multipartUpload(
       method: "POST",
     });
     if (!uploadResponse.ok) {
-      throw new Error((await uploadResponse.text()) || "无法创建分块上传");
+      throw new Error((await uploadResponse.text()) || translate("multipartCreateFailed"));
     }
     const created = await uploadResponse.json<{ uploadId: string }>();
     uploadId = created.uploadId;
@@ -548,10 +549,10 @@ export async function multipartUpload(
           .catch(uploadPart);
       const response = await [1, 2].reduce(retryReducer, uploadPart());
       if (!response.ok) {
-        throw new Error((await response.text()) || `分块 ${i} 上传失败`);
+        throw new Error((await response.text()) || translate("partUploadFailed", { n: i }));
       }
       const etag = response.headers.get("etag");
-      if (!etag) throw new Error(`分块 ${i} 缺少 ETag`);
+      if (!etag) throw new Error(translate("partMissingEtag", { n: i }));
       const finished = { partNumber: i, etag };
       uploadedParts.push(finished);
       done.add(i);
@@ -583,18 +584,18 @@ export async function copyPaste(source: string, target: string, move = false) {
     headers: { Destination: destinationUrl.href },
   });
   if (!response.ok) {
-    throw new Error(move ? "移动失败" : "复制失败");
+    throw new Error(move ? translate("moveFailed") : translate("copyFailed2"));
   }
 }
 
 export async function createFolder(cwd: string, folderName: string) {
   const name = folderName.trim();
-  if (!name) throw new Error("请输入文件夹名称");
-  if (name.includes("/")) throw new Error("文件夹名称不能包含 /");
+  if (!name) throw new Error(translate("folderNameRequired"));
+  if (name.includes("/")) throw new Error(translate("folderNameNoSlash"));
   const folderKey = `${cwd}${name}`;
   const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(folderKey)}`;
   const response = await authFetch(uploadUrl, { method: "MKCOL" });
-  if (!response.ok) throw new Error("新建文件夹失败");
+  if (!response.ok) throw new Error(translate("createFolderFailed"));
 }
 
 export async function processTransferTask({
@@ -660,7 +661,7 @@ export async function processTransferTask({
       onUploadProgress: onTaskProgress,
     });
     if (!response.ok) {
-      throw new Error((await response.text()) || "上传失败");
+      throw new Error((await response.text()) || translate("uploadFailedGeneric"));
     }
     return response;
   }

@@ -15,7 +15,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 import { authFetch } from "./app/auth";
 import { NotifyFn } from "./app/notify";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 
 interface WebDavInfo {
   username: string;
@@ -41,7 +41,7 @@ function WebDavPanel({
     setLoading(true);
     authFetch("/api/config")
       .then(async (response) => {
-        if (!response.ok) throw new Error("无法读取 WebDAV 配置");
+        if (!response.ok) throw new Error(translate("webdavConfigFailed"));
         const data = (await response.json()) as WebDavInfo;
         if (!canceled) setInfo(data);
       })
@@ -59,26 +59,26 @@ function WebDavPanel({
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      onNotify(`${label}已复制`, "success");
+      onNotify(translate("copiedFormat", { label }), "success");
     } catch {
-      onNotify("复制失败", "error");
+      onNotify(translate("copyFailed2"), "error");
     }
   };
 
   const guide = [
-    `地址：${webdavUrl}`,
-    `用户名：${info?.username || "（未配置）"}`,
-    "单次上传限制约 128MB，更大的文件请用网页端分块上传。",
-    "macOS Finder：菜单「前往」→「连接服务器」，粘贴上述地址。",
-    "密码与网页登录密码相同，此处不显示。",
+    `${translate("address")}：${webdavUrl}`,
+    `${strings.username}：${info?.username || strings.notConfigured}`,
+    translate("uploadLimitNote"),
+    translate("finderHowTo"),
+    translate("passwordNote"),
     info?.publicRead
-      ? "公开读取：已开启（未登录也可读取）。"
-      : "公开读取：未开启（需要登录才能读取）。",
+      ? translate("publicReadOn")
+      : translate("publicReadOff"),
   ].join("\n");
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>WebDAV 连接</DialogTitle>
+      <DialogTitle>{strings.webdavTitle}</DialogTitle>
       <DialogContent>
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", padding: 3 }}>
@@ -88,40 +88,40 @@ function WebDavPanel({
           <Stack spacing={2} sx={{ marginTop: 1 }}>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                地址
+                {strings.address}
               </Typography>
               <Typography sx={{ wordBreak: "break-all" }}>{webdavUrl}</Typography>
               <Button
                 size="small"
                 startIcon={<ContentCopyIcon />}
-                onClick={() => copy(webdavUrl, "地址")}
+                onClick={() => copy(webdavUrl, strings.address)}
               >
-                复制地址
+                {strings.copyAddress}
               </Button>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                用户名
+                {strings.username}
               </Typography>
-              <Typography>{info?.username || "（未配置）"}</Typography>
+              <Typography>{info?.username || "{strings.notConfigured}"}</Typography>
               {info?.username && (
                 <Button
                   size="small"
                   startIcon={<ContentCopyIcon />}
-                  onClick={() => copy(info.username, "用户名")}
+                  onClick={() => copy(info.username, strings.username)}
                 >
-                  复制用户名
+                  {strings.copyUsername}
                 </Button>
               )}
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
-                公开读取
+                {strings.publicRead}
               </Typography>
               <Typography>
                 {info?.publicRead
-                  ? "已开启（未登录也可读取文件）"
-                  : "未开启（需要登录才能读取）"}
+                  ? "{strings.publicReadOn}"
+                  : "{strings.publicReadOff}"}
               </Typography>
             </Box>
             <Box
@@ -142,7 +142,7 @@ function WebDavPanel({
               <Button
                 size="small"
                 startIcon={<ContentCopyIcon />}
-                onClick={() => copy(guide, "完整说明")}
+                onClick={() => copy(guide, strings.fullGuide)}
                 sx={{ mt: 1 }}
               >
                 {strings.copyWebDavGuide}
@@ -154,12 +154,12 @@ function WebDavPanel({
       <DialogActions>
         <Button
           startIcon={<ContentCopyIcon />}
-          onClick={() => copy(guide, "完整说明")}
+          onClick={() => copy(guide, strings.fullGuide)}
           disabled={loading}
         >
           {strings.copyWebDavGuide}
         </Button>
-        <Button onClick={onClose}>关闭</Button>
+        <Button onClick={onClose}>{strings.close}</Button>
       </DialogActions>
     </Dialog>
   );

@@ -1,6 +1,7 @@
 import React from "react";
 import { Button, Slide, Toolbar, Typography } from "@mui/material";
 
+import { strings, translate } from "./app/strings";
 import { Z_INDEX } from "./app/theme";
 import {
   Close as CloseIcon,
@@ -86,51 +87,51 @@ function MultiSelectToolbar({
           gap: 0.5,
         }}
       >
-        <ActionButton icon={<CloseIcon />} label="关闭" onClick={onClose} />
+        <ActionButton icon={<CloseIcon />} label={strings.close} onClick={onClose} />
         <ActionButton
           icon={<SelectAllIcon />}
-          label={`${count} 项`}
+          label={translate("itemsSuffix", { count })}
           onClick={onSelectAll}
         />
         <ActionButton
           icon={<CopyIcon />}
-          label="复制"
+          label={strings.copy}
           disabled={count === 0}
           onClick={onCopy}
         />
         <ActionButton
           icon={<CutIcon />}
-          label="剪切"
+          label={strings.cut}
           disabled={count === 0}
           onClick={onCut}
         />
         <ActionButton
           icon={<MoveIcon />}
-          label="移动"
+          label={strings.move}
           disabled={count === 0}
           onClick={onMove}
         />
         <ActionButton
           icon={<DownloadIcon />}
-          label="下载"
+          label={strings.download}
           disabled={count === 0}
           onClick={onDownload}
         />
         <ActionButton
           icon={<RenameIcon />}
-          label="重命名"
+          label={strings.rename}
           disabled={count !== 1}
           onClick={onRename}
         />
         <ActionButton
           icon={<ShareIcon />}
-          label="分享"
+          label={strings.share}
           disabled={count !== 1}
           onClick={onShare}
         />
         <ActionButton
           icon={<DeleteIcon />}
-          label="删除"
+          label={strings.delete}
           disabled={count === 0}
           onClick={onDelete}
         />

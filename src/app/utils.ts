@@ -1,4 +1,5 @@
 import { isTextPreviewable } from "./preview";
+import { translate } from "./strings";
 import { FileItem } from "./types";
 
 export function humanReadableSize(size: number) {
@@ -20,12 +21,12 @@ export function humanReadableSpeed(bytesPerSecond: number) {
 // 剩余时间：秒 →「45 秒」「2 分 10 秒」，无限/无效返回空串
 export function formatEta(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "";
-  if (seconds < 60) return `${Math.ceil(seconds)} 秒`;
+  if (seconds < 60) return translate("etaSeconds", { n: Math.ceil(seconds) });
   const minutes = Math.floor(seconds / 60);
   const rest = Math.ceil(seconds % 60);
-  if (minutes < 60) return `${minutes} 分 ${rest} 秒`;
+  if (minutes < 60) return translate("etaMinSec", { m: minutes, s: rest });
   const hours = Math.floor(minutes / 60);
-  return `${hours} 时 ${minutes % 60} 分`;
+  return translate("etaHourMin", { h: hours, m: minutes % 60 });
 }
 
 export function formatDateTime(value: string | Date) {
@@ -42,11 +43,11 @@ export function formatRelativeDateTime(value: string | Date) {
     return date.toLocaleDateString();
   }
   const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return "刚刚";
+  if (seconds < 60) return translate("justNow");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} 分钟前`;
+  if (minutes < 60) return translate("minutesAgo", { m: minutes });
   const hours = Math.floor(minutes / 60);
-  return `${hours} 小时前`;
+  return translate("hoursAgo", { h: hours });
 }
 
 export function encodeKey(key: string) {

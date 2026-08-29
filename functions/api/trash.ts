@@ -1,3 +1,5 @@
+import { ensureFolderMarkers, isInternalKey } from "./_apikey";
+
 interface TrashEnv {
   BUCKET: R2Bucket;
   WEBDAV_USERNAME: string;
@@ -165,6 +167,7 @@ export const onRequestDelete: PagesFunction<TrashEnv> = async (context) => {
 };
 
 // 软删除核心：复制到回收站前缀再删原对象。供网页回收站与开放接口 /api/delete?soft=1 共用。
+// 支持两类目录：带 0 字节 marker 的真实目录，以及只有前缀的虚拟目录（head 为空但后代存在）。
 export async function softDeleteKeys(bucket: R2Bucket, keys: string[]) {
   const results: Array<{ key: string; id: string }> = [];
   for (const rawKey of keys) {
@@ -172,9 +175,15 @@ export async function softDeleteKeys(bucket: R2Bucket, keys: string[]) {
     if (!key) continue;
 
     const head = await bucket.head(key);
-    if (head === null) continue;
+    if (head === null && isInternalKey(key)) continue;
 
-    const descendants = await listObjects(bucket, `${key}/`);
+    const descendants = (await listObjects(bucket, `${key}/`)).filter(
+      (object) => !object.key.startsWith("_$flaredrive$/")
+    );
+    // 虚拟目录：对象本体不存在，但有后代内容；两者皆无才是真不存在
+    const virtualDir = head === null && descendants.length > 0;
+    if (head === null && !virtualDir) continue;
+
     const id = createTrashId();
     const root = `${TRASH_PREFIX}${id}`;
     const items: Array<{
@@ -196,7 +205,6 @@ export async function softDeleteKeys(bucket: R2Bucket, keys: string[]) {
     }
 
     for (const object of descendants) {
-      if (object.key.startsWith("_$flaredrive$/")) continue;
       const relative = object.key.slice(`${key}/`.length);
       items.push({
         source: object.key,
@@ -229,6 +237,8 @@ export async function softDeleteKeys(bucket: R2Bucket, keys: string[]) {
         name: basename(key),
         deletedAt: new Date().toISOString(),
         size: totalSize,
+        // 虚拟目录没有可搬运的 marker，还原时需要补建
+        virtualDir,
         items: items.map(({ source, target }) => ({
           source,
           target,
@@ -284,6 +294,7 @@ async function handleRestore(request: Request, env: TrashEnv) {
 
     const metadata = (await metadataObject.json()) as {
       originalKey?: string;
+      virtualDir?: boolean;
       items?: Array<{ source: string; target: string }>;
     };
     if (!metadata.originalKey || !metadata.items) {
@@ -310,6 +321,23 @@ async function handleRestore(request: Request, env: TrashEnv) {
       await env.BUCKET.delete(item.target);
     }
     await env.BUCKET.delete(metadataKey);
+
+    // 还原目录内容后，父级目录 marker 可能已随其他删除动作消失，逐级补建；
+    // 虚拟目录本身没有可还原的 marker，也要补上。
+    const originalKey = metadata.originalKey;
+    const parent = originalKey.includes("/")
+      ? originalKey.slice(0, originalKey.lastIndexOf("/"))
+      : "";
+    if (parent) await ensureFolderMarkers(env.BUCKET, parent);
+    if (
+      metadata.virtualDir &&
+      (await env.BUCKET.head(originalKey)) === null
+    ) {
+      await env.BUCKET.put(originalKey, new Uint8Array(), {
+        httpMetadata: { contentType: "application/x-directory" },
+        customMetadata: { resourcetype: "<collection />" },
+      });
+    }
     results.push({ trashKey, status: "restored" });
   }
 

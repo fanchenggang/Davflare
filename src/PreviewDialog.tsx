@@ -198,9 +198,18 @@ function PreviewDialog({
   const isPhone = useMediaQuery("(max-width:600px)");
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [zoomed, setZoomed] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  // 旋转 90°/270° 后视觉包围盒与布局盒互换，用补偿系数防止溢出容器
+  const [rotFit, setRotFit] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [rate, setRate] = useState(1);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(
+    null
+  );
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mode = useTheme().palette.mode;
   const [text, setText] = useState<string | null>(null);
@@ -227,7 +236,8 @@ function PreviewDialog({
     if (!file) {
       setUrl(null);
       setText(null);
-      setZoomed(false);
+      setZoom(1);
+      setOffset({ x: 0, y: 0 });
       setTooLarge(false);
       setLargeSize(0);
       setJsonError(false);
@@ -244,7 +254,8 @@ function PreviewDialog({
     setTooLarge(false);
     setLargeSize(0);
     setJsonError(false);
-    setZoomed(false);
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
     setRotation(0);
     setRate(1);
 
@@ -263,7 +274,7 @@ function PreviewDialog({
         const response = await authFetch("/webdav/" + encodeKey(file.key), {
           signal: controller.signal,
         });
-        if (!response.ok) throw new Error("打开文件失败");
+        if (!response.ok) throw new Error(translate("openFileFailed"));
         if (asText) {
           const result = await readResponseTextCapped(response);
           if (canceled) return;
@@ -358,7 +369,7 @@ function PreviewDialog({
       await navigator.clipboard.writeText(text);
       onNotify(translate("copiedAllToast"), "success");
     } catch {
-      onNotify("复制失败", "error");
+      onNotify(translate("copyFailed2"), "error");
     }
   };
 
@@ -391,6 +402,83 @@ function PreviewDialog({
     !isAudio &&
     !isPdf &&
     (tooLarge || text != null || (file ? isTextPreviewable(file) : false));
+
+  // —— 图片缩放/平移/旋转 ——
+  const measureRotFit = React.useCallback(() => {
+    const stage = stageRef.current;
+    const img = imgRef.current;
+    if (!stage || !img) return;
+    const rect = stage.getBoundingClientRect();
+    const layoutW = img.clientWidth;
+    const layoutH = img.clientHeight;
+    if (!rect.width || !rect.height || !layoutW || !layoutH) {
+      setRotFit(1);
+      return;
+    }
+    if (rotation % 180 === 0) {
+      setRotFit(1);
+      return;
+    }
+    // 旋转后视觉包围盒宽高互换，按容器收敛
+    const k = Math.min(1, rect.width / layoutH, rect.height / layoutW);
+    setRotFit(Number.isFinite(k) && k > 0 ? Math.max(k, 0.05) : 1);
+  }, [rotation]);
+
+  React.useLayoutEffect(() => {
+    measureRotFit();
+  }, [measureRotFit, url]);
+
+  // 容器尺寸变化（窗口/对话框）时重算旋转补偿
+  React.useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => measureRotFit());
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [measureRotFit]);
+
+  // 滚轮缩放需要非被动监听才能 preventDefault（阻止页面滚动）
+  React.useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !url || !isImage) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+      setZoom((z) => Math.min(4, Math.max(0.25, z * factor)));
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, [url, isImage]);
+
+  const onImagePointerDown = (event: React.PointerEvent<HTMLImageElement>) => {
+    dragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      ox: offset.x,
+      oy: offset.y,
+    };
+    setDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onImagePointerMove = (event: React.PointerEvent<HTMLImageElement>) => {
+    const start = dragRef.current;
+    if (!start) return;
+    setOffset({
+      x: start.ox + (event.clientX - start.x),
+      y: start.oy + (event.clientY - start.y),
+    });
+  };
+  const onImagePointerEnd = (event: React.PointerEvent<HTMLImageElement>) => {
+    dragRef.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+  const onImageDoubleClick = () => {
+    setZoom((z) => (z > 1.01 ? 1 : 2.5));
+    setOffset({ x: 0, y: 0 });
+  };
 
   const pagerButton = (side: "left" | "right") => {
     const prev = side === "left";
@@ -514,32 +602,30 @@ function PreviewDialog({
               onClick={download}
               variant="contained"
             >
-              下载
+              {strings.download}
             </Button>
           </Box>
         ) : text != null ? (
           <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             {jsonError && (
               <Alert severity="warning" sx={{ borderRadius: 0 }}>
-                无法解析为 JSON，已显示原文
+                {strings.jsonParseFailed}
               </Alert>
             )}
             <TextPane text={text} highlightLang={highlightLang} />
           </Box>
         ) : url ? (
           isImage ? (
-            <img
-              src={url}
-              alt={file?.name}
-              onClick={() => setZoomed((prev) => !prev)}
-              style={{
-                maxWidth: zoomed ? "200%" : "100%",
-                maxHeight: zoomed ? "200%" : "none",
-                objectFit: "contain",
-                cursor: zoomed ? "zoom-out" : "zoom-in",
-                transition: "max-width 0.2s ease, max-height 0.2s ease, transform 0.2s ease",
-                margin: "0 auto",
-                transform: `rotate(${rotation}deg)`,
+            <Box
+              ref={stageRef}
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                borderRadius: 1,
                 // 透明 PNG 的棋盘格衬底（暗色用深色格）
                 backgroundImage:
                   mode === "dark"
@@ -547,7 +633,36 @@ function PreviewDialog({
                     : "conic-gradient(rgba(28, 22, 16, 0.08) 25%, transparent 0 50%, rgba(28, 22, 16, 0.08) 0 75%, transparent 0)",
                 backgroundSize: "16px 16px",
               }}
-            />
+            >
+              <img
+                ref={imgRef}
+                src={url}
+                alt={file?.name}
+                draggable={false}
+                onLoad={measureRotFit}
+                onDoubleClick={onImageDoubleClick}
+                onPointerDown={onImagePointerDown}
+                onPointerMove={onImagePointerMove}
+                onPointerUp={onImagePointerEnd}
+                onPointerCancel={onImagePointerEnd}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  objectFit: "contain",
+                  cursor: dragging
+                    ? "grabbing"
+                    : zoom > 1.01
+                    ? "grab"
+                    : "zoom-in",
+                  userSelect: "none",
+                  touchAction: "none",
+                  transform: `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg) scale(${(zoom * rotFit).toFixed(4)})`,
+                  transition: dragging
+                    ? "none"
+                    : "transform 0.15s ease-out",
+                }}
+              />
+            </Box>
           ) : isVideo ? (
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, width: "100%" }}>
               <video
@@ -596,11 +711,25 @@ function PreviewDialog({
           </>
         )}
         {url && isImage && (
-          <Tooltip title={strings.rotate}>
-            <Button onClick={() => setRotation((prev) => (prev + 90) % 360)}>
-              <RotateRightIcon />
+          <>
+            <Tooltip title={strings.rotate}>
+              <Button onClick={() => setRotation((prev) => (prev + 90) % 360)}>
+                <RotateRightIcon />
+              </Button>
+            </Tooltip>
+            {/* 当前显示比例，点击复位为 100% */}
+            <Button
+              size="small"
+              variant={zoom !== 1 || rotFit !== 1 ? "outlined" : "text"}
+              onClick={() => {
+                setZoom(1);
+                setOffset({ x: 0, y: 0 });
+              }}
+              sx={{ minWidth: 64, fontVariantNumeric: "tabular-nums" }}
+            >
+              {Math.round(zoom * rotFit * 100)}%
             </Button>
-          </Tooltip>
+          </>
         )}
         {text != null && (
           <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>
@@ -608,16 +737,16 @@ function PreviewDialog({
           </Button>
         )}
         <Button startIcon={<ShareIcon />} onClick={onShare}>
-          分享
+          {strings.share}
         </Button>
         <Button startIcon={<EditIcon />} onClick={onRename}>
-          重命名
+          {strings.rename}
         </Button>
         <Button color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
-          删除
+          {strings.delete}
         </Button>
         <Button startIcon={<DownloadIcon />} onClick={download}>
-          下载
+          {strings.download}
         </Button>
         <Button onClick={closePreview}>{strings.close}</Button>
       </DialogActions>

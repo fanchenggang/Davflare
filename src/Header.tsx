@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { alpha } from "@mui/material/styles";
 import { translate } from "./app/strings";
 import {
   Badge,
@@ -26,6 +27,7 @@ import {
 
 import { getLang, Lang, setLang, APP_NAME, strings } from "./app/strings";
 import { ThemeModePreference } from "./app/prefs";
+import { Z_INDEX } from "./app/theme";
 import { useTransferQueue } from "./app/transferQueue";
 
 function Header({
@@ -79,9 +81,20 @@ function Header({
         borderBottom: "1px solid",
         borderColor: "divider",
         flexShrink: 0,
-        transition: "box-shadow 0.2s ease",
+        transition:
+          "box-shadow 0.2s ease, background-color 0.2s ease, backdrop-filter 0.2s ease",
         boxShadow: elevated ? "0 2px 12px rgba(26, 23, 20, 0.10)" : "none",
-        zIndex: 1,
+        // 滚动后顶栏毛玻璃：半透明纸色 + 模糊；不支持 backdrop-filter 时回退纯色
+        ...(elevated && {
+          backgroundColor: (theme) =>
+            alpha(theme.palette.background.paper, 0.82),
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          "@supports not (backdrop-filter: blur(1px))": {
+            backgroundColor: "background.paper",
+          },
+        }),
+        zIndex: Z_INDEX.listHeader,
       }}
     >
       <Typography
@@ -122,7 +135,7 @@ function Header({
             <InputAdornment position="end">
               <IconButton
                 size="small"
-                aria-label="清空搜索"
+                aria-label={strings.clearSearch}
                 onClick={() => onSearchChange("")}
               >
                 <CloseIcon fontSize="small" />
@@ -234,7 +247,7 @@ function Header({
         }
       >
         <IconButton
-          aria-label="账户"
+          aria-label={strings.account}
           onClick={(event) => setAccountAnchor(event.currentTarget)}
         >
           <AccountCircleIcon />

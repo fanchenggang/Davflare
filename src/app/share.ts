@@ -1,4 +1,5 @@
 import { authFetch } from "./auth";
+import { translate } from "./strings";
 import { ShareInfo } from "./types";
 
 export async function createShare(
@@ -16,14 +17,14 @@ export async function createShare(
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error((await response.text()) || "创建分享失败");
+    throw new Error((await response.text()) || translate("createShareFailed"));
   }
   return response.json();
 }
 
 export async function listShares(): Promise<ShareInfo[]> {
   const response = await authFetch("/api/shares");
-  if (!response.ok) throw new Error("获取分享失败");
+  if (!response.ok) throw new Error(translate("loadSharesFailed"));
   return response.json();
 }
 
@@ -31,16 +32,16 @@ export async function revokeShare(token: string) {
   const response = await authFetch(`/api/shares?token=${encodeURIComponent(token)}`, {
     method: "DELETE",
   });
-  if (!response.ok) throw new Error("撤销分享失败");
+  if (!response.ok) throw new Error(translate("revokeShareFailed"));
 }
 
 export function formatShareClipboard(share: ShareInfo): string {
-  const lines = [`链接：${share.url}`];
+  const lines = [translate("shareClipboard", { url: share.url })];
   if (share.expiresAt) {
-    lines.push(`有效期至：${new Date(share.expiresAt).toLocaleString()}`);
+    lines.push(translate("shareClipboardExpiry", { time: new Date(share.expiresAt).toLocaleString() }));
   }
   if (share.extractCode) {
-    lines.push(`提取码：${share.extractCode}`);
+    lines.push(translate("shareClipboardCode", { code: share.extractCode }));
   }
   return lines.join("\n");
 }

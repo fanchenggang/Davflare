@@ -1,9 +1,56 @@
 # FlareDrive 回归测试清单
 
-> 最近一轮：2026-08-29 第五批（A9 i18n 中英双语 + scripts/api-e2e.sh 回归套件沉淀）
-> 前几轮：第四批（多选拖拽/面包屑下拉/图标扩展）、第三批（目录分享/回收站清理/搜索高亮/动效 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
-> 前几轮：第三批（目录分享/回收站清理/搜索高亮/动效等 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
+> 最近一轮：2026-08-29 第六批（缺陷修复 + B5/B9/C9 收尾 + i18n 第二阶段收编 + 界面美化 + 单测/e2e 落地）
+> 前几轮：第五批（A9 i18n 第一阶段 + scripts/api-e2e.sh 回归套件沉淀）、第四批（多选拖拽/面包屑下拉/图标扩展）、第三批（目录分享/回收站清理/搜索高亮/动效 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
 > 约束：所有测试数据操作仅在自己创建的目录内进行，测试后清理。
+
+## 0a-6. 第六批新增与新验证（2026-08-29）
+
+### 缺陷修复
+| 项 | 内容 | 验证 |
+|----|------|------|
+| i18n 快照 bug | ExplorerBar `TYPE_FILTERS` 与 FileActionSheet `ACTIONS` 在模块加载时固化文案，切语言后类型筛选 Chip / 右键菜单不跟随。改为常量存 key、渲染时经 strings 取值 | ✅ 代码核验 + 切换语言即时生效 |
+| Backspace 误删 | 网格按 Backspace 原本直接弹「移入回收站」确认（破坏性风险）。改为 Backspace = 返回上级目录（根目录无操作），Delete 才删除 | ✅ e2e 之外人工核验代码路径；TEST_CASES 新增 KB-12 |
+| 虚拟目录软删 404 | 仅前缀无 marker 的目录硬删成功但 `soft=1` 返回 404。`softDeleteKeys` 现按「head 为空但有后代」识别虚拟目录，记 `virtualDir` 元数据 | ✅ 单元逻辑核验；restore 补建 marker 见下条 |
+| restore 父级 marker | 回收站还原不重建原路径父级目录 marker；还原后逐级 `ensureFolderMarkers` 补建，虚拟目录本体 marker 也补上 | ✅ e2e：软删 deep 目录 → 硬删整树 → restore → 文件原位可列出（4 项断言） |
+| 目录判定不统一 | `shares.ts` 只认 contentType，改用 `_apikey.isCollectionObject`（contentType 或 resourcetype 均可）；`share/[[token]].ts` HEAD 对目录分享返回 200 application/zip（与 GET 一致）并补过期 410 | ✅ e2e：目录分享 HEAD 200|application/zip；文件/目录/提取码分享 12 项断言 |
+| upload.ts 鉴权去重 | 删除整段复制的鉴权代码（约 90 行），复用 `_apikey.authorizeApiKey/touchLastUsed/isInternalKey`；complete 前补 parts 升序校验 | ✅ e2e 全量 79 项断言通过（上传/分块行为不变） |
+| trashKey 命名 | `DELETE /api/delete?soft=1` 响应 `trashId` 与回收站列表 `trashKey` 不一致，统一为 `trashKey`（与 restore 参数直接对齐） | ✅ e2e 断言 `"trashKey"` 字段 |
+| 统计胶囊缓存 | `listingStats` 的 useMemo 缓存了翻译结果，切英文后仍显示「N 个文件夹」。useMemo 加 lang 依赖 | ✅ GUI：切英文后显示 "5 folder(s) · 0 file(s) · 0 B" |
+| TextPad 假 key | 记事本使用字典中不存在的 `fileName`/`notePlaceholder`，Proxy 兜底把 key 名原样显示。补 `fileName`/`noteContent` 两个 key 并改接线 | ✅ GUI：记事本标签正常显示 |
+
+### 半成品收尾（B5 / B9 / C9）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| B5 通知队列 | Snackbar 队列化（上一条退出后再弹下一条，连续错误不再互相覆盖）；error 默认 8s；上传失败 toast 带「上传任务」入口；删除/移动/拖拽移动失败 toast 带「重试」action | ✅ 构建 + 代码核验；TEST_CASES 新增 KB-13/14 |
+| B9 预览增强 | 图片预览：滚轮缩放 25%-400%（非被动监听）、双击 100%/250% 切换、按住拖拽平移（pointer capture）、旋转 90°/270° 自动计算补偿系数防溢出、操作栏显示当前百分比（点击复位） | ✅ 构建 + tsc；TEST_CASES 新增 PV-13/14 |
+| C9 棋盘格 | 缩略图（AuthThumbnail）补透明 PNG 棋盘格衬底，与预览大图一致（亮暗双套） | ✅ TEST_CASES 新增 PV-15 |
+
+### i18n 第二阶段全量收编
+| 项 | 内容 | 验证 |
+|----|------|------|
+| 文案收编 | src 下（strings.ts 除外）硬编码中文清零：app/ 工具模块全部错误消息（transfer/share/trash/transferQueue/apikeys 的 throw）、utils 时间与 ETA 文案、ShareDialog 有效期标签 | ✅ 扫描脚本核验 0 残留；`translate` 单测覆盖 |
+| curl 指南双语 | `formatApiUsage` 改为 zh/en 双语行模板（按 getLang() 取用），英文全文翻译 | ✅ tsc + 构建 |
+| 防漏译护栏 | strings.ts 暴露 `dictionary`；单测遍历断言每个 key 的 zh/en 均非空 | ✅ 单测 |
+
+### 界面美化
+| 项 | 内容 | 验证 |
+|----|------|------|
+| 顶栏毛玻璃 | 滚动后半透明纸色 + backdrop-filter blur（不支持时 @supports 回退纯色）；Header 裸 zIndex 收进 Z_INDEX 常量 | ✅ 构建 |
+| 空状态差异化 | EmptyState 增加 variant（folder/search/trash/shares），四种场景圆底色调/卡片倾角/圆点排布区分 | ✅ 四处调用点接线 |
+| 选中态统一 | 网格卡片与列表行选中统一叠加柔和呼吸光效（2.4s 脉动，prefers-reduced-motion 禁用） | ✅ 构建 |
+
+### 测试基建（从零到一）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| Jest 单测 | 首批 5 个测试套件 43 项：strings（字典完整性/插值/持久化/订阅）、route（hash 解析/编码/hashchange）、utils（尺寸/ETA/相对时间/去重/垃圾文件）、highlight（三族 tokenizer/按行拆分）、transferQueue（并发 2/失败自动重试 1 次/暂停恢复/取消清理） | ✅ `npm run test:ci` 43/43 |
+| e2e 一键化 | `scripts/run-e2e.sh` + `npm run test:e2e`：自动生成 .dev.vars → 构建（SKIP_BUILD=1 可跳）→ wrangler pages dev → 就绪轮询 → api-e2e.sh → trap 清理 | ✅ 本地全流程 |
+| e2e 扩容 | api-e2e.sh 48 → 79 项断言：新增 config、search（命中+空+401）、分享（文件/目录 zip 树/提取码 200-403/撤销 404/HEAD zip）、回收站还原（含父级 marker 补建）、archive（zip 内容校验/401）、WebDAV MKCOL/COPY/LOCK | ✅ 本地 79/79 全过 |
+| 脚本 | package.json 增 `test:ci` / `typecheck` / `test:e2e` | ✅ |
+
+### 本轮已知限制
+- 虚拟目录（无 marker）软删的 e2e 直接构造需要 R2 层操作（公开 API 建不出这种目录），实现已防御性支持，留待需要时用 miniflare API 补用例。
+- 预览缩放/平移的 GUI 自动化未跑（滚轮/拖拽手势），人工按 PV-13/14 走查即可。
 
 ## 0a-5. 第五批新增与新验证（2026-08-29）
 
@@ -144,9 +191,8 @@ npx wrangler pages dev build       # http://localhost:8788，前端 + functions 
 
 ## 4. 已知问题 / 后续建议
 
-- `functions/api/upload.ts` 仍内联复制 `_apikey.ts` 的鉴权逻辑（历史债务），建议后续统一引用。
 - 大目录（数千项）无虚拟滚动，PROPFIND 全量渲染可能卡顿；搜索结果 200+ 条渲染已可感知变慢。
-- IMPROVEMENT_PLAN 全部功能项已落地（A6-A9、B1-B10、C1-C9，A9 i18n 第二阶段为文案收编扫尾）。
 - 弱验证项：B5 断网重试、视频倍速真实流、上传速率真实网络表现（见第 3 节）。
-- 历史债务：upload.ts 鉴权内联去重、大目录虚拟滚动。
-- `npm test`（CRA Jest）当前无任何测试用例，API 断言脚本可迁移为自动化套件。
+- `formatRelativeDateTime` 非响应式：页面长开时「刚刚」不会自动变「N 分钟前」（重渲染后正确）。
+- 单测覆盖为首批基线（纯函数 + 上传队列状态机）；functions/ 端点继续由 e2e 覆盖，后续可考虑 vitest 直测 Workers 代码。
+- ~~`npm test`（CRA Jest）当前无任何测试用例~~ 第六批已落地 43 项单测与 `npm run test:e2e` 一键回归。

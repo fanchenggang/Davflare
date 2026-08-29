@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { strings } from "./app/strings";
 import {
   Box,
   Button,
@@ -68,14 +69,14 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-          <Typography variant="h6">记事本</Typography>
+          <Typography variant="h6">{strings.openTextPad}</Typography>
           <IconButton onClick={() => setOpen(false)}>
             <CloseIcon />
           </IconButton>
         </Box>
 
         <TextField
-          label="文件名"
+          label={strings.fileName}
           value={noteName}
           onChange={(e) => setNoteName(e.target.value)}
           fullWidth
@@ -83,7 +84,7 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
         />
 
         <TextField
-          label="写下你的笔记…"
+          label={strings.noteContent}
           multiline
           rows={15}
           variant="outlined"
@@ -98,7 +99,7 @@ const TextPadDrawer: React.FC<TextPadDrawerProps> = ({
           onClick={handleSaveNote}
           disabled={!noteText.trim() || savingRef.current}
         >
-          保存并上传
+          {strings.saveAndUpload}
         </Button>
       </Box>
     </Drawer>

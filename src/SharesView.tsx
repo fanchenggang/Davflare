@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from "react";
+import { strings, translate } from "./app/strings";
 import {
   Box,
   Button,
@@ -17,7 +18,6 @@ import LinkOffIcon from "@mui/icons-material/LinkOff";
 import EmptyState from "./EmptyState";
 import { formatShareClipboard, listShares, revokeShare } from "./app/share";
 import { NotifyFn } from "./app/notify";
-import { strings } from "./app/strings";
 import { ShareInfo } from "./app/types";
 
 function SharesView({
@@ -49,9 +49,9 @@ function SharesView({
   const copy = async (share: ShareInfo) => {
     try {
       await navigator.clipboard.writeText(formatShareClipboard(share));
-      onNotify("链接已复制", "success");
+      onNotify(translate("linkCopied"), "success");
     } catch {
-      onNotify("复制失败", "error");
+      onNotify(translate("copyFailed2"), "error");
     }
   };
 
@@ -75,6 +75,7 @@ function SharesView({
       </Box>
       {shares.length === 0 ? (
         <EmptyState
+          variant="shares"
           icon={<LinkOffIcon />}
           title={strings.emptyShares}
           description={strings.emptySharesHint}
@@ -106,7 +107,7 @@ function SharesView({
                     startIcon={<ContentCopyIcon />}
                     onClick={() => copy(share)}
                   >
-                    复制
+                    {strings.copy}
                   </Button>
                   <Button
                     size="small"
@@ -117,14 +118,14 @@ function SharesView({
                       setShares((prev) => prev.filter((item) => item.token !== token));
                       try {
                         await revokeShare(token);
-                        onNotify("已撤销分享", "success");
+                        onNotify(translate("shareLinkRevoked"), "success");
                       } catch (error) {
                         onNotify((error as Error).message, "error");
                         await load();
                       }
                     }}
                   >
-                    撤销
+                    {strings.revoke}
                   </Button>
                 </Stack>
               }
@@ -143,9 +144,9 @@ function SharesView({
                     </Typography>
                     {[
                       share.expiresAt
-                        ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
-                        : "永久有效",
-                      share.extractCode ? `提取码 ${share.extractCode}` : "",
+                        ? translate("expiresAtLabel", { time: new Date(share.expiresAt).toLocaleString() })
+                        : "{strings.validForever}",
+                      share.extractCode ? translate("extractCodeLabel", { code: share.extractCode }) : "",
                     ]
                       .filter(Boolean)
                       .join(" · ")}

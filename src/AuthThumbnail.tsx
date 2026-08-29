@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { alpha, useTheme } from "@mui/material/styles";
 
 import MimeIcon from "./MimeIcon";
 import { authFetch } from "./app/auth";
@@ -41,6 +42,7 @@ export default function AuthThumbnail({
   size,
 }: AuthThumbnailProps) {
   const [url, setUrl] = useState<string | null>(null);
+  const mode = useTheme().palette.mode;
 
   useEffect(() => {
     let active = true;
@@ -67,6 +69,12 @@ export default function AuthThumbnail({
         height: size,
         objectFit: "cover",
         borderRadius: size >= 48 ? 8 : 4,
+        // 透明 PNG 缩略图的棋盘格衬底，与预览大图一致（暗色用亮格）
+        backgroundImage:
+          mode === "dark"
+            ? "conic-gradient(rgba(255,255,255,0.14) 25%, transparent 0 50%, rgba(255,255,255,0.14) 0 75%, transparent 0)"
+            : `conic-gradient(${alpha("#1c1610", 0.12)} 25%, transparent 0 50%, ${alpha("#1c1610", 0.12)} 0 75%, transparent 0)`,
+        backgroundSize: "12px 12px",
       }}
     />
   );

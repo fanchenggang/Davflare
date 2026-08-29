@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from "react";
+import { strings } from "./app/strings";
 import {
   Box,
   Breadcrumbs,
@@ -74,7 +75,7 @@ function MoveDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>选择目标文件夹</DialogTitle>
+      <DialogTitle>{strings.chooseTargetFolder}</DialogTitle>
       <DialogContent>
         <Breadcrumbs separator="›" sx={{ paddingY: 1 }}>
           <Button size="small" onClick={() => navigate("")}>
@@ -104,7 +105,7 @@ function MoveDialog({
           </Box>
         ) : folders.length === 0 ? (
           <Typography textAlign="center" color="text.secondary">
-            当前没有子文件夹
+            {strings.noSubFolders}
           </Typography>
         ) : (
           <List>
@@ -123,13 +124,13 @@ function MoveDialog({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>取消</Button>
+        <Button onClick={onClose}>{strings.cancel}</Button>
         <Button
           variant="contained"
           disabled={isSourceDir}
           onClick={() => onMove(cwd)}
         >
-          移动到此处
+          {strings.moveHere}
         </Button>
       </DialogActions>
     </Dialog>

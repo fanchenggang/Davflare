@@ -16,7 +16,8 @@ bad() { FAIL=$((FAIL+1)); echo "  FAIL  $1  (got: $2, want: $3)"; }
 assert_code() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "$2" "$3"; fi; }
 assert_contains() { case "$2" in *"$3"*) ok "$1";; *) bad "$1" "$(echo "$2" | head -c 140)" "$3";; esac; }
 
-FIXTURE=$(mktemp /tmp/fd-suite-XXXXXX.txt)
+# BSD mktemp 对带后缀模板不做替换，改用进程号保证唯一
+FIXTURE="/tmp/fd-suite-$(date +%H%M%S)-$$.txt"
 echo "fixture-$(date +%s)" > "$FIXTURE"
 FIXNAME=$(basename "$FIXTURE")
 
@@ -77,7 +78,7 @@ code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" -X DELETE "$BASE/a
 assert_code "delete file 200" "$code" "200"
 code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" -X DELETE "$BASE/api/delete?path=$DIR/apitest/$FIXNAME&soft=1" -H "$A")
 assert_code "soft delete 200" "$code" "200"
-assert_contains "soft delete trashId" "$(cat /tmp/o.json)" '"trashId"'
+assert_contains "soft delete trashId" "$(cat /tmp/o.json)" '"trashKey"'
 assert_contains "soft-deleted visible in trash" "$(curl -s --noproxy '*' "$BASE/api/trash" -H "$BASIC")" "$FIXNAME"
 code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" -X DELETE "$BASE/api/delete?path=$DIR/mk/a-moved" -H "$A")
 assert_code "delete directory 200" "$code" "200"
@@ -123,8 +124,8 @@ code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/api/list?path=$D
 assert_code "limit=0 rejected" "$code" "400"
 
 echo "== 大文件分块上传（除末块外 ≥5MiB）=="
-P1BIN=$(mktemp /tmp/suite-p1-XXXX.bin); head -c 5242880 /dev/zero > "$P1BIN"
-P2BIN=$(mktemp /tmp/suite-p2-XXXX.bin); printf 'tail-content\n' > "$P2BIN"
+P1BIN="/tmp/fd-suite-$$.p1.bin"; head -c 5242880 /dev/zero > "$P1BIN"
+P2BIN="/tmp/fd-suite-$$.p2.bin"; printf 'tail-content\n' > "$P2BIN"
 MC=$(curl -s --noproxy '*' -X POST "$BASE/api/upload?uploads&path=$DIR/big/big.bin" -H "$A")
 UPID=$(echo "$MC" | python3 -c "import sys,json;print(json.load(sys.stdin)['uploadId'])")
 [ -n "$UPID" ] && ok "create uploadId" || bad "create uploadId" "$MC" ""
@@ -136,6 +137,78 @@ SZ=$(curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/big/big.bin&uploa
 assert_code "complete size = $EXPECT" "$SZ" "$EXPECT"
 code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X PUT "$BASE/api/upload?path=$DIR/big/x.bin&uploadId=fake&partNumber=0" -H "$A" --data-binary x)
 assert_code "partNumber=0 rejected" "$code" "400"
+
+echo "== config 与 search =="
+code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" "$BASE/api/config" -H "$BASIC")
+assert_code "config 200" "$code" "200"
+assert_contains "config has username" "$(cat /tmp/o.json)" '"username"'
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/api/config")
+assert_code "config no auth 401" "$code" "401"
+curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/apitest/" -H "$A" -H "X-File-Name: searchable-raw.txt" --data-binary "findme" -o /dev/null
+code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" "$BASE/api/search?q=searchable-raw" -H "$BASIC")
+assert_code "search 200" "$code" "200"
+assert_contains "search finds uploaded file" "$(cat /tmp/o.json)" "searchable-raw.txt"
+code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" "$BASE/api/search?q=zzz-no-hit-zzz" -H "$BASIC")
+assert_contains "search empty on no match" "$(cat /tmp/o.json)" '"items":[]'
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/api/search?q=x")
+assert_code "search no auth 401" "$code" "401"
+
+echo "== 分享（文件/目录/提取码/撤销）=="
+curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/apitest/" -H "$A" -H "X-File-Name: shareable.txt" --data-binary "share me 中文" -o /dev/null
+SHARE_FILE=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.txt\"}")
+STOKEN=$(echo "$SHARE_FILE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+[ -n "$STOKEN" ] && ok "share file created" || bad "share file created" "$SHARE_FILE" "token"
+assert_contains "file share GET content" "$(curl -s --noproxy '*' "$BASE/share/$STOKEN")" "share me 中文"
+SHARE_DIR=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/paged\"}")
+DTOKEN=$(echo "$SHARE_DIR" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+[ -n "$DTOKEN" ] && ok "share dir created" || bad "share dir created" "$SHARE_DIR" "token"
+curl -s --noproxy '*' -o /tmp/suite-dir.zip "$BASE/share/$DTOKEN"
+assert_contains "dir share zip contains children" "$(python3 -c "
+import zipfile
+try:
+    print('ZIP-OK' if any(n.endswith('f2.txt') for n in zipfile.ZipFile('/tmp/suite-dir.zip').namelist()) else 'ZIP-BAD')
+except Exception:
+    print('ZIP-BAD')
+")" "ZIP-OK"
+DTHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN")
+assert_contains "dir share HEAD 200 zip" "$DTHEAD" "200|application/zip"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$STOKEN")
+assert_code "share GET before revoke 200" "$code" "200"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/shares?token=$STOKEN" -H "$BASIC")
+assert_code "share revoke 204" "$code" "204"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$STOKEN")
+assert_code "revoked share 404" "$code" "404"
+SHARE_CODE=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.txt\",\"extractCode\":\"fd42\"}")
+CTOKEN=$(echo "$SHARE_CODE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+[ -n "$CTOKEN" ] && ok "share with extract code created" || bad "share with code" "$SHARE_CODE" "token"
+assert_contains "no code shows form" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN")" "提取码"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$CTOKEN?code=wrong")
+assert_code "wrong extract code 403" "$code" "403"
+assert_contains "correct code downloads" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN?code=fd42")" "share me 中文"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/shares?token=$CTOKEN" -H "$BASIC")
+assert_code "coded share revoke 204" "$code" "204"
+
+echo "== 回收站还原（含父级 marker 补建）=="
+curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/rst/parent/deep/" -H "$A" -H "X-File-Name: restorable.txt" --data-binary "restore-me" -o /dev/null
+RDEL=$(curl -s --noproxy '*' -X DELETE "$BASE/api/delete?path=$DIR/rst/parent/deep&soft=1" -H "$A")
+RKEY=$(echo "$RDEL" | python3 -c "import sys,json;print(json.load(sys.stdin)['trashKey'])")
+[ -n "$RKEY" ] && ok "soft delete returns trashKey" || bad "trashKey" "$RDEL" "key"
+# 还原前把父级目录整树硬删，还原时需要重建父级 marker
+curl -s --noproxy '*' -X DELETE "$BASE/api/delete?path=$DIR/rst" -H "$A" -o /dev/null
+RRES=$(curl -s --noproxy '*' -X POST "$BASE/api/trash?action=restore" -H "$BASIC" -H "Content-Type: application/json" -d "{\"trashKeys\":[\"$RKEY\"]}")
+assert_contains "restore status restored" "$RRES" '"restored"'
+assert_contains "restored file back in place" "$(curl -s --noproxy '*' "$BASE/api/list?path=$DIR/rst/parent/deep/" -H "$A")" "restorable.txt"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/api/list?path=$DIR/rst/parent/deep/" -H "$A")
+assert_code "restored parent listable 200" "$code" "200"
+
+echo "== archive 打包下载 =="
+curl -s --noproxy '*' -o /tmp/suite-archive.zip -X POST "$BASE/api/archive" -H "$BASIC" -H "Content-Type: application/json" -d "{\"keys\":[\"$DIR/apitest/shareable.txt\"]}"
+assert_contains "archive zip contains file" "$(python3 -c "
+import zipfile
+print('ARCHIVE-OK' if any(n.endswith('shareable.txt') for n in zipfile.ZipFile('/tmp/suite-archive.zip').namelist()) else 'ARCHIVE-BAD')
+" 2>/dev/null)" "ARCHIVE-OK"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/archive" -H "Content-Type: application/json" -d '{"keys":[]}')
+assert_code "archive no auth 401" "$code" "401"
 
 echo "== WebDAV =="
 code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X OPTIONS "$BASE/webdav/")
@@ -151,13 +224,21 @@ code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X MOVE "$BASE/webda
 assert_code "MOVE 201" "$code" "201"
 code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X DELETE "$BASE/webdav/_\$flaredrive\$/evil.txt" -H "$BASIC" --data-binary x)
 assert_code "internal prefix hidden 404" "$code" "404"
+code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X MKCOL "$BASE/webdav/$DIR/davcol/" -H "$BASIC")
+assert_code "MKCOL 201" "$code" "201"
+code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X COPY "$BASE/webdav/$DIR/dav-moved.txt" -H "$BASIC" -H "Destination: /webdav/$DIR/davcol/dav-copy.txt")
+assert_code "COPY 201" "$code" "201"
+assert_contains "COPY content intact" "$(curl -s --noproxy '*' "$BASE/webdav/$DIR/davcol/dav-copy.txt" -H "$BASIC")" "dav"
+LOCKRES=$(curl -s --noproxy '*' -D /tmp/suite-lock-headers -o /tmp/suite-lock-body -w "%{http_code}" -X LOCK "$BASE/webdav/$DIR/davcol/dav-copy.txt" -H "$BASIC" -H "Timeout: Second-60" -H "Content-Type: application/xml" --data-binary '<?xml version="1.0" encoding="utf-8"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype><D:owner>e2e</D:owner></D:lockinfo>')
+assert_code "LOCK 200/201" "$LOCKRES" "201"
+assert_contains "LOCK returns lock-token" "$(grep -i '^Lock-Token' /tmp/suite-lock-headers)" "urn:uuid"
 
 echo "== cleanup =="
 curl -s --noproxy '*' -X DELETE "$BASE/webdav/$DIR/" -H "$BASIC" -o /dev/null
 curl -s --noproxy '*' -X DELETE "$BASE/api/trash" -H "$BASIC" -H "Content-Type: application/json" -d '{"all":true}' -o /dev/null
 KID=$(curl -s --noproxy '*' "$BASE/api/keys" -H "$BASIC" | python3 -c "import sys,json;print(' '.join(k['id'] for k in json.load(sys.stdin)))")
 for id in $KID; do curl -s --noproxy '*' -X DELETE "$BASE/api/keys?id=$id" -H "$BASIC" -o /dev/null; done
-rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-dl.txt /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json 2>/dev/null
+rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-*.txt /tmp/suite-*.zip /tmp/suite-*.bin /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json 2>/dev/null
 
 echo ""
 echo "=============================="

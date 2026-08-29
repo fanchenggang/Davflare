@@ -32,16 +32,17 @@ import {
 
 import { Density, FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
 import { RecentEntry } from "./app/recent";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 
 export type ExplorerSection = "folder" | "shares" | "trash";
 
-const TYPE_FILTERS: Array<{ value: FileTypeFilter; label: string }> = [
-  { value: "all", label: strings.typeAll },
-  { value: "image", label: strings.typeImage },
-  { value: "video", label: strings.typeVideo },
-  { value: "doc", label: strings.typeDoc },
-  { value: "other", label: strings.typeOther },
+// labelKey 延迟到渲染时取 strings，避免模块级快照导致语言切换后标签不变。
+const TYPE_FILTERS: Array<{ value: FileTypeFilter; labelKey: string }> = [
+  { value: "all", labelKey: "typeAll" },
+  { value: "image", labelKey: "typeImage" },
+  { value: "video", labelKey: "typeVideo" },
+  { value: "doc", labelKey: "typeDoc" },
+  { value: "other", labelKey: "typeOther" },
 ];
 
 function ExplorerBar({
@@ -134,7 +135,7 @@ function ExplorerBar({
           onChange={(_, value: ExplorerSection | null) => {
             if (value) onSectionChange(value);
           }}
-          aria-label="页面切换"
+          aria-label={strings.pageSwitch}
           sx={{
             backgroundColor: "background.default",
             "& .MuiToggleButton-root": {
@@ -233,7 +234,7 @@ function ExplorerBar({
               </Button>
               <Button
                 size="small"
-                aria-label="更多上传方式"
+                aria-label={strings.moreUploadWays}
                 onClick={(event) => setUploadAnchor(event.currentTarget)}
                 sx={{ minWidth: 32, paddingX: 0.5 }}
               >
@@ -285,12 +286,17 @@ function ExplorerBar({
                 onClick={onPaste}
               >
                 {strings.paste}
-                {clipboardCount > 0 ? ` ${clipboardCount} 项` : ""}
+                {clipboardCount > 0
+                  ? translate("itemsSuffix", { count: clipboardCount })
+                  : ""}
               </Button>
             )}
             {clipboardMode && clipboardCount > 0 && !canPaste && (
               <Typography variant="caption" color="text.secondary">
-                已{clipboardMode === "cut" ? "剪切" : "复制"} {clipboardCount} 项
+                {translate("pastedItems", {
+                  mode: clipboardMode === "cut" ? translate("pastedCut") : translate("pastedCopy"),
+                  count: clipboardCount,
+                })}
               </Typography>
             )}
           </Box>
@@ -305,10 +311,10 @@ function ExplorerBar({
               gap: 0.5,
             }}
           >
-            <Tooltip title={view === "grid" ? "切换到列表视图" : "切换到网格视图"}>
+            <Tooltip title={view === "grid" ? strings.switchToList : strings.switchToGrid}>
               <IconButton
                 size="small"
-                aria-label="切换视图"
+                aria-label={strings.switchView}
                 onClick={() => onViewChange(view === "grid" ? "list" : "grid")}
               >
                 {view === "grid" ? <ViewListIcon /> : <GridViewIcon />}
@@ -323,7 +329,7 @@ function ExplorerBar({
             >
               <IconButton
                 size="small"
-                aria-label="显示密度"
+                aria-label={strings.density}
                 onClick={() =>
                   onDensityChange(density === "compact" ? "standard" : "compact")
                 }
@@ -335,10 +341,10 @@ function ExplorerBar({
                 )}
               </IconButton>
             </Tooltip>
-            <Tooltip title="排序">
+            <Tooltip title={strings.sort}>
               <IconButton
                 size="small"
-                aria-label="排序"
+                aria-label={strings.sort}
                 color={sortAnchor ? "primary" : "default"}
                 onClick={(event) => setSortAnchor(event.currentTarget)}
               >
@@ -351,16 +357,16 @@ function ExplorerBar({
               onClose={() => setSortAnchor(null)}
             >
               <MenuItem onClick={() => changeSort("name")}>
-                按名称排序（
-                {sort.field === "name" ? (sort.order === "asc" ? "↑" : "↓") : ""}）
+                {translate("sortByName")}
+                （{sort.field === "name" ? (sort.order === "asc" ? "↑" : "↓") : ""}）
               </MenuItem>
               <MenuItem onClick={() => changeSort("size")}>
-                按大小排序（
-                {sort.field === "size" ? (sort.order === "asc" ? "↑" : "↓") : ""}）
+                {translate("sortBySize")}
+                （{sort.field === "size" ? (sort.order === "asc" ? "↑" : "↓") : ""}）
               </MenuItem>
               <MenuItem onClick={() => changeSort("date")}>
-                按日期排序（
-                {sort.field === "date" ? (sort.order === "asc" ? "↑" : "↓") : ""}）
+                {translate("sortByDate")}
+                （{sort.field === "date" ? (sort.order === "asc" ? "↑" : "↓") : ""}）
               </MenuItem>
               <MenuItem
                 onClick={() => {
@@ -371,7 +377,7 @@ function ExplorerBar({
                   setSortAnchor(null);
                 }}
               >
-                升序/降序切换
+                {strings.toggleAscDesc}
               </MenuItem>
             </Menu>
           </Box>
@@ -394,7 +400,7 @@ function ExplorerBar({
             <Chip
               key={item.value}
               size="small"
-              label={item.label}
+              label={strings[item.labelKey]}
               clickable
               color={active ? "primary" : "default"}
               variant={active ? "filled" : "outlined"}

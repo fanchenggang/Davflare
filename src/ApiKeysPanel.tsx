@@ -37,7 +37,7 @@ import {
   uploadCurlExample,
 } from "./app/apikeys";
 import { NotifyFn } from "./app/notify";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 import { ApiKeyInfo } from "./app/types";
 
 function formatExpiry(expiresAt: string | null) {
@@ -45,7 +45,7 @@ function formatExpiry(expiresAt: string | null) {
   const date = new Date(expiresAt);
   if (Number.isNaN(date.getTime())) return strings.apiNever;
   const expired = date.getTime() <= Date.now();
-  return `${expired ? "已过期 · " : ""}${date.toLocaleString()}`;
+  return `${expired ? translate("expiredPrefix") : ""}${date.toLocaleString()}`;
 }
 
 function formatLastUsed(lastUsedAt?: string | null) {
@@ -106,23 +106,23 @@ function ApiKeysPanel({
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      onNotify(`${label}已复制`, "success");
+      onNotify(translate("copiedFormat", { label }), "success");
     } catch {
-      onNotify("复制失败", "error");
+      onNotify(translate("copyFailed2"), "error");
     }
   };
 
   const handleCreate = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      onNotify("请填写密钥名称", "error");
+      onNotify(translate("fillKeyName"), "error");
       return;
     }
     let expiresInHours: number | null = null;
     if (expiry === "custom") {
       const hours = Number(customHours);
       if (!Number.isFinite(hours) || hours <= 0) {
-        onNotify("请填写有效的自定义小时数", "error");
+        onNotify(translate("fillValidHours"), "error");
         return;
       }
       expiresInHours = hours;
@@ -142,7 +142,7 @@ function ApiKeysPanel({
       setCustomHours("");
       setExpiry("never");
       await load();
-      onNotify("密钥已创建，请立即复制", "success");
+      onNotify(translate("keyCreatedToast"), "success");
     } catch (error) {
       onNotify((error as Error).message, "error");
     } finally {
@@ -155,7 +155,7 @@ function ApiKeysPanel({
       setKeys((prev) => prev.filter((item) => item.id !== id));
       if (created?.id === id) setCreated(null);
       await revokeApiKey(id);
-      onNotify("密钥已作废", "success");
+      onNotify(translate("keyRevokedToast"), "success");
     } catch (error) {
       onNotify((error as Error).message, "error");
       await load();
@@ -259,7 +259,7 @@ function ApiKeysPanel({
                 <Button
                   size="small"
                   startIcon={<ContentCopyIcon />}
-                  onClick={() => copy(created.key, "密钥")}
+                  onClick={() => copy(created.key, strings.keyLabel)}
                 >
                   {strings.copyApiKey}
                 </Button>
@@ -267,7 +267,7 @@ function ApiKeysPanel({
             )}
 
             <Box>
-              <Typography variant="subtitle2">已有密钥</Typography>
+              <Typography variant="subtitle2">{strings.existingKeys}</Typography>
               {keys.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   {strings.apiNoKeys}
@@ -336,7 +336,7 @@ function ApiKeysPanel({
                 <Button
                   size="small"
                   startIcon={<ContentCopyIcon />}
-                  onClick={() => copy(usageText, "调用说明")}
+                  onClick={() => copy(usageText, strings.usageLabel)}
                 >
                   {strings.copyUsage}
                 </Button>
@@ -346,11 +346,11 @@ function ApiKeysPanel({
                   onClick={() =>
                     copy(
                       uploadCurlExample(origin, usageKey, "folder/"),
-                      "curl 示例"
+                      strings.curlSample
                     )
                   }
                 >
-                  复制 curl
+                  {strings.copyCurl}
                 </Button>
                 <Button
                   size="small"
@@ -362,20 +362,20 @@ function ApiKeysPanel({
                         usageKey,
                         "DBX/sync/snapshot.json"
                       ),
-                      "下载 curl"
+                      strings.copyDownloadCurl
                     )
                   }
                 >
-                  复制下载 curl
+                  {strings.copyDownloadCurl}
                 </Button>
                 <Button
                   size="small"
                   startIcon={<ContentCopyIcon />}
                   onClick={() =>
-                    copy(listCurlExample(origin, usageKey, "folder/"), "列出 curl")
+                    copy(listCurlExample(origin, usageKey, "folder/"), strings.copyListCurl)
                   }
                 >
-                  复制列出 curl
+                  {strings.copyListCurl}
                 </Button>
                 <Button
                   size="small"
@@ -383,11 +383,11 @@ function ApiKeysPanel({
                   onClick={() =>
                     copy(
                       overwriteCurlExample(origin, usageKey, "folder/"),
-                      "覆盖上传 curl"
+                      strings.copyOverwriteCurl
                     )
                   }
                 >
-                  复制覆盖 curl
+                  {strings.copyOverwriteCurl}
                 </Button>
                 <Button
                   size="small"
@@ -395,11 +395,11 @@ function ApiKeysPanel({
                   onClick={() =>
                     copy(
                       backupCurlExample(origin, usageKey, "folder/notes.txt"),
-                      "备份 curl"
+                      strings.copyBackupCurl
                     )
                   }
                 >
-                  复制备份 curl
+                  {strings.copyBackupCurl}
                 </Button>
                 <Button
                   size="small"
@@ -407,11 +407,11 @@ function ApiKeysPanel({
                   onClick={() =>
                     copy(
                       deleteCurlExample(origin, usageKey, "folder/notes.txt"),
-                      "删除 curl"
+                      strings.copyDeleteCurl
                     )
                   }
                 >
-                  复制删除 curl
+                  {strings.copyDeleteCurl}
                 </Button>
                 <Button
                   size="small"
@@ -419,11 +419,11 @@ function ApiKeysPanel({
                   onClick={() =>
                     copy(
                       mkdirCurlExample(origin, usageKey, "folder/sub"),
-                      "建目录 curl"
+                      strings.copyMkdirCurl
                     )
                   }
                 >
-                  复制建目录 curl
+                  {strings.copyMkdirCurl}
                 </Button>
               </Stack>
             </Box>
@@ -433,12 +433,12 @@ function ApiKeysPanel({
       <DialogActions>
         <Button
           startIcon={<ContentCopyIcon />}
-          onClick={() => copy(usageText, "调用说明")}
+          onClick={() => copy(usageText, strings.usageLabel)}
           disabled={loading}
         >
           {strings.copyUsage}
         </Button>
-        <Button onClick={onClose}>关闭</Button>
+        <Button onClick={onClose}>{strings.close}</Button>
       </DialogActions>
     </Dialog>
   );

@@ -26,7 +26,7 @@ import {
   restoreTrash,
 } from "./app/trash";
 import { NotifyFn } from "./app/notify";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 import { TrashItem } from "./app/types";
 import { humanReadableSize } from "./app/utils";
 
@@ -76,12 +76,12 @@ function TrashView({
       if (failed.length) {
         onNotify(
           failed
-            .map((result) => result.message || "部分项目恢复失败")
+            .map((result) => result.message || translate("restoreFailedPartial"))
             .join("\n"),
           "error"
         );
       } else {
-        onNotify("已恢复所选项目", "success");
+        onNotify(translate("restoreDone"), "success");
       }
     } catch (error) {
       onNotify((error as Error).message, "error");
@@ -93,7 +93,7 @@ function TrashView({
   const handlePermanentDelete = async () => {
     try {
       await permanentDeleteTrash(selected);
-      onNotify("已彻底删除所选项目", "success");
+      onNotify(translate("permanentDeletedToast"), "success");
     } catch (error) {
       onNotify((error as Error).message, "error");
     } finally {
@@ -105,7 +105,7 @@ function TrashView({
   const handleEmpty = async () => {
     try {
       await permanentDeleteTrash([], true);
-      onNotify("回收站已清空", "success");
+      onNotify(translate("trashClearedToast"), "success");
     } catch (error) {
       onNotify((error as Error).message, "error");
     } finally {
@@ -147,11 +147,12 @@ function TrashView({
           disabled={items.length === 0}
           onClick={() => setConfirm({ kind: "empty" })}
         >
-          清空回收站
+          {strings.clearTrash}
         </Button>
       </Box>
       {items.length === 0 ? (
         <EmptyState
+          variant="trash"
           icon={<DeleteOutlineIcon />}
           title={strings.emptyTrash}
           description={strings.emptyTrashHint}
@@ -197,9 +198,11 @@ function TrashView({
                 <ListItemText
                   primary={item.name}
                   primaryTypographyProps={{ fontWeight: 600 }}
-                  secondary={`原路径：${item.originalKey} · 删除于 ${new Date(
-                    item.deletedAt
-                  ).toLocaleString()} · ${humanReadableSize(item.size)}`}
+                  secondary={translate("itemLine", {
+                    path: item.originalKey,
+                    time: new Date(item.deletedAt).toLocaleString(),
+                    size: humanReadableSize(item.size),
+                  })}
                 />
               </ListItem>
             ))}
@@ -221,7 +224,7 @@ function TrashView({
               disabled={selected.length === 0}
               onClick={handleRestore}
             >
-              恢复
+              {strings.restoreBtn}
             </Button>
             <Button
               color="error"
@@ -229,20 +232,20 @@ function TrashView({
               disabled={selected.length === 0}
               onClick={() => setConfirm({ kind: "delete" })}
             >
-              彻底删除
+              {strings.permanentDelete}
             </Button>
           </Stack>
         </>
       )}
       <ConfirmDialog
         open={confirm !== null}
-        title={confirm?.kind === "empty" ? "清空回收站" : "彻底删除"}
+        title={confirm?.kind === "empty" ? strings.clearTrash : strings.permanentDelete}
         message={
           confirm?.kind === "empty"
-            ? "清空后所有内容将无法恢复，确定继续吗？"
-            : `将彻底删除 ${selected.length} 项，此操作无法恢复。`
+            ? strings.clearTrashConfirm
+            : translate("permanentDeleteCountConfirm", { count: selected.length })
         }
-        confirmText="删除"
+        confirmText={strings.deleteAction}
         onClose={() => setConfirm(null)}
         onConfirm={
           confirm?.kind === "empty" ? handleEmpty : handlePermanentDelete

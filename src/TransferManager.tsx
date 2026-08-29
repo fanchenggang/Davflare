@@ -131,7 +131,7 @@ function TransferManager({
     const speed = speedOf(task);
     if (task.status !== "in-progress" || speed <= 0) return "";
     const eta = formatEta((task.total - task.loaded) / speed);
-    return eta ? ` · 剩余 ${eta}` : "";
+    return eta ? ` · ${translate("etaRemaining", { time: eta })}` : "";
   };
 
   return (
@@ -266,7 +266,7 @@ function TransferManager({
         )}
         <Button onClick={actions.clearFailed}>{strings.clearFailed}</Button>
         <Button onClick={actions.clearCompleted}>{strings.clearCompleted}</Button>
-        <Button onClick={onClose}>关闭</Button>
+        <Button onClick={onClose}>{strings.close}</Button>
       </DialogActions>
     </Dialog>
   );
@@ -278,7 +278,7 @@ function taskStatusText(
   overallEta: string
 ) {
   const speed = humanReadableSpeed(overallSpeed);
-  const parts = [speed, overallEta ? `剩余 ${overallEta}` : ""].filter(Boolean);
+  const parts = [speed, overallEta ? translate("etaRemaining", { time: overallEta }) : ""].filter(Boolean);
   return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
 

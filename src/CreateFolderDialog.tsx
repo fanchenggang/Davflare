@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { strings, translate } from "./app/strings";
 import {
   Button,
   Dialog,
@@ -31,11 +32,11 @@ function CreateFolderDialog({
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("请输入文件夹名称");
+      setError(translate("folderNameEmpty"));
       return;
     }
     if (trimmed.includes("/")) {
-      setError("文件夹名称不能包含 /");
+      setError(translate("folderNameNoSlash"));
       return;
     }
     onSubmit(trimmed);
@@ -43,13 +44,13 @@ function CreateFolderDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>新建文件夹</DialogTitle>
+      <DialogTitle>{strings.createFolderTitle}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <TextField
             autoFocus
             fullWidth
-            label="文件夹名称"
+            label={strings.folderName}
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -60,9 +61,9 @@ function CreateFolderDialog({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>取消</Button>
+          <Button onClick={onClose}>{strings.cancel}</Button>
           <Button type="submit" variant="contained">
-            创建
+            {strings.create}
           </Button>
         </DialogActions>
       </form>

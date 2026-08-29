@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { strings, translate } from "./app/strings";
 import {
   Button,
   Dialog,
@@ -33,11 +34,11 @@ function RenameDialog({
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("名称不能为空");
+      setError(translate("nameEmpty"));
       return;
     }
     if (trimmed.includes("/")) {
-      setError("名称不能包含 /");
+      setError(translate("nameNoSlash"));
       return;
     }
     if (trimmed === currentName) {
@@ -49,13 +50,13 @@ function RenameDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>重命名</DialogTitle>
+      <DialogTitle>{strings.renameTitle}</DialogTitle>
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <TextField
             autoFocus
             fullWidth
-            label="名称"
+            label={strings.name}
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -66,9 +67,9 @@ function RenameDialog({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>取消</Button>
+          <Button onClick={onClose}>{strings.cancel}</Button>
           <Button type="submit" variant="contained">
-            确定
+            {strings.ok}
           </Button>
         </DialogActions>
       </form>

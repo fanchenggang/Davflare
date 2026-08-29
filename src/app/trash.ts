@@ -1,9 +1,10 @@
 import { authFetch } from "./auth";
+import { translate } from "./strings";
 import { TrashItem } from "./types";
 
 export async function listTrash(): Promise<TrashItem[]> {
   const response = await authFetch("/api/trash");
-  if (!response.ok) throw new Error("获取回收站失败");
+  if (!response.ok) throw new Error(translate("getTrashFailed"));
   return response.json();
 }
 
@@ -13,7 +14,7 @@ export async function moveToTrash(keys: string[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ keys }),
   });
-  if (!response.ok) throw new Error((await response.text()) || "移入回收站失败");
+  if (!response.ok) throw new Error((await response.text()) || translate("moveToTrashFailed"));
   return (await response.json()) as { results: Array<{ key: string; id: string }> };
 }
 
@@ -23,7 +24,7 @@ export async function restoreTrash(trashKeys: string[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ trashKeys }),
   });
-  if (!response.ok) throw new Error("恢复失败");
+  if (!response.ok) throw new Error(translate("restoreFailed"));
   return response.json() as Promise<
     Array<{ trashKey: string; status: string; message?: string }>
   >;
@@ -38,5 +39,5 @@ export async function permanentDeleteTrash(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ trashKeys, all }),
   });
-  if (!response.ok) throw new Error("彻底删除失败");
+  if (!response.ok) throw new Error(translate("permanentDeleteFailed"));
 }

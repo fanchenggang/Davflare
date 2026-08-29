@@ -1,3 +1,5 @@
+import { isCollectionObject } from "./_apikey";
+
 interface SharesEnv {
   BUCKET: R2Bucket;
   WEBDAV_USERNAME: string;
@@ -85,7 +87,8 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
   if (!key) return new Response("Bad Request", { status: 400 });
 
   const object = await env.BUCKET.head(key);
-  let isDir = object?.httpMetadata?.contentType === "application/x-directory";
+  // 目录判定与其他端点一致：contentType 或 resourcetype 任一标记都算目录
+  let isDir = isCollectionObject(object);
   if (object === null) {
     // 目录可能没有标记对象（仅前缀），检查是否有子对象
     const children = await env.BUCKET.list({ prefix: `${key}/`, limit: 1 });

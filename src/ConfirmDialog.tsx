@@ -1,3 +1,4 @@
+import { strings } from "./app/strings";
 import {
   Button,
   Dialog,
@@ -11,7 +12,7 @@ function ConfirmDialog({
   open,
   title,
   message,
-  confirmText = "确定",
+  confirmText = strings.ok,
   onClose,
   onConfirm,
 }: {
@@ -31,7 +32,7 @@ function ConfirmDialog({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>取消</Button>
+        <Button onClick={onClose}>{strings.cancel}</Button>
         <Button color="error" variant="contained" onClick={onConfirm}>
           {confirmText}
         </Button>

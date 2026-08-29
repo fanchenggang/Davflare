@@ -170,6 +170,22 @@ curl -X POST "https://<your-domain.com>/api/mkdir" \
 
 Bidirectional sync recipe (local wins; backup remote on conflict): list with `GET /api/list` and compare local mtime/size/etag vs remote `uploaded`/`size`/`etag`. Local-only new/changed → `POST /api/upload?overwrite=1`. Remote-only new/changed → `GET /api/download`. Both changed → `POST /api/backup?path=remoteKey` then overwrite-upload local bytes to the original name. Optional local deletes: `DELETE /api/delete` (skip unless the client tracks a sync db). Extra remote-only files: download them. Same Bearer / `X-Api-Key` auth as upload; no web session. WebDAV protocol is unchanged.
 
+## Development & testing
+
+```bash
+npm install
+
+npm run typecheck   # tsc --noEmit (covers src/ and functions/)
+npm test            # Jest unit tests (interactive watch)
+npm run test:ci     # Jest unit tests, single CI-friendly run
+npm run build       # production build into build/
+
+npm run test:e2e    # one-shot API regression: build → wrangler pages dev (local miniflare R2) → scripts/api-e2e.sh
+SKIP_BUILD=1 npm run test:e2e   # reuse an existing build/ for faster iterations
+```
+
+`test:e2e` creates a local `.dev.vars` (gitignored) with dev credentials if absent, boots `wrangler pages dev` on port 8788 (override with `PORT`), waits for readiness, runs the ~79-assertion suite against it, and tears the server down. Data lives in `.wrangler/state/` — delete that directory to reset the local bucket. See [TESTING.md](./TESTING.md) for the full verification history and [TEST_CASES.md](./TEST_CASES.md) for the manual GUI case library.
+
 ## Acknowledgments
 
 WebDAV related code is based on [r2-webdav](

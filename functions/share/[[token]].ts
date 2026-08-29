@@ -153,7 +153,23 @@ export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
 
   const metadata = await loadMeta(env.BUCKET, token);
   if (metadata === null || !metadata.key) return new Response(null, { status: 404 });
+  if (
+    metadata.expiresAt &&
+    new Date(metadata.expiresAt).getTime() <= Date.now()
+  ) {
+    return new Response(null, { status: 410 });
+  }
   if (gateExtractCode(request, metadata)) return new Response(null, { status: 403 });
+
+  // 与 GET 对齐：目录分享（含无 marker 的虚拟目录）下载的是 zip 流，无固定长度
+  if (metadata.isDir) {
+    return new Response(null, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
 
   const object = await env.BUCKET.head(metadata.key);
   if (object === null) return new Response(null, { status: 404 });

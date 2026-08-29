@@ -21,7 +21,7 @@ import AuthThumbnail from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { Density, ViewMode } from "./app/prefs";
 import { Z_INDEX } from "./app/theme";
-import { strings } from "./app/strings";
+import { strings, translate } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
   formatDateTime,
@@ -43,6 +43,19 @@ const itemEnterSx = (index: number) => ({
     animation: "none",
   },
 });
+
+// 选中态呼吸光效：柔和的橙色外圈明暗脉动（减弱动态时禁用）
+const selectionGlow = keyframes`
+  0%, 100% { box-shadow: 0 0 0 0 rgba(243, 128, 32, 0.00), 0 1px 2px rgba(26, 23, 20, 0.04); }
+  50% { box-shadow: 0 0 0 4px rgba(243, 128, 32, 0.18), 0 1px 2px rgba(26, 23, 20, 0.04); }
+`;
+
+const selectionGlowSx = {
+  animation: `${selectionGlow} 2.4s ease-in-out infinite`,
+  "@media (prefers-reduced-motion: reduce)": {
+    animation: "none",
+  },
+};
 
 // 搜索命中高亮：纯文本拆分（React 转义，天然防 XSS），命中片段用主色加粗
 function highlightName(name: string, query?: string): React.ReactNode {
@@ -232,7 +245,7 @@ function FileGrid({
     <Checkbox
       size="small"
       checked={isSelected(file)}
-      inputProps={{ "aria-label": `选择 ${file.name}` }}
+      inputProps={{ "aria-label": translate("selectFileLabel", { name: file.name }) }}
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
@@ -252,7 +265,7 @@ function FileGrid({
     const button = (
       <IconButton
         size="small"
-        aria-label={`${file.name} 操作`}
+        aria-label={translate("fileActionsLabel", { name: file.name })}
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
         onClick={handle}
@@ -404,6 +417,7 @@ function FileGrid({
         borderRadius: 1.5,
         gap: 0.5,
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
+        ...(isSelected(file) ? selectionGlowSx : {}),
         "&.Mui-selected": {
           backgroundColor: "action.selected",
         },
@@ -511,6 +525,7 @@ function FileGrid({
           ? "action.selected"
           : "background.paper",
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
+        ...(isSelected(file) ? selectionGlowSx : {}),
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 
+import { translate } from "./strings";
 import { processTransferTask } from "./transfer";
 import { TransferTask } from "./types";
 
@@ -155,7 +156,7 @@ export function TransferQueueProvider({
           updateTask(task.id, { status: "canceled" });
           canceledIdsRef.current.delete(task.id);
         } else {
-          const message = error?.message || "上传失败";
+          const message = error?.message || translate("uploadFailedGeneric");
           const staleUpload =
             Boolean(latest.uploadId) &&
             /nosuchupload|not found|no such upload|invalid/i.test(message);

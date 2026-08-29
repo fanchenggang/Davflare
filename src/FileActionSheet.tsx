@@ -35,20 +35,21 @@ export type FileAction =
   | "cut"
   | "delete";
 
+// label 存字典 key，渲染时再经 strings 取值：模块级快照会让语言切换后菜单文案不变。
 const ACTIONS: Array<{
   id: FileAction;
-  label: string;
+  labelKey: string;
   icon: React.ReactNode;
   filesOnly?: boolean;
 }> = [
-  { id: "open", label: strings.open, icon: <OpenIcon /> },
-  { id: "download", label: strings.download, icon: <DownloadIcon /> },
-  { id: "rename", label: strings.rename, icon: <RenameIcon /> },
-  { id: "move", label: strings.move, icon: <MoveIcon /> },
-  { id: "share", label: strings.share, icon: <ShareIcon /> },
-  { id: "copy", label: strings.copy, icon: <CopyIcon /> },
-  { id: "cut", label: strings.cut, icon: <CutIcon /> },
-  { id: "delete", label: strings.delete, icon: <DeleteIcon /> },
+  { id: "open", labelKey: "open", icon: <OpenIcon /> },
+  { id: "download", labelKey: "download", icon: <DownloadIcon /> },
+  { id: "rename", labelKey: "rename", icon: <RenameIcon /> },
+  { id: "move", labelKey: "move", icon: <MoveIcon /> },
+  { id: "share", labelKey: "share", icon: <ShareIcon /> },
+  { id: "copy", labelKey: "copy", icon: <CopyIcon /> },
+  { id: "cut", labelKey: "cut", icon: <CutIcon /> },
+  { id: "delete", labelKey: "delete", icon: <DeleteIcon /> },
 ];
 
 function FileActionSheet({
@@ -66,7 +67,7 @@ function FileActionSheet({
   const open = Boolean(file);
   const actions = ACTIONS.filter(
     (action) => !action.filesOnly || (file && !file.isDir)
-  );
+  ).map((action) => ({ ...action, label: strings[action.labelKey] }));
 
   const run = (action: FileAction) => {
     if (!file) return;

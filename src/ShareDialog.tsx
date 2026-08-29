@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from "react";
+import { strings, translate } from "./app/strings";
 import {
   Box,
   Button,
@@ -21,7 +22,6 @@ import {
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 import { createShare, formatShareClipboard, listShares, revokeShare } from "./app/share";
-import { strings } from "./app/strings";
 import { NotifyFn } from "./app/notify";
 import { FileItem, ShareInfo } from "./app/types";
 
@@ -71,7 +71,7 @@ function ShareDialog({
         extractCode.trim() || undefined
       );
       await refresh();
-      onNotify("分享链接已创建", "success");
+      onNotify(translate("shareLinkCreated"), "success");
       try {
         await navigator.clipboard.writeText(formatShareClipboard(created));
       } catch {
@@ -87,28 +87,28 @@ function ShareDialog({
   const copy = async (share: ShareInfo) => {
     try {
       await navigator.clipboard.writeText(formatShareClipboard(share));
-      onNotify("链接已复制", "success");
+      onNotify(translate("linkCopied"), "success");
     } catch {
-      onNotify("复制失败", "error");
+      onNotify(translate("copyFailed2"), "error");
     }
   };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>分享{file ? `「${file.name}」` : ""}</DialogTitle>
+      <DialogTitle>{translate("shareOf", { name: file?.name ?? "" })}</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           <FormControl fullWidth>
-            <InputLabel>有效期</InputLabel>
+            <InputLabel>{strings.expiry}</InputLabel>
             <Select
               value={expiry}
-              label="有效期"
+              label={strings.expiry}
               onChange={(event) => setExpiry(event.target.value)}
             >
-              <MenuItem value="never">永久</MenuItem>
-              <MenuItem value="24">1 天</MenuItem>
-              <MenuItem value="168">7 天</MenuItem>
-              <MenuItem value="720">30 天</MenuItem>
+              <MenuItem value="never">{strings.apiNever}</MenuItem>
+              <MenuItem value="24">{strings.apiExpiry1d}</MenuItem>
+              <MenuItem value="168">{strings.apiExpiry7d}</MenuItem>
+              <MenuItem value="720">{strings.apiExpiry30d}</MenuItem>
             </Select>
           </FormControl>
           <TextField
@@ -124,12 +124,12 @@ function ShareDialog({
             disabled={!file || loading}
             onClick={handleCreate}
           >
-            创建分享链接
+            {strings.createShareLink}
           </Button>
 
           {shares.length > 0 && (
             <Box>
-              <Typography variant="subtitle2">已有分享</Typography>
+              <Typography variant="subtitle2">{strings.existingShare}</Typography>
               <List>
                 {shares.map((share) => (
                   <ListItem
@@ -149,7 +149,7 @@ function ShareDialog({
                           }
                         }}
                       >
-                        撤销
+                        {strings.revoke}
                       </Button>
                     }
                   >
@@ -157,8 +157,8 @@ function ShareDialog({
                       primary={
                         [
                           share.expiresAt
-                            ? `有效期至 ${new Date(share.expiresAt).toLocaleString()}`
-                            : "永久有效",
+                            ? translate("expiresAtLabel", { time: new Date(share.expiresAt).toLocaleString() })
+                            : "{strings.validForever}",
                           share.extractCode
                             ? `${strings.extractCode} ${share.extractCode}`
                             : "",
@@ -175,7 +175,7 @@ function ShareDialog({
                       startIcon={<ContentCopyIcon />}
                       onClick={() => copy(share)}
                     >
-                      复制
+                      {strings.copy}
                     </Button>
                   </ListItem>
                 ))}
@@ -185,7 +185,7 @@ function ShareDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>关闭</Button>
+        <Button onClick={onClose}>{strings.close}</Button>
       </DialogActions>
     </Dialog>
   );

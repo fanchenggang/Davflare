@@ -26,6 +26,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:ci": "CI=true react-scripts test --watchAll=false",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "bash scripts/run-e2e.sh",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

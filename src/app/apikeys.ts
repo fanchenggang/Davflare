@@ -1,9 +1,10 @@
 import { authFetch } from "./auth";
+import { getLang, Lang, translate } from "./strings";
 import { ApiKeyInfo } from "./types";
 
 export async function listApiKeys(): Promise<ApiKeyInfo[]> {
   const response = await authFetch("/api/keys");
-  if (!response.ok) throw new Error((await response.text()) || "获取 API 密钥失败");
+  if (!response.ok) throw new Error((await response.text()) || translate("getKeysFailed"));
   return response.json();
 }
 
@@ -22,7 +23,7 @@ export async function createApiKey(input: {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error((await response.text()) || "创建 API 密钥失败");
+    throw new Error((await response.text()) || translate("createKeyFailed"));
   }
   return response.json();
 }
@@ -31,7 +32,7 @@ export async function revokeApiKey(id: string) {
   const response = await authFetch(`/api/keys?id=${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-  if (!response.ok) throw new Error((await response.text()) || "作废密钥失败");
+  if (!response.ok) throw new Error((await response.text()) || translate("revokeKeyFailed"));
 }
 
 export function uploadCurlExample(origin: string, apiKey = "<apiKey>", path = "folder/") {
@@ -91,9 +92,9 @@ export function mkdirCurlExample(
   return `curl -X POST "${origin}/api/mkdir" -H "Authorization: Bearer ${apiKey}" -H "Content-Type: application/json" -d '{"path":"${path}"}'`;
 }
 
-export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
-  const key = apiKey || "<apiKey>";
-  return [
+// 调用说明是整段多行文档，按语言各存一份行模板，插值 origin/key 后拼装。
+const API_GUIDE: Record<Lang, (ctx: { origin: string; key: string }) => string[]> = {
+  zh: ({ origin, key }) => [
     "调用说明",
     "",
     "鉴权（所有开放接口相同，二选一，无需网页登录）：",
@@ -218,7 +219,7 @@ export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
     "查询参数：path=文件或目录键。",
     "  默认硬删除；文件直接删，目录递归删除（上限 1000 对象）。",
     "  soft=1：软删除进回收站（可经 /api/trash?action=restore 还原），文件与目录都支持。",
-    "成功：200，JSON { key, deleted: true }（目录带 kind，软删带 soft/trashId）",
+    "成功：200，JSON { key, deleted: true }（目录带 kind，软删带 soft/trashKey）",
     "密钥无效：401；内部目录：400；不存在：404",
     "",
     "示例：",
@@ -243,5 +244,161 @@ export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
     "   用本地字节写回原文件名。",
     "5. 本地已删（可选）：DELETE /api/delete。默认配方可跳过删除，除非客户端有同步库跟踪。",
     "6. 远端多出来的文件：下载到本地。",
-  ].join("\n");
+  ],
+  en: ({ origin, key }) => [
+    "Usage",
+    "",
+    "Auth (same for every open API endpoint, either header; no web session):",
+    `  Authorization: Bearer ${key}`,
+    `  X-Api-Key: ${key}`,
+    "The internal prefix _$flaredrive$/ is always rejected. Web sessions are not used.",
+    "",
+    "— Upload —",
+    "",
+    `Endpoint: POST ${origin}/api/upload`,
+    "Query: path=target-folder/ (optional; empty means the root folder)",
+    "  overwrite=1 or true: PUT over the same object name",
+    "  Default (no overwrite): name clashes get uniqued to name (2).ext, matching existing clients",
+    "Body: multipart form field file=@local-file",
+    "You may also send a raw request body with the X-File-Name header.",
+    "Success: 201, JSON { key, name, size, path, overwritten }",
+    "Target is a directory: 409",
+    "Invalid or expired key: 401",
+    "Single file too large (~100MB): 413",
+    "For larger files use the web chunked uploader.",
+    "",
+    "Example (multipart, no overwrite):",
+    `curl -X POST "${origin}/api/upload?path=folder/" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -F "file=@photo.jpg"`,
+    "",
+    "Example (overwrite upload, overwrite=1):",
+    `curl -X POST "${origin}/api/upload?path=folder/&overwrite=1" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -F "file=@photo.jpg"`,
+    "",
+    "Example (X-Api-Key + raw body):",
+    `curl -X POST "${origin}/api/upload?path=docs/" \\`,
+    `  -H "X-Api-Key: ${key}" \\`,
+    `  -H "X-File-Name: notes.txt" \\`,
+    `  --data-binary @notes.txt`,
+    "",
+    "— Download —",
+    "",
+    `Endpoint: GET ${origin}/api/download`,
+    "Query: path=object-key (required; must be a file, not a directory)",
+    "Success: 200, returns the file body (Content-Disposition: attachment)",
+    "Missing path or directory target: 400; not found: 404; invalid key: 401",
+    "",
+    "Example:",
+    `curl -L "${origin}/api/download?path=DBX/sync/snapshot.json" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -o snapshot.json`,
+    "",
+    "— List folder (Depth 1) —",
+    "",
+    `Endpoint: GET ${origin}/api/list`,
+    "Query: path=folder/ (optional; empty means the root folder)",
+    "Returns the current level only: files plus direct subfolders, never the whole bucket.",
+    "Success: 200, JSON { items: [{ key, name, size, isDir, uploaded, etag }] }",
+    "  Files always carry size (bytes), uploaded (ISO; epoch when missing) and etag, plus an updated alias.",
+    "  Delimiter-prefix folders: isDir true, size 0, uploaded null.",
+    "path is a file: 400; folder not found: 404",
+    "",
+    "Example:",
+    `curl "${origin}/api/list?path=folder/" \\`,
+    `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "Example (paged listing for large folders):",
+    `curl "${origin}/api/list?path=folder/&limit=500&cursor=<nextCursor>" \\`,
+    `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "— Multipart upload for large files (>100MB) —",
+    "",
+    `1. Create: POST ${origin}/api/upload?uploads&path=<full-file-key>`,
+    "   Success: 201 { key, uploadId }",
+    `2. Upload part: PUT ${origin}/api/upload?path=<file-key>&uploadId=<id>&partNumber=<n>`,
+    "   Raw body; each part still limited to ~100MB per request; success 200 { partNumber, etag }",
+    `3. Complete: POST ${origin}/api/upload?path=<file-key>&uploadId=<id>`,
+    "   body JSON { parts: [{ partNumber, etag }] }; success 200 { key, size, etag }",
+    `4. Abort: DELETE ${origin}/api/upload?path=<file-key>&uploadId=<id> → 204`,
+    "",
+    "— Create folder —",
+    "",
+    `Endpoint: POST ${origin}/api/mkdir`,
+    "JSON { path } or query path=folder-key (also via the X-File-Path header).",
+    "Parent folders are created automatically; an existing folder returns 200 idempotently (created: false);",
+    "a file occupying the name: 409. Created: 201, JSON { key, created }.",
+    "",
+    "Example:",
+    `curl -X POST "${origin}/api/mkdir" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '{"path":"folder/sub"}'`,
+    "",
+    "— Conflict backup (use this on sync conflicts) —",
+    "",
+    `Endpoint: POST ${origin}/api/backup`,
+    "Query: path=remote-file-key (or JSON { path })",
+    "Copies the file to name.conflict-YYYYMMDDTHHMMSS.ext in the same folder (extension kept, UTC stamp), then deletes the original key.",
+    "Example: notes.txt → notes.conflict-20260828T115537.txt",
+    "R2 has no native rename, so this is copy + delete.",
+    "Success: 200, JSON { from, to }",
+    "Directory: 400; not found: 404",
+    "",
+    "Example:",
+    `curl -X POST "${origin}/api/backup?path=folder/notes.txt" \\`,
+    `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "— Rename —",
+    "",
+    `Endpoint: POST ${origin}/api/rename`,
+    "JSON { from, to } or query params from / to.",
+    "File: copied to to, then from is deleted. Existing to: 409 unless overwrite=1.",
+    "Directory: whole-tree recursive move (no overwrite; existing target 409; 1000-object cap).",
+    "Success: 200, JSON { from, to } (directories carry kind: \"directory\")",
+    "",
+    "Example:",
+    `curl -X POST "${origin}/api/rename" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '{"from":"folder/old.txt","to":"folder/new.txt"}'`,
+    "",
+    "— Delete —",
+    "",
+    `Endpoint: DELETE ${origin}/api/delete`,
+    "Query: path=file-or-folder-key.",
+    "  Default is a hard delete; files are removed directly, directories recursively (1000-object cap).",
+    "  soft=1: soft-delete into the trash (restorable via /api/trash?action=restore); works for files and folders.",
+    "Success: 200, JSON { key, deleted: true } (directories carry kind, soft deletes carry soft/trashKey)",
+    "Invalid key: 401; internal folder: 400; not found: 404",
+    "",
+    "Example:",
+    `curl -X DELETE "${origin}/api/delete?path=folder/notes.txt" \\`,
+    `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "Example (soft-delete into trash):",
+    `curl -X DELETE "${origin}/api/delete?path=folder/sub&soft=1" \\`,
+    `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "— Conflict backup notes —",
+    "Directory backup: whole tree renamed to name.conflict-<UTC stamp> (extension not split).",
+    "",
+    "— Two-way sync recipe (local wins; remote conflicts backed up first) —",
+    "",
+    "Local = files on the user's machine. Conflict policy: keep LOCAL and rename REMOTE to a backup first.",
+    "1. GET /api/list to read the folder; compare by key: local mtime/size/etag vs remote uploaded/size/etag.",
+    "2. Only local is new or changed → POST /api/upload?overwrite=1",
+    "3. Only remote is new or changed → GET /api/download",
+    "4. Both changed (conflict) → POST /api/backup?path=remoteKey",
+    "   (remote becomes *.conflict-YYYYMMDDTHHMMSS.*), then POST /api/upload?overwrite=1",
+    "   writing the local bytes back to the original name.",
+    "5. Deleted locally (optional): DELETE /api/delete. The default recipe skips deletes unless the client tracks deletions.",
+    "6. Extra remote files: download them locally.",
+  ],
+};
+
+export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
+  const key = apiKey || "<apiKey>";
+  return API_GUIDE[getLang()]({ origin, key }).join("\n");
 }

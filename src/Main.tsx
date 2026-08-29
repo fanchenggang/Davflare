@@ -52,7 +52,7 @@ import { Route } from "./app/route";
 import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
 import { Z_INDEX } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
-import { strings, translate } from "./app/strings";
+import { strings, translate, useLang } from "./app/strings";
 import {
   collectFilesFromDataTransfer,
   copyPaste,
@@ -196,7 +196,7 @@ function PathBar({
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
         <IconButton
           size="small"
-          aria-label="返回上一级"
+          aria-label={strings.goUp}
           disabled={atRoot}
           onClick={() =>
             onNavigate(parts.slice(0, -1).join("/") + (parts.length > 1 ? "/" : ""))
@@ -320,7 +320,7 @@ function PathBar({
           onChange={(_, value: SearchScope | null) => {
             if (value) onSearchScopeChange(value);
           }}
-          aria-label="搜索范围"
+          aria-label={strings.searchScope}
           sx={{
             backgroundColor: "background.default",
             "& .MuiToggleButton-root": {
@@ -671,6 +671,7 @@ function Main({
     return items;
   }, [debouncedSearch, searchScope, showHidden, sortedFiles, typeFilter]);
 
+  const lang = useLang();
   const listingStats = useMemo(() => {
     let folders = 0;
     let fileCount = 0;
@@ -688,7 +689,9 @@ function Main({
       files: fileCount,
       size: formatListingSize(bytes),
     });
-  }, [visibleFiles]);
+    // lang 入参让语言切换时重算翻译结果（useMemo 否则缓存旧语言文案）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleFiles, lang]);
 
   useEffect(() => {
     if (focusedKey && !visibleFiles.some((file) => file.key === focusedKey)) {
@@ -953,7 +956,15 @@ function Main({
         setRenameTarget(file);
         return;
       }
-      if (event.key === "Delete" || event.key === "Backspace") {
+      if (event.key === "Backspace") {
+        // Backspace 语义是「返回上级」而不是删除，避免破坏性误触；Delete 才删除。
+        if (hasOpenOverlay()) return;
+        if (route.kind !== "folder" || !route.path) return;
+        event.preventDefault();
+        navigateFolder(parentKey(route.path));
+        return;
+      }
+      if (event.key === "Delete") {
         if (hasOpenOverlay()) return;
         const targets =
           selectedKeys.length > 0
@@ -985,6 +996,7 @@ function Main({
     jumpFocused,
     moveFocused,
     navigateFolder,
+    route,
     selectAll,
     selectedKeys,
     toggleSelect,
@@ -1084,10 +1096,10 @@ function Main({
           setShareTarget(file);
         } else if (action === "copy") {
           copyToClipboard([file.key]);
-          onNotify("已复制到剪贴板", "success");
+          onNotify(translate("copiedToClipboard"), "success");
         } else if (action === "cut") {
           cutToClipboard([file.key]);
-          onNotify("已剪切到剪贴板", "success");
+          onNotify(translate("cutToClipboard"), "success");
         }
       } catch (error) {
         onNotify((error as Error).message, "error");
@@ -1123,8 +1135,12 @@ function Main({
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
+    const targets = confirmDelete;
+    const runDelete = async () => {
+      return moveToTrash(targets);
+    };
     try {
-      const result = await moveToTrash(confirmDelete);
+      const result = await runDelete();
       const trashIds = result.results.map((item) => item.id);
       onNotify(translate("movedToTrashCount", { count: trashIds.length }), "success", {
         duration: 7000,
@@ -1145,7 +1161,12 @@ function Main({
           : undefined,
       });
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify((error as Error).message, "error", {
+        action: {
+          label: strings.retry,
+          onClick: () => runDelete().then(() => loadListing()).catch(() => {}),
+        },
+      });
     } finally {
       setConfirmDelete(null);
       setSelectedKeys([]);
@@ -1176,12 +1197,21 @@ function Main({
 
   const handleMove = async (destination: string) => {
     if (!moveTarget?.length) return;
+    const keys = moveTarget;
+    const runMove = async () => {
+      await transferKeys(keys, destination, "cut");
+    };
     try {
-      await transferKeys(moveTarget, destination, "cut");
+      await runMove();
       setSelectedKeys([]);
-      onNotify("移动完成", "success");
+      onNotify(translate("moveDone"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify((error as Error).message, "error", {
+        action: {
+          label: strings.retry,
+          onClick: () => runMove().then(() => loadListing()).catch(() => {}),
+        },
+      });
     } finally {
       setMoveTarget(null);
       await loadListing();
@@ -1209,12 +1239,21 @@ function Main({
         (key) => key !== folder.key && !key.startsWith(`${folder.key}/`)
       );
       if (!keys.length) return;
+      const destination = `${folder.key}/`;
+      const runMove = async () => {
+        await transferKeys(keys, destination, "cut");
+      };
       try {
-        await transferKeys(keys, `${folder.key}/`, "cut");
+        await runMove();
         setSelectedKeys([]);
         await loadListing();
       } catch (error) {
-        onNotify((error as Error).message, "error");
+        onNotify((error as Error).message, "error", {
+          action: {
+            label: strings.retry,
+            onClick: () => runMove().then(() => loadListing()).catch(() => {}),
+          },
+        });
       }
       return;
     }
@@ -1278,7 +1317,7 @@ function Main({
         );
       }
     } else {
-      onNotify("最近项目不存在或已移动", "error");
+      onNotify(translate("recentMissing"), "error");
     }
     setPendingOpen(null);
   }, [files, listingPending, onNotify, pendingOpen]);
@@ -1404,6 +1443,7 @@ function Main({
                 emptyMessage={
                   debouncedSearch ? (
                     <EmptyState
+                      variant="search"
                       icon={<SearchOffIcon />}
                       title={strings.noSearchResult}
                       description={strings.noSearchResultHint}
@@ -1418,6 +1458,7 @@ function Main({
                     />
                   ) : (
                     <EmptyState
+                      variant="folder"
                       icon={<FolderOpenIcon />}
                       title={strings.noFiles}
                       description={strings.noFilesHint}
@@ -1455,7 +1496,7 @@ function Main({
                   display="block"
                   sx={{ paddingBottom: 6 }}
                 >
-                  已全部加载
+                  {strings.allLoaded}
                 </Typography>
               )}
             </Box>
@@ -1582,7 +1623,7 @@ function Main({
         open={Boolean(confirmDelete)}
         title={translate("confirmDeleteTitle")}
         message={translate("confirmDeleteMsg", { count: confirmDelete?.length ?? 0 })}
-        confirmText="移入回收站"
+        confirmText={translate("confirmAction")}
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleConfirmDelete}
       />
@@ -1631,11 +1672,11 @@ function Main({
         }}
         onCopy={() => {
           copyToClipboard(selectedKeys);
-          onNotify("已复制到剪贴板", "success");
+          onNotify(translate("copiedToClipboard"), "success");
         }}
         onCut={() => {
           cutToClipboard(selectedKeys);
-          onNotify("已剪切到剪贴板", "success");
+          onNotify(translate("cutToClipboard"), "success");
         }}
         onMove={() => setMoveTarget(selectedKeys)}
       />

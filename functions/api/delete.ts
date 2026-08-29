@@ -34,7 +34,8 @@ export const onRequestDelete: PagesFunction<DeleteEnv> = async (context) => {
     return textResponse("文件不存在", 404);
   }
 
-  // 软删除：文件与目录都进回收站（复用网页端语义），可还原
+  // 软删除：文件与目录都进回收站（复用网页端语义），可还原；
+  // 仅前缀的虚拟目录同样支持（softDeleteKeys 会记 virtualDir，还原时补 marker）
   if (soft) {
     const results = await softDeleteKeys(env.BUCKET, [key]);
     if (results.length === 0) return textResponse("文件不存在", 404);
@@ -43,7 +44,8 @@ export const onRequestDelete: PagesFunction<DeleteEnv> = async (context) => {
       key,
       deleted: true,
       soft: true,
-      trashId: results[0].id,
+      // 与 GET /api/trash 列表项的 trashKey 字段同名同值，便于直接调 restore
+      trashKey: results[0].id,
     });
   }
 

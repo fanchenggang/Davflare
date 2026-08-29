@@ -1,129 +1,27 @@
-import { isCollectionObject, isTruthyParam } from "./_apikey";
+import {
+  authorizeApiKey,
+  INTERNAL_PREFIX,
+  isCollectionObject,
+  isInternalKey,
+  isTruthyParam,
+  jsonResponse,
+  textResponse,
+  touchLastUsed,
+  type StoredApiKey,
+} from "./_apikey";
 
 interface UploadEnv {
   BUCKET: R2Bucket;
 }
 
-const KEYS_PREFIX = "_$flaredrive$/apikeys/";
-const INTERNAL_PREFIX = "_$flaredrive$/";
 const MAX_BYTES = 100 * 1024 * 1024;
 const MULTIPART_PART_MAX = 10000;
-
-interface StoredApiKey {
-  id: string;
-  name: string;
-  prefix: string;
-  keyHash: string;
-  createdAt: string;
-  expiresAt: string | null;
-  createdBy?: string;
-  lastUsedAt?: string | null;
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-  });
-}
-
-function textResponse(message: string, status: number) {
-  return new Response(message, {
-    status,
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
-}
 
 function tooLarge() {
   return textResponse(
     "单次上传超过 Cloudflare Workers 约 100MB 的请求限制。更大的文件请改用网页端分块上传。",
     413
   );
-}
-
-function extractApiKey(request: Request): string {
-  const xKey = (request.headers.get("X-Api-Key") || "").trim();
-  if (xKey) return xKey;
-  const authorization = request.headers.get("Authorization") || "";
-  if (authorization.startsWith("Bearer ")) {
-    return authorization.slice(7).trim();
-  }
-  return "";
-}
-
-async function sha256Hex(value: string) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value)
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function timingSafeEqual(a: string, b: string) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
-function isExpired(expiresAt: string | null | undefined) {
-  if (!expiresAt) return false;
-  const ts = Date.parse(expiresAt);
-  return Number.isFinite(ts) && ts <= Date.now();
-}
-
-async function listStoredKeys(bucket: R2Bucket): Promise<StoredApiKey[]> {
-  const records: StoredApiKey[] = [];
-  let cursor: string | undefined;
-  do {
-    const listing = await bucket.list({
-      prefix: KEYS_PREFIX,
-      cursor,
-    });
-    for (const object of listing.objects) {
-      if (!object.key.endsWith(".json")) continue;
-      const data = await bucket.get(object.key);
-      if (data === null) continue;
-      try {
-        records.push((await data.json()) as StoredApiKey);
-      } catch {
-        // skip corrupt metadata
-      }
-    }
-    if (!listing.truncated) break;
-    cursor = listing.cursor;
-  } while (true);
-  return records;
-}
-
-async function authorizeApiKey(
-  request: Request,
-  bucket: R2Bucket
-): Promise<StoredApiKey | Response> {
-  const rawKey = extractApiKey(request);
-  if (!rawKey) {
-    return textResponse("缺少 API 密钥", 401);
-  }
-  const incomingHash = await sha256Hex(rawKey);
-  const records = await listStoredKeys(bucket);
-  let matched: StoredApiKey | null = null;
-  for (const record of records) {
-    if (record.keyHash && timingSafeEqual(record.keyHash, incomingHash)) {
-      matched = record;
-      break;
-    }
-  }
-  if (!matched) {
-    return textResponse("无效的 API 密钥", 401);
-  }
-  if (isExpired(matched.expiresAt)) {
-    return textResponse("API 密钥已过期", 401);
-  }
-  return matched;
 }
 
 function normalizeFolder(raw: string | null): string | Response {
@@ -140,7 +38,7 @@ function normalizeFolder(raw: string | null): string | Response {
     return textResponse("路径不合法", 400);
   }
   const joined = parts.join("/");
-  if (joined.startsWith(INTERNAL_PREFIX) || joined.includes("/_$flaredrive$/")) {
+  if (isInternalKey(joined)) {
     return textResponse("禁止写入内部目录", 400);
   }
   return `${joined}/`;
@@ -201,17 +99,6 @@ async function ensureFolders(bucket: R2Bucket, folder: string) {
         customMetadata: { resourcetype: "<collection />" },
       });
     }
-  }
-}
-
-async function touchLastUsed(bucket: R2Bucket, record: StoredApiKey) {
-  try {
-    const next = { ...record, lastUsedAt: new Date().toISOString() };
-    await bucket.put(`${KEYS_PREFIX}${record.id}.json`, JSON.stringify(next), {
-      httpMetadata: { contentType: "application/json" },
-    });
-  } catch {
-    // last-used is best-effort; do not fail the upload
   }
 }
 
@@ -277,7 +164,7 @@ function multipartFileKey(raw: string | null): string | Response {
   }
   const key = parts.join("/");
   if (!key) return textResponse("分块上传需要 path 指向完整文件键", 400);
-  if (key.startsWith(INTERNAL_PREFIX) || key.includes("/_$flaredrive$/")) {
+  if (isInternalKey(key)) {
     return textResponse("禁止写入内部目录", 400);
   }
   return key;
@@ -335,8 +222,14 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
       partNumber: Number(part.partNumber),
       etag: String(part.etag ?? ""),
     }));
+    // R2 要求分块按 partNumber 升序且不重复，提前校验给出明确错误
+    const ascending = parts.every(
+      (part, index) =>
+        index === 0 || part.partNumber > parts[index - 1].partNumber
+    );
     const invalid =
       parts.length === 0 ||
+      !ascending ||
       parts.length > MULTIPART_PART_MAX ||
       parts.some(
         (part) =>

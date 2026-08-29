@@ -29,11 +29,15 @@ import { createAppTheme } from "./app/theme";
 import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
 
 interface SnackbarMessage {
+  key: number;
   message: string;
   severity: NoticeSeverity;
   action?: NoticeAction;
   duration?: number;
 }
+
+const DEFAULT_SNACK_MS = 5000;
+const ERROR_SNACK_MS = 8000;
 
 function isTypingTarget(target: EventTarget | null) {
   if (target instanceof HTMLInputElement) {
@@ -64,7 +68,10 @@ function AppContent({
   const [showTransfers, setShowTransfers] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [contentScrolled, setContentScrolled] = useState(false);
-  const [snackbar, setSnackbar] = useState<SnackbarMessage | null>(null);
+  const [snackQueue, setSnackQueue] = useState<SnackbarMessage[]>([]);
+  const [snackOpen, setSnackOpen] = useState(false);
+  const snackKeyRef = useRef(0);
+  const currentSnack = snackQueue[0] ?? null;
   const [view, setView] = usePersistedState<ViewMode>("flaredrive.view", "grid");
   const [sort, setSort] = usePersistedState<SortPref>("flaredrive.sort", {
     field: "name",
@@ -73,35 +80,50 @@ function AppContent({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const notified = useRef(new Set<string>());
 
+  const pushSnack = useCallback(
+    (snack: Omit<SnackbarMessage, "key">) => {
+      snackKeyRef.current += 1;
+      setSnackQueue((queue) => [...queue, { ...snack, key: snackKeyRef.current }]);
+    },
+    []
+  );
+
+  // 队列化展示：上一条退出动画结束后再弹下一条，连续消息不再互相覆盖
+  useEffect(() => {
+    if (snackOpen || snackQueue.length === 0) return;
+    setSnackOpen(true);
+  }, [snackOpen, snackQueue]);
+
   useEffect(() => {
     transferQueue.forEach((task) => {
       if (notified.current.has(task.id)) return;
       if (task.status === "completed") {
         notified.current.add(task.id);
-        setSnackbar({
+        pushSnack({
           message: translate("uploadedToast", { name: task.name }),
           severity: "success",
         });
       } else if (task.status === "failed") {
         notified.current.add(task.id);
-        setSnackbar({
+        pushSnack({
           message: translate("uploadFailedToast", { name: task.name }),
           severity: "error",
+          action: { label: translate("transfers"), onClick: () => setShowTransfers(true) },
         });
       }
     });
-  }, [transferQueue]);
+  }, [transferQueue, pushSnack]);
 
   const onNotify: NotifyFn = useCallback(
     (message, severity = "info", options?: NoticeOptions) => {
-      setSnackbar({
+      pushSnack({
         message,
         severity,
         action: options?.action,
-        duration: options?.duration,
+        duration: options?.duration ?? (severity === "error" ? ERROR_SNACK_MS : undefined),
       });
     },
-    []
+    [pushSnack]
   );
 
   useEffect(() => {
@@ -149,31 +171,33 @@ function AppContent({
       />
       {username === null && <LoginDialog />}
       <Snackbar
-        autoHideDuration={snackbar?.duration ?? 5000}
-        open={Boolean(snackbar)}
-        onClose={() => setSnackbar(null)}
+        key={currentSnack?.key}
+        autoHideDuration={currentSnack?.duration ?? (currentSnack?.severity === "error" ? ERROR_SNACK_MS : DEFAULT_SNACK_MS)}
+        open={snackOpen}
+        onClose={() => setSnackOpen(false)}
+        TransitionProps={{ onExited: () => setSnackQueue((queue) => queue.slice(1)) }}
       >
         <Alert
-          severity={snackbar?.severity ?? "info"}
-          onClose={() => setSnackbar(null)}
+          severity={currentSnack?.severity ?? "info"}
+          onClose={() => setSnackOpen(false)}
           action={
-            snackbar?.action ? (
+            currentSnack?.action ? (
               <Button
                 color="inherit"
                 size="small"
                 onClick={() => {
-                  const action = snackbar.action;
-                  setSnackbar(null);
+                  const action = currentSnack.action;
+                  setSnackOpen(false);
                   action?.onClick();
                 }}
               >
-                {snackbar.action.label}
+                {currentSnack.action.label}
               </Button>
             ) : undefined
           }
           sx={{ width: "100%" }}
         >
-          {snackbar?.message}
+          {currentSnack?.message}
         </Alert>
       </Snackbar>
       <TransferManager open={showTransfers} onClose={() => setShowTransfers(false)} />
