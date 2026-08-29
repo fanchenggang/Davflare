@@ -221,7 +221,7 @@ function PathBar({
             px: 1,
             py: 0.25,
             borderRadius: "999px",
-            backgroundColor: "#f4f1ec",
+            backgroundColor: "background.default",
             fontVariantNumeric: "tabular-nums",
           }}
         >
@@ -237,14 +237,14 @@ function PathBar({
           }}
           aria-label="搜索范围"
           sx={{
-            backgroundColor: "#f4f1ec",
+            backgroundColor: "background.default",
             "& .MuiToggleButton-root": {
               border: "none",
               px: 1.25,
               py: 0.25,
               fontSize: "0.75rem",
               "&.Mui-selected": {
-                backgroundColor: "#fff",
+                backgroundColor: "background.paper",
                 color: "primary.main",
                 boxShadow: "0 1px 2px rgba(26, 23, 20, 0.08)",
               },
@@ -360,6 +360,7 @@ function Main({
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const lastFolderPath = useRef("");
   const loadedListingKey = useRef<string | null>(null);
   const dropDepth = useRef(0);
@@ -375,6 +376,10 @@ function Main({
   useEffect(() => {
     setSearchScope(cwd ? "folder" : "global");
   }, [cwd]);
+
+  useEffect(() => {
+    setFocusedKey(null);
+  }, [cwd, section]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -534,6 +539,46 @@ function Main({
     )}`;
   }, [visibleFiles]);
 
+  useEffect(() => {
+    if (focusedKey && !visibleFiles.some((file) => file.key === focusedKey)) {
+      setFocusedKey(null);
+    }
+  }, [focusedKey, visibleFiles]);
+
+  const scrollFocusedIntoView = useCallback((key: string) => {
+    const nodes = document.querySelectorAll<HTMLElement>("[data-file-key]");
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.dataset.fileKey === key) {
+        node.scrollIntoView({ block: "nearest" });
+        return;
+      }
+    }
+  }, []);
+
+  const moveFocused = useCallback(
+    (delta: number, extendSelection: boolean) => {
+      if (!visibleFiles.length) return;
+      const currentIndex = focusedKey
+        ? visibleFiles.findIndex((file) => file.key === focusedKey)
+        : -1;
+      let nextIndex = currentIndex + delta;
+      if (nextIndex < 0) nextIndex = 0;
+      if (nextIndex >= visibleFiles.length) {
+        nextIndex = visibleFiles.length - 1;
+      }
+      const next = visibleFiles[nextIndex];
+      setFocusedKey(next.key);
+      if (extendSelection) {
+        setSelectedKeys((prev) =>
+          prev.includes(next.key) ? prev : [...prev, next.key]
+        );
+      }
+      scrollFocusedIntoView(next.key);
+    },
+    [focusedKey, scrollFocusedIntoView, visibleFiles]
+  );
+
   const navigateFolder = useCallback(
     (path: string) => {
       setDebouncedSearch("");
@@ -647,16 +692,65 @@ function Main({
       if (isTypingTarget(event.target)) return;
       if (event.key === "Escape") {
         if (hasOpenOverlay()) return;
-        if (selectedKeys.length) {
+        if (selectedKeys.length || focusedKey) {
           event.preventDefault();
           setSelectedKeys([]);
+          setFocusedKey(null);
         }
+        return;
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (hasOpenOverlay()) return;
+        event.preventDefault();
+        moveFocused(event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
+        return;
+      }
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        if (hasOpenOverlay()) return;
+        event.preventDefault();
+        moveFocused(event.key === "ArrowRight" ? 1 : -1, event.shiftKey);
+        return;
+      }
+      if (event.key === " " && focusedKey) {
+        if (hasOpenOverlay()) return;
+        event.preventDefault();
+        toggleSelect(focusedKey);
+        return;
+      }
+      if ((event.key === "a" || event.key === "A") && (event.metaKey || event.ctrlKey)) {
+        if (hasOpenOverlay()) return;
+        event.preventDefault();
+        selectAll();
+        return;
+      }
+      if (event.key === "F2") {
+        if (hasOpenOverlay()) return;
+        const activeKey = focusedKey ?? (selectedKeys.length === 1 ? selectedKeys[0] : null);
+        if (!activeKey) return;
+        const file = visibleFiles.find((item) => item.key === activeKey);
+        if (!file || file.isDir) return;
+        event.preventDefault();
+        setRenameTarget(file);
+        return;
+      }
+      if (event.key === "Delete" || event.key === "Backspace") {
+        if (hasOpenOverlay()) return;
+        const targets =
+          selectedKeys.length > 0
+            ? selectedKeys
+            : focusedKey
+            ? [focusedKey]
+            : [];
+        if (!targets.length) return;
+        event.preventDefault();
+        setConfirmDelete(targets);
         return;
       }
       if (event.key === "Enter") {
         if (hasOpenOverlay()) return;
-        if (selectedKeys.length !== 1) return;
-        const file = visibleFiles.find((item) => item.key === selectedKeys[0]);
+        const activeKey = focusedKey ?? (selectedKeys.length === 1 ? selectedKeys[0] : null);
+        if (!activeKey) return;
+        const file = visibleFiles.find((item) => item.key === activeKey);
         if (!file) return;
         event.preventDefault();
         if (file.isDir) navigateFolder(file.key);
@@ -665,7 +759,16 @@ function Main({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleOpen, navigateFolder, selectedKeys, visibleFiles]);
+  }, [
+    focusedKey,
+    handleOpen,
+    moveFocused,
+    navigateFolder,
+    selectAll,
+    selectedKeys,
+    toggleSelect,
+    visibleFiles,
+  ]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -1011,6 +1114,7 @@ function Main({
                 folderCounts={folderCounts}
                 selectedKeys={selectedKeys}
                 dimmedKeys={cutKeys}
+                focusedKey={focusedKey}
                 onToggleSelect={toggleSelect}
                 onNavigate={rememberFolder}
                 onOpen={handleOpen}
@@ -1127,7 +1231,7 @@ function Main({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(244, 241, 236, 0.88)",
+            backgroundColor: "surface.overlay",
             border: "3px dashed",
             borderColor: "primary.main",
             pointerEvents: "none",
@@ -1138,7 +1242,7 @@ function Main({
               px: 3,
               py: 2,
               borderRadius: 2,
-              backgroundColor: "#fff",
+              backgroundColor: "background.paper",
               boxShadow: "0 8px 24px rgba(26,23,20,0.12)",
             }}
           >

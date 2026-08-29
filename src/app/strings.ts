@@ -87,6 +87,10 @@ export const strings = {
   apiExpiry7d: "7 天",
   apiExpiry30d: "30 天",
   apiExpiryCustom: "自定义小时数",
+  theme: "外观",
+  themeLight: "浅色",
+  themeDark: "深色",
+  themeSystem: "跟随系统",
 };
 
 export default strings;

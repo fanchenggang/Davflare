@@ -128,7 +128,7 @@ function WebDavPanel({
               sx={{
                 p: 1.5,
                 borderRadius: 2,
-                backgroundColor: "#f7f5f1",
+                backgroundColor: "background.default",
                 border: "1px solid",
                 borderColor: "divider",
               }}

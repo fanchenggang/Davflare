@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { alpha, useTheme } from "@mui/material/styles";
 import {
   Box,
   Checkbox,
@@ -11,6 +12,7 @@ import {
 } from "@mui/material";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 
+import AuthThumbnail from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { Density, ViewMode } from "./app/prefs";
 import { strings } from "./app/strings";
@@ -28,6 +30,7 @@ interface FileGridProps {
   folderCounts?: Record<string, number>;
   selectedKeys: string[];
   dimmedKeys?: ReadonlySet<string>;
+  focusedKey?: string | null;
   onToggleSelect: (key: string) => void;
   onNavigate: (key: string) => void;
   onOpen: (key: string) => void;
@@ -107,6 +110,7 @@ function FileGrid({
   folderCounts,
   selectedKeys,
   dimmedKeys,
+  focusedKey,
   onToggleSelect,
   onNavigate,
   onOpen,
@@ -114,6 +118,7 @@ function FileGrid({
   onDropOnFolder,
   emptyMessage,
 }: FileGridProps) {
+  const theme = useTheme();
   const isSelected = (file: FileItem) => selectedKeys.includes(file.key);
   const folderMeta = (file: FileItem) => {
     const count = folderCounts?.[file.key];
@@ -214,7 +219,7 @@ function FileGrid({
           height: 44,
           boxSizing: "border-box",
           pointerEvents: "auto",
-          backgroundColor: "rgba(255,255,255,0.92)",
+          backgroundColor: alpha(theme.palette.background.paper, 0.92),
           borderRadius: 1,
         }}
         onPointerDown={(event) => event.stopPropagation()}
@@ -244,10 +249,12 @@ function FileGrid({
   const itemList = (file: FileItem) => (
     <ListItemButton
       selected={isSelected(file)}
+      data-file-key={file.key}
       onPointerDown={markPointer}
       onClick={() => clickItem(file)}
       onKeyDown={(event) => {
         if (event.key === "Enter") clickItem(file);
+        if (event.key === " ") event.preventDefault();
       }}
       onContextMenu={(event) => openMenu(event, file)}
       draggable
@@ -268,6 +275,13 @@ function FileGrid({
         "&.Mui-selected:hover": {
           backgroundColor: "action.selected",
         },
+        ...(focusedKey === file.key
+          ? {
+              outline: "2px solid",
+              outlineColor: "primary.main",
+              outlineOffset: -1,
+            }
+          : {}),
       }}
     >
       {checkbox(file)}
@@ -329,6 +343,7 @@ function FileGrid({
     <Box
       role="button"
       tabIndex={0}
+      data-file-key={file.key}
       onPointerDown={markPointer}
       onClick={() => clickItem(file)}
       onKeyDown={(event) => {
@@ -352,10 +367,10 @@ function FileGrid({
         border: (theme) =>
           isSelected(file)
             ? `2px solid ${theme.palette.primary.main}`
-            : "1px solid rgba(28, 22, 16, 0.08)",
+            : `1px solid ${theme.palette.divider}`,
         borderRadius: 2,
         backgroundColor: isSelected(file)
-          ? "rgba(243, 128, 32, 0.08)"
+          ? "action.selected"
           : "background.paper",
         opacity: dimmedKeys?.has(file.key) ? 0.5 : 1,
         display: "flex",
@@ -367,11 +382,9 @@ function FileGrid({
         boxShadow: "0 1px 2px rgba(26, 23, 20, 0.04)",
         transition: "background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
         "&:hover": {
-          backgroundColor: isSelected(file)
-            ? "rgba(243, 128, 32, 0.12)"
-            : "#faf8f5",
+          backgroundColor: "action.selected",
           boxShadow: "0 6px 16px rgba(26, 23, 20, 0.08)",
-          borderColor: "rgba(243, 128, 32, 0.35)",
+          borderColor: (theme) => `${theme.palette.primary.main}59`,
         },
         "&:focus": {
           outline: "none",
@@ -381,6 +394,13 @@ function FileGrid({
           outlineColor: "primary.main",
           outlineOffset: 2,
         },
+        ...(focusedKey === file.key
+          ? {
+              outline: "2px solid",
+              outlineColor: "primary.main",
+              outlineOffset: 2,
+            }
+          : {}),
       }}
     >
       {checkbox(file, { position: "absolute", top: 0, left: 0 })}
@@ -521,15 +541,11 @@ function FileGrid({
 
 function thumbnail(file: FileItem, size: number) {
   return file.thumbnail ? (
-    <img
-      src={`/webdav/_$flaredrive$/thumbnails/${file.thumbnail}.png`}
-      alt={file.name}
-      style={{
-        width: size,
-        height: size,
-        objectFit: "cover",
-        borderRadius: size >= 48 ? 8 : 4,
-      }}
+    <AuthThumbnail
+      digest={file.thumbnail}
+      name={file.name}
+      contentType={file.contentType}
+      size={size}
     />
   ) : (
     <MimeIcon contentType={file.contentType} name={file.name} />

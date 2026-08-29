@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from "react";
+import { alpha } from "@mui/material/styles";
 import {
   Alert,
   Box,
@@ -50,7 +51,7 @@ function TextPane({ text }: { text: string }) {
         flex: 1,
         minHeight: 0,
         overflow: "auto",
-        backgroundColor: "#f7f5f1",
+        backgroundColor: "surface.code",
         borderTop: "1px solid",
         borderBottom: "1px solid",
         borderColor: "divider",
@@ -58,7 +59,7 @@ function TextPane({ text }: { text: string }) {
           'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
         fontSize: 13,
         lineHeight: 1.65,
-        color: "#1f2328",
+        color: "surface.codeText",
         tabSize: 2,
       }}
     >
@@ -71,11 +72,11 @@ function TextPane({ text }: { text: string }) {
             textAlign: "right",
             px: 1.5,
             py: 1.5,
-            color: "rgba(26, 23, 20, 0.38)",
+            color: "text.secondary",
             borderRight: "1px solid",
             borderColor: "divider",
             minWidth: 48,
-            backgroundColor: "#f0ece6",
+            backgroundColor: "surface.codeGutter",
             fontVariantNumeric: "tabular-nums",
           }}
         >
@@ -316,9 +317,9 @@ function PreviewDialog({
           [side]: 8,
           transform: "translateY(-50%)",
           zIndex: 2,
-          backgroundColor: "rgba(255,255,255,0.88)",
+          backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.88),
           boxShadow: "0 2px 8px rgba(26,23,20,0.12)",
-          "&:hover": { backgroundColor: "#fff" },
+          "&:hover": { backgroundColor: "background.paper" },
           "&.Mui-disabled": { opacity: 0.3 },
         }}
       >

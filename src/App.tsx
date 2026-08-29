@@ -4,8 +4,9 @@ import {
   Snackbar,
   Stack,
   ThemeProvider,
+  useMediaQuery,
 } from "@mui/material";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ApiKeysPanel from "./ApiKeysPanel";
 import Header from "./Header";
@@ -15,9 +16,14 @@ import TransferManager from "./TransferManager";
 import { AuthProvider, useAuth } from "./app/auth";
 import { ClipboardProvider } from "./app/clipboard";
 import { NoticeSeverity, NotifyFn } from "./app/notify";
-import { SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import {
+  SortPref,
+  ThemeModePreference,
+  usePersistedState,
+  ViewMode,
+} from "./app/prefs";
 import { useHashRoute } from "./app/route";
-import { appTheme } from "./app/theme";
+import { createAppTheme } from "./app/theme";
 import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
 
 interface SnackbarMessage {
@@ -36,7 +42,13 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
-function AppContent() {
+function AppContent({
+  themeMode,
+  onThemeModeChange,
+}: {
+  themeMode: ThemeModePreference;
+  onThemeModeChange: (mode: ThemeModePreference) => void;
+}) {
   const { username, logout } = useAuth();
   const transferQueue = useTransferQueue();
   const [route, navigate] = useHashRoute();
@@ -95,6 +107,8 @@ function AppContent() {
         onLogout={logout}
         onOpenTransfers={() => setShowTransfers(true)}
         onOpenApi={() => setShowApiKeys(true)}
+        themeMode={themeMode}
+        onThemeModeChange={onThemeModeChange}
       />
       <Main
         search={search}
@@ -132,17 +146,41 @@ function AppContent() {
   );
 }
 
+function ThemedApp() {
+  const [themeMode, setThemeMode] = usePersistedState<ThemeModePreference>(
+    "flaredrive.themeMode",
+    "system"
+  );
+  const systemPrefersDark = useMediaQuery("(prefers-color-scheme: dark)", {
+    noSsr: true,
+  });
+  const effectiveMode =
+    themeMode === "system"
+      ? systemPrefersDark
+        ? "dark"
+        : "light"
+      : themeMode;
+  const theme = useMemo(() => createAppTheme(effectiveMode), [effectiveMode]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AppContent
+        themeMode={themeMode}
+        onThemeModeChange={setThemeMode}
+      />
+    </ThemeProvider>
+  );
+}
+
 function App() {
   return (
     <AuthProvider>
-      <ThemeProvider theme={appTheme}>
-        <CssBaseline />
-        <TransferQueueProvider>
-          <ClipboardProvider>
-            <AppContent />
-          </ClipboardProvider>
-        </TransferQueueProvider>
-      </ThemeProvider>
+      <TransferQueueProvider>
+        <ClipboardProvider>
+          <ThemedApp />
+        </ClipboardProvider>
+      </TransferQueueProvider>
     </AuthProvider>
   );
 }

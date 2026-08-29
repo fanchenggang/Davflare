@@ -14,12 +14,16 @@ import {
   AccountCircle as AccountCircleIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
   Logout as LogoutIcon,
   Search as SearchIcon,
+  SettingsBrightness as SystemThemeIcon,
   VpnKey as ApiIcon,
 } from "@mui/icons-material";
 
 import { APP_NAME, strings } from "./app/strings";
+import { ThemeModePreference } from "./app/prefs";
 import { useTransferQueue } from "./app/transferQueue";
 
 function Header({
@@ -30,6 +34,8 @@ function Header({
   onLogout,
   onOpenTransfers,
   onOpenApi,
+  themeMode,
+  onThemeModeChange,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
@@ -38,13 +44,23 @@ function Header({
   onLogout: () => void;
   onOpenTransfers: () => void;
   onOpenApi: () => void;
+  themeMode: ThemeModePreference;
+  onThemeModeChange: (mode: ThemeModePreference) => void;
 }) {
   const [accountAnchor, setAccountAnchor] = useState<null | HTMLElement>(null);
+  const [themeAnchor, setThemeAnchor] = useState<null | HTMLElement>(null);
   const transferQueue = useTransferQueue();
 
   const activeTasks = transferQueue.filter((task) =>
     ["pending", "in-progress", "paused"].includes(task.status)
   ).length;
+
+  const ThemeModeIcon =
+    themeMode === "dark"
+      ? DarkModeIcon
+      : themeMode === "light"
+      ? LightModeIcon
+      : SystemThemeIcon;
 
   return (
     <Toolbar
@@ -108,7 +124,7 @@ function Header({
         }
         inputProps={{ "aria-label": strings.searchShortcutHint }}
         sx={{
-          backgroundColor: "#f4f1ec",
+          backgroundColor: "background.default",
           border: "1px solid",
           borderColor: "divider",
           borderRadius: "999px",
@@ -116,11 +132,14 @@ function Header({
           marginLeft: 0.5,
           maxWidth: 560,
           transition: "border-color 0.15s ease, box-shadow 0.15s ease",
-          "&:hover": { borderColor: "rgba(243, 128, 32, 0.4)" },
+          "&:hover": {
+            borderColor: (theme) => `${theme.palette.primary.main}66`,
+          },
           "&.Mui-focused": {
             borderColor: "primary.main",
-            boxShadow: "0 0 0 3px rgba(243, 128, 32, 0.16)",
-            backgroundColor: "#fff",
+            boxShadow: (theme) =>
+              `0 0 0 3px ${theme.palette.primary.main}29`,
+            backgroundColor: "background.paper",
           },
         }}
       />
@@ -132,6 +151,40 @@ function Header({
           </Badge>
         </IconButton>
       </Tooltip>
+
+      <Tooltip title={strings.theme}>
+        <IconButton
+          aria-label={strings.theme}
+          onClick={(event) => setThemeAnchor(event.currentTarget)}
+        >
+          <ThemeModeIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={themeAnchor}
+        open={Boolean(themeAnchor)}
+        onClose={() => setThemeAnchor(null)}
+      >
+        {(
+          [
+            ["light", LightModeIcon, strings.themeLight],
+            ["dark", DarkModeIcon, strings.themeDark],
+            ["system", SystemThemeIcon, strings.themeSystem],
+          ] as const
+        ).map(([value, Icon, label]) => (
+          <MenuItem
+            key={value}
+            selected={themeMode === value}
+            onClick={() => {
+              onThemeModeChange(value);
+              setThemeAnchor(null);
+            }}
+          >
+            <Icon sx={{ marginRight: 1 }} />
+            {label}
+          </MenuItem>
+        ))}
+      </Menu>
 
       <Tooltip title={username ? `已登录：${username}` : strings.login}>
         <IconButton

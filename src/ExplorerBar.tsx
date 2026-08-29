@@ -136,12 +136,12 @@ function ExplorerBar({
           }}
           aria-label="页面切换"
           sx={{
-            backgroundColor: "#f4f1ec",
+            backgroundColor: "background.default",
             "& .MuiToggleButton-root": {
               border: "none",
               px: 1.5,
               "&.Mui-selected": {
-                backgroundColor: "#fff",
+                backgroundColor: "background.paper",
                 color: "primary.main",
                 boxShadow: "0 1px 2px rgba(26, 23, 20, 0.08)",
               },

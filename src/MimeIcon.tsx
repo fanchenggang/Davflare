@@ -14,6 +14,8 @@ import TableChartIcon from "@mui/icons-material/TableChart";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import VideoFileIcon from "@mui/icons-material/VideoFile";
 
+import { useTheme } from "@mui/material/styles";
+
 import { fileIconKind } from "./app/preview";
 
 const KIND_COLOR: Record<string, string> = {
@@ -34,6 +36,16 @@ const KIND_COLOR: Record<string, string> = {
   other: "#6b7280",
 };
 
+// 暗色背景下过暗的几类图标换用提亮色
+const KIND_COLOR_DARK: Record<string, string> = {
+  zip: "#c99b6a",
+  css: "#7aa5d8",
+  code: "#7aa5d8",
+  text: "#8fa0b0",
+  shell: "#9fb0bd",
+  csv: "#66b884",
+};
+
 function MimeIcon({
   contentType,
   name,
@@ -43,8 +55,12 @@ function MimeIcon({
   name?: string;
   fontSize?: "inherit" | "large" | "medium" | "small";
 }) {
+  const theme = useTheme();
   const kind = fileIconKind({ contentType, name });
-  const color = KIND_COLOR[kind] || KIND_COLOR.other;
+  const color =
+    (theme.palette.mode === "dark" ? KIND_COLOR_DARK[kind] : undefined) ||
+    KIND_COLOR[kind] ||
+    KIND_COLOR.other;
   const sx = { color };
   if (kind === "folder") return <FolderIcon fontSize={fontSize} sx={sx} />;
   if (kind === "image") return <ImageIcon fontSize={fontSize} sx={sx} />;

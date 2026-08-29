@@ -5,6 +5,7 @@ export type Density = "standard" | "compact";
 export type SortField = "name" | "size" | "date";
 export type SortOrder = "asc" | "desc";
 export type FileTypeFilter = "all" | "image" | "video" | "doc" | "other";
+export type ThemeModePreference = "system" | "light" | "dark";
 
 export interface SortPref {
   field: SortField;

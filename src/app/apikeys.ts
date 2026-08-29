@@ -83,6 +83,14 @@ export function renameCurlExample(
   return `curl -X POST "${origin}/api/rename" -H "Authorization: Bearer ${apiKey}" -H "Content-Type: application/json" -d '{"from":"${fromPath}","to":"${toPath}"}'`;
 }
 
+export function mkdirCurlExample(
+  origin: string,
+  apiKey = "<apiKey>",
+  path = "folder/sub"
+) {
+  return `curl -X POST "${origin}/api/mkdir" -H "Authorization: Bearer ${apiKey}" -H "Content-Type: application/json" -d '{"path":"${path}"}'`;
+}
+
 export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
   const key = apiKey || "<apiKey>";
   return [
@@ -148,6 +156,19 @@ export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
     "示例：",
     `curl "${origin}/api/list?path=folder/" \\`,
     `  -H "Authorization: Bearer ${key}"`,
+    "",
+    "—— 创建目录 ——",
+    "",
+    `接口：POST ${origin}/api/mkdir`,
+    "JSON { path } 或查询参数 path=目录键（也可 X-File-Path 头）。",
+    "父目录会自动补建；已存在同名目录幂等返回 200（created: false）；",
+    "同名文件占位：409。成功创建：201，JSON { key, created }。",
+    "",
+    "示例：",
+    `curl -X POST "${origin}/api/mkdir" \\`,
+    `  -H "Authorization: Bearer ${key}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '{"path":"folder/sub"}'`,
     "",
     "—— 冲突备份（同步冲突用这个）——",
     "",

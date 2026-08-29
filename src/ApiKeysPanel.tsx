@@ -31,6 +31,7 @@ import {
   formatApiUsage,
   listApiKeys,
   listCurlExample,
+  mkdirCurlExample,
   overwriteCurlExample,
   revokeApiKey,
   uploadCurlExample,
@@ -237,7 +238,7 @@ function ApiKeysPanel({
               <Alert
                 severity="warning"
                 sx={{
-                  backgroundColor: "#fff8ef",
+                  backgroundColor: "background.default",
                   color: "text.primary",
                   border: "1px solid",
                   borderColor: "rgba(243, 128, 32, 0.28)",
@@ -311,7 +312,7 @@ function ApiKeysPanel({
               sx={{
                 p: 1.5,
                 borderRadius: 2,
-                backgroundColor: "#f7f5f1",
+                backgroundColor: "background.default",
                 border: "1px solid",
                 borderColor: "divider",
               }}
@@ -411,6 +412,18 @@ function ApiKeysPanel({
                   }
                 >
                   复制删除 curl
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ContentCopyIcon />}
+                  onClick={() =>
+                    copy(
+                      mkdirCurlExample(origin, usageKey, "folder/sub"),
+                      "建目录 curl"
+                    )
+                  }
+                >
+                  复制建目录 curl
                 </Button>
               </Stack>
             </Box>

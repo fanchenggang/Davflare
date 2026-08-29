@@ -2,34 +2,125 @@ import { createTheme, Theme } from "@mui/material/styles";
 
 export const ORANGE = "#f38020";
 
-export function createAppTheme(): Theme {
+export type ThemeMode = "light" | "dark";
+
+declare module "@mui/material/styles" {
+  interface Palette {
+    surface: {
+      /** 代码/文本预览内嵌面板背景 */
+      code: string;
+      /** 代码面板行号栏背景 */
+      codeGutter: string;
+      /** 代码面板文字颜色 */
+      codeText: string;
+      /** 全屏遮罩的半透明底色 */
+      overlay: string;
+    };
+  }
+  interface PaletteOptions {
+    surface?: {
+      code?: string;
+      codeGutter?: string;
+      codeText?: string;
+      overlay?: string;
+    };
+  }
+}
+
+const palettes: Record<
+  ThemeMode,
+  {
+    backgroundDefault: string;
+    backgroundPaper: string;
+    divider: string;
+    textPrimary: string;
+    textSecondary: string;
+    textCaption: string;
+    textMuted: string;
+    hover: string;
+    selected: string;
+    focusRing: string;
+    secondary: string;
+    linkColor: string;
+    code: string;
+    codeGutter: string;
+    codeText: string;
+    overlay: string;
+  }
+> = {
+  light: {
+    backgroundDefault: "#f4f1ec",
+    backgroundPaper: "#ffffff",
+    divider: "rgba(28, 22, 16, 0.08)",
+    textPrimary: "#1a1714",
+    textSecondary: "rgba(26, 23, 20, 0.64)",
+    textCaption: "rgba(26, 23, 20, 0.62)",
+    textMuted: "rgba(26, 23, 20, 0.38)",
+    hover: "rgba(243, 128, 32, 0.06)",
+    selected: "rgba(243, 128, 32, 0.12)",
+    focusRing: "rgba(243, 128, 32, 0.16)",
+    secondary: "#8a5a2b",
+    linkColor: "#c45f10",
+    code: "#f7f5f1",
+    codeGutter: "#f0ece6",
+    codeText: "#1f2328",
+    overlay: "rgba(244, 241, 236, 0.88)",
+  },
+  dark: {
+    backgroundDefault: "#171310",
+    backgroundPaper: "#211c17",
+    divider: "rgba(255, 255, 255, 0.09)",
+    textPrimary: "#f1ece5",
+    textSecondary: "rgba(241, 236, 229, 0.66)",
+    textCaption: "rgba(241, 236, 229, 0.6)",
+    textMuted: "rgba(241, 236, 229, 0.4)",
+    hover: "rgba(243, 128, 32, 0.12)",
+    selected: "rgba(243, 128, 32, 0.22)",
+    focusRing: "rgba(243, 128, 32, 0.28)",
+    secondary: "#c99b6a",
+    linkColor: "#ff9a45",
+    code: "#1c1814",
+    codeGutter: "#15110e",
+    codeText: "#e4ded6",
+    overlay: "rgba(23, 19, 16, 0.82)",
+  },
+};
+
+export function createAppTheme(mode: ThemeMode = "light"): Theme {
+  const p = palettes[mode];
   return createTheme({
     palette: {
-      mode: "light",
+      mode,
       primary: {
         main: ORANGE,
         dark: "#d96e12",
         light: "#ff9a45",
         contrastText: "#ffffff",
       },
-      secondary: { main: "#8a5a2b" },
+      secondary: { main: p.secondary },
       success: { main: "#2e7d4f" },
       error: { main: "#c4472c" },
       warning: { main: "#c47b1a" },
       info: { main: "#3d6b99" },
       background: {
-        default: "#f4f1ec",
-        paper: "#ffffff",
+        default: p.backgroundDefault,
+        paper: p.backgroundPaper,
       },
-      divider: "rgba(28, 22, 16, 0.08)",
+      divider: p.divider,
       text: {
-        primary: "#1a1714",
-        secondary: "rgba(26, 23, 20, 0.64)",
+        primary: p.textPrimary,
+        secondary: p.textSecondary,
       },
       action: {
-        hover: "rgba(243, 128, 32, 0.06)",
-        selected: "rgba(243, 128, 32, 0.12)",
-        focus: "rgba(243, 128, 32, 0.16)",
+        hover: p.hover,
+        selected: p.selected,
+        focus: p.focusRing,
+      },
+      surface: {
+        code: p.code,
+        codeGutter: p.codeGutter,
+        codeText: p.codeText,
+        overlay: p.overlay,
       },
     },
     shape: { borderRadius: 10 },
@@ -55,18 +146,18 @@ export function createAppTheme(): Theme {
       caption: {
         fontSize: "0.75rem",
         lineHeight: 1.4,
-        color: "rgba(26, 23, 20, 0.62)",
+        color: p.textCaption,
       },
       button: { textTransform: "none", fontWeight: 600 },
     },
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          ":root": { colorScheme: "light" },
+          ":root": { colorScheme: mode },
           "html, body, #root": { height: "100%" },
           body: {
-            backgroundColor: "#f4f1ec",
-            color: "#1a1714",
+            backgroundColor: p.backgroundDefault,
+            color: p.textPrimary,
           },
           "::selection": {
             backgroundColor: "rgba(243, 128, 32, 0.28)",
@@ -114,7 +205,7 @@ export function createAppTheme(): Theme {
       },
       MuiLink: {
         styleOverrides: {
-          root: { color: "#c45f10" },
+          root: { color: p.linkColor },
         },
       },
     },

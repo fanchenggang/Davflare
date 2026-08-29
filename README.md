@@ -117,6 +117,16 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/notes.txt" \
   -H "Authorization: Bearer <apiKey>"
 ```
 
+Create folders from scripts (parents are auto-created):
+
+```bash
+# JSON body or ?path= both work. 201 created / 200 already exists / 409 same-name file
+curl -X POST "https://<your-domain.com>/api/mkdir" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"folder/sub"}'
+```
+
 Bidirectional sync recipe (local wins; backup remote on conflict): list with `GET /api/list` and compare local mtime/size/etag vs remote `uploaded`/`size`/`etag`. Local-only new/changed → `POST /api/upload?overwrite=1`. Remote-only new/changed → `GET /api/download`. Both changed → `POST /api/backup?path=remoteKey` then overwrite-upload local bytes to the original name. Optional local deletes: `DELETE /api/delete` (skip unless the client tracks a sync db). Extra remote-only files: download them. Same Bearer / `X-Api-Key` auth as upload; no web session. WebDAV protocol is unchanged.
 
 ## Acknowledgments
