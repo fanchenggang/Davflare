@@ -34,6 +34,7 @@ Share (expiry + extract code):
 - Recycle bin with `TRASH_RETENTION_DAYS` (default 30; `-1` disables; lazy purge up to 200 items when trash is opened)
 - WebDAV Class 1/2 at `/webdav`
 - API keys for scripted upload, download, and bidirectional sync
+- Remote MCP at `/mcp` (list, upload, download, mkdir, delete)
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
 ## Deploy
@@ -92,8 +93,28 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 | POST | `/api/backup` | Rename remote to `name.conflict-<UTC>` before overwrite |
 | DELETE | `/api/delete` | Hard delete, or `soft=1` to trash |
 | POST | `/api/shares` | Share a file or folder (folder → zip) |
+| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; ~1 MiB cap) |
 
 Same keys work for a bidirectional sync client (local wins; backup remote on conflict). Details in the [API docs](docs/API.md).
+
+## MCP
+
+Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`). v1 tools: `list`, `upload`, `download`, `mkdir`, `delete`. MCP uploads/downloads are capped at about 1 MiB; use the web UI for larger files.
+
+Cursor (`mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://<your-domain.com>/mcp",
+      "headers": {
+        "Authorization": "Bearer <apiKey>"
+      }
+    }
+  }
+}
+```
 
 ## Development & testing
 

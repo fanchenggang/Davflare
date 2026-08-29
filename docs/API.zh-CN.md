@@ -121,6 +121,39 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 `POST /api/shares` 也接受文件夹 key —— 打开分享链接会把整棵子树以 zip 流式下载（提取码和过期时间照常生效）。
 
+### MCP
+
+同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。密钥缺失或无效返回 **HTTP 401**。v1 工具：`list`、`upload`、`download`、`mkdir`、`delete`（包装上方 Open API）。经 MCP 上传/下载约 1 MiB 上限，更大则工具错误（会提到 **413** / 网页端）。`delete` 默认进回收站；`hard=true` 为永久删除。
+
+```bash
+# initialize
+curl -X POST "https://<your-domain.com>/mcp" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{}}}'
+
+# tools/list
+curl -X POST "https://<your-domain.com>/mcp" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+```
+
+Cursor（`mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://<your-domain.com>/mcp",
+      "headers": {
+        "Authorization": "Bearer <apiKey>"
+      }
+    }
+  }
+}
+```
+
 ### 双向同步示例
 
 以本地为准；冲突时先备份远端。鉴权与上传相同（Bearer / `X-Api-Key`），不走网页会话。WebDAV 协议不变。

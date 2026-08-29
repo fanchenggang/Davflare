@@ -32,6 +32,7 @@
 - 回收站，由 `TRASH_RETENTION_DAYS` 控制（默认 30 天；`-1` 关闭；打开回收站时惰性清理最多 200 项）
 - WebDAV Class 1/2，路径 `/webdav`
 - API Key，可用于脚本上传、下载与双向同步
+- 远程 MCP，路径 `/mcp`（list / upload / download / mkdir / delete）
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
 
 ## 部署
@@ -90,8 +91,28 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 | POST | `/api/backup` | 冲突时把远端改名为 `name.conflict-<UTC>` |
 | DELETE | `/api/delete` | 硬删除，或 `soft=1` 进回收站 |
 | POST | `/api/shares` | 分享文件或文件夹（文件夹为 zip） |
+| POST | `/mcp` | 远程 MCP（JSON-RPC 2.0；同一把 API 密钥；约 1 MiB 上限） |
 
 同一把密钥可做双向同步（本地优先，冲突时先备份远端）。详见 [开放接口文档](docs/API.zh-CN.md)。
+
+## MCP
+
+同源 Model Context Protocol（Streamable HTTP），路径 `POST /mcp`。鉴权与开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`）。v1 工具：`list`、`upload`、`download`、`mkdir`、`delete`。经 MCP 上传/下载约 1 MiB 上限，更大的文件请用网页端。
+
+Cursor（`mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://<your-domain.com>/mcp",
+      "headers": {
+        "Authorization": "Bearer <apiKey>"
+      }
+    }
+  }
+}
+```
 
 ## 开发与测试
 
