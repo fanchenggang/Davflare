@@ -5,7 +5,7 @@ import {
   Button,
   Checkbox,
   List,
-  ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Skeleton,
@@ -168,9 +168,8 @@ function TrashView({
         <>
           <List>
             {items.map((item) => (
-              <ListItem
+              <ListItemButton
                 key={item.trashKey}
-                button
                 onClick={() => toggle(item.trashKey)}
                 sx={{
                   mx: 1,
@@ -189,10 +188,8 @@ function TrashView({
                   <Checkbox
                     size="small"
                     checked={selected.includes(item.trashKey)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggle(item.trashKey);
-                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => toggle(item.trashKey)}
                   />
                 </ListItemIcon>
                 <ListItemText
@@ -204,7 +201,7 @@ function TrashView({
                     size: humanReadableSize(item.size),
                   })}
                 />
-              </ListItem>
+              </ListItemButton>
             ))}
           </List>
           <Stack
@@ -223,6 +220,7 @@ function TrashView({
               startIcon={<RestoreIcon />}
               disabled={selected.length === 0}
               onClick={handleRestore}
+              sx={{ "&.Mui-disabled": { pointerEvents: "auto" } }}
             >
               {strings.restoreBtn}
             </Button>
@@ -231,6 +229,7 @@ function TrashView({
               startIcon={<DeleteForeverIcon />}
               disabled={selected.length === 0}
               onClick={() => setConfirm({ kind: "delete" })}
+              sx={{ "&.Mui-disabled": { pointerEvents: "auto" } }}
             >
               {strings.permanentDelete}
             </Button>
