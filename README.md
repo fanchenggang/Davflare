@@ -10,13 +10,21 @@ Cloudflare R2 file manager on Pages + Workers — free 10 GB storage and 100,000
 
 ## Screenshots
 
-File browser (light theme):
+Grid light:
 
-![File browser](docs/screenshots/browser.png)
+![Grid light](docs/screenshots/grid-light.png)
 
-Preview / share:
+Grid dark:
 
-![Preview](docs/screenshots/preview.png)
+![Grid dark](docs/screenshots/grid-dark.png)
+
+Image preview:
+
+![Image preview](docs/screenshots/preview.png)
+
+Share (expiry + extract code):
+
+![Share (expiry + extract code)](docs/screenshots/share.png)
 
 ## Features
 
