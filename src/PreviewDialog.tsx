@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from "react";
-import { alpha } from "@mui/material/styles";
+import { alpha, useTheme } from "@mui/material/styles";
 import {
   Alert,
   Box,
@@ -23,8 +23,17 @@ import EditIcon from "@mui/icons-material/Edit";
 import ShareIcon from "@mui/icons-material/Share";
 
 import { authFetch } from "./app/auth";
+import {
+  HighlightLang,
+  highlightLangFor,
+  LineToken,
+  tokenizeForHighlight,
+  tokensToLines,
+} from "./app/highlight";
 import { NotifyFn } from "./app/notify";
 import {
+  fileExtension,
+  fileIconKind,
   isJsonFile,
   isMediaPreviewable,
   isTextPreviewable,
@@ -34,15 +43,72 @@ import {
   TEXT_PREVIEW_MAX_BYTES,
 } from "./app/preview";
 import { strings } from "./app/strings";
+import { Z_INDEX } from "./app/theme";
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
 import { encodeKey, humanReadableSize } from "./app/utils";
 
 const LINE_NUMBER_CAP = 2000;
+const HIGHLIGHT_MAX_BYTES = 1024 * 1024;
 
-function TextPane({ text }: { text: string }) {
-  const lines = useMemo(() => text.split("\n"), [text]);
-  const showGutter = lines.length <= LINE_NUMBER_CAP;
+// 亮暗两套 token 配色（对 surface.code 背景均满足可读性）
+const TOKEN_COLORS = {
+  light: {
+    keyword: "#a626a4",
+    string: "#50a14f",
+    comment: "#9d9d99",
+    number: "#986801",
+  },
+  dark: {
+    keyword: "#c678dd",
+    string: "#98c379",
+    comment: "#7f848e",
+    number: "#d19a66",
+  },
+} as const;
+
+function TextPane({
+  text,
+  highlightLang,
+}: {
+  text: string;
+  highlightLang: HighlightLang | null;
+}) {
+  const theme = useTheme();
+  const mode = theme.palette.mode;
+  const enabled =
+    highlightLang !== null && text.length <= HIGHLIGHT_MAX_BYTES;
+
+  const lines = useMemo(() => {
+    if (!enabled) return null;
+    try {
+      return tokensToLines(text, tokenizeForHighlight(text, highlightLang));
+    } catch {
+      return null;
+    }
+  }, [enabled, highlightLang, text]);
+
+  const plainLines = useMemo(() => text.split("\n"), [text]);
+  const showGutter = plainLines.length <= LINE_NUMBER_CAP;
+  const tokenColor = (kind: LineToken["kind"]) =>
+    kind === "plain" ? undefined : TOKEN_COLORS[mode][kind];
+
+  const renderLine = (line: LineToken[], index: number) =>
+    line.length === 0 ? (
+      <div key={index}>{"\u00a0"}</div>
+    ) : (
+      <div key={index}>
+        {line.map((token, tokenIndex) =>
+          token.kind === "plain" ? (
+            <React.Fragment key={tokenIndex}>{token.text}</React.Fragment>
+          ) : (
+            <span key={tokenIndex} style={{ color: tokenColor(token.kind) }}>
+              {token.text}
+            </span>
+          )
+        )}
+      </div>
+    );
 
   return (
     <Box
@@ -80,7 +146,7 @@ function TextPane({ text }: { text: string }) {
             fontVariantNumeric: "tabular-nums",
           }}
         >
-          {lines.map((_, index) => (
+          {plainLines.map((_, index) => (
             <div key={index}>{index + 1}</div>
           ))}
         </Box>
@@ -98,7 +164,11 @@ function TextPane({ text }: { text: string }) {
           wordBreak: "normal",
         }}
       >
-        {text}
+        {lines
+          ? lines.map(renderLine)
+          : plainLines.map((line, index) => (
+              <div key={index}>{line || "\u00a0"}</div>
+            ))}
       </Box>
     </Box>
   );
@@ -289,6 +359,16 @@ function PreviewDialog({
   };
 
   const contentType = mimeType(file?.contentType);
+  // 代码类文件启用轻量语法高亮（json/clike/hash 注释族）
+  const highlightLang = useMemo<HighlightLang | null>(() => {
+    if (!file) return null;
+    const kind = fileIconKind(file);
+    if (kind === "json") return "json";
+    if (kind === "js" || kind === "css" || kind === "code" || kind === "shell") {
+      return highlightLangFor(fileExtension(file.name));
+    }
+    return null;
+  }, [file]);
   const isImage =
     contentType.startsWith("image/") && contentType !== "image/svg+xml";
   const isVideo = contentType.startsWith("video/");
@@ -316,7 +396,7 @@ function PreviewDialog({
           top: "50%",
           [side]: 8,
           transform: "translateY(-50%)",
-          zIndex: 2,
+          zIndex: Z_INDEX.previewPager,
           backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.88),
           boxShadow: "0 2px 8px rgba(26,23,20,0.12)",
           "&:hover": { backgroundColor: "background.paper" },
@@ -433,7 +513,7 @@ function PreviewDialog({
                 无法解析为 JSON，已显示原文
               </Alert>
             )}
-            <TextPane text={text} />
+            <TextPane text={text} highlightLang={highlightLang} />
           </Box>
         ) : url ? (
           isImage ? (

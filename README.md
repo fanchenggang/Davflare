@@ -70,7 +70,32 @@ curl -X POST "https://<your-domain.com>/api/upload?path=docs/" \
   --data-binary @notes.txt
 ```
 
-Single-request uploads are limited to about 100MB (HTTP 413 otherwise). Larger files still need the web chunked uploader. Manage keys via session-authenticated `GET/POST/DELETE /api/keys`. Usage docs are also shown on the API settings page.
+Single-request uploads are limited to about 100MB (HTTP 413 otherwise). Larger files use the multipart API:
+
+```bash
+# 1) create
+curl -X POST "https://<your-domain.com>/api/upload?uploads&path=folder/big.bin" \
+  -H "Authorization: Bearer <apiKey>"
+# → 201 { key, uploadId }
+
+# 2) upload each part (≤100MB per request, partNumber 1..10000)
+curl -X PUT "https://<your-domain.com>/api/upload?path=folder/big.bin&uploadId=<id>&partNumber=1" \
+  -H "Authorization: Bearer <apiKey>" \
+  --data-binary @part1.bin
+# → 200 { partNumber, etag }
+
+# 3) complete with the collected parts (order matters)
+curl -X POST "https://<your-domain.com>/api/upload?path=folder/big.bin&uploadId=<id>" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"parts":[{"partNumber":1,"etag":"..."},{"partNumber":2,"etag":"..."}]}'
+
+# abort an unfinished upload
+curl -X DELETE "https://<your-domain.com>/api/upload?path=folder/big.bin&uploadId=<id>" \
+  -H "Authorization: Bearer <apiKey>"
+```
+
+Manage keys via session-authenticated `GET/POST/DELETE /api/keys`. Usage docs are also shown on the API settings page.
 
 The same keys can list a folder and download each file (folders are not a zip):
 
@@ -90,7 +115,7 @@ curl -L "https://<your-domain.com>/api/download?path=DBX/sync/snapshot.json" \
   -o snapshot.json
 ```
 
-`GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded, etag }] }` for the current folder only. Files always include numeric `size`, ISO `uploaded` (and alias `updated`), and R2 `etag`. Delimited-prefix folders have `isDir: true`, `size: 0`, and `uploaded: null` (unknown; no fake mtime). Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns 400 and tells you to use `/api/download`. Missing folder: 404. Bad/expired key: 401.
+`GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded, etag }] }` for the current folder only. Files always include numeric `size`, ISO `uploaded` (and alias `updated`), and R2 `etag`. Delimited-prefix folders have `isDir: true`, `size: 0`, and `uploaded: null` (unknown; no fake mtime). Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns 400 and tells you to use `/api/download`. Missing folder: 404. Bad/expired key: 401. Large folders: add `limit=1..1000` (plus `cursor` from the previous response) for paged reads — the response then carries `nextCursor` while more pages remain.
 
 `GET /api/download` `path` is the object key. HTTP 200 streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns 400; unknown object 404; bad/expired key 401. Internal `_$flaredrive$/` keys are rejected.
 
@@ -106,7 +131,7 @@ curl -X POST "https://<your-domain.com>/api/upload?path=folder/&overwrite=1" \
 curl -X POST "https://<your-domain.com>/api/backup?path=folder/notes.txt" \
   -H "Authorization: Bearer <apiKey>"
 
-# rename (409 if `to` exists unless overwrite=1)
+# rename (409 if `to` exists unless overwrite=1; directories move recursively, no overwrite)
 curl -X POST "https://<your-domain.com>/api/rename" \
   -H "Authorization: Bearer <apiKey>" \
   -H "Content-Type: application/json" \
@@ -115,7 +140,17 @@ curl -X POST "https://<your-domain.com>/api/rename" \
 # delete a file only
 curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/notes.txt" \
   -H "Authorization: Bearer <apiKey>"
+
+# soft delete (goes to the recycle bin, restorable; works for directories too)
+curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/notes.txt&soft=1" \
+  -H "Authorization: Bearer <apiKey>"
+
+# delete a whole directory recursively (≤1000 objects per call)
+curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
+  -H "Authorization: Bearer <apiKey>"
 ```
+
+Directory notes: `/api/rename` and `/api/delete` accept directories — rename moves the whole tree, delete removes it recursively (hard delete unless `soft=1`). `/api/backup` on a directory renames the whole tree to `name.conflict-<UTCstamp>`. Operations covering more than 1000 objects return 400 and must be batched.
 
 Create folders from scripts (parents are auto-created):
 

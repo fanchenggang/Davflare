@@ -14,6 +14,7 @@ export async function moveToTrash(keys: string[]) {
     body: JSON.stringify({ keys }),
   });
   if (!response.ok) throw new Error((await response.text()) || "移入回收站失败");
+  return (await response.json()) as { results: Array<{ key: string; id: string }> };
 }
 
 export async function restoreTrash(trashKeys: string[]) {

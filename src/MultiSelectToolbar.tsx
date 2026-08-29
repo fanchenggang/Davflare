@@ -1,5 +1,7 @@
 import React from "react";
 import { Button, Slide, Toolbar, Typography } from "@mui/material";
+
+import { Z_INDEX } from "./app/theme";
 import {
   Close as CloseIcon,
   ContentCopy as CopyIcon,
@@ -72,7 +74,7 @@ function MultiSelectToolbar({
           bottom: 0,
           left: 0,
           right: 0,
-          zIndex: 100,
+          zIndex: Z_INDEX.multiSelectToolbar,
           backgroundColor: (theme) => theme.palette.background.paper,
           borderTop: "1px solid",
           borderColor: "divider",

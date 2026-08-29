@@ -2,10 +2,12 @@ import {
   authorizeApiKey,
   conflictBackupKey,
   copyThenDelete,
+  formatConflictStamp,
   isCollectionObject,
   isInternalKey,
   isPrefixOnlyFolder,
   jsonResponse,
+  moveDirectory,
   normalizeFileKey,
   splitNameExt,
   textResponse,
@@ -58,6 +60,27 @@ async function uniqueBackupKey(bucket: R2Bucket, from: string): Promise<string> 
   }
 }
 
+// 目录备份名：name.conflict-<UTC戳>（目录名不拆扩展名）
+async function uniqueDirBackupKey(
+  bucket: R2Bucket,
+  folder: string,
+  name: string
+): Promise<string> {
+  const base = `${folder}${name}.conflict-${formatConflictStamp()}`;
+  const head = await bucket.head(base);
+  if (head === null) return base;
+  let index = 2;
+  while (true) {
+    const candidate = `${base}-${index}`;
+    const exists = await bucket.head(candidate);
+    if (exists === null) return candidate;
+    index += 1;
+    if (index > 99) {
+      return `${base}-${Date.now()}`;
+    }
+  }
+}
+
 export const onRequestPost: PagesFunction<BackupEnv> = async (context) => {
   const { request, env } = context;
   const auth = await authorizeApiKey(request, env.BUCKET);
@@ -67,20 +90,32 @@ export const onRequestPost: PagesFunction<BackupEnv> = async (context) => {
   if (from instanceof Response) return from;
 
   const sourceHead = await env.BUCKET.head(from);
-  if (sourceHead === null) {
-    if (await isPrefixOnlyFolder(env.BUCKET, from)) {
-      return textResponse("只能备份文件，不能备份目录", 400);
-    }
+  const sourceIsDir =
+    sourceHead !== null
+      ? isCollectionObject(sourceHead)
+      : await isPrefixOnlyFolder(env.BUCKET, from);
+  if (sourceHead === null && !sourceIsDir) {
     return textResponse("文件不存在", 404);
   }
-  if (isCollectionObject(sourceHead)) {
-    return textResponse("只能备份文件，不能备份目录", 400);
+
+  if (!sourceIsDir) {
+    const to = await uniqueBackupKey(env.BUCKET, from);
+    const copied = await copyThenDelete(env.BUCKET, from, to);
+    if (copied) return copied;
+
+    await touchLastUsed(env.BUCKET, auth);
+    return jsonResponse({ from, to });
   }
 
-  const to = await uniqueBackupKey(env.BUCKET, from);
-  const copied = await copyThenDelete(env.BUCKET, from, to);
-  if (copied) return copied;
+  // 目录备份：整树改名 name.conflict-<UTC戳>
+  const slash = from.lastIndexOf("/");
+  const name = slash >= 0 ? from.slice(slash + 1) : from;
+  const folder = slash >= 0 ? from.slice(0, slash + 1) : "";
+  const to = await uniqueDirBackupKey(env.BUCKET, folder, name);
+
+  const moved = await moveDirectory(env.BUCKET, from, to);
+  if (moved) return moved;
 
   await touchLastUsed(env.BUCKET, auth);
-  return jsonResponse({ from, to });
+  return jsonResponse({ from, to, kind: "directory" });
 };

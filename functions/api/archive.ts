@@ -14,6 +14,7 @@ async function listObjects(bucket: R2Bucket, prefix: string) {
     const listing = await bucket.list({
       prefix,
       cursor,
+      // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata"],
     });
     objects.push(...listing.objects);

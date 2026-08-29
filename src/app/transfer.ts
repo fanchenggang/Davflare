@@ -101,6 +101,30 @@ export interface SearchResponse {
   nextCursor?: string;
 }
 
+// 并发统计一批文件夹的直接子项数（惰性计数），失败的键不出现在结果里
+export async function fetchFolderCounts(
+  keys: string[],
+  concurrency = 3
+): Promise<Record<string, number>> {
+  const results: Record<string, number> = {};
+  const queue = [...keys];
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(concurrency, queue.length)) },
+    async () => {
+      while (queue.length) {
+        const key = queue.shift()!;
+        try {
+          results[key] = (await fetchPath(key)).length;
+        } catch {
+          // 单个失败静默，前端保留占位文案
+        }
+      }
+    }
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export async function searchFiles(
   query: string,
   cursor?: string,

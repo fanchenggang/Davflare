@@ -122,26 +122,17 @@ export const onRequestDelete: PagesFunction<TrashEnv> = async (context) => {
   return new Response(null, { status: 204 });
 };
 
-async function handleSoftDelete(request: Request, env: TrashEnv) {
-  let body: { keys?: string[] };
-  try {
-    body = await request.json();
-  } catch {
-    return new Response("Bad Request", { status: 400 });
-  }
-
-  const keys = body.keys || [];
-  if (keys.length === 0) return new Response("Bad Request", { status: 400 });
-
+// 软删除核心：复制到回收站前缀再删原对象。供网页回收站与开放接口 /api/delete?soft=1 共用。
+export async function softDeleteKeys(bucket: R2Bucket, keys: string[]) {
   const results: Array<{ key: string; id: string }> = [];
   for (const rawKey of keys) {
     const key = String(rawKey).replace(/\/$/, "");
     if (!key) continue;
 
-    const head = await env.BUCKET.head(key);
+    const head = await bucket.head(key);
     if (head === null) continue;
 
-    const descendants = await listObjects(env.BUCKET, `${key}/`);
+    const descendants = await listObjects(bucket, `${key}/`);
     const id = createTrashId();
     const root = `${TRASH_PREFIX}${id}`;
     const items: Array<{
@@ -176,9 +167,9 @@ async function handleSoftDelete(request: Request, env: TrashEnv) {
 
     let totalSize = 0;
     for (const item of items) {
-      const source = await env.BUCKET.get(item.source);
+      const source = await bucket.get(item.source);
       if (source === null) continue;
-      await env.BUCKET.put(item.target, source.body, {
+      await bucket.put(item.target, source.body, {
         httpMetadata: source.httpMetadata,
         customMetadata: source.customMetadata,
       });
@@ -186,10 +177,10 @@ async function handleSoftDelete(request: Request, env: TrashEnv) {
     }
 
     for (const item of items) {
-      await env.BUCKET.delete(item.source);
+      await bucket.delete(item.source);
     }
 
-    await env.BUCKET.put(
+    await bucket.put(
       `${TRASH_PREFIX}${id}.json`,
       JSON.stringify({
         originalKey: key,
@@ -206,6 +197,21 @@ async function handleSoftDelete(request: Request, env: TrashEnv) {
 
     results.push({ key, id });
   }
+  return results;
+}
+
+async function handleSoftDelete(request: Request, env: TrashEnv) {
+  let body: { keys?: string[] };
+  try {
+    body = await request.json();
+  } catch {
+    return new Response("Bad Request", { status: 400 });
+  }
+
+  const keys = body.keys || [];
+  if (keys.length === 0) return new Response("Bad Request", { status: 400 });
+
+  const results = await softDeleteKeys(env.BUCKET, keys);
 
   return new Response(JSON.stringify({ results }), {
     headers: { "Content-Type": "application/json" },

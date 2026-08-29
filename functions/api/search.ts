@@ -40,9 +40,14 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
   let hasMore = false;
   let done = false;
 
+  // 固定小步长扫描：凑满 limit 后继续扫完当前页，保证同页命中不丢；
+  // 只有 R2 页还有后续（truncated）时才给 cursor 翻页。最后一页可能返回略多于 limit 条。
+  const SCAN_PAGE = 100;
+
   while (!done) {
     const listing = await env.BUCKET.list({
       cursor,
+      limit: SCAN_PAGE,
       // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata", "customMetadata"],
     });
@@ -58,18 +63,16 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
         contentType: object.httpMetadata?.contentType || "",
         thumbnail: object.customMetadata?.thumbnail || "",
       });
-
-      if (items.length >= limit) {
-        if (listing.truncated) {
-          hasMore = true;
-          nextCursor = listing.cursor;
-        }
-        done = true;
-        break;
-      }
     }
 
-    if (done) break;
+    if (items.length >= limit) {
+      if (listing.truncated) {
+        hasMore = true;
+        nextCursor = listing.cursor;
+      }
+      done = true;
+      break;
+    }
     if (!listing.truncated) {
       done = true;
     } else {

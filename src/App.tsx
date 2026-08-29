@@ -1,5 +1,6 @@
 import {
   Alert,
+  Button,
   CssBaseline,
   Snackbar,
   Stack,
@@ -15,7 +16,7 @@ import Main from "./Main";
 import TransferManager from "./TransferManager";
 import { AuthProvider, useAuth } from "./app/auth";
 import { ClipboardProvider } from "./app/clipboard";
-import { NoticeSeverity, NotifyFn } from "./app/notify";
+import { NoticeAction, NoticeOptions, NoticeSeverity, NotifyFn } from "./app/notify";
 import {
   SortPref,
   ThemeModePreference,
@@ -29,13 +30,18 @@ import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
 interface SnackbarMessage {
   message: string;
   severity: NoticeSeverity;
+  action?: NoticeAction;
+  duration?: number;
 }
 
 function isTypingTarget(target: EventTarget | null) {
+  if (target instanceof HTMLInputElement) {
+    // 复选框/单选/按钮不是文本输入，键盘导航应继续生效
+    return !["checkbox", "radio", "button", "submit"].includes(target.type);
+  }
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return (
-    tag === "INPUT" ||
     tag === "TEXTAREA" ||
     tag === "SELECT" ||
     target.isContentEditable
@@ -77,9 +83,17 @@ function AppContent({
     });
   }, [transferQueue]);
 
-  const onNotify: NotifyFn = useCallback((message, severity = "info") => {
-    setSnackbar({ message, severity });
-  }, []);
+  const onNotify: NotifyFn = useCallback(
+    (message, severity = "info", options?: NoticeOptions) => {
+      setSnackbar({
+        message,
+        severity,
+        action: options?.action,
+        duration: options?.duration,
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -124,13 +138,28 @@ function AppContent({
       />
       {username === null && <LoginDialog />}
       <Snackbar
-        autoHideDuration={5000}
+        autoHideDuration={snackbar?.duration ?? 5000}
         open={Boolean(snackbar)}
         onClose={() => setSnackbar(null)}
       >
         <Alert
           severity={snackbar?.severity ?? "info"}
           onClose={() => setSnackbar(null)}
+          action={
+            snackbar?.action ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  const action = snackbar.action;
+                  setSnackbar(null);
+                  action?.onClick();
+                }}
+              >
+                {snackbar.action.label}
+              </Button>
+            ) : undefined
+          }
           sx={{ width: "100%" }}
         >
           {snackbar?.message}

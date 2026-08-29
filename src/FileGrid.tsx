@@ -15,6 +15,7 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import AuthThumbnail from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { Density, ViewMode } from "./app/prefs";
+import { Z_INDEX } from "./app/theme";
 import { strings } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
@@ -31,7 +32,7 @@ interface FileGridProps {
   selectedKeys: string[];
   dimmedKeys?: ReadonlySet<string>;
   focusedKey?: string | null;
-  onToggleSelect: (key: string) => void;
+  onToggleSelect: (key: string, event?: { shiftKey?: boolean }) => void;
   onNavigate: (key: string) => void;
   onOpen: (key: string) => void;
   onOpenMenu: (
@@ -146,8 +147,16 @@ function FileGrid({
     event.dataTransfer.effectAllowed = "move";
   };
 
-  const clickItem = (file: FileItem) => {
+  const clickItem = (
+    file: FileItem,
+    event?: React.MouseEvent
+  ) => {
     if (pointer.current.dragging) return;
+    // Ctrl/Cmd+Click 切换选择，Shift+Click 范围选择（不触发打开/进入）
+    if (event && (event.shiftKey || event.metaKey || event.ctrlKey)) {
+      onToggleSelect(file.key, event);
+      return;
+    }
     if (isDirectory(file)) onNavigate(file.key);
     else onOpen(file.key);
   };
@@ -161,7 +170,7 @@ function FileGrid({
       onMouseDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
-        onToggleSelect(file.key);
+        onToggleSelect(file.key, event);
       }}
       sx={sx}
     />
@@ -214,7 +223,7 @@ function FileGrid({
           position: "absolute",
           top: 0,
           right: 0,
-          zIndex: 3,
+          zIndex: Z_INDEX.cardOverlay,
           width: 44,
           height: 44,
           boxSizing: "border-box",
@@ -251,7 +260,7 @@ function FileGrid({
       selected={isSelected(file)}
       data-file-key={file.key}
       onPointerDown={markPointer}
-      onClick={() => clickItem(file)}
+      onClick={(event) => clickItem(file, event)}
       onKeyDown={(event) => {
         if (event.key === "Enter") clickItem(file);
         if (event.key === " ") event.preventDefault();
@@ -345,7 +354,7 @@ function FileGrid({
       tabIndex={0}
       data-file-key={file.key}
       onPointerDown={markPointer}
-      onClick={() => clickItem(file)}
+      onClick={(event) => clickItem(file, event)}
       onKeyDown={(event) => {
         if (event.key === "Enter") clickItem(file);
       }}
@@ -471,7 +480,7 @@ function FileGrid({
             py: 0.75,
             position: "sticky",
             top: 0,
-            zIndex: 1,
+            zIndex: Z_INDEX.listHeader,
             backgroundColor: "background.default",
             borderBottom: "1px solid",
             borderColor: "divider",

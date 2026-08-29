@@ -10,8 +10,10 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  CircularProgress,
   IconButton,
   Link,
+  Stack,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -43,6 +45,7 @@ import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
 import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { Z_INDEX } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings } from "./app/strings";
 import {
@@ -51,12 +54,13 @@ import {
   createFolder,
   downloadArchive,
   downloadFile,
+  fetchFolderCounts,
   fetchPath,
   openFile,
   searchFiles,
   selectDirectoryFiles,
 } from "./app/transfer";
-import { moveToTrash } from "./app/trash";
+import { moveToTrash, restoreTrash } from "./app/trash";
 import { useAuth } from "./app/auth";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
@@ -72,11 +76,35 @@ import {
 
 export type SearchScope = "folder" | "global";
 
+const FOLDER_COUNT_CACHE_KEY = "flaredrive.folderCounts";
+const FOLDER_COUNT_FILL_MAX = 50;
+
+function loadFolderCountCache(): Record<string, number> {
+  try {
+    return JSON.parse(
+      sessionStorage.getItem(FOLDER_COUNT_CACHE_KEY) || "{}"
+    ) as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+function saveFolderCountCache(counts: Record<string, number>) {
+  try {
+    sessionStorage.setItem(FOLDER_COUNT_CACHE_KEY, JSON.stringify(counts));
+  } catch {
+    // 忽略持久化失败
+  }
+}
+
 function isTypingTarget(target: EventTarget | null) {
+  if (target instanceof HTMLInputElement) {
+    // 复选框/单选/按钮不是文本输入，键盘导航应继续生效
+    return !["checkbox", "radio", "button", "submit"].includes(target.type);
+  }
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return (
-    tag === "INPUT" ||
     tag === "TEXTAREA" ||
     tag === "SELECT" ||
     target.isContentEditable
@@ -346,7 +374,10 @@ function Main({
     "standard"
   );
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
-  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({});
+  const [folderCounts, setFolderCounts] = useState<Record<string, number>>(
+    loadFolderCountCache
+  );
+  const folderCountInFlight = useRef(new Set<string>());
   const recents = useRecent();
   const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [contextMenu, setContextMenu] = useState<{
@@ -361,6 +392,7 @@ function Main({
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
   const [dropActive, setDropActive] = useState(false);
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const selectionAnchor = useRef<string | null>(null);
   const lastFolderPath = useRef("");
   const loadedListingKey = useRef<string | null>(null);
   const dropDepth = useRef(0);
@@ -436,7 +468,10 @@ function Main({
       loadedListingKey.current = listingKey;
       setSelectedKeys([]);
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify((error as Error).message, "error", {
+        duration: 8000,
+        action: { label: strings.retry, onClick: () => loadListing() },
+      });
     } finally {
       setLoading(false);
     }
@@ -468,8 +503,11 @@ function Main({
     previousActive.current = activeUploads;
   }, [activeUploads, loadListing]);
 
-  const loadMore = async () => {
-    if (!isGlobalSearch || !searchCursor) return;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const loadMore = useCallback(async () => {
+    if (!isGlobalSearch || !searchCursor || loadingMore) return;
+    setLoadingMore(true);
     try {
       const result = await searchFiles(debouncedSearch, searchCursor);
       setFiles((prev) => [...prev, ...result.items]);
@@ -477,8 +515,53 @@ function Main({
       setSearchCursor(result.nextCursor);
     } catch (error) {
       onNotify((error as Error).message, "error");
+    } finally {
+      setLoadingMore(false);
     }
-  };
+  }, [
+    debouncedSearch,
+    isGlobalSearch,
+    loadingMore,
+    onNotify,
+    searchCursor,
+  ]);
+
+  // 全盘搜索触底自动加载：IO 为主，scroll 捕获阶段兜底（部分嵌入环境 IO 不发回调）
+  useEffect(() => {
+    if (!searchHasMore) return;
+    const node = loadMoreSentinelRef.current;
+    if (!node) return;
+
+    const maybeLoad = () => {
+      const rect = node.getBoundingClientRect();
+      if (rect.top < window.innerHeight + 200 && rect.bottom > -200) {
+        loadMore();
+      }
+    };
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(node);
+
+    let lastCheck = 0;
+    const onScroll = () => {
+      // rAF 在部分嵌入环境会被暂停，直接用时间戳节流
+      const now = Date.now();
+      if (now - lastCheck < 150) return;
+      lastCheck = now;
+      maybeLoad();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    const initial = window.setTimeout(maybeLoad, 0);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.clearTimeout(initial);
+    };
+  }, [loadMore, searchHasMore]);
 
   const sortedFiles = useMemo(() => {
     const items = [...files];
@@ -556,18 +639,11 @@ function Main({
     }
   }, []);
 
-  const moveFocused = useCallback(
-    (delta: number, extendSelection: boolean) => {
+  const jumpFocused = useCallback(
+    (index: number, extendSelection: boolean) => {
       if (!visibleFiles.length) return;
-      const currentIndex = focusedKey
-        ? visibleFiles.findIndex((file) => file.key === focusedKey)
-        : -1;
-      let nextIndex = currentIndex + delta;
-      if (nextIndex < 0) nextIndex = 0;
-      if (nextIndex >= visibleFiles.length) {
-        nextIndex = visibleFiles.length - 1;
-      }
-      const next = visibleFiles[nextIndex];
+      const clamped = Math.max(0, Math.min(index, visibleFiles.length - 1));
+      const next = visibleFiles[clamped];
       setFocusedKey(next.key);
       if (extendSelection) {
         setSelectedKeys((prev) =>
@@ -576,8 +652,50 @@ function Main({
       }
       scrollFocusedIntoView(next.key);
     },
-    [focusedKey, scrollFocusedIntoView, visibleFiles]
+    [scrollFocusedIntoView, visibleFiles]
   );
+
+  const moveFocused = useCallback(
+    (delta: number, extendSelection: boolean) => {
+      if (!visibleFiles.length) return;
+      const currentIndex = focusedKey
+        ? visibleFiles.findIndex((file) => file.key === focusedKey)
+        : -1;
+      jumpFocused(currentIndex + delta, extendSelection);
+    },
+    [focusedKey, jumpFocused, visibleFiles]
+  );
+
+  // 惰性补全可见文件夹的子项计数（缓存到 sessionStorage，重复进入不重复请求）
+  useEffect(() => {
+    if (route.kind !== "folder" || isGlobalSearch) return;
+    const targets = visibleFiles
+      .filter(
+        (file) =>
+          file.isDir &&
+          folderCounts[file.key] === undefined &&
+          !folderCountInFlight.current.has(file.key)
+      )
+      .slice(0, FOLDER_COUNT_FILL_MAX);
+    if (!targets.length) return;
+    for (const target of targets) folderCountInFlight.current.add(target.key);
+    let cancelled = false;
+    fetchFolderCounts(targets.map((target) => target.key)).then((counts) => {
+      for (const target of targets) {
+        folderCountInFlight.current.delete(target.key);
+      }
+      if (cancelled) return;
+      if (Object.keys(counts).length === 0) return;
+      setFolderCounts((prev) => {
+        const next = { ...prev, ...counts };
+        saveFolderCountCache(next);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [folderCounts, isGlobalSearch, route.kind, visibleFiles]);
 
   const navigateFolder = useCallback(
     (path: string) => {
@@ -609,11 +727,36 @@ function Main({
     navigateFolder(key);
   }, [files, navigateFolder]);
 
-  const toggleSelect = useCallback((key: string) => {
-    setSelectedKeys((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
-  }, []);
+  const toggleSelect = useCallback(
+    (key: string, event?: { shiftKey?: boolean }) => {
+      setSelectedKeys((prev) => {
+        if (event?.shiftKey && selectionAnchor.current) {
+          const anchorIndex = visibleFiles.findIndex(
+            (file) => file.key === selectionAnchor.current
+          );
+          const targetIndex = visibleFiles.findIndex(
+            (file) => file.key === key
+          );
+          if (anchorIndex >= 0 && targetIndex >= 0) {
+            const [start, end] =
+              anchorIndex <= targetIndex
+                ? [anchorIndex, targetIndex]
+                : [targetIndex, anchorIndex];
+            const merged = new Set(prev);
+            for (const file of visibleFiles.slice(start, end + 1)) {
+              merged.add(file.key);
+            }
+            return [...merged];
+          }
+        }
+        return prev.includes(key)
+          ? prev.filter((item) => item !== key)
+          : [...prev, key];
+      });
+      selectionAnchor.current = key;
+    },
+    [visibleFiles]
+  );
 
   const selectAll = useCallback(() => {
     setSelectedKeys((prev) => {
@@ -711,6 +854,15 @@ function Main({
         moveFocused(event.key === "ArrowRight" ? 1 : -1, event.shiftKey);
         return;
       }
+      if (event.key === "Home" || event.key === "End") {
+        if (hasOpenOverlay()) return;
+        event.preventDefault();
+        jumpFocused(
+          event.key === "Home" ? 0 : visibleFiles.length - 1,
+          event.shiftKey
+        );
+        return;
+      }
       if (event.key === " " && focusedKey) {
         if (hasOpenOverlay()) return;
         event.preventDefault();
@@ -728,7 +880,7 @@ function Main({
         const activeKey = focusedKey ?? (selectedKeys.length === 1 ? selectedKeys[0] : null);
         if (!activeKey) return;
         const file = visibleFiles.find((item) => item.key === activeKey);
-        if (!file || file.isDir) return;
+        if (!file) return;
         event.preventDefault();
         setRenameTarget(file);
         return;
@@ -762,6 +914,7 @@ function Main({
   }, [
     focusedKey,
     handleOpen,
+    jumpFocused,
     moveFocused,
     navigateFolder,
     selectAll,
@@ -882,11 +1035,18 @@ function Main({
       renameTarget.key.length - renameTarget.name.length
     );
     const target = `${parent}${name}`;
+    const source = renameTarget.key;
+    const runRename = async () => {
+      await copyPaste(source, target, true);
+    };
     try {
-      await copyPaste(renameTarget.key, target, true);
+      await runRename();
       onNotify("重命名成功", "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify((error as Error).message, "error", {
+        duration: 8000,
+        action: { label: strings.retry, onClick: () => runRename().catch(() => {}) },
+      });
     } finally {
       setRenameTarget(null);
       await loadListing();
@@ -896,13 +1056,32 @@ function Main({
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
     try {
-      await moveToTrash(confirmDelete);
-      onNotify("已移入回收站", "success");
+      const result = await moveToTrash(confirmDelete);
+      const trashIds = result.results.map((item) => item.id);
+      onNotify(`已移入回收站 ${trashIds.length} 项`, "success", {
+        duration: 7000,
+        action: trashIds.length
+          ? {
+              label: strings.undo,
+              onClick: () => {
+                restoreTrash(trashIds)
+                  .then(() => {
+                    onNotify("已撤销删除", "success");
+                  })
+                  .catch((error) =>
+                    onNotify((error as Error).message, "error")
+                  )
+                  .finally(() => loadListing());
+              },
+            }
+          : undefined,
+      });
     } catch (error) {
       onNotify((error as Error).message, "error");
     } finally {
       setConfirmDelete(null);
       setSelectedKeys([]);
+      setFocusedKey(null);
       setPreviewFile(null);
       await loadListing();
     }
@@ -910,12 +1089,18 @@ function Main({
 
   const handlePaste = async () => {
     if (!clipboard || route.kind !== "folder") return;
-    try {
+    const runPaste = async () => {
       await transferKeys(clipboard.keys, cwd, clipboard.mode);
       if (clipboard.mode === "cut") clearClipboard();
+    };
+    try {
+      await runPaste();
       onNotify("粘贴完成", "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify((error as Error).message, "error", {
+        duration: 8000,
+        action: { label: strings.retry, onClick: () => runPaste().catch(() => {}) },
+      });
     } finally {
       await loadListing();
     }
@@ -1158,13 +1343,24 @@ function Main({
                 }
               />
               {searchHasMore && (
-                <Button
-                  fullWidth
-                  onClick={loadMore}
-                  sx={{ marginBottom: "48px" }}
+                <Stack
+                  alignItems="center"
+                  ref={loadMoreSentinelRef}
+                  sx={{ padding: 2, marginBottom: "48px" }}
                 >
-                  加载更多
-                </Button>
+                  <CircularProgress size={22} />
+                </Stack>
+              )}
+              {isGlobalSearch && !searchHasMore && files.length > 0 && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  textAlign="center"
+                  display="block"
+                  sx={{ paddingBottom: 6 }}
+                >
+                  已全部加载
+                </Typography>
               )}
             </Box>
           )}
@@ -1227,7 +1423,7 @@ function Main({
           sx={{
             position: "fixed",
             inset: 0,
-            zIndex: 1400,
+            zIndex: Z_INDEX.dragOverlay,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

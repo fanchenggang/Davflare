@@ -7,6 +7,7 @@ import {
   isPrefixOnlyFolder,
   isTruthyParam,
   jsonResponse,
+  moveDirectory,
   normalizeFileKey,
   textResponse,
   touchLastUsed,
@@ -69,36 +70,58 @@ export const onRequestPost: PagesFunction<RenameEnv> = async (context) => {
   if (input instanceof Response) return input;
 
   const sourceHead = await env.BUCKET.head(input.from);
-  if (sourceHead === null) {
-    if (await isPrefixOnlyFolder(env.BUCKET, input.from)) {
-      return textResponse("只能操作文件，不能操作目录", 400);
-    }
+  const sourceIsDir =
+    sourceHead !== null
+      ? isCollectionObject(sourceHead)
+      : await isPrefixOnlyFolder(env.BUCKET, input.from);
+  if (sourceHead === null && !sourceIsDir) {
     return textResponse("文件不存在", 404);
   }
-  if (isCollectionObject(sourceHead)) {
-    return textResponse("只能操作文件，不能操作目录", 400);
-  }
 
-  const destHead = await env.BUCKET.head(input.to);
-  if (destHead !== null) {
-    if (isCollectionObject(destHead)) {
+  if (!sourceIsDir) {
+    const destHead = await env.BUCKET.head(input.to);
+    if (destHead !== null) {
+      if (isCollectionObject(destHead)) {
+        return textResponse("目标已存在且为目录", 409);
+      }
+      if (!input.overwrite) {
+        return textResponse("目标已存在", 409);
+      }
+    } else if (await isPrefixOnlyFolder(env.BUCKET, input.to)) {
       return textResponse("目标已存在且为目录", 409);
     }
-    if (!input.overwrite) {
-      return textResponse("目标已存在", 409);
+
+    const slash = input.to.lastIndexOf("/");
+    if (slash > 0) {
+      await ensureFolderMarkers(env.BUCKET, input.to.slice(0, slash + 1));
     }
-  } else if (await isPrefixOnlyFolder(env.BUCKET, input.to)) {
-    return textResponse("目标已存在且为目录", 409);
+
+    const copied = await copyThenDelete(env.BUCKET, input.from, input.to);
+    if (copied) return copied;
+
+    await touchLastUsed(env.BUCKET, auth);
+    return jsonResponse({ from: input.from, to: input.to });
   }
 
+  // 目录整体移动（rename / move）
+  if (input.overwrite) {
+    return textResponse("目录移动不支持 overwrite", 400);
+  }
+  if (input.to === input.from || input.to.startsWith(`${input.from}/`)) {
+    return textResponse("目标目录不能是源目录自身或其子路径", 400);
+  }
+  const destHead = await env.BUCKET.head(input.to);
+  if (destHead !== null || (await isPrefixOnlyFolder(env.BUCKET, input.to))) {
+    return textResponse("目标目录已存在", 409);
+  }
   const slash = input.to.lastIndexOf("/");
   if (slash > 0) {
     await ensureFolderMarkers(env.BUCKET, input.to.slice(0, slash + 1));
   }
 
-  const copied = await copyThenDelete(env.BUCKET, input.from, input.to);
-  if (copied) return copied;
+  const moved = await moveDirectory(env.BUCKET, input.from, input.to);
+  if (moved) return moved;
 
   await touchLastUsed(env.BUCKET, auth);
-  return jsonResponse({ from: input.from, to: input.to });
+  return jsonResponse({ from: input.from, to: input.to, kind: "directory" });
 };

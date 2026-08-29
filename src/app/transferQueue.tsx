@@ -12,6 +12,8 @@ import { processTransferTask } from "./transfer";
 import { TransferTask } from "./types";
 
 const CONCURRENCY = 2;
+const AUTO_RETRY_MAX = 1;
+const AUTO_RETRY_DELAY_MS = 3000;
 
 interface EnqueueRequest {
   basedir: string;
@@ -27,9 +29,12 @@ interface TransferQueueActions {
   remove: (id: string) => void;
   clearCompleted: () => void;
   clearFailed: () => void;
+  pauseAll: () => void;
+  resumeAll: () => void;
 }
 
 const TransferQueueContext = createContext<TransferTask[]>([]);
+const TransferQueueGlobalPausedContext = createContext(false);
 const TransferQueueActionsContext = createContext<TransferQueueActions>({
   enqueue: () => {},
   pause: () => {},
@@ -39,10 +44,16 @@ const TransferQueueActionsContext = createContext<TransferQueueActions>({
   remove: () => {},
   clearCompleted: () => {},
   clearFailed: () => {},
+  pauseAll: () => {},
+  resumeAll: () => {},
 });
 
 export function useTransferQueue() {
   return useContext(TransferQueueContext);
+}
+
+export function useTransferQueueGlobalPaused() {
+  return useContext(TransferQueueGlobalPausedContext);
 }
 
 export function useTransferQueueActions() {
@@ -67,11 +78,14 @@ export function TransferQueueProvider({
   children: React.ReactNode;
 }) {
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const [globalPaused, setGlobalPaused] = useState(false);
   const tasksRef = useRef<TransferTask[]>([]);
   const runningRef = useRef<Set<string>>(new Set());
   const controllersRef = useRef<Map<string, AbortController>>(new Map());
   const pausedIdsRef = useRef<Set<string>>(new Set());
   const canceledIdsRef = useRef<Set<string>>(new Set());
+  const globalPausedRef = useRef(false);
+  const autoRetryRef = useRef<Map<string, number>>(new Map());
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -130,6 +144,7 @@ export function TransferQueueProvider({
       },
     })
       .then(() => {
+        autoRetryRef.current.delete(task.id);
         updateTask(task.id, { status: "completed" });
       })
       .catch((error: any) => {
@@ -151,6 +166,22 @@ export function TransferQueueProvider({
               ? { uploadId: undefined, uploadedParts: undefined, loaded: 0 }
               : {}),
           });
+          // 失败自动重试一次（3 秒后），期间用户手动重试会重置计数
+          const attempts = autoRetryRef.current.get(task.id) || 0;
+          if (attempts < AUTO_RETRY_MAX) {
+            window.setTimeout(() => {
+              const current = tasksRef.current.find(
+                (item) => item.id === task.id
+              );
+              if (!current || current.status !== "failed") return;
+              autoRetryRef.current.set(task.id, attempts + 1);
+              updateTask(task.id, {
+                status: "pending",
+                error: undefined,
+                loaded: current.uploadId ? current.loaded : 0,
+              });
+            }, AUTO_RETRY_DELAY_MS);
+          }
         }
       })
       .finally(() => {
@@ -160,6 +191,8 @@ export function TransferQueueProvider({
   };
 
   useEffect(() => {
+    // 全局暂停时不派发新任务；已在传的任务由 pauseAll 显式暂停
+    if (globalPausedRef.current) return;
     // Never recurse on the same pending task: startTask leaves status
     // "pending" in tasksRef until React commits updateTask. The old
     // recursive finder re-picked that task forever and overflowed the
@@ -201,12 +234,40 @@ export function TransferQueueProvider({
       retry: (id) => {
         pausedIdsRef.current.delete(id);
         canceledIdsRef.current.delete(id);
+        autoRetryRef.current.delete(id);
         const current = tasksRef.current.find((item) => item.id === id);
         updateTask(id, {
           status: "pending",
           error: undefined,
           loaded: current?.uploadId ? current.loaded : 0,
         });
+      },
+      pauseAll: () => {
+        globalPausedRef.current = true;
+        setGlobalPaused(true);
+        for (const task of tasksRef.current) {
+          if (task.type !== "upload") continue;
+          if (task.status === "in-progress") {
+            pausedIdsRef.current.add(task.id);
+            controllersRef.current.get(task.id)?.abort();
+          } else if (task.status === "pending") {
+            updateTask(task.id, { status: "paused" });
+          }
+        }
+      },
+      resumeAll: () => {
+        globalPausedRef.current = false;
+        setGlobalPaused(false);
+        for (const task of tasksRef.current) {
+          if (task.type !== "upload" || task.status !== "paused") continue;
+          pausedIdsRef.current.delete(task.id);
+          canceledIdsRef.current.delete(task.id);
+          updateTask(task.id, {
+            status: "pending",
+            error: undefined,
+            loaded: task.uploadId ? task.loaded : 0,
+          });
+        }
       },
       cancel: (id) => {
         canceledIdsRef.current.add(id);
@@ -239,9 +300,11 @@ export function TransferQueueProvider({
 
   return (
     <TransferQueueContext.Provider value={transferTasks}>
-      <TransferQueueActionsContext.Provider value={actions}>
-        {children}
-      </TransferQueueActionsContext.Provider>
+      <TransferQueueGlobalPausedContext.Provider value={globalPaused}>
+        <TransferQueueActionsContext.Provider value={actions}>
+          {children}
+        </TransferQueueActionsContext.Provider>
+      </TransferQueueGlobalPausedContext.Provider>
     </TransferQueueContext.Provider>
   );
 }

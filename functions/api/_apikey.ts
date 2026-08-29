@@ -173,6 +173,115 @@ export function normalizeFileKey(raw: string | null): string | Response {
   return key;
 }
 
+// 目录键：允许结尾斜杠（自动剥掉），文件与目录通用
+export function normalizeDirKey(raw: string | null): string | Response {
+  const decoded = decodeRawPath(raw);
+  if (!decoded) return textResponse("缺少 path 参数", 400);
+  const parts = splitSafeParts(decoded);
+  if (parts instanceof Response) return parts;
+  if (parts.length === 0) return textResponse("缺少 path 参数", 400);
+  const key = parts.join("/");
+  if (isInternalKey(key)) return textResponse("禁止访问内部目录", 400);
+  return key;
+}
+
+// 目录递归操作的单次对象数上限，超出时要求调用方分批
+export const MAX_DIR_OBJECTS = 1000;
+
+export interface DirDescendants {
+  objects: R2Object[];
+}
+
+// 列出目录下全部后代对象（不含目录标记本身），超过上限返回 400
+export async function listDescendants(
+  bucket: R2Bucket,
+  dirKey: string,
+  limit = MAX_DIR_OBJECTS
+): Promise<DirDescendants | Response> {
+  const objects: R2Object[] = [];
+  let cursor: string | undefined;
+  do {
+    const listing = await bucket.list({
+      prefix: `${dirKey}/`,
+      cursor,
+      // @ts-ignore `include` is supported by R2 but missing from this types version.
+      include: ["httpMetadata", "customMetadata"],
+    });
+    for (const object of listing.objects) {
+      if (isInternalKey(object.key)) continue;
+      objects.push(object);
+      if (objects.length > limit) {
+        return textResponse(`目录包含超过 ${limit} 个对象，请分批处理`, 400);
+      }
+    }
+    if (!listing.truncated) break;
+    cursor = listing.cursor;
+  } while (true);
+  return { objects };
+}
+
+// 判断 key 是「目录」：有目录标记，或是只有前缀的虚拟目录
+export async function resolveAsDirectory(
+  bucket: R2Bucket,
+  key: string
+): Promise<boolean> {
+  const head = await bucket.head(key);
+  if (head !== null) return isCollectionObject(head);
+  return isPrefixOnlyFolder(bucket, key);
+}
+
+// 目录整体移动：先复制后代到新前缀，再删源，最后搬目录标记
+export async function moveDirectory(
+  bucket: R2Bucket,
+  from: string,
+  to: string
+): Promise<Response | null> {
+  const descendants = await listDescendants(bucket, from);
+  if (descendants instanceof Response) return descendants;
+
+  for (const object of descendants.objects) {
+    const target = `${to}/${object.key.slice(from.length + 1)}`;
+    const body = await bucket.get(object.key);
+    if (body === null) continue;
+    await bucket.put(target, body.body, {
+      httpMetadata: body.httpMetadata,
+      customMetadata: body.customMetadata,
+    });
+  }
+  for (const object of descendants.objects) {
+    await bucket.delete(object.key);
+  }
+
+  const marker = await bucket.get(from);
+  if (marker !== null) {
+    await bucket.put(to, marker.body, {
+      httpMetadata: marker.httpMetadata,
+      customMetadata: marker.customMetadata,
+    });
+    await bucket.delete(from);
+  } else {
+    await bucket.put(to, new Uint8Array(), {
+      httpMetadata: { contentType: "application/x-directory" },
+      customMetadata: { resourcetype: "<collection />" },
+    });
+  }
+  return null;
+}
+
+// 目录整体删除（递归硬删）：先删后代，再删目录标记
+export async function deleteDirectory(
+  bucket: R2Bucket,
+  dirKey: string
+): Promise<Response | null> {
+  const descendants = await listDescendants(bucket, dirKey);
+  if (descendants instanceof Response) return descendants;
+  for (const object of descendants.objects) {
+    await bucket.delete(object.key);
+  }
+  await bucket.delete(dirKey);
+  return null;
+}
+
 export function splitNameExt(name: string): { stem: string; ext: string } {
   const dot = name.lastIndexOf(".");
   if (dot <= 0) return { stem: name, ext: "" };

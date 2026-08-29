@@ -91,6 +91,10 @@ export const strings = {
   themeLight: "浅色",
   themeDark: "深色",
   themeSystem: "跟随系统",
+  undo: "撤销",
+  retry: "重试",
+  pausedAll: "已全部暂停",
+  resumedAll: "已全部恢复",
 };
 
 export default strings;

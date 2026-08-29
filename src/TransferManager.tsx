@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   Button,
   CircularProgress,
@@ -14,15 +15,17 @@ import {
   CheckCircleOutline as CheckCircleOutlineIcon,
   ErrorOutline as ErrorOutlineIcon,
   Pause as PauseIcon,
+  PauseCircle as PauseAllIcon,
   PlayArrow as PlayArrowIcon,
+  PlayCircle as ResumeAllIcon,
   Refresh as RefreshIcon,
 } from "@mui/icons-material";
 
-import { useTransferQueue, useTransferQueueActions } from "./app/transferQueue";
-import { TransferStatus } from "./app/types";
-import { humanReadableSize } from "./app/utils";
+import { useTransferQueue, useTransferQueueActions, useTransferQueueGlobalPaused } from "./app/transferQueue";
+import { TransferTask } from "./app/types";
+import { formatEta, humanReadableSize, humanReadableSpeed } from "./app/utils";
 
-function statusLabel(status: TransferStatus, resumable: boolean) {
+function statusLabel(status: TransferTask["status"], resumable: boolean) {
   switch (status) {
     case "pending":
       return "等待中";
@@ -41,6 +44,12 @@ function statusLabel(status: TransferStatus, resumable: boolean) {
   }
 }
 
+interface SpeedSample {
+  loaded: number;
+  time: number;
+  speed: number;
+}
+
 function TransferManager({
   open,
   onClose,
@@ -49,11 +58,78 @@ function TransferManager({
   onClose: () => void;
 }) {
   const transferQueue = useTransferQueue();
+  const globalPaused = useTransferQueueGlobalPaused();
   const actions = useTransferQueueActions();
   const uploads = transferQueue.filter((task) => task.type === "upload");
+  const [, setTick] = useState(0);
+  const uploadsRef = useRef(uploads);
+  uploadsRef.current = uploads;
+  const speedRef = useRef<Map<string, SpeedSample>>(new Map());
 
   const total = uploads.reduce((sum, task) => sum + task.total, 0);
   const loaded = uploads.reduce((sum, task) => sum + task.loaded, 0);
+
+  const activeCount = uploads.filter(
+    (task) => task.status === "pending" || task.status === "in-progress"
+  ).length;
+  const pausedCount = uploads.filter((task) => task.status === "paused").length;
+
+  // 每 700ms 采样一次进度差估算速度（EMA 平滑），供单任务与整体 ETA 展示
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      let changed = false;
+      const seen = new Set<string>();
+      for (const task of uploadsRef.current) {
+        if (task.status !== "in-progress") continue;
+        seen.add(task.id);
+        const prev = speedRef.current.get(task.id);
+        if (!prev) {
+          speedRef.current.set(task.id, {
+            loaded: task.loaded,
+            time: now,
+            speed: 0,
+          });
+          continue;
+        }
+        const dt = (now - prev.time) / 1000;
+        if (dt <= 0) continue;
+        const instant = Math.max(0, task.loaded - prev.loaded) / dt;
+        const smoothed = prev.speed > 0 ? prev.speed * 0.6 + instant * 0.4 : instant;
+        speedRef.current.set(task.id, {
+          loaded: task.loaded,
+          time: now,
+          speed: smoothed,
+        });
+        changed = true;
+      }
+      for (const id of Array.from(speedRef.current.keys())) {
+        if (!seen.has(id)) {
+          speedRef.current.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) setTick((n) => n + 1);
+    }, 700);
+    return () => window.clearInterval(timer);
+  }, [open]);
+
+  const speedOf = (task: TransferTask) =>
+    speedRef.current.get(task.id)?.speed ?? 0;
+
+  const overallSpeed = uploads
+    .filter((task) => task.status === "in-progress")
+    .reduce((sum, task) => sum + speedOf(task), 0);
+  const overallEta =
+    overallSpeed > 0 ? formatEta((total - loaded) / overallSpeed) : "";
+
+  const taskEtaText = (task: TransferTask) => {
+    const speed = speedOf(task);
+    if (task.status !== "in-progress" || speed <= 0) return "";
+    const eta = formatEta((task.total - task.loaded) / speed);
+    return eta ? ` · 剩余 ${eta}` : "";
+  };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -75,10 +151,12 @@ function TransferManager({
             />
             <Typography variant="body2" color="text.secondary">
               总进度：{humanReadableSize(loaded)} / {humanReadableSize(total)}
+              {overallSpeed > 0 && taskStatusText(uploads, overallSpeed, overallEta)}
             </Typography>
             <Stack spacing={2}>
               {uploads.map((task) => {
                 const resumable = Boolean(task.uploadId);
+                const speed = humanReadableSpeed(speedOf(task));
                 return (
                   <Stack
                     key={task.id}
@@ -106,6 +184,8 @@ function TransferManager({
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
                       {humanReadableSize(task.loaded)} / {humanReadableSize(task.total)}
+                      {speed ? ` · ${speed}` : ""}
+                      {taskEtaText(task)}
                       {" · "}
                       {statusLabel(task.status, resumable)}
                     </Typography>
@@ -172,12 +252,31 @@ function TransferManager({
         )}
       </DialogContent>
       <DialogActions>
+        {uploads.length > 0 && (
+          <Button
+            startIcon={globalPaused ? <ResumeAllIcon /> : <PauseAllIcon />}
+            onClick={globalPaused ? actions.resumeAll : actions.pauseAll}
+            disabled={!globalPaused && activeCount === 0 && pausedCount === 0}
+          >
+            {globalPaused ? "全部继续" : "全部暂停"}
+          </Button>
+        )}
         <Button onClick={actions.clearFailed}>清除失败</Button>
         <Button onClick={actions.clearCompleted}>清除已完成</Button>
         <Button onClick={onClose}>关闭</Button>
       </DialogActions>
     </Dialog>
   );
+}
+
+function taskStatusText(
+  uploads: TransferTask[],
+  overallSpeed: number,
+  overallEta: string
+) {
+  const speed = humanReadableSpeed(overallSpeed);
+  const parts = [speed, overallEta ? `剩余 ${overallEta}` : ""].filter(Boolean);
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
 
 export default TransferManager;

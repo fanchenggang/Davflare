@@ -7,6 +7,7 @@ interface UploadEnv {
 const KEYS_PREFIX = "_$flaredrive$/apikeys/";
 const INTERNAL_PREFIX = "_$flaredrive$/";
 const MAX_BYTES = 100 * 1024 * 1024;
+const MULTIPART_PART_MAX = 10000;
 
 interface StoredApiKey {
   id: string;
@@ -258,21 +259,117 @@ async function readUpload(
   };
 }
 
+// 分块上传：path 为完整文件键（目录/文件名）
+function multipartFileKey(raw: string | null): string | Response {
+  let path = (raw || "").trim();
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // keep raw
+  }
+  if (!path) return textResponse("分块上传需要 path 指向完整文件键", 400);
+  const parts = path
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((part) => part && part !== ".");
+  if (parts.some((part) => part === "..")) {
+    return textResponse("路径不合法", 400);
+  }
+  const key = parts.join("/");
+  if (!key) return textResponse("分块上传需要 path 指向完整文件键", 400);
+  if (key.startsWith(INTERNAL_PREFIX) || key.includes("/_$flaredrive$/")) {
+    return textResponse("禁止写入内部目录", 400);
+  }
+  return key;
+}
+
+function parsePartNumber(raw: string | null): number | Response {
+  if (!raw || !/^\d+$/.test(raw)) {
+    return textResponse("partNumber 不合法", 400);
+  }
+  const partNumber = parseInt(raw, 10);
+  if (partNumber < 1 || partNumber > MULTIPART_PART_MAX) {
+    return textResponse(`partNumber 需在 1-${MULTIPART_PART_MAX}`, 400);
+  }
+  return partNumber;
+}
+
 export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
   const { request, env } = context;
   const auth = await authorizeApiKey(request, env.BUCKET);
   if (auth instanceof Response) return auth;
 
-  const folder = normalizeFolder(new URL(request.url).searchParams.get("path"));
+  const url = new URL(request.url);
+
+  // —— 分块上传 ①：创建（POST /api/upload?uploads&path=<文件键>）——
+  if (url.searchParams.has("uploads")) {
+    const key = multipartFileKey(url.searchParams.get("path"));
+    if (key instanceof Response) return key;
+    const slash = key.lastIndexOf("/");
+    if (slash > 0) await ensureFolders(env.BUCKET, key.slice(0, slash + 1));
+    const contentType = request.headers.get("Content-Type") || "";
+    const multipart = await env.BUCKET.createMultipartUpload(key, {
+      httpMetadata: {
+        contentType: contentType || "application/octet-stream",
+      },
+    });
+    await touchLastUsed(env.BUCKET, auth);
+    return jsonResponse(
+      { key: multipart.key, uploadId: multipart.uploadId },
+      201
+    );
+  }
+
+  // —— 分块上传 ③：完成（POST /api/upload?path=&uploadId=，body { parts }）——
+  const completeUploadId = url.searchParams.get("uploadId");
+  if (completeUploadId) {
+    const key = multipartFileKey(url.searchParams.get("path"));
+    if (key instanceof Response) return key;
+    let body: { parts?: Array<{ partNumber?: unknown; etag?: unknown }> };
+    try {
+      body = await request.json();
+    } catch {
+      return textResponse("无法解析 JSON", 400);
+    }
+    const parts = (body.parts || []).map((part) => ({
+      partNumber: Number(part.partNumber),
+      etag: String(part.etag ?? ""),
+    }));
+    const invalid =
+      parts.length === 0 ||
+      parts.length > MULTIPART_PART_MAX ||
+      parts.some(
+        (part) =>
+          !Number.isInteger(part.partNumber) ||
+          part.partNumber < 1 ||
+          part.partNumber > MULTIPART_PART_MAX ||
+          !part.etag
+      );
+    if (invalid) {
+      return textResponse("parts 参数不合法", 400);
+    }
+    try {
+      const multipart = env.BUCKET.resumeMultipartUpload(key, completeUploadId);
+      const object = await multipart.complete(parts);
+      await touchLastUsed(env.BUCKET, auth);
+      return jsonResponse({
+        key: object.key,
+        size: object.size,
+        etag: (object as { httpEtag?: string }).httpEtag ?? "",
+      });
+    } catch (error) {
+      return textResponse((error as Error)?.message || "完成分块上传失败", 400);
+    }
+  }
+
+  const folder = normalizeFolder(url.searchParams.get("path"));
   if (folder instanceof Response) return folder;
 
   const upload = await readUpload(request);
   if (upload instanceof Response) return upload;
   if (upload.body.byteLength >= MAX_BYTES) return tooLarge();
 
-  const overwrite = isTruthyParam(
-    new URL(request.url).searchParams.get("overwrite")
-  );
+  const overwrite = isTruthyParam(url.searchParams.get("overwrite"));
 
   await ensureFolders(env.BUCKET, folder);
   let fileName = upload.name;
@@ -316,4 +413,51 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
     },
     201
   );
+};
+
+// —— 分块上传 ②：上传分块（PUT /api/upload?path=&uploadId=&partNumber=，原始请求体）——
+export const onRequestPut: PagesFunction<UploadEnv> = async (context) => {
+  const { request, env } = context;
+  const auth = await authorizeApiKey(request, env.BUCKET);
+  if (auth instanceof Response) return auth;
+
+  const url = new URL(request.url);
+  const key = multipartFileKey(url.searchParams.get("path"));
+  if (key instanceof Response) return key;
+  const uploadId = url.searchParams.get("uploadId");
+  if (!uploadId) return textResponse("缺少 uploadId", 400);
+  const partNumber = parsePartNumber(url.searchParams.get("partNumber"));
+  if (partNumber instanceof Response) return partNumber;
+  if (!request.body) return textResponse("缺少分块内容", 400);
+
+  try {
+    const multipart = env.BUCKET.resumeMultipartUpload(key, uploadId);
+    const part = await multipart.uploadPart(partNumber, request.body);
+    await touchLastUsed(env.BUCKET, auth);
+    return jsonResponse({ partNumber: part.partNumber, etag: part.etag });
+  } catch (error) {
+    return textResponse((error as Error)?.message || "上传分块失败", 400);
+  }
+};
+
+// —— 分块上传 ④：放弃（DELETE /api/upload?path=&uploadId=）——
+export const onRequestDelete: PagesFunction<UploadEnv> = async (context) => {
+  const { request, env } = context;
+  const auth = await authorizeApiKey(request, env.BUCKET);
+  if (auth instanceof Response) return auth;
+
+  const url = new URL(request.url);
+  const key = multipartFileKey(url.searchParams.get("path"));
+  if (key instanceof Response) return key;
+  const uploadId = url.searchParams.get("uploadId");
+  if (!uploadId) return textResponse("缺少 uploadId", 400);
+
+  try {
+    const multipart = env.BUCKET.resumeMultipartUpload(key, uploadId);
+    await multipart.abort();
+  } catch {
+    // 未知的 uploadId 视为已失效，幂等返回
+  }
+  await touchLastUsed(env.BUCKET, auth);
+  return new Response(null, { status: 204 });
 };

@@ -12,6 +12,22 @@ export function humanReadableSize(size: number) {
   return `${size.toFixed(1)} ${units[i]}`;
 }
 
+export function humanReadableSpeed(bytesPerSecond: number) {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "";
+  return `${humanReadableSize(bytesPerSecond)}/s`;
+}
+
+// 剩余时间：秒 →「45 秒」「2 分 10 秒」，无限/无效返回空串
+export function formatEta(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 60) return `${Math.ceil(seconds)} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.ceil(seconds % 60);
+  if (minutes < 60) return `${minutes} 分 ${rest} 秒`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} 时 ${minutes % 60} 分`;
+}
+
 export function formatDateTime(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();

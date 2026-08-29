@@ -2,6 +2,16 @@ import { createTheme, Theme } from "@mui/material/styles";
 
 export const ORANGE = "#f38020";
 
+// 全局层叠顺序（替代散落的魔法数字）：文件卡片内浮层 < 底部导航 < 多选工具栏 < 全屏拖拽遮罩
+export const Z_INDEX = {
+  cardOverlay: 3,
+  listHeader: 1,
+  mobileNav: 90,
+  multiSelectToolbar: 100,
+  dragOverlay: 1400,
+  previewPager: 2,
+} as const;
+
 export type ThemeMode = "light" | "dark";
 
 declare module "@mui/material/styles" {
@@ -36,7 +46,6 @@ const palettes: Record<
     textPrimary: string;
     textSecondary: string;
     textCaption: string;
-    textMuted: string;
     hover: string;
     selected: string;
     focusRing: string;
@@ -55,7 +64,6 @@ const palettes: Record<
     textPrimary: "#1a1714",
     textSecondary: "rgba(26, 23, 20, 0.64)",
     textCaption: "rgba(26, 23, 20, 0.62)",
-    textMuted: "rgba(26, 23, 20, 0.38)",
     hover: "rgba(243, 128, 32, 0.06)",
     selected: "rgba(243, 128, 32, 0.12)",
     focusRing: "rgba(243, 128, 32, 0.16)",
@@ -73,7 +81,6 @@ const palettes: Record<
     textPrimary: "#f1ece5",
     textSecondary: "rgba(241, 236, 229, 0.66)",
     textCaption: "rgba(241, 236, 229, 0.6)",
-    textMuted: "rgba(241, 236, 229, 0.4)",
     hover: "rgba(243, 128, 32, 0.12)",
     selected: "rgba(243, 128, 32, 0.22)",
     focusRing: "rgba(243, 128, 32, 0.28)",

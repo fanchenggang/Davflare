@@ -661,7 +661,7 @@ function timingSafeEqual(left: Uint8Array, right: Uint8Array): boolean {
   return mismatch === 0;
 }
 
-function getConditionalHeaders(source: Headers): Headers {
+function getConditionalHeaders(source: Headers, excludeNoneMatch = false): Headers {
   const headers = new Headers();
   for (const name of [
     "if-match",
@@ -670,6 +670,7 @@ function getConditionalHeaders(source: Headers): Headers {
     "if-unmodified-since",
     "if-range",
   ]) {
+    if (excludeNoneMatch && name === "if-none-match") continue;
     const value = source.get(name);
     if (value !== null) {
       headers.set(name, value);
@@ -1028,8 +1029,33 @@ async function handleGet({
     return Response.redirect(redirectUrl.toString(), 301);
   }
 
+  // If-None-Match 是浏览器缓存再验证（同一文件第二次 GET 必带）：命中时按 RFC 7232
+  // 返回 304，而不是交给 R2 onlyIf 变成 412（会导致网页预览重开失败）。
+  const ifNoneMatch = request.headers.get("if-none-match");
+  if (ifNoneMatch !== null) {
+    const candidates = ifNoneMatch
+      .split(",")
+      .map((value) => value.trim().replace(/^W\//, ""))
+      .filter(Boolean);
+    const current = await bucket.head(path);
+    if (current !== null) {
+      const strongEtag = current.httpEtag ?? current.etag;
+      const quoted = strongEtag.startsWith('"') ? strongEtag : `"${strongEtag}"`;
+      if (
+        candidates.includes("*") ||
+        candidates.includes(quoted) ||
+        candidates.includes(strongEtag)
+      ) {
+        const notModified = new Headers();
+        notModified.set("ETag", quoted);
+        notModified.set("Last-Modified", current.uploaded.toUTCString());
+        return new Response(null, { status: 304, headers: notModified });
+      }
+    }
+  }
+
   const object = await bucket.get(path, {
-    onlyIf: getConditionalHeaders(request.headers),
+    onlyIf: getConditionalHeaders(request.headers, true),
     range: request.headers,
   });
   if (object === null) {

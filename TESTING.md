@@ -1,7 +1,32 @@
 # FlareDrive 回归测试清单
 
-> 最近一轮：2026-08-29（本地 wrangler pages dev + 浏览器 GUI 黑盒回归，全部通过）
-> 约束：所有测试数据操作仅在自己创建的目录内进行（本轮为 `fd-e2e-20260829/`），测试后清理。
+> 最近一轮：2026-08-29 第二批（IMPROVEMENT_PLAN 第一、二批落地 + 按 TEST_CASES.md 测试，全部通过）
+> 上一轮：2026-08-29 首批（暗色模式/键盘导航/mkdir/缩略图修复）
+> 约束：所有测试数据操作仅在自己创建的目录内进行，测试后清理。
+
+## 0. 本轮（第二批）新增与新验证
+
+### 新落地功能
+| 项 | 内容 | 验证 |
+|----|------|------|
+| A1 | 开放接口目录级 rename（递归移动）/ delete（递归删除）/ backup（整树改名 `.conflict-<戳>`），上限 1000 对象 | ✅ curl：目录改名子项跟随、删目录后 404、子路径改名 400、目录 backup 名正确 |
+| A2 | `DELETE /api/delete?soft=1` 软删除（文件+目录，进回收站可还原） | ✅ curl：trashId 返回、回收站可见、restore 后内容一致 |
+| A4 | `GET /api/list?limit=&cursor=` 分页 | ✅ curl：5 条 limit=2 三页取尽无重复；limit=0/1001 拒绝 |
+| A5 | 开放接口分块上传 `?uploads` → PUT part → complete / abort | ✅ curl：5MiB+小块拼装逐字节一致、abort 后 complete 400、partNumber=0 拒绝。注意 R2 限制：除末块外每块 ≥5MiB（错误信息透传） |
+| A3 | 文件夹计数真实化（惰性并发补数 + sessionStorage 缓存） | ✅ GUI：bulk 105 项 / empty-dir 0 项 / 子目录甲 2 项 |
+| B1 | 键盘增强：F2 支持目录、Home/End、Shift+Click 范围选、Ctrl/Cmd+Click 选、修饰键点击不触发打开 | ✅ GUI：End 聚焦末项、F2 弹目录重命名（预填 bulk）|
+| B2 | 删除可撤销（toast「撤销」7 秒） | ✅ GUI：删除→撤销→文件原位恢复 |
+| B3 | 上传队列：速度/ETA 显示、全部暂停/继续、失败自动重试 1 次 | ✅ 按钮/文案渲染；持续速率本地瞬时完成无法观察（环境受限，见未覆盖） |
+| B4 | 全盘搜索触底自动加载 + 「已全部加载」 | ✅ GUI：181→滚动→223 条+已全部加载 |
+| B5 | 错误 Snackbar 带重试（列目录/重命名/粘贴） | ✅ 基建接入；断网场景未本地模拟 |
+| C1 | 代码预览语法高亮（json/clike/hash 注释族，≤1MB） | ✅ GUI：js 关键字紫/字符串绿/注释灰/数字橙，暗色配色独立；JSON 格式化+高亮 |
+| C7 | 对比度审计 + z-index 收敛 | ✅ 7 项文本 token 对比度 4.79–15.72:1 全过 WCAG AA；z-index 常量化 |
+
+### 本轮发现并修复的真实缺陷
+1. **预览重开 412**（严重，历史遗留）：浏览器第二次 GET 同一文件带 `If-None-Match` 缓存再验证，WebDAV GET 把它透传给 R2 `onlyIf` 得到 412「打开文件失败」。修复：`protocol.ts` 对 If-None-Match 命中返回 **304**（curl 验证 304/200 双路径）。
+2. **全盘搜索丢结果**（严重，历史遗留）：凑满 limit 立即截断，同页剩余命中被丢弃且桶 ≤1000 对象时无 cursor 可翻页（实测 102 命中只返回 100 且 hasMore=false）。修复：固定 100/页步长扫完当前页再截断。
+3. **复选框聚焦吞键盘**：isTypingTarget 把 checkbox 当文本输入，Delete/方向键失效。修复：checkbox/radio/button 不再视为输入目标。
+4. **Snackbar action 不渲染**：MUI Snackbar 有 children（Alert）时 action prop 不生效，改挂 Alert 的 action prop。
 
 ## 1. 本地环境搭建
 
@@ -73,14 +98,15 @@ npx wrangler pages dev build       # http://localhost:8788，前端 + functions 
 ## 3. 本轮未覆盖项
 
 - 文件选择器与系统拖拽上传的 GUI 路径（IAB 自动化不支持 file chooser）；已用合成 drop 事件与记事本路径覆盖上传管线，API 上传另行 curl 验证。
-- >100MB 分块（multipart）上传：本地生成大文件成本高，未跑；该路径代码未变，风险低。
+- **上传速率/ETA 与传输中「全部暂停」的实际效果**：本地 miniflare 吞吐即时（6MB 瞬间完成），按钮渲染与状态机已验证，持续传输表现需真实网络环境观察。
+- B5 重试按钮的断网触发：需网络故障注入，本地未模拟（代码路径已接入列目录/重命名/粘贴三处）。
 - 分享过期（410）与 `WEBDAV_PUBLIC_READ=1` 分支：需要时间/配置切换，未跑。
-- 剪贴板粘贴图片上传（GUI 粘贴事件不可合成系统剪贴板文件）；代码未变。
+- IAB 嵌入环境的 IntersectionObserver / requestAnimationFrame 不触发回调（原生自检确认），B4 已加 scroll 捕获兜底；普通浏览器主路径仍为 IO。
+- cua 合成按键在部分焦点状态下不可达（checkbox 聚焦时），改用合成 KeyboardEvent 验证；真实键盘事件走 window 监听不受影响。
 
 ## 4. 已知问题 / 后续建议
 
-- 根目录曾有死代码副本（`Main.tsx`、`TextPadDrawer.tsx`、`utils/s3.ts`），本轮已删除。
-- `functions/api/upload.ts` 内联复制了 `_apikey.ts` 的鉴权逻辑，存在漂移风险，建议后续统一引用。
-- 文件夹计数仅统计当前目录，网格里其他文件夹显示占位文案「文件夹」。
-- 大目录（数千项）无虚拟滚动，PROPFIND 全量渲染可能卡顿。
-- `npm test`（CRA Jest）当前无任何测试用例，可作为后续沉淀方向（Playwright E2E）。
+- `functions/api/upload.ts` 仍内联复制 `_apikey.ts` 的鉴权逻辑（历史债务），建议后续统一引用。
+- 大目录（数千项）无虚拟滚动，PROPFIND 全量渲染可能卡顿；搜索结果 200+ 条渲染已可感知变慢。
+- IMPROVEMENT_PLAN.md 第三批（P2/P3：目录分享、回收站过期清理、搜索高亮、空状态插画等）待后续批次。
+- `npm test`（CRA Jest）当前无任何测试用例，API 断言脚本可迁移为自动化套件。

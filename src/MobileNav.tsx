@@ -9,6 +9,7 @@ import {
 } from "@mui/icons-material";
 
 import { strings } from "./app/strings";
+import { Z_INDEX } from "./app/theme";
 
 function NavButton({
   icon,
@@ -79,7 +80,7 @@ function MobileNav({
           left: 0,
           right: 0,
           bottom: 0,
-          zIndex: 90,
+          zIndex: Z_INDEX.mobileNav,
           borderTopLeftRadius: 12,
           borderTopRightRadius: 12,
           borderBottomLeftRadius: 0,
