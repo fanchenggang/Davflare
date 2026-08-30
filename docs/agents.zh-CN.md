@@ -9,15 +9,15 @@
 ```
 agents/
   global/
-    skills/
+    skills/{name}/SKILL.md
     rules/
     mcp/
   {agent}/                 # cursor | claude | codex | opencode
-    skills/
+    skills/{name}/SKILL.md
     rules/
     mcp/
     {project}/             # 仓库或工作区名，例如 Davflare
-      skills/
+      skills/{name}/SKILL.md
       rules/
       mcp/
 ```
@@ -26,7 +26,7 @@ agent 用小写（`cursor`，不要 `Cursor`）。project 与仓库/工作区名
 
 | 类型 | 目录里放什么 |
 | --- | --- |
-| `skills/` | 每个技能一个子目录，内含 `SKILL.md`（可带辅助文件） |
+| `skills/{name}/SKILL.md` | 每个技能一个子目录（可带辅助文件） |
 | `rules/` | Cursor 的 `.mdc` 规则（或 `AGENTS.md`） |
 | `mcp/` | 只放 `mcp.json` — **占位符，不要明文密钥** |
 

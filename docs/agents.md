@@ -9,15 +9,15 @@ Merge order when the same name exists at more than one layer: **project > agent 
 ```
 agents/
   global/
-    skills/
+    skills/{name}/SKILL.md
     rules/
     mcp/
   {agent}/                 # cursor | claude | codex | opencode
-    skills/
+    skills/{name}/SKILL.md
     rules/
     mcp/
     {project}/             # repo or workspace name, e.g. Davflare
-      skills/
+      skills/{name}/SKILL.md
       rules/
       mcp/
 ```
@@ -26,7 +26,7 @@ Slugs are lowercase (`cursor`, not `Cursor`). Project names match the repo/works
 
 | Type | What lives in that folder |
 | --- | --- |
-| `skills/` | One directory per skill, each with a `SKILL.md` (and optional helpers) |
+| `skills/{name}/SKILL.md` | One directory per skill (optional helpers beside SKILL.md) |
 | `rules/` | Cursor `.mdc` rule files (or `AGENTS.md`) |
 | `mcp/` | `mcp.json` only — **placeholders, never raw keys** |
 
