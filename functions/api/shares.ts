@@ -1,4 +1,4 @@
-import { isCollectionObject, verifyBasicAuth } from "./_apikey";
+import { authorizeApiKey, isCollectionObject, verifyBasicAuth } from "./_apikey";
 
 interface SharesEnv {
   BUCKET: R2Bucket;
@@ -8,8 +8,13 @@ interface SharesEnv {
 
 const SHARES_PREFIX = "_$flaredrive$/shares/";
 
-function isAuthorized(request: Request, env: SharesEnv) {
-  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
+// 会话（Basic）与 API key 均可管理分享：MCP/脚本侧需要以密钥创建与撤销分享
+async function isAuthorized(request: Request, env: SharesEnv) {
+  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return true;
+  }
+  const keyAuth = await authorizeApiKey(request, env.BUCKET);
+  return !(keyAuth instanceof Response);
 }
 
 function basename(key: string) {
@@ -58,7 +63,7 @@ async function readShares(
 
 export const onRequestGet: PagesFunction<SharesEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
   return new Response(JSON.stringify(await readShares(env.BUCKET, request)), {
@@ -68,7 +73,7 @@ export const onRequestGet: PagesFunction<SharesEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -141,7 +146,7 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<SharesEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
 

@@ -346,11 +346,23 @@ export async function ensureFolderMarkers(bucket: R2Bucket, folder: string) {
   }
 }
 
-export async function copyThenDelete(
+/**
+ * 拷贝单个对象（保留 httpMetadata/customMetadata）。
+ * 目录与源不存在返回错误 Response；成功返回 null。
+ * 默认目标已存在时 409（move 语义传 overwrite: true 保持原行为）。
+ */
+export async function copyObject(
   bucket: R2Bucket,
   from: string,
-  to: string
+  to: string,
+  options?: { overwrite?: boolean }
 ): Promise<Response | null> {
+  if (!options?.overwrite) {
+    const dest = await bucket.head(to);
+    if (dest !== null) {
+      return textResponse("目标已存在", 409);
+    }
+  }
   const source = await bucket.get(from);
   if (source === null) return textResponse("文件不存在", 404);
   if (isCollectionObject(source)) {
@@ -360,6 +372,16 @@ export async function copyThenDelete(
     httpMetadata: source.httpMetadata,
     customMetadata: source.customMetadata,
   });
+  return null;
+}
+
+export async function copyThenDelete(
+  bucket: R2Bucket,
+  from: string,
+  to: string
+): Promise<Response | null> {
+  const error = await copyObject(bucket, from, to, { overwrite: true });
+  if (error) return error;
   await bucket.delete(from);
   return null;
 }

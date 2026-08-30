@@ -304,12 +304,87 @@ else
   echo "  SKIP  静态站点断言（未设置 SITES_HOST，run-e2e.sh 会自动补齐）"
 fi
 
+echo "== MCP：新工具与大文件分块 =="
+# 解开 JSON-RPC 包装，直接取工具结果文本（工具返回的就是接口 JSON/错误文本）。
+# 注意：arguments JSON 必须先拼进变量再传入 —— 在 $( ) 里内嵌 \" 会被 bash
+# 花括号展开按逗号拆碎（血泪教训，见 mcp mkdir 通过而 upload 静默失败的历史）。
+mcp_call() {
+  curl -s --noproxy '*' -X POST "$BASE/mcp" -H "$A" -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['result']['content'][0]['text'])"
+}
+TOOLS_JSON=$(curl -s --noproxy '*' -X POST "$BASE/mcp" -H "$A" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
+assert_contains "mcp tools/list has search" "$TOOLS_JSON" '"name":"search"'
+assert_contains "mcp tools/list has sites_list" "$TOOLS_JSON" '"name":"sites_list"'
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/mcp" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
+assert_code "mcp no key 401" "$code" "401"
+MCP_DIR="$DIR/mcp/f"
+args='{"path":"'"$MCP_DIR"'/"}'
+assert_contains "mcp mkdir" "$(mcp_call mkdir "$args")" '"created":true'
+args='{"path":"'"$MCP_DIR"'/","name":"mcp.txt","content":"mcp-hello"}'
+assert_contains "mcp upload small" "$(mcp_call upload "$args")" '"key"'
+args='{"path":"'"$MCP_DIR"'/mcp.txt"}'
+assert_contains "mcp stat size" "$(mcp_call stat "$args")" '"size":9'
+args='{"from":"'"$MCP_DIR"'/mcp.txt","to":"'"$MCP_DIR"'/mcp-copy.txt"}'
+assert_contains "mcp copy" "$(mcp_call copy "$args")" '"copied":true'
+args='{"path":"'"$MCP_DIR"'/mcp-copy.txt"}'
+assert_contains "mcp stat copy" "$(mcp_call stat "$args")" '"size":9'
+args='{"from":"'"$MCP_DIR"'/mcp-copy.txt","to":"'"$MCP_DIR"'/mcp-moved.txt"}'
+assert_contains "mcp move" "$(mcp_call move "$args")" '"to":"'"$MCP_DIR"'/mcp-moved.txt"'
+args='{"path":"'"$MCP_DIR"'/mcp-moved.txt"}'
+assert_contains "mcp stat moved" "$(mcp_call stat "$args")" '"size":9'
+args='{"query":"mcp-moved"}'
+assert_contains "mcp search finds moved" "$(mcp_call search "$args")" 'mcp-moved'
+
+args='{"key":"'"$MCP_DIR"'/mcp.txt"}'
+assert_contains "shares accept api key (create)" "$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$A" -H "Content-Type: application/json" -d "$args")" '"token"'
+assert_contains "shares accept api key (list)" "$(curl -s --noproxy '*' "$BASE/api/shares" -H "$A")" '"token"'
+args='{"path":"'"$MCP_DIR"'/mcp.txt"}'
+SHARED_TOKEN=$(mcp_call share_create "$args" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+if [ -n "$SHARED_TOKEN" ]; then ok "mcp share_create token"; else bad "mcp share_create token" "empty" "token"; fi
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$SHARED_TOKEN")
+assert_code "mcp-created share serves file" "$code" "200"
+args='{"token":"'"$SHARED_TOKEN"'"}'
+assert_contains "mcp share_revoke" "$(mcp_call share_revoke "$args")" 'HTTP 204'
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$SHARED_TOKEN")
+assert_code "mcp-revoked share 404" "$code" "404"
+
+# 2MB 二进制：MCP upload 自动三段式 → /api/download 逐字节校验
+python3 - "$DIR" <<'PYEOF'
+import base64, json, sys
+data = (b"0123456789abcdef" * 131072)[:2000000]  # 2,000,000 bytes
+open("/tmp/mcp-big.bin", "wb").write(data)
+payload = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "upload", "arguments": {
+    "path": sys.argv[1] + "/mcp/f/", "name": "big.bin", "content": base64.b64encode(data).decode(), "encoding": "base64"}}}
+open("/tmp/mcp-big.json", "w").write(json.dumps(payload))
+PYEOF
+BIG_RESP=$(curl -s --noproxy '*' -X POST "$BASE/mcp" -H "$A" -H "Content-Type: application/json" --data-binary @/tmp/mcp-big.json | python3 -c "import sys,json;print(json.load(sys.stdin)['result']['content'][0]['text'])")
+assert_contains "mcp upload 2MB via multipart chunks" "$BIG_RESP" '"key"'
+assert_contains "mcp 2MB uploaded size intact" "$BIG_RESP" '"size":2000000'
+curl -s --noproxy '*' -o /tmp/mcp-big-dl.bin "$BASE/api/download?path=$MCP_DIR/big.bin" -H "$A"
+if cmp -s /tmp/mcp-big.bin /tmp/mcp-big-dl.bin; then ok "mcp 2MB download byte-identical"; else bad "mcp 2MB download byte-identical" "differs" "identical"; fi
+args='{"path":"'"$MCP_DIR"'/big.bin","part":1,"partSize":1048576}'
+mcp_call download "$args" > /tmp/mcp-part.json
+python3 - <<'PYEOF'
+import base64, json
+parsed = json.loads(open("/tmp/mcp-part.json").read())
+data = open("/tmp/mcp-big.bin", "rb").read()
+assert parsed["totalParts"] == 2, parsed["totalParts"]
+assert parsed["part"] == 1
+assert base64.b64decode(parsed["content"]) == data[: parsed["length"]]
+print("  PASS  mcp download part paging matches")
+PYEOF
+if [ $? -eq 0 ]; then PASS=$((PASS+1)); else bad "mcp download part paging matches" "mismatch" "match"; fi
+
+args='{}'
+assert_contains "mcp sites_list" "$(mcp_call sites_list "$args")" '"sitesHost"'
+
 echo "== cleanup =="
 curl -s --noproxy '*' -X DELETE "$BASE/webdav/$DIR/" -H "$BASIC" -o /dev/null
 curl -s --noproxy '*' -X DELETE "$BASE/api/trash" -H "$BASIC" -H "Content-Type: application/json" -d '{"all":true}' -o /dev/null
 KID=$(curl -s --noproxy '*' "$BASE/api/keys" -H "$BASIC" | python3 -c "import sys,json;print(' '.join(k['id'] for k in json.load(sys.stdin)))")
 for id in $KID; do curl -s --noproxy '*' -X DELETE "$BASE/api/keys?id=$id" -H "$BASIC" -o /dev/null; done
-rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-*.txt /tmp/suite-*.zip /tmp/suite-*.bin /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json 2>/dev/null
+rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-*.txt /tmp/suite-*.zip /tmp/suite-*.bin /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json /tmp/mcp-big.json /tmp/mcp-big.bin /tmp/mcp-big-dl.bin /tmp/mcp-part.json 2>/dev/null
 
 echo ""
 echo "=============================="

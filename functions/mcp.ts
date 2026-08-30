@@ -1,9 +1,27 @@
 import { authorizeApiKey } from "./api/_apikey";
+import { onRequestPost as copyOnPost } from "./api/copy";
 import { onRequestDelete as deleteOnDelete } from "./api/delete";
 import { onRequestGet as downloadOnGet } from "./api/download";
 import { onRequestGet as listOnGet } from "./api/list";
 import { onRequestPost as mkdirOnPost } from "./api/mkdir";
-import { onRequestPost as uploadOnPost } from "./api/upload";
+import { onRequestPost as renameOnPost } from "./api/rename";
+import { onRequestGet as searchOnGet } from "./api/search";
+import {
+  onRequestDelete as sharesOnDelete,
+  onRequestGet as sharesOnGet,
+  onRequestPost as sharesOnPost,
+} from "./api/shares";
+import {
+  onRequestDelete as sitesOnDelete,
+  onRequestGet as sitesOnGet,
+  onRequestPost as sitesOnPost,
+} from "./api/sites";
+import { onRequestGet as statOnGet } from "./api/stat";
+import {
+  onRequestDelete as uploadOnDelete,
+  onRequestPost as uploadOnPost,
+  onRequestPut as uploadOnPut,
+} from "./api/upload";
 import {
   dispatchMcpRequest,
   parseJsonRpcBody,
@@ -70,8 +88,17 @@ function cloneApiRequest(
   });
 }
 
-function withRequest(context: McpContext, request: Request): McpContext {
-  return Object.assign({}, context, { request });
+function withRequest<T extends { BUCKET: R2Bucket }>(
+  context: McpContext,
+  request: Request
+): EventContext<T, any, any> {
+  // MCP 流程已通过 API key 鉴权；shares/sites handler 的 Basic 凭据字段在
+  // 该分支下仅用于"是否同时允许会话"的判定，缺失时安全跳过。
+  return Object.assign({}, context, { request }) as unknown as EventContext<
+    T,
+    any,
+    any
+  >;
 }
 
 function makeApis(context: McpContext): ToolCallApis {
@@ -122,6 +149,122 @@ function makeApis(context: McpContext): ToolCallApis {
       }
       const request = cloneApiRequest(context.request, "DELETE", url);
       return deleteOnDelete(withRequest(context, request));
+    },
+    async search({ query, limit, cursor }) {
+      const url = new URL("/api/search", origin);
+      url.searchParams.set("q", query);
+      if (limit !== undefined) url.searchParams.set("limit", String(limit));
+      if (cursor) url.searchParams.set("cursor", cursor);
+      const request = cloneApiRequest(context.request, "GET", url);
+      return searchOnGet(withRequest(context, request));
+    },
+    async move({ from, to, overwrite }) {
+      const url = new URL("/api/rename", origin);
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: JSON.stringify({ from, to, overwrite: overwrite === true }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return renameOnPost(withRequest(context, request));
+    },
+    async copy({ from, to, overwrite }) {
+      const url = new URL("/api/copy", origin);
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: JSON.stringify({ from, to, overwrite: overwrite === true }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return copyOnPost(withRequest(context, request));
+    },
+    async stat({ path }) {
+      const url = new URL("/api/stat", origin);
+      url.searchParams.set("path", path);
+      const request = cloneApiRequest(context.request, "GET", url);
+      return statOnGet(withRequest(context, request));
+    },
+    async downloadRange({ path, offset, length }) {
+      const url = new URL("/api/download", origin);
+      url.searchParams.set("path", path);
+      const request = cloneApiRequest(context.request, "GET", url, {
+        headers: { Range: `bytes=${offset}-${offset + length - 1}` },
+      });
+      return downloadOnGet(withRequest(context, request));
+    },
+    async uploadStart({ key }) {
+      const url = new URL("/api/upload", origin);
+      url.searchParams.set("uploads", "");
+      url.searchParams.set("path", key);
+      const request = cloneApiRequest(context.request, "POST", url);
+      return uploadOnPost(withRequest(context, request));
+    },
+    async uploadPart({ key, uploadId, partNumber, body }) {
+      const url = new URL("/api/upload", origin);
+      url.searchParams.set("path", key);
+      url.searchParams.set("uploadId", uploadId);
+      url.searchParams.set("partNumber", String(partNumber));
+      const request = cloneApiRequest(context.request, "PUT", url, {
+        body: body as unknown as BodyInit,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+      return uploadOnPut(withRequest(context, request));
+    },
+    async uploadComplete({ key, uploadId, parts }) {
+      const url = new URL("/api/upload", origin);
+      url.searchParams.set("path", key);
+      url.searchParams.set("uploadId", uploadId);
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: JSON.stringify({ parts }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return uploadOnPost(withRequest(context, request));
+    },
+    async uploadAbort({ key, uploadId }) {
+      const url = new URL("/api/upload", origin);
+      url.searchParams.set("path", key);
+      url.searchParams.set("uploadId", uploadId);
+      const request = cloneApiRequest(context.request, "DELETE", url);
+      return uploadOnDelete(withRequest(context, request));
+    },
+    async shareCreate({ key, extractCode, expiresInHours }) {
+      const url = new URL("/api/shares", origin);
+      const body: Record<string, unknown> = { key };
+      if (extractCode) body.extractCode = extractCode;
+      if (expiresInHours !== undefined) body.expiresInHours = expiresInHours;
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      });
+      return sharesOnPost(withRequest(context, request));
+    },
+    async shareList() {
+      const url = new URL("/api/shares", origin);
+      const request = cloneApiRequest(context.request, "GET", url);
+      return sharesOnGet(withRequest(context, request));
+    },
+    async shareRevoke({ token }) {
+      const url = new URL("/api/shares", origin);
+      url.searchParams.set("token", token);
+      const request = cloneApiRequest(context.request, "DELETE", url);
+      return sharesOnDelete(withRequest(context, request));
+    },
+    async sitesList({ withStats }) {
+      const url = new URL("/api/sites", origin);
+      if (withStats) url.searchParams.set("stats", "1");
+      const request = cloneApiRequest(context.request, "GET", url);
+      return sitesOnGet(withRequest(context, request));
+    },
+    async sitesConfig({ slug, spa }) {
+      const url = new URL("/api/sites", origin);
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: JSON.stringify({ slug, spa }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return sitesOnPost(withRequest(context, request));
+    },
+    async sitesDelete({ slug, purge }) {
+      const url = new URL("/api/sites", origin);
+      url.searchParams.set("slug", slug);
+      if (purge) url.searchParams.set("purge", "1");
+      const request = cloneApiRequest(context.request, "DELETE", url);
+      return sitesOnDelete(withRequest(context, request));
     },
   };
 }

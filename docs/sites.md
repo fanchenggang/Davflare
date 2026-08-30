@@ -23,6 +23,14 @@ sites/blog/style.css
 
 Then open `https://sites.<your-domain>/blog/` (or `/blog/style.css`). Missing files 404. Directory URLs resolve to `index.html`. No git deploy, no Pages project per site.
 
+## Management API & UI
+
+- Web UI: open the **Sites** section (`#/sites`) — list sites with stats, one-click zip deploy (client-side unzip + upload queue), SPA toggle, per-site delete. "Manage files" jumps into the regular file manager at `sites/<slug>/`.
+- `GET /api/sites` — list sites (`?stats=1` adds cached object count / total size). Session (Basic) or API key.
+- `POST /api/sites` — `{"slug":"blog","spa":true}` toggles SPA fallback. The site must already exist.
+- `DELETE /api/sites?slug=blog` — remove all site files (config kept, so a redeploy keeps the SPA flag); add `&purge=1` to also delete the config.
+- SPA fallback: on a final miss, `spa=true` serves `sites/<slug>/index.html` with 200; otherwise a custom `sites/<slug>/404.html` is served with status 404 when present.
+
 ## Security
 
 - `SITES_HOST` must differ from the drive's own hostname (see the warning above): when they match, the sites middleware intercepts all GET/HEAD requests on that host.

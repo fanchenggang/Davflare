@@ -23,6 +23,14 @@ sites/blog/style.css
 
 然后打开 `https://sites.<你的域>/blog/`（或 `/blog/style.css`）。没有文件就是 404。目录 URL 找 `index.html`。不做 git 部署，不为每个站再建一个 Pages 项目。
 
+## 管理 API 与界面
+
+- 网页端：打开「站点」区块（`#/sites`）——站点列表与统计、zip 一键部署（浏览器解压后走上传队列）、SPA 开关、按站删除；「管理文件」直接跳到 `sites/<slug>/` 的常规文件管理器。
+- `GET /api/sites` — 列站点（`?stats=1` 附带缓存的文件数/总大小）。会话（Basic）或 API key 均可。
+- `POST /api/sites` — `{"slug":"blog","spa":true}` 切换 SPA 回退；站点需已存在。
+- `DELETE /api/sites?slug=blog` — 删除站点全部文件（保留配置，重新部署同 slug 时 SPA 开关仍在）；加 `&purge=1` 连配置一起删。
+- SPA 回退：最终未命中时，`spa=true` 以 200 返回 `sites/<slug>/index.html`；否则若存在 `sites/<slug>/404.html` 以 404 状态返回它。
+
 ## 安全
 
 - `SITES_HOST` 必须与网盘自身主机名不同（见上方警告）：两者相同时站点中间件会接管该域名的全部 GET/HEAD 请求。

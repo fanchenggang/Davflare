@@ -1,4 +1,4 @@
-import { verifyBasicAuth } from "./_apikey";
+import { authorizeApiKey, verifyBasicAuth } from "./_apikey";
 
 interface SearchEnv {
   BUCKET: R2Bucket;
@@ -6,14 +6,19 @@ interface SearchEnv {
   WEBDAV_PASSWORD: string;
 }
 
-function isAuthorized(request: Request, env: SearchEnv) {
-  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
+// 会话（Basic）与 API key 均可搜索：MCP search 工具以密钥转发到此端点
+async function isAuthorized(request: Request, env: SearchEnv) {
+  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return true;
+  }
+  const keyAuth = await authorizeApiKey(request, env.BUCKET);
+  return !(keyAuth instanceof Response);
 }
 
 export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
   const { request, env } = context;
 
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
 

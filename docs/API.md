@@ -119,11 +119,31 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 ### Shares
 
-`POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code and expiry apply as usual).
+`POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code and expiry apply as usual). Share management (`GET`/`POST`/`DELETE /api/shares`) accepts **both** the web session (Basic) and an API key, so scripts and MCP can create/list/revoke shares.
+
+### Copy, stat, search
+
+```bash
+# copy a file (409 if `to` exists unless overwrite=1; directories are not supported)
+curl -X POST "https://<your-domain.com>/api/copy" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"folder/a.txt","to":"folder/b.txt"}'
+
+# object metadata (kind file/directory, size, etag, uploaded, contentType)
+curl "https://<your-domain.com>/api/stat?path=folder/a.txt" \
+  -H "Authorization: Bearer <apiKey>"
+
+# search all objects by filename substring (cursor pagination)
+curl "https://<your-domain.com>/api/search?q=notes&limit=100" \
+  -H "Authorization: Bearer <apiKey>"
+```
+
+`GET /api/download` sends `Accept-Ranges: bytes` and honors a single `Range` header with **206** responses, so resumable/chunked downloads work with plain HTTP clients.
 
 ### MCP
 
-Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). Missing or invalid keys return **HTTP 401**. v1 tools: `list`, `upload`, `download`, `mkdir`, `delete` (they wrap the Open API handlers above). MCP upload/download is capped at about 1 MiB — larger files return a tool error (mentioning **413** / the web UI). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete.
+Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys.
 
 ```bash
 # initialize

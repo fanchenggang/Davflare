@@ -55,6 +55,22 @@ async function isPrefixOnlyFolder(bucket: R2Bucket, key: string) {
   return listing.objects.length > 0 || (prefixes && prefixes.length > 0);
 }
 
+// 与 WebDAV GET 相同的 Content-Range 计算（R2 range 语义：suffix/offset+length）
+function calcContentRange(object: R2ObjectBody) {
+  let rangeOffset = 0;
+  let rangeEnd = object.size - 1;
+  if (object.range) {
+    if ("suffix" in object.range) {
+      rangeOffset = Math.max(object.size - object.range.suffix, 0);
+    } else {
+      rangeOffset = object.range.offset ?? 0;
+      const length = object.range.length ?? object.size - rangeOffset;
+      rangeEnd = Math.min(rangeOffset + length - 1, object.size - 1);
+    }
+  }
+  return { rangeOffset, rangeEnd };
+}
+
 export const onRequestGet: PagesFunction<DownloadEnv> = async (context) => {
   const { request, env } = context;
   const auth = await authorizeApiKey(request, env.BUCKET);
@@ -63,7 +79,18 @@ export const onRequestGet: PagesFunction<DownloadEnv> = async (context) => {
   const key = normalizeObjectKey(new URL(request.url).searchParams.get("path"));
   if (key instanceof Response) return key;
 
-  const object = await env.BUCKET.get(key);
+  // Range 请求（断点续传/分片读取）：非法 Range 回退全量，避免 500
+  let object: R2ObjectBody | null;
+  const ranged = request.headers.has("Range");
+  if (ranged) {
+    try {
+      object = await env.BUCKET.get(key, { range: request.headers });
+    } catch {
+      object = await env.BUCKET.get(key);
+    }
+  } else {
+    object = await env.BUCKET.get(key);
+  }
   if (object === null) {
     if (await isPrefixOnlyFolder(env.BUCKET, key)) {
       return textResponse("不能下载目录，请逐个文件下载", 400);
@@ -84,14 +111,22 @@ export const onRequestGet: PagesFunction<DownloadEnv> = async (context) => {
     object.httpMetadata?.contentType || "application/octet-stream";
   headers.set("Content-Type", contentType);
   headers.set("Content-Disposition", attachmentDisposition(basename(key)));
-  if (Number.isFinite(object.size)) {
-    headers.set("Content-Length", String(object.size));
-  }
+  headers.set("Accept-Ranges", "bytes");
   headers.set("Cache-Control", "no-store");
   if (object.httpEtag) headers.set("ETag", object.httpEtag);
   if (object.uploaded) {
     headers.set("Last-Modified", object.uploaded.toUTCString());
   }
 
-  return new Response(object.body, { status: 200, headers });
+  let status = 200;
+  if (ranged && object.range) {
+    const { rangeOffset, rangeEnd } = calcContentRange(object);
+    headers.set("Content-Range", `bytes ${rangeOffset}-${rangeEnd}/${object.size}`);
+    headers.set("Content-Length", String(rangeEnd - rangeOffset + 1));
+    status = 206;
+  } else if (Number.isFinite(object.size)) {
+    headers.set("Content-Length", String(object.size));
+  }
+
+  return new Response(object.body, { status, headers });
 };

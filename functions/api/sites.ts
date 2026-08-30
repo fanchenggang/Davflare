@@ -6,7 +6,7 @@ import {
   normalizeSitesHost,
   siteConfigKey,
 } from "../_sites";
-import { verifyBasicAuth } from "./_apikey";
+import { authorizeApiKey, verifyBasicAuth } from "./_apikey";
 
 interface SitesApiEnv {
   BUCKET: R2Bucket;
@@ -19,8 +19,13 @@ const SITE_STATS_MAX_OBJECTS = 5000;
 const SITE_STATS_TTL_MS = 10 * 60 * 1000;
 const SITE_DELETE_MAX_OBJECTS = 5000;
 
-function isAuthorized(request: Request, env: SitesApiEnv) {
-  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
+// 会话（Basic）与 API key 均可管理站点：MCP sites 工具以密钥转发到此端点
+async function isAuthorized(request: Request, env: SitesApiEnv) {
+  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return true;
+  }
+  const keyAuth = await authorizeApiKey(request, env.BUCKET);
+  return !(keyAuth instanceof Response);
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -82,7 +87,7 @@ async function saveSiteConfig(bucket: R2Bucket, config: SiteConfig): Promise<voi
 
 export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -110,7 +115,7 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -142,7 +147,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
 
