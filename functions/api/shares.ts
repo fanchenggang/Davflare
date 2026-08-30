@@ -1,4 +1,9 @@
-import { authorizeApiKey, isCollectionObject, verifyBasicAuth } from "./_apikey";
+import {
+  authorizeApiKey,
+  isCollectionObject,
+  isInternalKey,
+  verifyBasicAuth,
+} from "./_apikey";
 
 interface SharesEnv {
   BUCKET: R2Bucket;
@@ -86,6 +91,7 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
 
   const key = String(body.key || "").trim();
   if (!key) return new Response("Bad Request", { status: 400 });
+  if (isInternalKey(key)) return new Response("Bad Request", { status: 400 });
 
   const object = await env.BUCKET.head(key);
   // 目录判定与其他端点一致：contentType 或 resourcetype 任一标记都算目录

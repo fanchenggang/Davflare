@@ -78,16 +78,17 @@ export class DavflareClient {
     const queue = [folder.replace(/\/+$/, "")];
     while (queue.length > 0) {
       const current = queue.shift()!;
+      const prefix = current ? `${current}/` : "";
       let cursor: string | undefined;
-      let page: ListPage;
-      try {
-        page = await this.listPage(current ? `${current}/` : "", cursor);
-      } catch (error) {
-        // 远端目录不存在（尚未创建）：视为空，便于 sync 首推
-        if (error instanceof ApiError && error.status === 404) return;
-        throw error;
-      }
-      do {
+      while (true) {
+        let page: ListPage;
+        try {
+          page = await this.listPage(prefix, cursor);
+        } catch (error) {
+          // 远端目录不存在（尚未创建）：跳过该目录继续处理队列，便于 sync 首推
+          if (error instanceof ApiError && error.status === 404) break;
+          throw error;
+        }
         for (const entry of page.items) {
           if (entry.isDir) {
             queue.push(entry.key.replace(/\/+$/, ""));
@@ -95,8 +96,9 @@ export class DavflareClient {
             yield entry;
           }
         }
-        cursor = page.nextCursor || undefined;
-      } while (cursor);
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+      }
     }
   }
 

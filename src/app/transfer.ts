@@ -437,12 +437,22 @@ function xhrFetch(
           if (key) parsed.append(key, value);
         }
       }
-      resolve(
-        new Response(xhr.responseText, {
-          status: xhr.status || 0,
-          headers: parsed,
-        })
-      );
+      const status = xhr.status;
+      if (!status) {
+        reject(new Error(translate("networkRequestFailed")));
+        return;
+      }
+      try {
+        // 204/205/304 必须使用 null body，否则 Response 构造器会抛 TypeError；
+        // onload 里的异常不会 settle Promise，任务会永远挂在 in-progress。
+        const body =
+          status === 204 || status === 205 || status === 304
+            ? null
+            : xhr.responseText;
+        resolve(new Response(body, { status, headers: parsed }));
+      } catch (error) {
+        reject(error as Error);
+      }
     };
     xhr.onerror = () => {
       requestInit.signal?.removeEventListener("abort", abort);

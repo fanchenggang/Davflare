@@ -62,6 +62,9 @@ export function verifyBasicAuth(
   username: string,
   password: string
 ): boolean {
+  // fail closed：凭据未配置或为空时一律拒绝，避免 btoa("undefined:undefined")/
+  // btoa(":") 这类固定值成为可被猜中的有效 Basic 头。
+  if (!username || !password) return false;
   const authorization = request.headers.get("Authorization") || "";
   const expected = `Basic ${btoa(`${username}:${password}`)}`;
   return timingSafeEqual(authorization, expected);

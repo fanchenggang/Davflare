@@ -3,7 +3,7 @@ interface ShareEnv {
 }
 
 import { buildZipStream } from "../api/_zip";
-import { sha256Hex, timingSafeEqual } from "../api/_apikey";
+import { isInternalKey, sha256Hex, timingSafeEqual } from "../api/_apikey";
 
 const SHARES_PREFIX = "_$flaredrive$/shares/";
 const SHARE_COOKIE = "fd_share_code";
@@ -97,7 +97,28 @@ type ShareMeta = {
 async function loadMeta(bucket: R2Bucket, token: string): Promise<ShareMeta | null> {
   const metadataObject = await bucket.get(`${SHARES_PREFIX}${token}.json`);
   if (metadataObject === null) return null;
-  return (await metadataObject.json()) as ShareMeta;
+  const parsed = (await metadataObject.json()) as ShareMeta;
+  // 防御性：拒绝历史遗留/绕过校验创建的内部对象分享（apikeys、trash 等元数据）
+  if (parsed && typeof parsed.key === "string" && isInternalKey(parsed.key)) {
+    return null;
+  }
+  return parsed;
+}
+
+// 与 /api/download、WebDAV GET 相同的 Content-Range 计算（R2 range 语义）
+function calcContentRange(object: R2ObjectBody) {
+  let rangeOffset = 0;
+  let rangeEnd = object.size - 1;
+  if (object.range) {
+    if ("suffix" in object.range) {
+      rangeOffset = Math.max(object.size - object.range.suffix, 0);
+    } else {
+      rangeOffset = object.range.offset ?? 0;
+      const length = object.range.length ?? object.size - rangeOffset;
+      rangeEnd = Math.min(rangeOffset + length - 1, object.size - 1);
+    }
+  }
+  return { rangeOffset, rangeEnd };
 }
 
 function getCookieValue(cookieHeader: string | null, name: string): string {
@@ -235,7 +256,22 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
     `${disposition}; filename*=UTF-8''${encodedName}`
   );
 
-  return new Response(object.body, { headers });
+  // Range 支持（视频拖动/断点续传）：R2 返回部分对象时给出 206 与正确的
+  // Content-Range/Content-Length，覆盖 writeHttpMetadata 写入的全量 Content-Length。
+  const rangeRequested =
+    request.headers.has("Range") && object.range !== undefined;
+  let status = 200;
+  if (rangeRequested) {
+    const { rangeOffset, rangeEnd } = calcContentRange(object);
+    headers.set(
+      "Content-Range",
+      `bytes ${rangeOffset}-${rangeEnd}/${object.size}`
+    );
+    headers.set("Content-Length", String(rangeEnd - rangeOffset + 1));
+    status = 206;
+  }
+
+  return new Response(object.body, { status, headers });
 };
 
 export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
