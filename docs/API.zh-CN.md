@@ -154,6 +154,10 @@ Cursor（`mcp.json`）：
 }
 ```
 
+### Agent 目录
+
+skills / rules / MCP 片段：`agents/{global|{agent}|{agent}/{project}}/{skills|rules|mcp}/`。v1 手动（现有 list/upload/download/mkdir/delete 或网页端）。合并：project 覆盖 agent 覆盖 global。`mcp.json` 不要明文密钥。完整约定：[agents.zh-CN.md](./agents.zh-CN.md)。
+
 ### 双向同步示例
 
 以本地为准；冲突时先备份远端。鉴权与上传相同（Bearer / `X-Api-Key`），不走网页会话。WebDAV 协议不变。

@@ -35,6 +35,7 @@ Share (expiry + extract code):
 - WebDAV Class 1/2 at `/webdav`
 - API keys for scripted upload, download, and bidirectional sync
 - Remote MCP at `/mcp` (list, upload, download, mkdir, delete)
+- Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (manual pull/push; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
 ## Deploy
@@ -115,6 +116,10 @@ Cursor (`mcp.json`):
   }
 }
 ```
+
+## Agent layouts
+
+Skills, rules, and MCP snippets live on R2 under `agents/`. v1 is a directory convention plus manual pull/push with the existing MCP tools (or the web UI). Merge order: project > agent > global. Never store raw API keys in `mcp.json` — use `${env:DAVFLARE_API_KEY}`. Cursor local paths and the walk-the-tree recipe: [docs/agents.md](docs/agents.md).
 
 ## Development & testing
 

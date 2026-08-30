@@ -154,6 +154,10 @@ Cursor (`mcp.json`):
 }
 ```
 
+### Agent layouts
+
+Skills / rules / MCP snippets: `agents/{global|{agent}|{agent}/{project}}/{skills|rules|mcp}/`. v1 is manual (existing list/upload/download/mkdir/delete or the web UI). Merge: project > agent > global. Do not store raw keys in `mcp.json`. Full convention: [agents.md](./agents.md).
+
 ### Bidirectional sync recipe
 
 Local wins; backup remote on conflict. Same Bearer / `X-Api-Key` auth as upload; no web session. WebDAV protocol is unchanged.
