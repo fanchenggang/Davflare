@@ -35,6 +35,7 @@ Share (expiry + extract code):
 - WebDAV Class 1/2 at `/webdav`
 - API keys for scripted upload, download, and bidirectional sync
 - Remote MCP at `/mcp` (list, upload, download, mkdir, delete)
+- Static sites on a separate host (`SITES_HOST` + `sites/{slug}/`); [docs/sites.md](docs/sites.md)
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (manual pull/push; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
@@ -51,8 +52,9 @@ After the first deploy:
 1. Bind your R2 bucket to the `BUCKET` variable
 2. Set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`
 3. Optional: `WEBDAV_PUBLIC_READ=1` for public read; `TRASH_RETENTION_DAYS` (default `30`, `-1` disables purge)
-4. Retry deploy so the binding and env vars apply
-5. Optional: add a custom domain
+4. Optional static sites: bind `sites.<your-domain>` to this same Pages project and set `SITES_HOST=sites.<your-domain>`
+5. Retry deploy so the binding and env vars apply
+6. Optional: add a custom domain for the drive UI
 
 ### Manual Cloudflare Pages
 
@@ -116,6 +118,10 @@ Cursor (`mcp.json`):
   }
 }
 ```
+
+## Static sites
+
+Public HTML from `sites/{slug}/` on a **separate hostname** (`SITES_HOST`). Same Worker, Host routing — not `/sites` on the drive origin. Details: [docs/sites.md](docs/sites.md).
 
 ## Agent layouts
 

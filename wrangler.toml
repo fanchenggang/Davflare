@@ -4,6 +4,8 @@ compatibility_date = "2024-06-20"
 
 [vars]
 WEBDAV_PUBLIC_READ = "0"
+# Exact hostname for static sites, e.g. sites.example.com. Empty = off.
+SITES_HOST = ""
 
 [[r2_buckets]]
 binding = "BUCKET"
