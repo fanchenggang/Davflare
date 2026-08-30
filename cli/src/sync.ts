@@ -24,8 +24,6 @@ export type SyncDirection = "push" | "pull";
 export interface SyncPlan {
   /** push=待上传；pull=待下载 */
   transfer: string[];
-  /** 对端独有；push 时为远端多出的，pull 时为本地多出的 */
-  missingOnSource: string[];
   /** push 时本地较新（或远端缺失）；pull 时远端较新（或本地缺失） */
   upToDate: string[];
   /** 双侧都有且 size 不同（可能冲突） */
@@ -43,7 +41,7 @@ function buildMaps(local: LocalEntry[], remote: RemoteEntryLite[]) {
 
 export function planSync(direction: SyncDirection, local: LocalEntry[], remote: RemoteEntryLite[]): SyncPlan {
   const { localMap, remoteMap, paths } = buildMaps(local, remote);
-  const plan: SyncPlan = { transfer: [], missingOnSource: [], upToDate: [], changed: [], deleteCandidates: [] };
+  const plan: SyncPlan = { transfer: [], upToDate: [], changed: [], deleteCandidates: [] };
 
   for (const p of paths) {
     const l = localMap.get(p);
@@ -77,7 +75,6 @@ export function planSync(direction: SyncDirection, local: LocalEntry[], remote: 
   plan.changed.sort();
   plan.deleteCandidates.sort();
   plan.upToDate.sort();
-  plan.missingOnSource.sort();
   return plan;
 }
 

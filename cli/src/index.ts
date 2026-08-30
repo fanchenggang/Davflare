@@ -217,7 +217,12 @@ program
       const remote: Array<{ path: string; size: number; uploadedMs: number }> = [];
       for await (const entry of api.walk(remoteBase)) {
         remote.push({
-          path: entry.key.slice(remoteBase.length + 1),
+          // remoteBase 为空（同步根目录）时 key 即相对路径，不能 slice(1)；
+          // 非空时 key 以 `${remoteBase}/` 开头，剥掉该前缀得到相对路径。
+          path:
+            remoteBase && entry.key.startsWith(`${remoteBase}/`)
+              ? entry.key.slice(remoteBase.length + 1)
+              : entry.key,
           size: entry.size,
           uploadedMs: entry.uploaded ? Date.parse(entry.uploaded) : 0,
         });
