@@ -1,0 +1,62 @@
+import React from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+
+import WebDavPanel from "../../WebDavPanel";
+import { authFetch } from "../auth";
+import { setLang, strings, translate } from "../strings";
+
+jest.mock("../auth", () => ({
+  authFetch: jest.fn(),
+}));
+
+const mockAuthFetch = authFetch as unknown as jest.Mock;
+
+beforeEach(() => {
+  setLang("zh");
+  mockAuthFetch.mockReset();
+});
+
+describe("WebDavPanel", () => {
+  test("加载配置后展示用户名与地址", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ username: "alice", publicRead: true }),
+    } as unknown as Response);
+    render(<WebDavPanel open onClose={jest.fn()} onNotify={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("alice")).toBeInTheDocument());
+    expect(screen.getByText(`${window.location.origin}/webdav`)).toBeInTheDocument();
+    expect(screen.getByText(strings.publicReadOn)).toBeInTheDocument();
+  });
+
+  test("配置失败提示错误", async () => {
+    mockAuthFetch.mockResolvedValue({ ok: false, status: 500 } as unknown as Response);
+    const onNotify = jest.fn();
+    render(<WebDavPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    await waitFor(() => expect(onNotify).toHaveBeenCalled());
+  });
+
+  test("点击复制写入剪贴板", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ username: "alice", publicRead: false }),
+    } as unknown as Response);
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    const onNotify = jest.fn();
+    render(<WebDavPanel open onClose={jest.fn()} onNotify={onNotify} />);
+
+    fireEvent.click(await screen.findByText(strings.copyAddress));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(
+        translate("copiedFormat", { label: strings.address }),
+        "success"
+      )
+    );
+  });
+});
