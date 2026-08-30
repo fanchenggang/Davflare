@@ -16,6 +16,14 @@ function inlineContentType(contentType: string) {
   );
 }
 
+// 分享内容来自用户上传、Content-Type 由上传方控制（可含 text/html、image/svg+xml）。
+// CSP sandbox 使响应文档运行在 opaque origin 且默认禁脚本，杜绝同源 XSS 读取站内凭据；
+// nosniff 防止浏览器嗅探改判类型。图片/音视频/PDF/纯文本预览不受影响。
+function applyShareHardening(headers: Headers) {
+  headers.set("Content-Security-Policy", "sandbox");
+  headers.set("X-Content-Type-Options", "nosniff");
+}
+
 function tokenFromParams(params: Record<string, unknown>): string | null {
   const token = params.token;
   if (typeof token === "string") return token;
@@ -118,6 +126,7 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
     const headers = new Headers();
     headers.set("Content-Type", "application/zip");
     headers.set("Cache-Control", "no-store");
+    applyShareHardening(headers);
     headers.set(
       "Content-Disposition",
       `attachment; filename*=UTF-8''${encodedName}.zip`
@@ -135,6 +144,7 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Cache-Control", "no-store");
+  applyShareHardening(headers);
 
   const contentType = object.httpMetadata?.contentType || "application/octet-stream";
   const disposition = inlineContentType(contentType) ? "inline" : "attachment";

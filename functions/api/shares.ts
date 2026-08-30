@@ -109,6 +109,10 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
   const createdAt = new Date().toISOString();
   const name = basename(key);
   const extractCode = String(body.extractCode || "").trim().slice(0, 32);
+  // 提取码在 /share 端点无限流，过短的码可被秒级爆破，因此强制最短 4 位
+  if (extractCode && extractCode.length < 4) {
+    return new Response("提取码需为 4–32 位", { status: 400 });
+  }
 
   await env.BUCKET.put(
     `${SHARES_PREFIX}${token}.json`,
