@@ -1,8 +1,13 @@
 import {
   indexFallbackKey,
   isSitesHost,
+  isValidSlug,
   mimeForKey,
   parseSitesPath,
+  siteConfigKey,
+  siteNotFoundKey,
+  siteSpaKey,
+  sitesNotFoundPage,
 } from "../../../functions/_sites";
 
 describe("static sites host routing", () => {
@@ -77,5 +82,30 @@ describe("static sites host routing", () => {
     expect(mimeForKey("sites/a/index.html")).toMatch(/^text\/html/);
     expect(mimeForKey("sites/a/app.js")).toMatch(/javascript/);
     expect(mimeForKey("sites/a/noext")).toBe("application/octet-stream");
+  });
+
+  test("slug validation shared with API layer", () => {
+    expect(isValidSlug("blog")).toBe(true);
+    expect(isValidSlug("a")).toBe(true);
+    expect(isValidSlug("a".repeat(63))).toBe(true);
+    expect(isValidSlug("")).toBe(false);
+    expect(isValidSlug("Bad")).toBe(false);
+    expect(isValidSlug("-lead")).toBe(false);
+    expect(isValidSlug("has_underscore")).toBe(false);
+    expect(isValidSlug("a".repeat(64))).toBe(false);
+  });
+
+  test("config and fallback keys derive from slug", () => {
+    expect(siteConfigKey("blog")).toBe("_$flaredrive$/sites/blog.json");
+    expect(siteSpaKey("blog")).toBe("sites/blog/index.html");
+    expect(siteNotFoundKey("blog")).toBe("sites/blog/404.html");
+  });
+
+  test("custom 404 page keeps 404 status and no-store", () => {
+    const response = sitesNotFoundPage({ body: null }, true);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Content-Type")).toMatch(/^text\/html/);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
   });
 });

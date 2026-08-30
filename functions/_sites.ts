@@ -1,6 +1,55 @@
 export const SITES_PREFIX = "sites/";
 
+// 每站配置与统计缓存放内部前缀（与 shares 元数据同惯例），不会出现在 sites/ 列表里
+export const SITES_CONFIG_PREFIX = "_$flaredrive$/sites/";
+
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+export function isValidSlug(slug: string): boolean {
+  return SLUG_RE.test(slug);
+}
+
+/** 每站配置：spa 决定 miss 时是否回退 index.html；stats 为聚合缓存（懒计算） */
+export interface SiteStats {
+  objects: number;
+  size: number;
+  cachedAt: string;
+  /** true 表示扫描达到封顶，统计为下限值 */
+  truncated?: boolean;
+}
+
+export interface SiteConfig {
+  slug: string;
+  spa?: boolean;
+  stats?: SiteStats;
+}
+
+export function siteConfigKey(slug: string): string {
+  return `${SITES_CONFIG_PREFIX}${slug}.json`;
+}
+
+export function siteSpaKey(slug: string): string {
+  return `${SITES_PREFIX}${slug}/index.html`;
+}
+
+export function siteNotFoundKey(slug: string): string {
+  return `${SITES_PREFIX}${slug}/404.html`;
+}
+
+export async function loadSiteConfig(
+  bucket: R2Bucket,
+  slug: string
+): Promise<SiteConfig | null> {
+  const object = await bucket.get(siteConfigKey(slug));
+  if (object === null) return null;
+  try {
+    const config = (await object.json()) as SiteConfig;
+    if (config === null || typeof config !== "object") return null;
+    return config;
+  } catch {
+    return null;
+  }
+}
 
 const MIME: Record<string, string> = {
   html: "text/html; charset=utf-8",
@@ -112,4 +161,17 @@ export function sitesResponse(object: { body: ReadableStream | null; httpEtag?: 
   headers.set("X-Robots-Tag", "noindex");
   if (object.httpEtag) headers.set("ETag", object.httpEtag);
   return new Response(head ? null : object.body, { status: 200, headers });
+}
+
+/** 自定义 404 页：内容来自站点文件，404 状态不缓存，避免部署后拿到过期负缓存 */
+export function sitesNotFoundPage(
+  object: { body: ReadableStream | null },
+  head: boolean
+): Response {
+  const headers = new Headers();
+  headers.set("Content-Type", MIME.html);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Robots-Tag", "noindex");
+  return new Response(head ? null : object.body, { status: 404, headers });
 }

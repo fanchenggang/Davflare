@@ -1,4 +1,14 @@
-import { indexFallbackKey, isSitesHost, parseSitesPath, sitesNotFound, sitesResponse } from "./_sites";
+import {
+  indexFallbackKey,
+  isSitesHost,
+  loadSiteConfig,
+  parseSitesPath,
+  siteNotFoundKey,
+  siteSpaKey,
+  sitesNotFound,
+  sitesNotFoundPage,
+  sitesResponse,
+} from "./_sites";
 
 interface SitesEnv {
   BUCKET: R2Bucket;
@@ -28,7 +38,26 @@ export const onRequest: PagesFunction<SitesEnv> = async (context) => {
     key = indexFallbackKey(parsed.key);
     object = await context.env.BUCKET.get(key);
   }
-  if (!object) return sitesNotFound();
+  if (!object) {
+    // SPA/404 兜底：仅在最终 miss 时读一次站点配置，正常命中路径零额外 R2 读
+    const config = await loadSiteConfig(context.env.BUCKET, parsed.slug);
+    if (config?.spa) {
+      const spaObject = await context.env.BUCKET.get(siteSpaKey(parsed.slug));
+      if (spaObject) {
+        return sitesResponse(
+          { body: spaObject.body, httpEtag: spaObject.httpEtag },
+          siteSpaKey(parsed.slug),
+          method === "HEAD"
+        );
+      }
+      return sitesNotFound();
+    }
+    const notFoundObject = await context.env.BUCKET.get(siteNotFoundKey(parsed.slug));
+    if (notFoundObject) {
+      return sitesNotFoundPage({ body: notFoundObject.body }, method === "HEAD");
+    }
+    return sitesNotFound();
+  }
 
   return sitesResponse(
     { body: object.body, httpEtag: object.httpEtag },

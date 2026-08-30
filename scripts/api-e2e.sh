@@ -7,6 +7,7 @@ set -u
 BASE="${BASE:-http://127.0.0.1:8788}"
 USER="${WEBDAV_USER:-admin}"
 PASSWD="${WEBDAV_PASS:-admin}"
+SITES_HOST="${SITES_HOST:-}"
 DIR="fd-e2e-$(date +%H%M%S)-suite"
 BASIC="Authorization: Basic $(printf '%s:%s' "$USER" "$PASSWD" | base64)"
 PASS=0; FAIL=0
@@ -242,6 +243,57 @@ assert_contains "COPY content intact" "$(curl -s --noproxy '*' "$BASE/webdav/$DI
 LOCKRES=$(curl -s --noproxy '*' -D /tmp/suite-lock-headers -o /tmp/suite-lock-body -w "%{http_code}" -X LOCK "$BASE/webdav/$DIR/davcol/dav-copy.txt" -H "$BASIC" -H "Timeout: Second-60" -H "Content-Type: application/xml" --data-binary '<?xml version="1.0" encoding="utf-8"?><D:lockinfo xmlns:D="DAV:"><D:lockscope><D:exclusive/></D:lockscope><D:locktype><D:write/></D:locktype><D:owner>e2e</D:owner></D:lockinfo>')
 assert_code "LOCK 200/201" "$LOCKRES" "201"
 assert_contains "LOCK returns lock-token" "$(grep -i '^Lock-Token' /tmp/suite-lock-headers)" "urn:uuid"
+
+echo "== 静态站点：/api/sites 与 SPA/404 兜底 =="
+if [ -n "$SITES_HOST" ]; then
+  SH="Host: $SITES_HOST"
+  SITE="e2esite"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/upload?path=sites/$SITE/" -H "$A" -H "X-File-Name: index.html" --data-binary "<h1>e2e-site-ok</h1>")
+  assert_code "site index upload 201" "$code" "201"
+  assert_contains "sites host serves index" "$(curl -s --noproxy '*' "$BASE/$SITE/index.html" -H "$SH")" "e2e-site-ok"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/$SITE/missing-page" -H "$SH")
+  assert_code "sites miss plain 404 (spa off)" "$code" "404"
+
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$SITE\",\"spa\":true}")
+  assert_code "sites config spa=1 200" "$code" "200"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/$SITE/missing-page" -H "$SH")
+  assert_code "sites miss spa fallback 200" "$code" "200"
+  assert_contains "spa fallback serves index" "$(cat /tmp/o)" "e2e-site-ok"
+
+  code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST "$BASE/api/upload?path=sites/$SITE/" -H "$A" -H "X-File-Name: 404.html" --data-binary "custom-not-found")
+  assert_code "site 404 page upload 201" "$code" "201"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$SITE\",\"spa\":false}")
+  assert_code "sites config spa=0 200" "$code" "200"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/$SITE/missing-page" -H "$SH")
+  assert_code "custom 404 keeps status 404" "$code" "404"
+  assert_contains "custom 404 page body" "$(cat /tmp/o)" "custom-not-found"
+
+  SITES_LIST=$(curl -s --noproxy '*' "$BASE/api/sites" -H "$BASIC")
+  assert_contains "sites list contains site" "$SITES_LIST" "\"slug\":\"$SITE\""
+  assert_contains "sites list reports spa=false" "$SITES_LIST" '"spa":false'
+  SITES_STATS=$(curl -s --noproxy '*' "$BASE/api/sites?stats=1" -H "$BASIC")
+  assert_contains "sites stats objects counted" "$SITES_STATS" '"objects":2'
+
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d '{"slug":"Bad_Slug","spa":true}')
+  assert_code "sites bad slug 400" "$code" "400"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d '{"slug":"nosuchsite","spa":true}')
+  assert_code "sites config on missing site 404" "$code" "404"
+  code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$BASE/api/sites" -H "Authorization: Basic $(printf '%s:wrong' "$USER" | base64)")
+  assert_code "sites unauthorized 401" "$code" "401"
+
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/sites?slug=$SITE" -H "$BASIC")
+  assert_code "delete site 200" "$code" "200"
+  code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$BASE/$SITE/index.html" -H "$SH")
+  assert_code "site gone after delete 404" "$code" "404"
+  SITES_LIST2=$(curl -s --noproxy '*' "$BASE/api/sites" -H "$BASIC")
+  if echo "$SITES_LIST2" | grep -q "$SITE"; then
+    bad "site removed from list" "still present" "absent"
+  else
+    ok "site removed from list"
+  fi
+else
+  echo "  SKIP  静态站点断言（未设置 SITES_HOST，run-e2e.sh 会自动补齐）"
+fi
 
 echo "== cleanup =="
 curl -s --noproxy '*' -X DELETE "$BASE/webdav/$DIR/" -H "$BASIC" -o /dev/null

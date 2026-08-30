@@ -34,6 +34,14 @@ if [ -f .dev.vars ]; then
   [ -n "$VAR_PASS" ] && WEBDAV_PASS="$VAR_PASS"
 fi
 
+# 站点托管 e2e 需要独立的 SITES_HOST；缺省值保证本套件可重复运行
+SITES_HOST="${SITES_HOST:-sites.e2e.test}"
+if [ -f .dev.vars ] && ! grep -q '^SITES_HOST=' .dev.vars; then
+  printf 'SITES_HOST=%s\n' "$SITES_HOST" >> .dev.vars
+fi
+VAR_SITES=$(grep -E '^SITES_HOST=' .dev.vars 2>/dev/null | cut -d= -f2- || true)
+[ -n "$VAR_SITES" ] && SITES_HOST="$VAR_SITES"
+
 if [ "${SKIP_BUILD:-0}" != "1" ] || [ ! -d build ]; then
   echo "== build =="
   npm run build
@@ -68,4 +76,4 @@ if [ "$READY" != "1" ]; then
 fi
 
 echo "== 运行 api-e2e.sh =="
-BASE="$BASE" WEBDAV_USER="$WEBDAV_USER" WEBDAV_PASS="$WEBDAV_PASS" bash scripts/api-e2e.sh
+BASE="$BASE" WEBDAV_USER="$WEBDAV_USER" WEBDAV_PASS="$WEBDAV_PASS" SITES_HOST="$SITES_HOST" bash scripts/api-e2e.sh
