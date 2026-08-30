@@ -43,6 +43,7 @@ import PreviewDialog from "./PreviewDialog";
 import RenameDialog from "./RenameDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
+import SitesView from "./SitesView";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
 import WebDavPanel from "./WebDavPanel";
@@ -459,7 +460,9 @@ function Main({
 
   const cwd = route.kind === "folder" ? route.path : lastFolderPath.current;
   const section: ExplorerSection =
-    route.kind === "shares" || route.kind === "trash" ? route.kind : "folder";
+    route.kind === "shares" || route.kind === "trash" || route.kind === "sites"
+      ? route.kind
+      : "folder";
 
   useEffect(() => {
     if (route.kind === "folder") lastFolderPath.current = route.path;
@@ -1400,6 +1403,19 @@ function Main({
             onNotify={onNotify}
             onGoFiles={() =>
               navigate({ kind: "folder", path: lastFolderPath.current })
+            }
+          />
+        </Box>
+      )}
+      {route.kind === "sites" && (
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+          <SitesView
+            onNotify={onNotify}
+            onGoFiles={() =>
+              navigate({ kind: "folder", path: lastFolderPath.current })
+            }
+            onManageFiles={(slug) =>
+              navigate({ kind: "folder", path: `sites/${slug}/` })
             }
           />
         </Box>

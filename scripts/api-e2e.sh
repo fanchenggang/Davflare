@@ -282,9 +282,18 @@ if [ -n "$SITES_HOST" ]; then
   assert_code "sites unauthorized 401" "$code" "401"
 
   code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/sites?slug=$SITE" -H "$BASIC")
-  assert_code "delete site 200" "$code" "200"
+  assert_code "clear site keeps config 200" "$code" "200"
+  code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST "$BASE/api/upload?path=sites/$SITE/" -H "$A" -H "X-File-Name: index.html" --data-binary "<h1>e2e-site-ok</h1>")
+  assert_code "redeploy index upload 201" "$code" "201"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$SITE\",\"spa\":true}")
+  assert_code "sites config after redeploy 200" "$code" "200"
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/$SITE/missing-page" -H "$SH")
+  assert_code "spa fallback after redeploy 200" "$code" "200"
+
+  code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/sites?slug=$SITE&purge=1" -H "$BASIC")
+  assert_code "purge site 200" "$code" "200"
   code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$BASE/$SITE/index.html" -H "$SH")
-  assert_code "site gone after delete 404" "$code" "404"
+  assert_code "site gone after purge 404" "$code" "404"
   SITES_LIST2=$(curl -s --noproxy '*' "$BASE/api/sites" -H "$BASIC")
   if echo "$SITES_LIST2" | grep -q "$SITE"; then
     bad "site removed from list" "still present" "absent"

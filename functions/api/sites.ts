@@ -151,7 +151,10 @@ export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
     return new Response("Bad slug", { status: 400 });
   }
 
-  // 分批删除站点对象（R2 单次最多 1000 个键），封顶防止超大站点拖垮请求
+  // 分批删除站点对象（R2 单次最多 1000 个键），封顶防止超大站点拖垮请求。
+  // 默认保留站点配置（重新部署同一 slug 时 SPA 开关等自动保留）；
+  // purge=1 连配置一起删，用于彻底移除站点。
+  const purge = new URL(request.url).searchParams.get("purge") === "1";
   let deleted = 0;
   let cursor: string | undefined;
   do {
@@ -175,6 +178,6 @@ export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
     cursor = listing.cursor;
   } while (true);
 
-  await env.BUCKET.delete(siteConfigKey(slug));
+  if (purge) await env.BUCKET.delete(siteConfigKey(slug));
   return jsonResponse({ slug, deleted });
 };

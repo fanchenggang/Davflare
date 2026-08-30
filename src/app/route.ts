@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 export type Route =
   | { kind: "folder"; path: string }
   | { kind: "trash" }
-  | { kind: "shares" };
+  | { kind: "shares" }
+  | { kind: "sites" };
 
 function encodeRoute(route: Route): string {
   switch (route.kind) {
@@ -13,6 +14,8 @@ function encodeRoute(route: Route): string {
       return "#/trash";
     case "shares":
       return "#/shares";
+    case "sites":
+      return "#/sites";
   }
 }
 
@@ -20,6 +23,7 @@ function decodeRoute(hash: string): Route {
   const raw = hash.replace(/^#\/?/, "");
   if (raw === "trash") return { kind: "trash" };
   if (raw === "shares") return { kind: "shares" };
+  if (raw === "sites") return { kind: "sites" };
 
   const path = raw
     .split("/")

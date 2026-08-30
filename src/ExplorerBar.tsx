@@ -35,7 +35,7 @@ import { RecentEntry } from "./app/recent";
 import { strings, translate } from "./app/strings";
 import { warmShadow } from "./app/theme";
 
-export type ExplorerSection = "folder" | "shares" | "trash";
+export type ExplorerSection = "folder" | "shares" | "trash" | "sites";
 
 // labelKey 延迟到渲染时取 strings，避免模块级快照导致语言切换后标签不变。
 const TYPE_FILTERS: Array<{ value: FileTypeFilter; labelKey: string }> = [
@@ -156,6 +156,9 @@ function ExplorerBar({
           </ToggleButton>
           <ToggleButton value="shares" aria-label={strings.shares}>
             {strings.shares}
+          </ToggleButton>
+          <ToggleButton value="sites" aria-label={strings.sitesSection}>
+            {strings.sitesSection}
           </ToggleButton>
           <ToggleButton value="trash" aria-label={strings.trash}>
             {strings.trash}
