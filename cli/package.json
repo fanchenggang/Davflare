@@ -1,0 +1,30 @@
+{
+  "name": "davflare-cli",
+  "version": "0.1.0",
+  "description": "Command-line client for the Davflare Open API (Cloudflare R2 drive): ls/mkdir/rm/mv/cp/sync",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "davflare": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.3",
+    "vitest": "^2.1.0"
+  }
+}

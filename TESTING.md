@@ -1,8 +1,59 @@
 # FlareDrive 回归测试清单
 
-> 最近一轮：2026-08-29 第六批（缺陷修复 + B5/B9/C9 收尾 + i18n 第二阶段收编 + 界面美化 + 单测/e2e 落地）
-> 前几轮：第五批（A9 i18n 第一阶段 + scripts/api-e2e.sh 回归套件沉淀）、第四批（多选拖拽/面包屑下拉/图标扩展）、第三批（目录分享/回收站清理/搜索高亮/动效 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
+> 最近一轮：2026-08-30 第三轮四批（Sites 管理面板 + MCP 深化 + davflare-cli，另含第 0 批缺陷修复）
+> 前几轮：2026-08-29 第六批（缺陷修复 + B5/B9/C9 收尾 + i18n 第二阶段收编 + 界面美化 + 单测/e2e 落地）、第五批（A9 i18n 第一阶段 + scripts/api-e2e.sh 回归套件沉淀）、第四批（多选拖拽/面包屑下拉/图标扩展）、第三批（目录分享/回收站清理/搜索高亮/动效 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
 > 约束：所有测试数据操作仅在自己创建的目录内进行，测试后清理。
+
+## 0a-7. 第三轮四批（2026-08-30）
+
+### 第 0 批：缺陷修复（commit 54a4acb）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| shareLinkRevoked 缺键 | SharesView 撤销分享 toast 显示原始键名，strings.ts 补 `shareLinkRevoked` 中英文 | ✅ strings 单测（双语完整性）通过 |
+| WebDavPanel 字面量 | `"{strings.notConfigured}"` 等带花括号原文渲染给用户，改为正常表达式 | ✅ typecheck + 构建 |
+| html lang 固定 | `<html lang>` 不随语言切换；setLang() 与模块初始化时同步 `document.documentElement.lang` | ✅ 构建 |
+| 暗色硬编码阴影 | 7 文件 10 处暖黑阴影改为 theme 感知 `warmShadow()`（亮色不变，暗色纯黑加深） | ✅ 构建 + 既有测试不回归 |
+
+### 第 1 批：Sites 管理后端（commit 8258836）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| /api/sites | 列站（delimiter）/配置（SPA 开关）/删站（分批 + purge 语义：默认保留配置）；统计聚合带 10 分钟 TTL 缓存 | ✅ e2e 18 项断言（列表/配置/统计/非法 slug/401/清空保留配置/purge 彻删） |
+| SPA/404 兜底 | 中间件最终 miss 才读一次配置：spa→index.html 200；否则 404.html 以 404 返回；正常命中零额外 R2 读 | ✅ e2e：miss 404 / spa 200 / 404.html 404+内容 / 重部署后 SPA 仍生效 |
+
+### 第 2 批：SitesView 界面（commit 370cf8b）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| 站点区块 | `#/sites` 第四 section + ExplorerBar 切换；卡片（slug/静态 SPA 徽标/URL 复制/懒加载统计）；SITES_HOST 未配置引导横幅 | ✅ 浏览器 GUI 冒烟（截图核验布局与主题一致性） |
+| zip 一键部署 | 前端 fflate 解压 → 注入 webkitRelativePath → 复用上传队列（覆盖语义/清空可选项/进度暂停重试全套） | ✅ GUI：部署对话框渲染、未选文件禁用部署按钮；「管理文件」跳转 `sites/<slug>/` 复用文件管理器 |
+| SPA 开关即时生效 | 开关 optimistic 更新 + 服务端 POST 配置 | ✅ GUI：开关后徽标变 SPA + toast；TEST_CASES 新增 TC-SITES 12 例 |
+
+### 第 3 批：MCP 深化（commit f089ff9）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| 新端点 | `POST /api/copy`（复用抽取的 copyObject，rename 行为不变）、`GET /api/stat`、`/api/download` 支持 Range（206 + Content-Range，非法 Range 回退全量） | ✅ e2e：copy/stat 成功路径 + 2MB 下载逐字节 cmp |
+| MCP 十新工具 | search/move/copy/stat/share_create/share_list/share_revoke/sites_list/sites_config/sites_delete（_mcp.ts 保持纯函数） | ✅ mcp 单测 15→23 用例（工具目录/参数转发/分块编排）；e2e tools/list 计数与调用 |
+| 大文件分块 | MCP upload >1MiB 自动三段式（cap 25MB），分块失败 abort 清理；download 大文件按 part/partSize 分页 base64 | ✅ e2e：2MB base64 上传 → /api/download 逐字节一致 → part 分页与原文件前 1MiB 一致 |
+| 鉴权统一 | /api/shares、/api/search、/api/sites 放行 API key（会话仍可用） | ✅ e2e：三端点 Bearer key 创建/搜索/列站；无 key 401 |
+| 文档 | docs/API.md（copy/stat/search/Range/MCP 工具清单/shares 密钥说明）、docs/sites(.zh-CN).md 管理 API 章节 | ✅ 与实现核对 |
+
+### 第 4 批：davflare-cli（本次提交）
+| 项 | 内容 | 验证 |
+|----|------|------|
+| cli 包 | 独立 npm 包 `davflare-cli`（Node ≥18 + commander，ESM + tsc + vitest）；login 创建专用密钥存 `~/.config/davflare/config.json`(0600)；DAVFLARE_SERVER/KEY 环境变量 | ✅ 构建 + `--help/--version` |
+| 命令 | ls/ln -l/--json、mkdir、rm -r/--hard、mv、cp 双向（>100MB 自动分块上传、Range 断点续传下载）、sync push/pull --dry-run/--delete/--backup-conflicts | ✅ cli/e2e.sh 17 项断言全过（上传/下载字节一致/mv/rm/sync 双向幂等/清理） |
+| sync 引擎 | 纯函数 planSync（transfer/changed/deleteCandidates/upToDate），local wins（push）与 remote wins（pull） | ✅ vitest 4 用例（push/pull/空表/同 size 一致） |
+
+### 排障记录（本轮真实故障，值得留档）
+| 现象 | 根因 | 处置 |
+|------|------|------|
+| e2e 站点断言全挂，响应是网盘 SPA 页 | 8788 端口有残留 wrangler dev（早前会话遗留），测试打到旧进程 | 测试前确认端口空闲；换端口运行 |
+| MCP stat 间歇性「文件不存在」 | 多个 wrangler dev 共享同一 `.wrangler/state` SQLite，workerd 间 SQLITE_BUSY 争锁（日志可见 Fatal ... SQLITE_BUSY） | 只保留一个 dev 实例；多实例需各自 --persist-to |
+| MCP 上传响应 -32700 Parse error、参数被截断 | e2e 里 `$( )` 内嵌 `\"` 构造 JSON 参数：不在引号内的 $( ) 中 `\"` 使引号开关，`{a,b}` 形状触发 **bash 花括号展开**按逗号拆参 | JSON 参数先拼进变量再传（mcp_call 调用约定已加注释警示） |
+| CLI 上传 400「需要 X-File-Name」 | /api/upload 原始体模式要求 path=目录 + X-File-Name=文件名；客户端误传完整键 | client.uploadFile 拆分 folder/name |
+| CLI ls --json 断言失败 | CLI 美化输出 `"name": "a.txt"`（带空格），grep 写成无空格 | e2e grep 对齐实际输出 |
+
+**本轮验证汇总**：`npm run typecheck` 0 错误；`npm run test:ci` 8 套件 76 用例全过；`npm run build` 成功；主 e2e `npm run test:e2e` **129 项断言全过**（含站点 18 项 + MCP 20 项）；`cli` vitest 4 用例 + `cli/e2e.sh` **17 项全过**；SitesView 浏览器 GUI 冒烟通过。
+
 
 ## 0a-6. 第六批新增与新验证（2026-08-29）
 

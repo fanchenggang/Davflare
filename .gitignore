@@ -27,3 +27,7 @@ yarn-error.log*
 .dev.vars
 /.zcode
 /.wrangler-local
+
+# davflare-cli
+cli/node_modules
+cli/dist
