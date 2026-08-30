@@ -33,6 +33,7 @@
 - WebDAV Class 1/2，路径 `/webdav`
 - API Key，可用于脚本上传、下载与双向同步
 - 远程 MCP，路径 `/mcp`（list / upload / download / mkdir / delete）
+- 静态站点走单独域名（`SITES_HOST` + `sites/{slug}/`）；[docs/sites.zh-CN.md](docs/sites.zh-CN.md)
 - Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（手动拉取/推送，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
 
@@ -114,6 +115,10 @@ Cursor（`mcp.json`）：
   }
 }
 ```
+
+## 静态站点
+
+`sites/{slug}/` 下的 HTML 只在**单独域名**（`SITES_HOST`）上提供。同一个 Worker，按 Host 分流，不是网盘源上的 `/sites`。详见 [docs/sites.zh-CN.md](docs/sites.zh-CN.md)。
 
 ## Agent 目录
 
