@@ -33,6 +33,7 @@
 - WebDAV Class 1/2，路径 `/webdav`
 - API Key，可用于脚本上传、下载与双向同步
 - 远程 MCP，路径 `/mcp`（list / upload / download / mkdir / delete）
+- Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（手动拉取/推送，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
 
 ## 部署
@@ -113,6 +114,10 @@ Cursor（`mcp.json`）：
   }
 }
 ```
+
+## Agent 目录
+
+skills / rules / MCP 片段放在 R2 的 `agents/` 下。v1 只是目录约定 + 用现有 MCP 工具（或网页端）手动拉取/推送。合并顺序：project 覆盖 agent 覆盖 global。`mcp.json` 里不要存明文密钥，用 `${env:DAVFLARE_API_KEY}`。Cursor 落地路径和走目录步骤见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)。
 
 ## 开发与测试
 
