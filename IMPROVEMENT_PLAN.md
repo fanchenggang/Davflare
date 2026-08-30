@@ -205,7 +205,7 @@
 ### A3. 性能与统计（P2）
 - **A3.1 搜索提速**：`functions/api/search.ts` 现为全桶线性逐页扫描。改为 R2 `list` cursor 分段 + 2~3 并发扫描，前端加会话级缓存（同 query 翻页复用）。维持无索引架构（元数据全在 R2），注释说明引入 D1/R2 索引前需先统一各写入路径（api/webdav/sites）。
 - **A3.2 存储用量统计**：新增 `GET /api/usage`（会话鉴权）聚合对象数与总大小，结果缓存于 `_$flaredrive$/stats/usage.json`（带 TTL + 扫描限量，避免大桶超时）；前端在 ExplorerBar/Header 入口展示总用量与一级子目录分布条形图。
-- **A3.3 MCP 扩展**：`functions/_mcp.ts` 增 search/move/share 管理工具；上传工具内部自动走 `/api/upload` 三段式分块，上限从 1MiB 提升（目标 25MB，保持 Worker CPU 时间约束内）。
+- **A3.3 MCP 扩展**：`functions/_mcp.ts` 增 search/move/share 管理工具；上传工具内部自动走 `/api/upload` 三段式分块，上限从 1MiB 提升（目标 25MB，保持 Worker CPU 时间约束内）。（2026-08-30 注：已并入第三轮 B1，以第三轮内容为准）
 - **验收**：万级对象桶搜索首屏 <3s；usage 缓存命中后 <100ms；MCP 大文件上传经分块成功且 abort 可清理。
 - **工作量**：中-大。
 
@@ -264,3 +264,71 @@
 | 第 5 批（P3） | A4 工程现代化（独立分支） | 工程健康 |
 
 每批验证：`npm run typecheck && npm run test:ci && npm run build && npm run test:e2e`；UI 批次按 TEST_CASES.md 做浏览器 GUI 冒烟；涉及分享/A1 的批次必须回归安全响应头断言（api-e2e 已含）。
+
+---
+
+# 第三轮（2026-08-30）：Sites 管理面板 · MCP 深化 · CLI
+
+> 经讨论选定三个方向优先推进，其余候选（访客上传链接、相册模式、文本在线编辑等）暂不排期。
+> 本轮 MCP 工作流**吸收并替代第二轮 A3.3**（search/move/share 工具 + 分块上传，内容为其超集），
+> 第二轮 A3 剩余的 A3.1/A3.2（搜索提速、用量统计）排期不变。
+> 批次顺序：Sites 后端先行（MCP sites 工具依赖其配置设计），CLI 可与任何批次并行。
+
+## A. Sites 管理面板（P1，先行）
+
+### A1. 站点配置与元数据 API（后端）
+- **现状**：`sites/{slug}/` 仅是普通 R2 前缀，`functions/_middleware.ts` 按 Host 接管 GET/HEAD（解析在纯函数 `functions/_sites.ts`）；无站点列表、无配置、无统计；slug 校验 `SLUG_RE` 私有在 `_sites.ts:3`；miss 一律纯 404。
+- **方案**：
+  1. `functions/_sites.ts` 导出 slug 校验供 API 层复用；新增每站配置对象 `_$flaredrive$/sites/{slug}.json`（`{ slug, spa?: boolean, stats?: { objects, size, cachedAt } }`），沿用 shares 元数据「内部前缀 + JSON 对象」的既有惯例。
+  2. **SPA fallback 与自定义 404**：中间件仅在最终 miss 时读一次配置——`spa=true` 回源 `{slug}/index.html`（200，支持 history 路由）；否则存在 `{slug}/404.html` 时以其内容返回 404；都不满足维持现状纯 404。正常命中路径**零额外 R2 读**；HEAD 与 GET 行为对齐。
+  3. 新增 `functions/api/sites.ts`（会话 Basic 鉴权，风格对齐 `functions/api/keys.ts`）：GET 列站点（`bucket.list({ prefix: "sites/", delimiter: "/" })` 取 commonPrefixes + 各自配置）；POST 更新配置 `{ slug, spa? }`；DELETE `?slug=` 删整站（复用目录硬删，>1000 对象按既有约定分批提示）。文件数/总大小按需前缀聚合（每站 ≤5000 对象上限），结果写回配置 JSON 缓存（TTL 10 分钟）。
+- **验收**：api-e2e 新增——curl 带 `-H "Host: <SITES_HOST>"`：miss 默认 404；`spa=1` 后 miss 返回 index.html（200）；存在 404.html 时返回 404 + 内容；非法 slug 400；删站后站点文件与配置均消失；目录 URL 落 index.html 的既有行为不回归。
+- **工作量**：中（约 1 天）。
+
+### A2. SitesView 管理界面
+- **现状**：前端只有 folder/shares/trash 三个 section（`src/app/route.ts:3-7`），站点管理只能靠 WebDAV/API 裸操作，用户不可见。
+- **方案**：
+  1. 路由与入口：新增 `{ kind: "sites" }` 路由 `#/sites`，ExplorerBar ToggleButtonGroup 加第四段，MobileNav 文件菜单补入口；新建 `src/SitesView.tsx`。
+  2. 站点卡片：slug、类型徽标（静态/SPA）、文件数/总大小（懒加载统计）、站点 URL 一键复制；`SITES_HOST` 未配置时顶部横幅给出 wrangler.toml 配置指引（链接 docs/sites.md），「打开站点」禁用。
+  3. 操作：「管理文件」直接跳 `#/sites/{slug}/` 文件夹路由——**复用整套文件管理器**（上传/重命名/删除全都有），零新代码；「上传 zip 部署」前端 fflate.unzip（已是依赖）→ 走既有 transferQueue 并发上传到 `sites/{slug}/`，可勾选「部署前清空」，进度/暂停/重试全套复用；SPA 开关（POST 配置）；删除（ConfirmDialog 输入 slug 确认）。
+  4. 大站提示（≥200MB 或 ≥5000 文件建议 WebDAV/CLI 部署）；文案全量收编 strings.ts。
+- **验收**：TEST_CASES.md 增 TC-SITES 组；GUI 冒烟：zip 部署后新标签打开站点、SPA 路由深链刷新可回退 index、开关切换即时生效、删站后文件区同步消失、SITES_HOST 未配置时的引导横幅。
+- **工作量**：中（约 1 天）。
+
+## B. MCP 持续加深（P1/P2）
+
+### B1. 通用工具补齐 + 大文件（吸收第二轮 A3.3）
+- **现状**：`functions/_mcp.ts` 纯分发器 5 工具（list/upload/download/mkdir/delete），上传/下载硬上限 1 MiB（`MCP_MAX_BYTES`）；`functions/mcp.ts` 以 `makeApis` 克隆请求转发到 /api handler，API key 鉴权。
+- **方案**：
+  1. 新工具：`search {query, limit, cursor}`（→ /api/search）、`move {source, destination}`（→ /api/rename，目录可用）、`copy {source, destination}`（**新增 POST /api/copy**，抽取 `_apikey.ts` 中 `copyThenDelete` 的拷贝半边）、`stat {path}`（**新增 GET /api/stat**，bucket.head 返回 size/etag/uploaded/contentType）。
+  2. 分享三件套：`share_create {path, extractCode?, expiresInDays?}`、`share_list`、`share_revoke {token}`。**前置改动**：`/api/shares` 放行 API key 鉴权（现仅会话 Basic，`functions/api/shares.ts` 增加 `authorizeApiKey` 分支），docs/API.md 注明「API key 可管理分享」。
+  3. 大文件：`upload` >1MiB 时内部自动走 `/api/upload?uploads` 三段式，上限提升至 10-25MB（base64 后单条 JSON-RPC ~34MB，按 Worker 内存实测定档）；`download` 大文件返回分块指引或按 `part` 参数分页返回 base64。
+  4. 工具 schema 全部进 `MCP_TOOLS`；`_mcp.ts` 保持纯函数（继续由 `src/app/__tests__/mcp.test.ts` 覆盖）。
+- **验收**：e2e 增 MCP 断言——tools/list 数量与新工具、search/move/copy/stat 成功路径、无 key 401、/api/shares 的 key 放行、大文件分块上传后逐字节校验、abort 清理。
+- **工作量**：中-大（1-2 天）。
+
+### B2. Sites MCP 工具（依赖 A1）
+- **方案**：`sites_list`（slug + 配置 + 统计）、`sites_config {slug, spa?}`、`sites_delete {slug}`，内部转发 A1 的 /api/sites；upload/delete 通用工具对 `sites/` 前缀天然可用，docs/agents.md 补 agent 部署站点推荐序列（mkdir → upload ×N → sites_config）。
+- **验收**：mcp.test.ts 纯逻辑用例 + e2e 调用断言。
+- **工作量**：小（约 0.5 天）。
+
+## C. davflare-cli（P2，可与 A/B 并行）
+
+- **现状**：Open API 已完备（list 分页 / upload 单发+三段式 / mkdir / rename / delete / backup / download / search），docs/API.md 已写双向同步配方（local wins + 冲突备份），但只能 curl 手搓。
+- **方案**：仓库内 `cli/` 子目录，独立 npm 包 `davflare-cli`（bin: `davflare`），Node ≥18 + TypeScript + ESM；不接 CRA/Jest，自建 `tsc` + vitest；发布流程（版本号/CHANGELOG/README）文档化。
+  1. **登录**：`davflare login` 交互输入 server + 用户名/密码 → 以会话 Basic 调 `POST /api/keys` 自动创建专用密钥 `cli-{hostname}`（可 `davflare logout` 吊销）→ 存 `~/.config/davflare/config.json`（0600）；CI 场景支持 `DAVFLARE_SERVER` / `DAVFLARE_KEY` 环境变量。
+  2. **v1 命令**：`ls [-l] [path]`、`mkdir`、`rm [-r] [--hard]`、`mv src dst`、`cp` 本地↔远端双向（>100MB 自动三段式分块上传；下载断点续传依赖 `/api/download` 补 Range——小改，对齐 share 端点 `range: request.headers` 的既有用法）、`sync push|pull [--dry-run]`（按 docs 配方：mtime+size 比对，local wins，远端冲突经 `/api/backup` 改名 `name.conflict-<ts>`）、`--json` 机器可读输出。
+  3. **实现约束**：运行时依赖仅 commander，fetch/流全部 Node 内建；同步 diff 引擎做成纯函数便于单测；进度输出走 stderr 保持管道友好。
+- **验收**：`cli/e2e.sh` 对 `wrangler pages dev` 全命令回归（与 api-e2e 同套路，可复用其起停逻辑）；sync 单测覆盖 新增/修改/删除/冲突 四象限；README 含安装、登录、同步示例。
+- **工作量**：大（2-3 天）。
+
+## 第三轮批次与依赖
+
+| 批次 | 内容 | 依赖 |
+|------|------|------|
+| 第 1 批（P1） | A1 Sites 后端（配置/SPA/404/统计 API） | 无，先行 |
+| 第 2 批（P1） | A2 SitesView 管理界面 | 第 1 批 |
+| 第 3 批（P1/P2） | B1 MCP 通用工具 + B2 sites 工具 | B2 依赖第 1 批；可与第 2 批并行 |
+| 第 4 批（P2） | C davflare-cli | 无，可全程并行 |
+
+每批验证：`npm run typecheck && npm run test:ci && npm run build && npm run test:e2e`；GUI 部分按 TEST_CASES.md 冒烟；CLI 另跑 `cli/e2e.sh`。
