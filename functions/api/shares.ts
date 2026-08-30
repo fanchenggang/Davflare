@@ -1,4 +1,4 @@
-import { isCollectionObject } from "./_apikey";
+import { isCollectionObject, verifyBasicAuth } from "./_apikey";
 
 interface SharesEnv {
   BUCKET: R2Bucket;
@@ -9,11 +9,7 @@ interface SharesEnv {
 const SHARES_PREFIX = "_$flaredrive$/shares/";
 
 function isAuthorized(request: Request, env: SharesEnv) {
-  const authorization = request.headers.get("Authorization");
-  const expected = `Basic ${btoa(
-    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-  )}`;
-  return Boolean(authorization && authorization === expected);
+  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
 }
 
 function basename(key: string) {

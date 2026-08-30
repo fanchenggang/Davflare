@@ -46,14 +46,28 @@ export function mimeForKey(key: string): string {
   return MIME[ext] || "application/octet-stream";
 }
 
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
 export function parseSitesPath(
   pathname: string
 ): { ok: true; slug: string; key: string; tryIndex: boolean } | { ok: false; reason: string } {
   const raw = pathname.replace(/\\/g, "/");
-  if (raw.includes("..") || raw.includes("_$flaredrive$")) {
+  // 逐段解码后校验：%2e%2e 之类的编码穿越同样被拦，编码斜杠视为非法；
+  // 而文件名内部的 "a..b.html"、空格、中文等合法字符不再被误伤
+  const parts = raw.split("/").map(decodeSegment).filter(Boolean);
+  if (
+    parts.some(
+      (part) => part === ".." || part.includes("/") || part.includes("_$flaredrive$")
+    )
+  ) {
     return { ok: false, reason: "bad path" };
   }
-  const parts = raw.split("/").filter(Boolean);
   if (parts.length === 0) return { ok: false, reason: "missing slug" };
   const slug = parts[0].toLowerCase();
   if (!SLUG_RE.test(slug)) return { ok: false, reason: "bad slug" };

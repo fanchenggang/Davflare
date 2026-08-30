@@ -4,12 +4,10 @@ interface ConfigEnv {
   WEBDAV_PUBLIC_READ?: string;
 }
 
+import { verifyBasicAuth } from "./_apikey";
+
 function isAuthorized(request: Request, env: ConfigEnv) {
-  const authorization = request.headers.get("Authorization");
-  const expected = `Basic ${btoa(
-    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-  )}`;
-  return Boolean(authorization && authorization === expected);
+  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
 }
 
 export const onRequestGet: PagesFunction<ConfigEnv> = async (context) => {

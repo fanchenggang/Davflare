@@ -3,8 +3,10 @@ interface ShareEnv {
 }
 
 import { buildZipStream } from "../api/_zip";
+import { sha256Hex, timingSafeEqual } from "../api/_apikey";
 
 const SHARES_PREFIX = "_$flaredrive$/shares/";
+const SHARE_COOKIE = "fd_share_code";
 
 function inlineContentType(contentType: string) {
   return (
@@ -24,6 +26,15 @@ function applyShareHardening(headers: Headers) {
   headers.set("X-Content-Type-Options", "nosniff");
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function tokenFromParams(params: Record<string, unknown>): string | null {
   const token = params.token;
   if (typeof token === "string") return token;
@@ -31,9 +42,13 @@ function tokenFromParams(params: Record<string, unknown>): string | null {
   return null;
 }
 
-function extractForm(error?: string) {
+function sharePath(token: string): string {
+  return `/share/${encodeURIComponent(token)}`;
+}
+
+function extractForm(error: string | undefined, action: string) {
   const message = error
-    ? `<p class="err">${error}</p>`
+    ? `<p class="err">${escapeHtml(error)}</p>`
     : "<p>请输入提取码后查看文件</p>";
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -58,7 +73,7 @@ function extractForm(error?: string) {
   </style>
 </head>
 <body>
-  <form class="card" method="GET">
+  <form class="card" method="post" action="${escapeHtml(action)}">
     <h1>提取文件</h1>
     ${message}
     <input name="code" type="text" maxlength="32" autocomplete="off" placeholder="提取码" autofocus />
@@ -85,18 +100,85 @@ async function loadMeta(bucket: R2Bucket, token: string): Promise<ShareMeta | nu
   return (await metadataObject.json()) as ShareMeta;
 }
 
-function gateExtractCode(request: Request, metadata: ShareMeta) {
+function getCookieValue(cookieHeader: string | null, name: string): string {
+  if (!cookieHeader) return "";
+  for (const pair of cookieHeader.split(";")) {
+    const eq = pair.indexOf("=");
+    if (eq < 0) continue;
+    if (pair.slice(0, eq).trim() === name) return pair.slice(eq + 1).trim();
+  }
+  return "";
+}
+
+// 提取码门禁：兼容 ?code= 查询参数（旧链接/直链），也接受表单 POST 成功后
+// 种下的 path 级 cookie（cookie 里存的是码的 SHA-256，不回存明文）。
+async function gateExtractCode(request: Request, metadata: ShareMeta, action: string) {
   const required = String(metadata.extractCode || "").trim();
   if (!required) return null;
   const provided = new URL(request.url).searchParams.get("code") || "";
   if (provided === required) return null;
-  return extractForm(provided ? "提取码不正确" : undefined);
+  const cookieHash = getCookieValue(request.headers.get("Cookie"), SHARE_COOKIE);
+  if (cookieHash && timingSafeEqual(cookieHash, await sha256Hex(required))) return null;
+  return extractForm(provided || cookieHash ? "提取码不正确" : undefined, action);
 }
+
+async function loadFormCode(request: Request): Promise<string> {
+  const contentType = request.headers.get("Content-Type") || "";
+  if (!contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
+    return "";
+  }
+  try {
+    return (new URLSearchParams(await request.text()).get("code") || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+export const onRequestPost: PagesFunction<ShareEnv> = async (context) => {
+  const { request, env, params } = context;
+  const token = tokenFromParams(params);
+  if (!token) return new Response("Not found", { status: 404 });
+  const target = sharePath(token);
+
+  const metadata = await loadMeta(env.BUCKET, token);
+  if (metadata === null || !metadata.key) {
+    return new Response("分享链接不存在或已撤销", { status: 404 });
+  }
+  if (
+    metadata.expiresAt &&
+    new Date(metadata.expiresAt).getTime() <= Date.now()
+  ) {
+    return new Response("分享链接已过期", { status: 410 });
+  }
+
+  const required = String(metadata.extractCode || "").trim();
+  if (!required) {
+    return new Response(null, { status: 303, headers: { Location: target } });
+  }
+
+  const provided = await loadFormCode(request);
+  if (!provided) return extractForm(undefined, target);
+  if (!timingSafeEqual(provided, required)) {
+    return extractForm("提取码不正确", target);
+  }
+
+  // 校验通过：种下 Path 限定到本分享的 HttpOnly 会话 cookie（存码的哈希），
+  // 303 回不带 code 的干净链接。后续 GET/HEAD（含视频拖动的 Range 请求）
+  // 自动带上 cookie，提取码不再出现在 URL、浏览器历史和访问日志里。
+  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+  const headers = new Headers({ Location: target });
+  headers.append(
+    "Set-Cookie",
+    `${SHARE_COOKIE}=${await sha256Hex(required)}; Path=${target}; HttpOnly; SameSite=Lax${secure}`
+  );
+  return new Response(null, { status: 303, headers });
+};
 
 export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   const { request, env, params } = context;
   const token = tokenFromParams(params);
   if (!token) return new Response("Not found", { status: 404 });
+  const target = sharePath(token);
 
   const metadata = await loadMeta(env.BUCKET, token);
   if (metadata === null) {
@@ -111,7 +193,7 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
     return new Response("分享链接已过期", { status: 410 });
   }
 
-  const gated = gateExtractCode(request, metadata);
+  const gated = await gateExtractCode(request, metadata, target);
   if (gated) return gated;
 
   const encodedName = encodeURIComponent(
@@ -160,6 +242,7 @@ export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
   const { request, env, params } = context;
   const token = tokenFromParams(params);
   if (!token) return new Response(null, { status: 404 });
+  const target = sharePath(token);
 
   const metadata = await loadMeta(env.BUCKET, token);
   if (metadata === null || !metadata.key) return new Response(null, { status: 404 });
@@ -169,7 +252,9 @@ export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
   ) {
     return new Response(null, { status: 410 });
   }
-  if (gateExtractCode(request, metadata)) return new Response(null, { status: 403 });
+  if (await gateExtractCode(request, metadata, target)) {
+    return new Response(null, { status: 403 });
+  }
 
   // 与 GET 对齐：目录分享（含无 marker 的虚拟目录）下载的是 zip 流，无固定长度
   if (metadata.isDir) {

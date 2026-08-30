@@ -53,6 +53,26 @@ describe("static sites host routing", () => {
     expect(parseSitesPath("/_$flaredrive$/x").ok).toBe(false);
   });
 
+  test("dots inside filenames allowed; encoded traversal still rejected", () => {
+    expect(parseSitesPath("/blog/a..b.html").ok).toBe(true);
+    expect(parseSitesPath("/blog/%2e%2e/secret").ok).toBe(false);
+    expect(parseSitesPath("/blog/a%2Fb").ok).toBe(false);
+    expect(parseSitesPath("/blog/_%24flaredrive%24/x").ok).toBe(false);
+  });
+
+  test("encoded filenames decode to object keys", () => {
+    expect(parseSitesPath("/blog/hello%20world.html")).toEqual({
+      ok: true,
+      slug: "blog",
+      key: "sites/blog/hello world.html",
+      tryIndex: false,
+    });
+    expect(parseSitesPath("/blog/%E4%B8%AD%E6%96%87.html")).toMatchObject({
+      ok: true,
+      key: "sites/blog/中文.html",
+    });
+  });
+
   test("mime by extension", () => {
     expect(mimeForKey("sites/a/index.html")).toMatch(/^text\/html/);
     expect(mimeForKey("sites/a/app.js")).toMatch(/javascript/);

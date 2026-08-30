@@ -4,6 +4,8 @@ interface KeysEnv {
   WEBDAV_PASSWORD: string;
 }
 
+import { verifyBasicAuth } from "./_apikey";
+
 const KEYS_PREFIX = "_$flaredrive$/apikeys/";
 
 interface StoredApiKey {
@@ -18,11 +20,7 @@ interface StoredApiKey {
 }
 
 function isAuthorized(request: Request, env: KeysEnv) {
-  const authorization = request.headers.get("Authorization");
-  const expected = `Basic ${btoa(
-    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-  )}`;
-  return Boolean(authorization && authorization === expected);
+  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
 }
 
 function usernameFromBasic(request: Request): string {

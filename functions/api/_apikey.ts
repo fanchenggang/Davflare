@@ -36,7 +36,7 @@ function extractApiKey(request: Request): string {
   return "";
 }
 
-async function sha256Hex(value: string) {
+export async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(value)
@@ -46,13 +46,25 @@ async function sha256Hex(value: string) {
     .join("");
 }
 
-function timingSafeEqual(a: string, b: string) {
+export function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) {
     diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   }
   return diff === 0;
+}
+
+// Basic 认证统一入口：常数时间比较整个 Authorization 头，
+// 各端点不要再用 `===` 明文比对凭据。
+export function verifyBasicAuth(
+  request: Request,
+  username: string,
+  password: string
+): boolean {
+  const authorization = request.headers.get("Authorization") || "";
+  const expected = `Basic ${btoa(`${username}:${password}`)}`;
+  return timingSafeEqual(authorization, expected);
 }
 
 function isExpired(expiresAt: string | null | undefined) {

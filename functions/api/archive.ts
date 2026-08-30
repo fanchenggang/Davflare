@@ -1,5 +1,5 @@
 import { buildZipStream } from "./_zip";
-import { decodeRawPath, isInternalKey } from "./_apikey";
+import { decodeRawPath, isInternalKey, verifyBasicAuth } from "./_apikey";
 
 interface ArchiveEnv {
   BUCKET: R2Bucket;
@@ -10,11 +10,7 @@ interface ArchiveEnv {
 export const onRequestPost: PagesFunction<ArchiveEnv> = async (context) => {
   const { request, env } = context;
 
-  const authorization = request.headers.get("Authorization");
-  const expected = `Basic ${btoa(
-    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-  )}`;
-  if (!authorization || authorization !== expected) {
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

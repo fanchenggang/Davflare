@@ -185,6 +185,16 @@ assert_contains "no code shows form" "$(curl -s --noproxy '*' "$BASE/share/$CTOK
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$CTOKEN?code=wrong")
 assert_code "wrong extract code 403" "$code" "403"
 assert_contains "correct code downloads" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN?code=fd42")" "share me 中文"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/share/$CTOKEN" -d "code=wrong")
+assert_code "form POST wrong code 403" "$code" "403"
+JAR=$(mktemp)
+code=$(curl -s --noproxy '*' -c "$JAR" -o /tmp/o -w "%{http_code}" -X POST "$BASE/share/$CTOKEN" -d "code=fd42")
+assert_code "form POST correct code 303" "$code" "303"
+assert_contains "cookie unlocks clean share URL" "$(curl -s --noproxy '*' -b "$JAR" "$BASE/share/$CTOKEN")" "share me 中文"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$CTOKEN")
+assert_code "clean URL still gated without cookie" "$code" "200"
+grep -q "提取码" /tmp/o && ok "clean URL shows form" || bad "clean URL shows form" "$(cat /tmp/o)" "提取码"
+rm -f "$JAR"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/shares?token=$CTOKEN" -H "$BASIC")
 assert_code "coded share revoke 204" "$code" "204"
 

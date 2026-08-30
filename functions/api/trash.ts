@@ -1,4 +1,4 @@
-import { ensureFolderMarkers, isInternalKey } from "./_apikey";
+import { ensureFolderMarkers, isInternalKey, verifyBasicAuth } from "./_apikey";
 
 interface TrashEnv {
   BUCKET: R2Bucket;
@@ -50,11 +50,7 @@ function retentionDaysFrom(env: TrashEnv): number {
 }
 
 function isAuthorized(request: Request, env: TrashEnv) {
-  const authorization = request.headers.get("Authorization");
-  const expected = `Basic ${btoa(
-    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-  )}`;
-  return Boolean(authorization && authorization === expected);
+  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
 }
 
 function basename(key: string) {

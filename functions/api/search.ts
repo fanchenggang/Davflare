@@ -1,3 +1,5 @@
+import { verifyBasicAuth } from "./_apikey";
+
 interface SearchEnv {
   BUCKET: R2Bucket;
   WEBDAV_USERNAME: string;
@@ -5,11 +7,7 @@ interface SearchEnv {
 }
 
 function isAuthorized(request: Request, env: SearchEnv) {
-  const authorization = request.headers.get("Authorization");
-  const expected = `Basic ${btoa(
-    `${env.WEBDAV_USERNAME}:${env.WEBDAV_PASSWORD}`
-  )}`;
-  return Boolean(authorization && authorization === expected);
+  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
 }
 
 export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
