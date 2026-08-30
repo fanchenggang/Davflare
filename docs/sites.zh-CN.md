@@ -5,7 +5,7 @@
 ## 开启
 
 1. 给同一个 Cloudflare Pages 项目绑自定义域：`sites.<你的域>`。
-2. 设置环境变量 `SITES_HOST=sites.<你的域>`（只要主机名，不要 `https://`）。
+2. 在 Cloudflare 控制台给 Pages 项目添加环境变量 `SITES_HOST=sites.<你的域>`（Production 和/或 Preview；只要主机名，不要 `https://`）。**不要**写死在 `wrangler.toml` 的 `[vars]` 里。
 3. 重新部署。`SITES_HOST` 为空则功能关闭。
 
 > `SITES_HOST` 必须是**打开网盘之外**的主机名。若设成网盘自己的域名，站点内容会遮蔽该域名的全部 GET/HEAD，网盘直接不可用。

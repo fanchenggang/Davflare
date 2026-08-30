@@ -5,7 +5,7 @@ Serve folders from R2 as public websites on a **separate hostname**. Same Worker
 ## Enable
 
 1. Bind a custom domain to the same Cloudflare Pages project: `sites.<your-domain>`.
-2. Set the Pages env var `SITES_HOST=sites.<your-domain>` (exact hostname, no `https://`).
+2. In the Cloudflare dashboard, add the Pages project env var `SITES_HOST=sites.<your-domain>` (Production and/or Preview; exact hostname, no `https://`). Do **not** hard-code it in `wrangler.toml`'s `[vars]`.
 3. Redeploy. If `SITES_HOST` is empty, static hosting stays off.
 
 > `SITES_HOST` must be a hostname you do **not** use to open the drive. If you point it at the drive's own domain, site content shadows every GET/HEAD on that host and takes the manager offline.

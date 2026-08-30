@@ -33,8 +33,8 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   sitesTitle: { zh: "静态站点", en: "Static sites" },
   sitesHostMissing: { zh: "未配置 SITES_HOST,站点访问已禁用", en: "SITES_HOST not set — site visits are disabled" },
   sitesHostMissingHint: {
-    zh: "在 wrangler.toml 的 vars 中设置 SITES_HOST(如 sites.example.com)并绑定该自定义域,站点才会在此域名下对外服务。详见 docs/sites.md。",
-    en: "Set SITES_HOST in wrangler.toml vars (e.g. sites.example.com) and bind that custom domain to serve sites publicly. See docs/sites.md.",
+    zh: "在 Cloudflare Pages 项目的环境变量中设置 SITES_HOST(如 sites.example.com)并绑定该自定义域,站点才会在此域名下对外服务。详见 docs/sites.md。",
+    en: "Set SITES_HOST as a Cloudflare Pages environment variable (e.g. sites.example.com) and bind that custom domain to serve sites publicly. See docs/sites.md.",
   },
   emptySites: { zh: "还没有站点", en: "No sites yet" },
   emptySitesHint: {
