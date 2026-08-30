@@ -3,6 +3,9 @@
 > 2026-08-29 制定。基于本轮探索与回归测试发现的实际问题，按「功能改进 / 交互优化 / 界面美化」三个维度组织，
 > 每项含动机（现状与代码位置）、方案要点、验收标准。分三批落地，第一批为 P0（正确性与核心体验）。
 > 回归用例见 [TEST_CASES.md](./TEST_CASES.md)；上一轮已完成项见 [TESTING.md](./TESTING.md)。
+>
+> **2026-08-30 更新：第一轮 A/B/C 三组已全部落地**（详见 TESTING.md 各批记录）。
+> 第二轮计划见文末「第二轮（2026-08-30）」章节。
 
 ---
 
@@ -175,3 +178,89 @@
 | 第三批（P2/P3） | A6-A9、B6-B10、C2-C6、C8-C9 | 打磨与差异化 |
 
 每批完成后跑一遍 TEST_CASES.md 中对应用例 + 全量 P0 回归，本地 `wrangler pages dev` 验证后提交。
+
+---
+
+# 第二轮（2026-08-30）
+
+> 基于第一轮完成后的全面探索制定。现状：后端已具备 WebDAV Class 1,2、文件/目录分享（提取码 + 过期 + 撤销）、
+> 回收站（惰性过期）、Open API（含分块上传）、MCP、静态站点托管；前端为 React 18 + MUI v5 + Emotion（纯 sx，无 CSS 文件），
+> 暖色纸感主题 + 暗色模式 + i18n（中/英）+ 键盘导航 + 动效体系均已就位。
+> 第 0 批（bug 修复）已随本轮计划同步落地；以下按批次推进。
+
+## A. 功能改进
+
+### A1. 分享落地页升级（P1）
+- **现状**：无提取码的分享 GET 直接吐文件流；提取码表单是内联 HTML 且只有亮色硬编码（`functions/share/[[token]].ts:53-88`、`extractForm`）。访客没有「这是什么文件、多大、何时分享」的上下文。
+- **方案**：GET 默认返回服务端渲染落地页——纯 HTML+CSS、零脚本（落地页是我们生成的内容，不适用 CSP sandbox；文件内容响应仍单独带 sandbox，两者互不影响）。页面含文件名/类型图标/大小/分享时间 + 「下载」按钮；图片/音视频/PDF/文本额外提供「在线预览」（`<img>`/`<iframe>` 指向同一 URL，内容响应既有 hardening 不变）。`?download=1` 保留直链下载兼容。提取码表单复用落地页视觉，`prefers-color-scheme` 亮暗双套。
+- **验收**：落地页信息与预览/下载均正确；提取码、过期（410）、撤销（404）行为与安全响应头（sandbox/nosniff）不回退；旧直链（无参 GET）改为落地页后，自动化脚本下载需用 `?download=1`（README/API 文档注明）。
+- **工作量**：中。
+
+### A2. 文本文件在线编辑（P2）
+- **现状**：TextPad 只能新建笔记上传（`src/TextPadDrawer.tsx`）；PreviewDialog 的文本面板只读（`src/PreviewDialog.tsx` TextPane）。
+- **方案**：文本类文件（`text/*` 与常见代码扩展名，≤1MB）在预览中提供「编辑」模式：textarea 编辑 + 保存走 `authFetch PUT /webdav/{path}`，带 `If-Match: <etag>` 冲突检测（410/412 时提示重新加载）；未保存关闭需确认；保存后通知列表刷新。
+- **验收**：编辑保存后重开内容一致；他人改动后保存收到冲突提示；>1MB 或二进制不出现编辑入口。
+- **工作量**：中。
+
+### A3. 性能与统计（P2）
+- **A3.1 搜索提速**：`functions/api/search.ts` 现为全桶线性逐页扫描。改为 R2 `list` cursor 分段 + 2~3 并发扫描，前端加会话级缓存（同 query 翻页复用）。维持无索引架构（元数据全在 R2），注释说明引入 D1/R2 索引前需先统一各写入路径（api/webdav/sites）。
+- **A3.2 存储用量统计**：新增 `GET /api/usage`（会话鉴权）聚合对象数与总大小，结果缓存于 `_$flaredrive$/stats/usage.json`（带 TTL + 扫描限量，避免大桶超时）；前端在 ExplorerBar/Header 入口展示总用量与一级子目录分布条形图。
+- **A3.3 MCP 扩展**：`functions/_mcp.ts` 增 search/move/share 管理工具；上传工具内部自动走 `/api/upload` 三段式分块，上限从 1MiB 提升（目标 25MB，保持 Worker CPU 时间约束内）。
+- **验收**：万级对象桶搜索首屏 <3s；usage 缓存命中后 <100ms；MCP 大文件上传经分块成功且 abort 可清理。
+- **工作量**：中-大。
+
+### A4. 工程现代化（P3，独立分支全量回归后合入）
+- **现状**：`react-scripts 5`（CRA）2023 年起停止维护；MUI v5 已落后两个大版本；`web-vitals 2.x` 陈旧。
+- **方案**：分两步——① CRA → Vite：`public/index.html` 迁根目录、环境变量改 `import.meta.env`、Jest → Vitest（现有 8 套件 65 用例迁移）、scripts 调整；② MUI v5 → v7：重点 FileGrid 的 Grid 旧 API（v7 移除，改 `<Grid size={...}>`）、theme 兼容性检查、`@mui/icons-material` 同步升级。
+- **验收**：typecheck/test/build/e2e 全绿 + GUI 冒烟；包体积不显著回退。
+- **工作量**：大（机械但面广）。
+
+## B. 交互与可访问性
+
+### B1. 网格 ARIA 语义与 roving tabindex（P1）
+- **现状**：方向键移动仅更新视觉焦点并 `scrollIntoView`（`src/Main.tsx:909-1008`），DOM 焦点不动，屏幕阅读器无网格语义。
+- **方案**：网格容器 `role="grid"`/行 `role="row"`/单元格 `role="gridcell"`，方向键同步设置 DOM 焦点（roving tabindex + `aria-activedescendant` 或真实 focus 二选一，实测后定）；列表视图对应 `role="listbox"`/`option`。
+- **验收**：NVDA/VoiceOver 可用方向键遍历并朗读选中状态；现有键盘模型（TEST_CASES TC-KB）不回归。
+- **工作量**：中。
+
+### B2. 可访问性补全（P1）
+- skip-to-content 链接（首 Tab 可达）；Header 裸 `Toolbar` 改 `AppBar`/banner landmark；ConfirmDialog 打开时聚焦安全的「取消」按钮；全站 `:focus-visible` 焦点环风格统一审计。
+- **工作量**：小。
+
+### B3. 缩略图 blur-up 淡入（P2）
+- **现状**：`src/AuthThumbnail.tsx` 加载完成直接替换 MimeIcon，有跳变。
+- **方案**：低质量占位（MimeIcon 淡底）+ blob 加载完成后 opacity 过渡淡入；失败回退逻辑不变。
+- **工作量**：小。
+
+## C. 界面美化（中度）
+
+### C1. Ctrl+K 命令面板（P1）
+- **现状**：`/` 与 Ctrl/Cmd+K 仅聚焦搜索框（`src/App.tsx:141-155`）。
+- **方案**：升级为命令面板 Dialog——上半区文件搜索（复用 `/api/search` + 高亮 + 键盘上下选择回车打开），下半区动作命令（上传文件/新建文件夹/粘贴上传、切换网格/列表、切换亮暗主题与语言、跳转分享/回收站、打开 WebDAV 与 API Key 面板）。`/` 保持聚焦搜索框原行为；面板项注册表结构化，便于后续 MCP/站点管理扩展。
+- **验收**：纯键盘完成「搜索打开文件」「切主题」「跳回收站」；reduced-motion 与 a11y 符合 B 组标准。
+- **工作量**：中-大。
+
+### C2. 文件详情侧栏（P2）
+- **方案**：右侧 Drawer（手机端全屏）——大图预览（复用 AuthThumbnail/棋盘格）、元数据（名称/类型/大小/上传时间/ETag/完整路径）、快捷操作行（下载/分享/重命名/移动/删除/复制 WebDAV 直链）；卡片「信息」按钮与 `i` 键打开。
+- **工作量**：中。
+
+### C3. 分享管理升级（P1，与 A1 呼应）
+- **方案**：SharesView 卡片加二维码（npm `qrcode` 前端生成 dataURL，扫码即达落地页）、一键复制、过期倒计时徽标、创建时间；ShareDialog 创建成功态同步加二维码。
+- **工作量**：小-中。
+
+### C4. 主题细节打磨（P2）
+- 滚动条样式（webkit + scrollbar-width，亮暗双套细滚动条）；对比度复核（`text.secondary`/caption 暗色 alpha）；`prefers-reduced-motion` 全站复核。暗色硬编码阴影已由 `theme.ts` 的 `warmShadow()` 统一（第 0 批落地）。
+- **工作量**：小。
+
+## 第二轮落地批次
+
+| 批次 | 内容 | 目标 |
+|------|------|------|
+| 第 0 批（已落地） | i18n 缺键（shareLinkRevoked）、WebDavPanel 字面量文案、`<html lang>` 同步、暗色硬编码阴影（`warmShadow()`） | 正确性 |
+| 第 1 批（P1） | A1 分享落地页 + C3 分享管理升级 | 访客与分享体验 |
+| 第 2 批（P1） | C1 命令面板 + C2 详情侧栏 + B1/B2 a11y | 效率与可访问性 |
+| 第 3 批（P2） | A2 文本在线编辑 + C4 主题细节 | 编辑能力与观感 |
+| 第 4 批（P2） | A3 性能与统计 | 规模化能力 |
+| 第 5 批（P3） | A4 工程现代化（独立分支） | 工程健康 |
+
+每批验证：`npm run typecheck && npm run test:ci && npm run build && npm run test:e2e`；UI 批次按 TEST_CASES.md 做浏览器 GUI 冒烟；涉及分享/A1 的批次必须回归安全响应头断言（api-e2e 已含）。
