@@ -50,7 +50,7 @@ import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
 import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
-import { Z_INDEX } from "./app/theme";
+import { Z_INDEX, warmShadow } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings, translate, useLang } from "./app/strings";
 import {
@@ -331,7 +331,8 @@ function PathBar({
               "&.Mui-selected": {
                 backgroundColor: "background.paper",
                 color: "primary.main",
-                boxShadow: "0 1px 2px rgba(26, 23, 20, 0.08)",
+                boxShadow: (theme) =>
+                  warmShadow(theme.palette.mode === "dark", "0 1px 2px", 0.08),
               },
             },
           }}
@@ -1580,7 +1581,8 @@ function Main({
               py: 2,
               borderRadius: 2,
               backgroundColor: "background.paper",
-              boxShadow: "0 8px 24px rgba(26,23,20,0.12)",
+              boxShadow: (theme) =>
+                warmShadow(theme.palette.mode === "dark", "0 8px 24px", 0.12),
             }}
           >
             <Typography variant="h6" sx={{ fontWeight: 700 }}>

@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Typography } from "@mui/material";
 import { keyframes } from "@emotion/react";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
+import { warmShadow } from "./app/theme";
 
 const floatY = keyframes`
   0%, 100% { transform: translateY(0); }
@@ -120,7 +121,8 @@ function EmptyState({
             border: "1px solid",
             borderColor: "divider",
             transform: `rotate(${v.backCardRotate}deg)`,
-            boxShadow: "0 2px 8px rgba(26, 23, 20, 0.06)",
+            boxShadow: (theme) =>
+              warmShadow(theme.palette.mode === "dark", "0 2px 8px", 0.06),
           }}
         />
         <Box
@@ -134,7 +136,8 @@ function EmptyState({
             backgroundColor: "background.paper",
             border: "1px solid",
             borderColor: "divider",
-            boxShadow: "0 6px 16px rgba(26, 23, 20, 0.10)",
+            boxShadow: (theme) =>
+              warmShadow(theme.palette.mode === "dark", "0 6px 16px", 0.1),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

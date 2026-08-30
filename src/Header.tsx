@@ -27,7 +27,7 @@ import {
 
 import { getLang, Lang, setLang, APP_NAME, strings } from "./app/strings";
 import { ThemeModePreference } from "./app/prefs";
-import { Z_INDEX } from "./app/theme";
+import { Z_INDEX, warmShadow } from "./app/theme";
 import { useTransferQueue } from "./app/transferQueue";
 
 function Header({
@@ -83,7 +83,9 @@ function Header({
         flexShrink: 0,
         transition:
           "box-shadow 0.2s ease, background-color 0.2s ease, backdrop-filter 0.2s ease",
-        boxShadow: elevated ? "0 2px 12px rgba(26, 23, 20, 0.10)" : "none",
+        boxShadow: elevated
+          ? (theme) => warmShadow(theme.palette.mode === "dark", "0 2px 12px", 0.1)
+          : "none",
         // 滚动后顶栏毛玻璃：半透明纸色 + 模糊；不支持 backdrop-filter 时回退纯色
         ...(elevated && {
           backgroundColor: (theme) =>

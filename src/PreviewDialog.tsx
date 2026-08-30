@@ -45,7 +45,7 @@ import {
   TEXT_PREVIEW_MAX_BYTES,
 } from "./app/preview";
 import { strings, translate } from "./app/strings";
-import { Z_INDEX } from "./app/theme";
+import { Z_INDEX, warmShadow } from "./app/theme";
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
 import { encodeKey, humanReadableSize } from "./app/utils";
@@ -496,7 +496,8 @@ function PreviewDialog({
           transform: "translateY(-50%)",
           zIndex: Z_INDEX.previewPager,
           backgroundColor: (theme) => alpha(theme.palette.background.paper, 0.88),
-          boxShadow: "0 2px 8px rgba(26,23,20,0.12)",
+          boxShadow: (theme) =>
+            warmShadow(theme.palette.mode === "dark", "0 2px 8px", 0.12),
           "&:hover": { backgroundColor: "background.paper" },
           "&.Mui-disabled": { opacity: 0.3 },
         }}

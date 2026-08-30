@@ -2,7 +2,7 @@ import React from "react";
 import { Button, Slide, Toolbar, Typography } from "@mui/material";
 
 import { strings, translate } from "./app/strings";
-import { Z_INDEX } from "./app/theme";
+import { Z_INDEX, warmShadow } from "./app/theme";
 import {
   Close as CloseIcon,
   ContentCopy as CopyIcon,
@@ -81,7 +81,8 @@ function MultiSelectToolbar({
           borderColor: "divider",
           borderTopLeftRadius: 12,
           borderTopRightRadius: 12,
-          boxShadow: "0 -8px 24px rgba(26, 23, 20, 0.08)",
+          boxShadow: (theme) =>
+            warmShadow(theme.palette.mode === "dark", "0 -8px 24px", 0.08),
           justifyContent: "space-evenly",
           overflowX: "auto",
           gap: 0.5,

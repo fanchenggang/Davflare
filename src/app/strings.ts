@@ -209,6 +209,7 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   createShareFailed: { zh: "创建分享失败", en: "Failed to create share" },
   loadSharesFailed: { zh: "获取分享失败", en: "Failed to load shares" },
   revokeShareFailed: { zh: "撤销分享失败", en: "Failed to revoke share" },
+  shareLinkRevoked: { zh: "分享链接已撤销", en: "Share link revoked" },
   shareClipboard: { zh: "链接：{url}", en: "Link: {url}" },
   shareClipboardExpiry: { zh: "有效期至：{time}", en: "Expires: {time}" },
   shareClipboardCode: { zh: "提取码：{code}", en: "Extract code: {code}" },
@@ -308,6 +309,14 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
 let currentLang: Lang = detectLang();
 const listeners = new Set<() => void>();
 
+/** 同步 <html lang>，浏览器据此选择字体/断行与朗读、翻译行为 */
+function syncDocumentLang(lang: Lang) {
+  if (typeof document === "undefined") return;
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+}
+
+syncDocumentLang(currentLang);
+
 /** 暴露字典本体：单测校验每个 key 的 zh/en 都非空，防止漏译 */
 export const dictionary = entries;
 
@@ -330,6 +339,7 @@ export function getLang(): Lang {
 
 export function setLang(lang: Lang) {
   currentLang = lang;
+  syncDocumentLang(lang);
   try {
     localStorage.setItem("flaredrive.lang", lang);
   } catch {

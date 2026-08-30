@@ -20,7 +20,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AuthThumbnail from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { Density, ViewMode } from "./app/prefs";
-import { Z_INDEX } from "./app/theme";
+import { Z_INDEX, warmShadow } from "./app/theme";
 import { strings, translate } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
@@ -393,7 +393,8 @@ function FileGrid({
           backgroundColor: alpha(theme.palette.background.paper, 0.95),
           borderRadius: 999,
           padding: "1px 4px",
-          boxShadow: "0 2px 10px rgba(26, 23, 20, 0.16)",
+          boxShadow: (theme) =>
+            warmShadow(theme.palette.mode === "dark", "0 2px 10px", 0.16),
           opacity: 0,
           pointerEvents: "none",
           transition: "opacity 0.15s ease",
@@ -552,11 +553,13 @@ function FileGrid({
         justifyContent: "center",
         gap: 0.75,
         userSelect: "none",
-        boxShadow: "0 1px 2px rgba(26, 23, 20, 0.04)",
+        boxShadow: (theme) =>
+          warmShadow(theme.palette.mode === "dark", "0 1px 2px", 0.04),
         transition: "background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease",
         "&:hover": {
           backgroundColor: "action.selected",
-          boxShadow: "0 6px 16px rgba(26, 23, 20, 0.08)",
+          boxShadow: (theme) =>
+            warmShadow(theme.palette.mode === "dark", "0 6px 16px", 0.08),
           borderColor: (theme) => `${theme.palette.primary.main}59`,
           "& .quick-actions-bar": {
             opacity: 1,

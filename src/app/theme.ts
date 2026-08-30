@@ -14,6 +14,22 @@ export const Z_INDEX = {
 
 export type ThemeMode = "light" | "dark";
 
+/**
+ * 暖色调阴影：亮色模式用暖黑低 alpha（与纸面协调，沿用既有视觉）；
+ * 暗色模式下暖黑在深底上不可见，改用纯黑并按比例加深补偿。
+ * geometry 为阴影的长度部分，如 "0 6px 16px"（底部工具栏可为负 y）。
+ */
+export function warmShadow(
+  dark: boolean,
+  geometry: string,
+  alpha: number
+): string {
+  const color = dark
+    ? `rgba(0, 0, 0, ${Math.min(0.6, alpha * 3)})`
+    : `rgba(26, 23, 20, ${alpha})`;
+  return `${geometry} ${color}`;
+}
+
 declare module "@mui/material/styles" {
   interface Palette {
     surface: {

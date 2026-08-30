@@ -103,7 +103,7 @@ function WebDavPanel({
               <Typography variant="caption" color="text.secondary">
                 {strings.username}
               </Typography>
-              <Typography>{info?.username || "{strings.notConfigured}"}</Typography>
+              <Typography>{info?.username || strings.notConfigured}</Typography>
               {info?.username && (
                 <Button
                   size="small"
@@ -120,8 +120,8 @@ function WebDavPanel({
               </Typography>
               <Typography>
                 {info?.publicRead
-                  ? "{strings.publicReadOn}"
-                  : "{strings.publicReadOff}"}
+                  ? strings.publicReadOn
+                  : strings.publicReadOff}
               </Typography>
             </Box>
             <Box

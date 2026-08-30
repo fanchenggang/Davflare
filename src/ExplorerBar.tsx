@@ -33,6 +33,7 @@ import {
 import { Density, FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
 import { RecentEntry } from "./app/recent";
 import { strings, translate } from "./app/strings";
+import { warmShadow } from "./app/theme";
 
 export type ExplorerSection = "folder" | "shares" | "trash";
 
@@ -144,7 +145,8 @@ function ExplorerBar({
               "&.Mui-selected": {
                 backgroundColor: "background.paper",
                 color: "primary.main",
-                boxShadow: "0 1px 2px rgba(26, 23, 20, 0.08)",
+                boxShadow: (theme) =>
+                  warmShadow(theme.palette.mode === "dark", "0 1px 2px", 0.08),
               },
             },
           }}
