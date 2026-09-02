@@ -1,0 +1,150 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f1ec;
+  --paper: #ffffff;
+  --text: #1a1714;
+  --muted: rgba(26, 23, 20, 0.64);
+  --line: rgba(28, 22, 16, 0.08);
+  --orange: #f38020;
+  --orange-dark: #d96e12;
+  --focus: rgba(243, 128, 32, 0.16);
+  --ok: #2e7d4f;
+  --err: #c4472c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  padding: 48px 20px 64px;
+}
+
+.card {
+  width: min(520px, 100%);
+  margin: 0 auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 28px 28px 24px;
+  box-shadow: 0 6px 16px rgba(26, 23, 20, 0.06);
+}
+
+.brand {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 22px;
+}
+
+.brand img {
+  border-radius: 10px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+}
+
+.brand p,
+.hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 6px;
+}
+
+input[type="url"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--text);
+  background: #fff;
+}
+
+input[type="url"]:focus {
+  outline: none;
+  border-color: var(--orange);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.toggle {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 20px 0 8px;
+  cursor: pointer;
+  font-weight: 400;
+}
+
+.toggle input {
+  margin-top: 4px;
+  accent-color: var(--orange);
+}
+
+.toggle strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+button {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  background: var(--orange);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--orange-dark);
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.status {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.status.ok {
+  color: var(--ok);
+}
+
+.status.err {
+  color: var(--err);
+}

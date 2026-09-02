@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Davflare</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header class="brand">
+        <img src="icons/icon48.png" width="40" height="40" alt="" />
+        <div>
+          <h1>Davflare</h1>
+          <p id="tagline">Open the drive you deployed. No built-in host.</p>
+        </div>
+      </header>
+
+      <form id="form" novalidate>
+        <label for="instanceUrl" id="urlLabel">Instance URL</label>
+        <input
+          id="instanceUrl"
+          name="instanceUrl"
+          type="url"
+          inputmode="url"
+          autocomplete="url"
+          spellcheck="false"
+          placeholder="https://your-domain.com"
+        />
+        <p class="hint" id="urlHint">
+          Paste the Pages or custom-domain URL of your own Davflare instance.
+        </p>
+
+        <label class="toggle">
+          <input id="newTab" name="newTab" type="checkbox" />
+          <span>
+            <strong id="newTabLabel">Use Davflare as new tab</strong>
+            <span class="hint" id="newTabHint">Off by default. Chrome’s usual new tab stays when this is off.</span>
+          </span>
+        </label>
+
+        <div class="actions">
+          <button type="submit" id="save">Save</button>
+          <p id="status" class="status" role="status"></p>
+        </div>
+      </form>
+    </main>
+    <script src="url.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

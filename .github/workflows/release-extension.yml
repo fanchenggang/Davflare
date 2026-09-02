@@ -1,0 +1,38 @@
+name: Release extension
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "extension-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag for this release (created if missing), e.g. extension-v1.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Zip extension/
+        run: |
+          set -euo pipefail
+          test -f extension/manifest.json
+          (cd extension && zip -r -X ../davflare-extension.zip . -x '*.DS_Store' -x '*__MACOSX*')
+          unzip -l davflare-extension.zip
+
+      - name: Attach zip to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: davflare-extension.zip
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
