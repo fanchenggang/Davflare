@@ -40,6 +40,7 @@ Share (expiry + extract code):
 - Image host on the same sites hostname at `/i/{id}` (stored under `_$flaredrive$/img/`, not `sites/` or share links)
 - Owner Settings (`#/settings`) with five persistent feature switches (default all on)
 - `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
+- Optional Chrome MV3 extension in `extension/` (toolbar opens **your** instance; New Tab override defaults off)
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (`pull` / `push` tools; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
@@ -185,6 +186,18 @@ In the drive UI, **Sites** (`#/sites`) lists each slug with stats, one-click zip
 ## CLI
 
 [`davflare-cli`](cli/README.md) is the Open API command-line client: `login`, `ls`, `mkdir`, `rm`, `mv`, `cp`, `sync`. Uploads over 100 MB are chunked; downloads resume with HTTP Range. See `cli/README.md` for install, login, and sync semantics.
+
+## Extension
+
+A Chrome Manifest V3 helper that opens **your** Davflare instance. It is not on the Chrome Web Store.
+
+- Options: paste the URL of the Pages / custom-domain host you deployed. The field starts empty — there is no built-in site.
+- Toolbar click opens that URL. If it is unset, the toolbar opens Options instead.
+- Optional New Tab is **off** by default. Leave it off to keep Chrome’s normal new tab; turn it on to open your drive.
+
+**Load unpacked:** Chrome → `chrome://extensions` → Developer mode → Load unpacked → select the `extension/` folder in this repo.
+
+**Release zip:** download `davflare-extension.zip` from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked from that folder. A tag (`v*` / `extension-*`) or **Actions → Release extension** builds the zip.
 
 ## Image host
 
