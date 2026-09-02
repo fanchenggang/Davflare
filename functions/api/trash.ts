@@ -19,7 +19,8 @@ async function purgeExpiredTrash(bucket: R2Bucket, retentionDays: number) {
   const objects = await listObjects(bucket, TRASH_PREFIX);
   let purged = 0;
   for (const object of objects) {
-    if (!object.key.endsWith(".json")) continue;
+    const rest = object.key.slice(TRASH_PREFIX.length);
+    if (!rest.endsWith(".json") || rest.includes("/")) continue;
     if (purged >= PURGE_BATCH_MAX) break;
     const data = await bucket.get(object.key);
     if (data === null) continue;
@@ -32,7 +33,7 @@ async function purgeExpiredTrash(bucket: R2Bucket, retentionDays: number) {
     }
     const ts = Date.parse(deletedAt);
     if (!Number.isFinite(ts) || ts > cutoff) continue;
-    const trashId = object.key.slice(TRASH_PREFIX.length).replace(/\.json$/, "");
+    const trashId = rest.replace(/\.json$/, "");
     const descendants = await listObjects(bucket, `${TRASH_PREFIX}${trashId}/`);
     for (const item of descendants) {
       await bucket.delete(item.key);
@@ -87,16 +88,23 @@ async function listTrashItems(bucket: R2Bucket) {
   const items: Array<Record<string, unknown>> = [];
 
   for (const object of objects) {
-    if (!object.key.endsWith(".json")) continue;
+    const rest = object.key.slice(TRASH_PREFIX.length);
+    if (!rest.endsWith(".json") || rest.includes("/")) continue;
     const data = await bucket.get(object.key);
     if (data === null) continue;
-    const parsed = (await data.json()) as Record<string, unknown>;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = (await data.json()) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    if (!parsed.originalKey) continue;
     items.push({
-      trashKey: object.key.slice(TRASH_PREFIX.length).replace(/\.json$/, ""),
+      trashKey: rest.replace(/\.json$/, ""),
       originalKey: parsed.originalKey,
       name: parsed.name || basename(String(parsed.originalKey || "")),
       deletedAt: parsed.deletedAt,
-      size: parsed.size || 0,
+      size: Number(parsed.size) || 0,
     });
   }
 

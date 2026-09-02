@@ -52,17 +52,21 @@ const DEFAULT_SNACK_MS = 5000;
 const ERROR_SNACK_MS = 8000;
 
 function isTypingTarget(target: EventTarget | null) {
-  if (target instanceof HTMLInputElement) {
-    // 复选框/单选/按钮不是文本输入，键盘导航应继续生效
-    return !["checkbox", "radio", "button", "submit"].includes(target.type);
+  const el =
+    target instanceof HTMLElement
+      ? target
+      : document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  if (!el) return false;
+  const field = el.closest("input, textarea, select, [contenteditable='true']");
+  if (field instanceof HTMLInputElement) {
+    return !["checkbox", "radio", "button", "submit"].includes(field.type);
   }
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
+  if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+    return true;
+  }
+  return Boolean(field) || el.isContentEditable;
 }
 
 function AppContent({
@@ -142,11 +146,15 @@ function AppContent({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.key === "Process") return;
+      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
+        return;
+      }
       const cmdK =
         (event.key === "k" || event.key === "K") &&
         (event.metaKey || event.ctrlKey);
       const slash = event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
-      if (cmdK || (slash && !isTypingTarget(event.target))) {
+      if (cmdK || slash) {
         event.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -157,7 +165,7 @@ function AppContent({
   }, []);
 
   return (
-    <Stack sx={{ height: "100%", backgroundColor: "background.default" }}>
+    <Stack sx={{ height: "100%", minHeight: 0, overflow: "hidden", backgroundColor: "background.default" }}>
       <Header
         search={search}
         onSearchChange={setSearch}

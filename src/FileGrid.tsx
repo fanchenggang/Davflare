@@ -397,6 +397,10 @@ function FileGrid({
             warmShadow(theme.palette.mode === "dark", "0 2px 10px", 0.16),
           opacity: 0,
           pointerEvents: "none",
+          ".file-card:hover &, .file-card:focus-within &": {
+            opacity: 1,
+            pointerEvents: "auto",
+          },
           transition: "opacity 0.15s ease",
         }}
         onPointerDown={stop}
@@ -412,6 +416,7 @@ function FileGrid({
   const itemList = (file: FileItem, index: number) => (
     <ListItemButton
       component="div"
+      className="file-card"
       selected={isSelected(file)}
       data-file-key={file.key}
       onPointerDown={markPointer}
@@ -511,6 +516,7 @@ function FileGrid({
 
   const itemTile = (file: FileItem, index: number) => (
     <Box
+      className="file-card"
       role="button"
       tabIndex={0}
       data-file-key={file.key}
