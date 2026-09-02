@@ -316,6 +316,9 @@ mcp_call() {
 TOOLS_JSON=$(curl -s --noproxy '*' -X POST "$BASE/mcp" -H "$A" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 assert_contains "mcp tools/list has search" "$TOOLS_JSON" '"name":"search"'
 assert_contains "mcp tools/list has sites_list" "$TOOLS_JSON" '"name":"sites_list"'
+assert_contains "mcp tools/list has pull" "$TOOLS_JSON" '"name":"pull"'
+assert_contains "mcp tools/list has push" "$TOOLS_JSON" '"name":"push"'
+assert_contains "mcp tools/list has publish_site" "$TOOLS_JSON" '"name":"publish_site"'
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/mcp" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 assert_code "mcp no key 401" "$code" "401"
 MCP_DIR="$DIR/mcp/f"
@@ -335,6 +338,19 @@ args='{"path":"'"$MCP_DIR"'/mcp-moved.txt"}'
 assert_contains "mcp stat moved" "$(mcp_call stat "$args")" '"size":9'
 args='{"query":"mcp-moved"}'
 assert_contains "mcp search finds moved" "$(mcp_call search "$args")" 'mcp-moved'
+args='{"agent":"cursor","files":[{"path":"skills/e2e/SKILL.md","content":"# e2e-skill"}]}'
+assert_contains "mcp push skill" "$(mcp_call push "$args")" '"uploaded"'
+args='{"agent":"cursor","type":"skills"}'
+assert_contains "mcp pull skill" "$(mcp_call pull "$args")" 'e2e-skill'
+args='{"agent":"cursor","files":[{"path":"mcp/mcp.json","content":"{\"servers\":{\"x\":{\"headers\":{\"Authorization\":\"Bearer fd_secret\"}}}}"}]}'
+assert_contains "mcp push rejects raw key" "$(mcp_call push "$args")" 'must not contain raw API keys'
+PUBLISH_SRC="$DIR/mcp/site-src"
+args='{"path":"'"$PUBLISH_SRC"'/"}'
+assert_contains "mcp mkdir site src" "$(mcp_call mkdir "$args")" '"created":true'
+args='{"path":"'"$PUBLISH_SRC"'/","name":"index.html","content":"<h1>e2e-site</h1>"}'
+assert_contains "mcp upload site index" "$(mcp_call upload "$args")" '"key"'
+args='{"slug":"e2eqa","source":"'"$PUBLISH_SRC"'"}'
+assert_contains "mcp publish_site" "$(mcp_call publish_site "$args")" 'e2eqa'
 
 args='{"key":"'"$MCP_DIR"'/mcp.txt"}'
 assert_contains "shares accept api key (create)" "$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$A" -H "Content-Type: application/json" -d "$args")" '"token"'
