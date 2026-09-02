@@ -1,6 +1,6 @@
-# Davflare Agent 目录约定（v1）
+# Davflare Agent 目录约定（v2）
 
-把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v1 只是**约定 + 手动拉取/推送**：用现有 MCP 工具或网页端即可。不做文件监听。密钥不当文件存。
+把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v2 增加 MCP `pull` / `push` 自动走这棵树（网页端仍可用）。不做文件监听。密钥不当文件存。
 
 同名文件的合并顺序：**project 覆盖 agent 覆盖 global**。
 
@@ -38,7 +38,7 @@ agent 用小写（`cursor`，不要 `Cursor`）。project 与仓库/工作区名
 - `agents/cursor/Davflare/skills/pages-deploy/SKILL.md`
 - `agents/cursor/Davflare/mcp/mcp.json`
 
-## Cursor 落地路径（v1）
+## Cursor 落地路径
 
 | 层 | skills | rules | mcp |
 | --- | --- | --- | --- |
@@ -62,19 +62,17 @@ Cursor 的 `mcp.json` 支持在 `headers` / `url` 里写 `${env:NAME}`。用这�
 }
 ```
 
-## 手动拉取 / 推送（v1）
+## pull / push（v2）
 
-`GET /api/list` 和 MCP `list` 都是 **Depth 1**，要自己一层层走。
+`GET /api/list` 和 MCP `list` 仍是 **Depth 1**。请用 `pull` / `push`，不必手走目录。
 
-拉取（远端 → Cursor），先 project：
+`pull` 参数：`agent`（可选，如 `cursor`）、`project`（可选；需要 `agent`）、`type` 可选过滤（`skills` | `rules` | `mcp`）。会走 `agents/{global|agent|agent/project}/{skills|rules|mcp}/`，返回目录树和文件内容。每个文件带 `layer`、`rel` 和远端 `key`。客户端合并顺序：**project 覆盖 agent 覆盖 global**。超过 1 MiB 的文件与 `download` 一样用 `part` / `partSize` 分页。
 
-1. `list` `agents/cursor/<project>/skills/`（再 `rules/`、`mcp/`）→ `download` 到上表的项目 `.cursor/…`。
-2. 再处理 `agents/cursor/{skills,rules,mcp}/` → 用户级路径。project 层已经有的同名文件跳过。
-3. 最后 `agents/global/…`。
+`push` 参数：同样的 `agent` / `project`，加上 `files: [{ path, content, encoding? }]`。路径相对该层根目录（两者都省略则写 `agents/global/`）。需要时自动建父目录。`mcp.json` 必须用 `${env:...}` 占位符——明文密钥（`fd_…`、不是 `${env:…}` 的 `Bearer`）会被拒绝。没有本地磁盘监听；由 agent 带着文件内容调用工具。
 
-推送（Cursor → 远端）：先 `mkdir` 远端目录，再 `upload`（或网页端）。上传 `mcp.json` 前去掉密钥。MCP 上传超过 1 MiB 会自动分块（上限 25 MB）；再大走网页端或 davflare-cli。
+需要时仍可用 Depth-1 的 `list` + `download` / `upload`。MCP 上传超过 1 MiB 会自动分块（上限 25 MB）；再大走网页端或 davflare-cli。
 
-v2 会加 `pull` / `push` 两个工具自动走这棵树。v3 再接其它 agent 和冲突策略。在此之前不要自动同步、不要监听本地磁盘。
+v3 可能再接其它 agent 和冲突策略。不要自动同步、不要监听本地磁盘。
 
 ## 网页端
 

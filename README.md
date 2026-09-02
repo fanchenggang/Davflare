@@ -34,13 +34,13 @@ Share (expiry + extract code):
 - Recycle bin with `TRASH_RETENTION_DAYS` (default 30; `-1` disables; lazy purge up to 200 items when trash is opened)
 - WebDAV Class 1/2 at `/webdav` (can be switched off without affecting the web file manager)
 - API keys for scripted upload, download, and bidirectional sync
-- Remote MCP at `/mcp` (15 tools: files, search, move/copy, shares, sites). Uploads auto-chunk up to 25 MB; downloads page with `part`. **MCP requires an API Key** — if the API Key switch is off, `/mcp` is 404 even when the MCP switch is on
+- Remote MCP at `/mcp` (18 tools: files, search, move/copy, shares, sites, plus `pull` / `push` / `publish_site`). Uploads auto-chunk up to 25 MB; downloads page with `part`. **MCP requires an API Key** — if the API Key switch is off, `/mcp` is 404 even when the MCP switch is on
 - Sites manager in the UI (`#/sites`): zip deploy, SPA toggle, per-site delete
 - Static sites on a separate host (`SITES_HOST` + `sites/{slug}/`); [docs/sites.md](docs/sites.md)
 - Image host on the same sites hostname at `/i/{id}` (stored under `_$flaredrive$/img/`, not `sites/` or share links)
 - Owner Settings (`#/settings`) with five persistent feature switches (default all on)
 - `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
-- Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (manual pull/push; see [docs/agents.md](docs/agents.md))
+- Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (`pull` / `push` tools; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
 ## Follow along
@@ -133,7 +133,7 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 | DELETE | `/api/delete` | Hard delete, or `soft=1` to trash |
 | POST | `/api/shares` | Share a file or folder (folder → zip) |
 | GET / POST / DELETE | `/api/sites` | List, SPA-config, or delete static sites |
-| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; 15 tools) |
+| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; 18 tools) |
 
 Same keys work for a bidirectional sync client (local wins; backup remote on conflict). Details in the [API docs](docs/API.md).
 
@@ -157,9 +157,9 @@ Owner-only Settings (`#/settings`, account menu) persist five flags in R2 at `_$
 
 Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`). **MCP depends on API Key: if the API Key switch is off, MCP is unusable even if the MCP switch is on.**
 
-Tools (15): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`.
+Tools (18): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`.
 
-Uploads up to 1 MiB go inline; larger content is auto-chunked (cap **25 MB**). Bigger files: web UI or `davflare-cli`. Downloads over 1 MiB page with `part` / `partSize`. Default `delete` is trash; `hard=true` permanently deletes. Publish a static site by uploading into `sites/{slug}/`, then `sites_config` if you need SPA fallback. Details: [docs/API.md](docs/API.md).
+Uploads up to 1 MiB go inline; larger content is auto-chunked (cap **25 MB**). Bigger files: web UI or `davflare-cli`. Downloads over 1 MiB page with `part` / `partSize`. Default `delete` is trash; `hard=true` permanently deletes. Publish a static site by uploading into `sites/{slug}/` (or `publish_site` from a drive folder), then `sites_config` if you need SPA fallback. `pull` / `push` walk `agents/…` (merge: project > agent > global). Details: [docs/API.md](docs/API.md).
 
 Cursor (`mcp.json`):
 
@@ -194,7 +194,7 @@ On the sites host, `/i/{id}` is matched **before** slug static sites. The image-
 
 ## Agent layouts
 
-Skills, rules, and MCP snippets live on R2 under `agents/`. v1 is a directory convention plus manual pull/push with the existing MCP tools (or the web UI). Merge order: project > agent > global. Never store raw API keys in `mcp.json` — use `${env:DAVFLARE_API_KEY}`. Cursor local paths and the walk-the-tree recipe: [docs/agents.md](docs/agents.md).
+Skills, rules, and MCP snippets live on R2 under `agents/`. v2 `pull` / `push` walk that tree (or use the web UI). Merge order: project > agent > global. Never store raw API keys in `mcp.json` — use `${env:DAVFLARE_API_KEY}`. Cursor local paths: [docs/agents.md](docs/agents.md).
 
 ## Development & testing
 

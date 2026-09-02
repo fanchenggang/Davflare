@@ -10,11 +10,13 @@ import {
   MCP_MAX_BYTES,
   MCP_MAX_UPLOAD_BYTES,
   MCP_PROTOCOL_VERSION,
+  AGENT_MERGE_ORDER,
   MCP_TOOL_NAMES,
   MCP_TOOLS,
   MCP_UPLOAD_PART_SIZE,
   decodeUploadContent,
   dispatchMcpRequest,
+  mcpJsonHasRawSecrets,
   parseJsonRpcBody,
   type JsonRpcRequest,
   type ToolCallApis,
@@ -63,6 +65,7 @@ function mockApis(overrides: Partial<ToolCallApis> = {}): ToolCallApis {
     sitesList: async () => jsonResponse({ sitesHost: "sites.example.com", sites: [] }),
     sitesConfig: async () => jsonResponse({ slug: "demo", spa: true }),
     sitesDelete: async () => jsonResponse({ slug: "demo", deleted: 2 }),
+    sitesEnabled: async () => true,
     ...overrides,
   };
 }
@@ -80,7 +83,7 @@ function toolPayload(result: Awaited<ReturnType<typeof dispatchMcpRequest>>) {
 }
 
 describe("mcp protocol", () => {
-  test("tool catalog: base + search/move/copy/stat/share/sites", () => {
+  test("tool catalog: base + search/move/copy/stat/share/sites + pull/push/publish_site", () => {
     expect(MCP_TOOL_NAMES).toEqual([
       "list",
       "upload",
@@ -97,8 +100,11 @@ describe("mcp protocol", () => {
       "sites_list",
       "sites_config",
       "sites_delete",
+      "pull",
+      "push",
+      "publish_site",
     ]);
-    expect(MCP_TOOLS).toHaveLength(15);
+    expect(MCP_TOOLS).toHaveLength(18);
   });
 
   test("parseJsonRpcBody rejects invalid json", () => {
@@ -339,5 +345,195 @@ describe("mcp protocol", () => {
     const missing = await callTool("sites_config", { slug: "demo" }, { sitesConfig });
     expect(toolPayload(missing).isError).toBe(true);
     expect(sitesConfig).not.toHaveBeenCalled();
+  });
+
+  test("pull walks layers and documents merge order project > agent > global", async () => {
+    const trees: Record<string, Array<{ key: string; name: string; isDir: boolean }>> = {
+      "agents/global/skills": [{ key: "agents/global/skills/commit", name: "commit", isDir: true }],
+      "agents/global/skills/commit": [
+        { key: "agents/global/skills/commit/SKILL.md", name: "SKILL.md", isDir: false },
+      ],
+      "agents/cursor/rules": [
+        { key: "agents/cursor/rules/typescript.mdc", name: "typescript.mdc", isDir: false },
+      ],
+      "agents/cursor/Davflare/skills": [
+        { key: "agents/cursor/Davflare/skills/pages-deploy", name: "pages-deploy", isDir: true },
+      ],
+      "agents/cursor/Davflare/skills/pages-deploy": [
+        {
+          key: "agents/cursor/Davflare/skills/pages-deploy/SKILL.md",
+          name: "SKILL.md",
+          isDir: false,
+        },
+      ],
+    };
+    const contents: Record<string, string> = {
+      "agents/global/skills/commit/SKILL.md": "global-commit",
+      "agents/cursor/rules/typescript.mdc": "agent-rule",
+      "agents/cursor/Davflare/skills/pages-deploy/SKILL.md": "project-skill",
+    };
+    const list = jest.fn(async ({ path }: { path: string }) => {
+      const folder = path.replace(/\/+$/, "");
+      const items = trees[folder];
+      if (!items) return new Response("目录不存在", { status: 404 });
+      return jsonResponse({ items });
+    });
+    const download = jest.fn(async ({ path }: { path: string }) => {
+      const text = contents[path];
+      if (!text) return new Response("missing", { status: 404 });
+      return new Response(text, { status: 200, headers: { "Content-Type": "text/plain" } });
+    });
+    const result = await callTool(
+      "pull",
+      { agent: "cursor", project: "Davflare" },
+      { list, download }
+    );
+    const body = toolPayload(result);
+    expect(body.isError).toBeFalsy();
+    const parsed = JSON.parse(body.content[0].text);
+    expect(parsed.mergeOrder).toEqual([...AGENT_MERGE_ORDER]);
+    expect(parsed.mergeOrder).toEqual(["project", "agent", "global"]);
+    expect(parsed.mergeHint).toMatch(/project > agent > global/);
+    const byKey = Object.fromEntries(parsed.files.map((f: { key: string }) => [f.key, f]));
+    expect(byKey["agents/global/skills/commit/SKILL.md"]).toMatchObject({
+      layer: "global",
+      type: "skills",
+      rel: "skills/commit/SKILL.md",
+      content: "global-commit",
+    });
+    expect(byKey["agents/cursor/rules/typescript.mdc"]).toMatchObject({
+      layer: "agent",
+      type: "rules",
+      rel: "rules/typescript.mdc",
+      content: "agent-rule",
+    });
+    expect(byKey["agents/cursor/Davflare/skills/pages-deploy/SKILL.md"]).toMatchObject({
+      layer: "project",
+      type: "skills",
+      rel: "skills/pages-deploy/SKILL.md",
+      content: "project-skill",
+    });
+    expect(parsed.files.map((f: { layer: string }) => f.layer)).toEqual([
+      "global",
+      "agent",
+      "project",
+    ]);
+  });
+
+  test("mcpJsonHasRawSecrets detects fd_ keys and raw Bearer tokens", () => {
+    expect(mcpJsonHasRawSecrets('{"headers":{"Authorization":"Bearer ${env:DAVFLARE_API_KEY}"}}')).toBe(
+      false
+    );
+    expect(mcpJsonHasRawSecrets("Bearer ${env:DAVFLARE_API_KEY}")).toBe(false);
+    expect(
+      mcpJsonHasRawSecrets(
+        '{"headers":{"Authorization":"Bearer fd_0123456789abcdef0123456789abcdef"}}'
+      )
+    ).toBe(true);
+    expect(mcpJsonHasRawSecrets("Authorization: Bearer sk-live-secret")).toBe(true);
+    expect(mcpJsonHasRawSecrets('{"headers":{"X-Api-Key":"fd_0123456789abcdef01234567"}}')).toBe(
+      true
+    );
+  });
+
+  test("push rejects raw keys in mcp.json", async () => {
+    const upload = jest.fn(async () => jsonResponse({ key: "agents/cursor/mcp/mcp.json" }, 201));
+    const rejected = await callTool(
+      "push",
+      {
+        agent: "cursor",
+        files: [
+          {
+            path: "mcp/mcp.json",
+            content: JSON.stringify({
+              mcpServers: {
+                davflare: {
+                  url: "https://example.com/mcp",
+                  headers: { Authorization: "Bearer fd_0123456789abcdef0123456789abcdef" },
+                },
+              },
+            }),
+          },
+        ],
+      },
+      { upload }
+    );
+    expect(toolPayload(rejected).isError).toBe(true);
+    expect(toolPayload(rejected).content[0].text).toMatch(/mcp\.json/);
+    expect(toolPayload(rejected).content[0].text).toMatch(/\$\{env:/);
+    expect(upload).not.toHaveBeenCalled();
+
+    const accepted = await callTool(
+      "push",
+      {
+        agent: "cursor",
+        files: [
+          {
+            path: "mcp/mcp.json",
+            content: JSON.stringify({
+              mcpServers: {
+                davflare: {
+                  url: "https://example.com/mcp",
+                  headers: { Authorization: "Bearer ${env:DAVFLARE_API_KEY}" },
+                },
+              },
+            }),
+          },
+        ],
+      },
+      { upload }
+    );
+    expect(toolPayload(accepted).isError).toBeFalsy();
+    expect(upload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "agents/cursor/mcp",
+        name: "mcp.json",
+        overwrite: true,
+      })
+    );
+  });
+
+  test("publish_site copies into sites/{slug}/ and respects sites flag", async () => {
+    const trees: Record<string, Array<{ key: string; name: string; isDir: boolean }>> = {
+      "draft/hello": [
+        { key: "draft/hello/index.html", name: "index.html", isDir: false },
+        { key: "draft/hello/css", name: "css", isDir: true },
+      ],
+      "draft/hello/css": [{ key: "draft/hello/css/app.css", name: "app.css", isDir: false }],
+    };
+    const list = jest.fn(async ({ path }: { path: string }) => {
+      const items = trees[path.replace(/\/+$/, "")];
+      if (!items) return new Response("目录不存在", { status: 404 });
+      return jsonResponse({ items });
+    });
+    const copy = jest.fn(async () => jsonResponse({ copied: true }));
+    const copied = await callTool(
+      "publish_site",
+      { slug: "hello", source: "draft/hello" },
+      { list, copy, sitesEnabled: async () => true }
+    );
+    expect(toolPayload(copied).isError).toBeFalsy();
+    const payload = JSON.parse(toolPayload(copied).content[0].text);
+    expect(payload.slug).toBe("hello");
+    expect(payload.copied).toBe(2);
+    expect(copy).toHaveBeenCalledWith({
+      from: "draft/hello/index.html",
+      to: "sites/hello/index.html",
+      overwrite: true,
+    });
+    expect(copy).toHaveBeenCalledWith({
+      from: "draft/hello/css/app.css",
+      to: "sites/hello/css/app.css",
+      overwrite: true,
+    });
+
+    const blocked = await callTool(
+      "publish_site",
+      { slug: "hello", source: "draft/hello" },
+      { list, copy, sitesEnabled: async () => false }
+    );
+    expect(toolPayload(blocked).isError).toBe(true);
+    expect(toolPayload(blocked).content[0].text).toMatch(/404/);
+    expect(copy).toHaveBeenCalledTimes(2);
   });
 });
