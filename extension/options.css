@@ -88,25 +88,6 @@ input[type="url"]:focus {
   box-shadow: 0 0 0 4px var(--focus);
 }
 
-.toggle {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin: 20px 0 8px;
-  cursor: pointer;
-  font-weight: 400;
-}
-
-.toggle input {
-  margin-top: 4px;
-  accent-color: var(--orange);
-}
-
-.toggle strong {
-  display: block;
-  font-size: 0.9rem;
-}
-
 .actions {
   display: flex;
   align-items: center;

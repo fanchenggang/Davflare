@@ -7,7 +7,6 @@
 
 var DEFAULT_SETTINGS = {
   instanceUrl: "",
-  newTab: false,
 };
 
 var DEFAULT_NTP = "chrome://new-tab-page/";
@@ -16,7 +15,6 @@ function mergeSettings(stored) {
   var src = stored && typeof stored === "object" ? stored : {};
   return {
     instanceUrl: typeof src.instanceUrl === "string" ? src.instanceUrl : "",
-    newTab: src.newTab === true,
   };
 }
 
@@ -59,9 +57,8 @@ function resolveToolbarTarget(settings) {
 }
 
 function resolveNewTabTarget(settings) {
-  var merged = mergeSettings(settings);
-  var url = normalizeInstanceUrl(merged.instanceUrl);
-  if (merged.newTab && url) return { action: "open", url: url };
+  var url = normalizeInstanceUrl(mergeSettings(settings).instanceUrl);
+  if (url) return { action: "open", url: url };
   return { action: "default-ntp", url: DEFAULT_NTP };
 }
 

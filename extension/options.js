@@ -6,8 +6,6 @@ var COPY = {
     tagline: "Open the drive you deployed. No built-in host.",
     urlLabel: "Instance URL",
     urlHint: "Paste the Pages or custom-domain URL of your own Davflare instance.",
-    newTabLabel: "Use Davflare as new tab",
-    newTabHint: "Off by default. Chrome’s usual new tab stays when this is off.",
     save: "Save",
     saved: "Saved.",
     cleared: "Saved. Toolbar click will open this page until you add a URL.",
@@ -18,8 +16,6 @@ var COPY = {
     tagline: "打开你自己部署的网盘。扩展不内置任何站点。",
     urlLabel: "实例地址",
     urlHint: "粘贴你自己的 Pages 或自定义域名。",
-    newTabLabel: "用 Davflare 作为新标签页",
-    newTabHint: "默认关闭。关闭时仍使用 Chrome 自带的新标签页。",
     save: "保存",
     saved: "已保存。",
     cleared: "已保存。未填写地址时，工具栏点击会打开本页。",
@@ -31,14 +27,13 @@ function storageArea() {
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.sync) {
     return chrome.storage.sync;
   }
-  var memory = { instanceUrl: "", newTab: false };
+  var memory = { instanceUrl: "" };
   return {
     get: function (keys, cb) {
-      cb({ instanceUrl: memory.instanceUrl, newTab: memory.newTab });
+      cb({ instanceUrl: memory.instanceUrl });
     },
     set: function (values, cb) {
       if (typeof values.instanceUrl === "string") memory.instanceUrl = values.instanceUrl;
-      if (typeof values.newTab === "boolean") memory.newTab = values.newTab;
       if (cb) cb();
     },
   };
@@ -52,8 +47,6 @@ function applyCopy() {
   document.getElementById("tagline").textContent = t.tagline;
   document.getElementById("urlLabel").textContent = t.urlLabel;
   document.getElementById("urlHint").textContent = t.urlHint;
-  document.getElementById("newTabLabel").textContent = t.newTabLabel;
-  document.getElementById("newTabHint").textContent = t.newTabHint;
   document.getElementById("save").textContent = t.save;
   return t;
 }
@@ -62,7 +55,6 @@ var strings = applyCopy();
 var store = storageArea();
 var form = document.getElementById("form");
 var urlInput = document.getElementById("instanceUrl");
-var newTabInput = document.getElementById("newTab");
 var statusEl = document.getElementById("status");
 
 function setStatus(message, kind) {
@@ -70,10 +62,8 @@ function setStatus(message, kind) {
   statusEl.className = "status" + (kind ? " " + kind : "");
 }
 
-store.get(["instanceUrl", "newTab"], function (stored) {
-  var settings = mergeSettings(stored);
-  urlInput.value = settings.instanceUrl;
-  newTabInput.checked = settings.newTab === true;
+store.get(["instanceUrl"], function (stored) {
+  urlInput.value = mergeSettings(stored).instanceUrl;
 });
 
 form.addEventListener("submit", function (event) {
@@ -85,10 +75,7 @@ form.addEventListener("submit", function (event) {
     urlInput.focus();
     return;
   }
-  var next = {
-    instanceUrl: normalized,
-    newTab: newTabInput.checked === true,
-  };
+  var next = { instanceUrl: normalized };
   store.set(next, function () {
     urlInput.value = next.instanceUrl;
     setStatus(next.instanceUrl ? strings.saved : strings.cleared, "ok");

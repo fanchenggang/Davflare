@@ -40,7 +40,7 @@ Share (expiry + extract code):
 - Image host on the same sites hostname at `/i/{id}` (stored under `_$flaredrive$/img/`, not `sites/` or share links)
 - Owner Settings (`#/settings`) with five persistent feature switches (default all on)
 - `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
-- Optional Chrome MV3 extension in `extension/` (toolbar opens **your** instance; New Tab override defaults off)
+- Optional Chrome MV3 extension in `extension/` (toolbar opens **your** instance; default zip does not change new tab)
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (`pull` / `push` tools; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
@@ -193,11 +193,18 @@ A Chrome Manifest V3 helper that opens **your** Davflare instance. It is not on 
 
 - Options: paste the URL of the Pages / custom-domain host you deployed. The field starts empty — there is no built-in site.
 - Toolbar click opens that URL. If it is unset, the toolbar opens Options instead.
-- Optional New Tab is **off** by default. Leave it off to keep Chrome’s normal new tab; turn it on to open your drive.
+- The **default** package does **not** change Chrome’s new tab. Chrome treats a new-tab override as permanent for as long as `chrome_url_overrides` is in the loaded manifest — an in-extension toggle cannot undo that.
 
-**Load unpacked:** Chrome → `chrome://extensions` → Developer mode → Load unpacked → select the `extension/` folder in this repo.
+Two zips on the same GitHub Release:
 
-**Release zip:** download `davflare-extension.zip` from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked from that folder. A tag (`v*` / `extension-*`) or **Actions → Release extension** builds the zip.
+| Zip | What it does |
+| --- | --- |
+| `davflare-extension.zip` | Toolbar + options only. Load this unless you want Davflare as the new tab. |
+| `davflare-extension-newtab.zip` | Same as default, plus a New Tab override that opens your instance. Separate download; do not expect this behavior from the default zip. |
+
+**Load unpacked (default, no new tab):** Chrome → `chrome://extensions` → Developer mode → Load unpacked → select the `extension/` folder in this repo.
+
+**Release zips:** download from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked. A tag (`v*` / `extension-*`) or **Actions → Release extension** attaches both zips.
 
 ## Image host
 

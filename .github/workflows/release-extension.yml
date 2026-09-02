@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Git tag for this release (created if missing), e.g. extension-v1.0.0"
+        description: "Git tag for this release (created if missing), e.g. extension-v1.1.0"
         required: true
         type: string
 
@@ -22,17 +22,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Zip extension/
-        run: |
-          set -euo pipefail
-          test -f extension/manifest.json
-          (cd extension && zip -r -X ../davflare-extension.zip . -x '*.DS_Store' -x '*__MACOSX*')
-          unzip -l davflare-extension.zip
+      - name: Zip default and newtab packages
+        run: bash scripts/package-extension.sh .
 
-      - name: Attach zip to GitHub Release
+      - name: Attach zips to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: davflare-extension.zip
+          files: |
+            davflare-extension.zip
+            davflare-extension-newtab.zip
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           generate_release_notes: true
           fail_on_unmatched_files: true
