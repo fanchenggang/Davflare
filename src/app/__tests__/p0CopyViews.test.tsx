@@ -59,7 +59,7 @@ describe("P0 copy: Settings / Sites / Images", () => {
 
   test("Sites view is blunt when SITES_HOST is missing", async () => {
     mockListSites.mockResolvedValue({ sitesHost: null, sites: [] });
-    render(<SitesView onNotify={jest.fn()} />);
+    render(<SitesView onNotify={jest.fn()} onManageFiles={jest.fn()} />);
     await waitFor(() => {
       expect(screen.getByText(strings.sitesHostMissing)).toBeInTheDocument();
     });
