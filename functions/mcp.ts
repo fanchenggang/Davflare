@@ -267,6 +267,10 @@ function makeApis(context: McpContext): ToolCallApis {
       const request = cloneApiRequest(context.request, "DELETE", url);
       return sitesOnDelete(withRequest(context, request));
     },
+    async sitesEnabled() {
+      const flags = await loadFeatureFlags(context.env.BUCKET);
+      return flags.sites;
+    },
   };
 }
 

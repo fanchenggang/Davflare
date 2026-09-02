@@ -1,6 +1,6 @@
-# Davflare agent layouts (v1)
+# Davflare agent layouts (v2)
 
-Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v1 is a **convention + manual pull/push** with the existing MCP tools (or the web UI). No file watcher. Secrets are not stored as files.
+Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v2 adds MCP `pull` / `push` that walk this tree (the web UI still works). No file watcher. Secrets are not stored as files.
 
 Merge order when the same name exists at more than one layer: **project > agent > global**.
 
@@ -38,7 +38,7 @@ Example keys:
 - `agents/cursor/Davflare/skills/pages-deploy/SKILL.md`
 - `agents/cursor/Davflare/mcp/mcp.json`
 
-## Cursor local paths (v1)
+## Cursor local paths
 
 | Layer | skills | rules | mcp |
 | --- | --- | --- | --- |
@@ -62,19 +62,17 @@ Safe remote `mcp.json` (store this, not a live key):
 }
 ```
 
-## Manual pull / push (v1)
+## pull / push (v2)
 
-`GET /api/list` and the MCP `list` tool are **depth 1**. Walk each folder yourself.
+`GET /api/list` and the MCP `list` tool are still **depth 1**. Use `pull` / `push` instead of walking by hand.
 
-Pull (remote → Cursor), project first:
+`pull` args: `agent` (optional, e.g. `cursor`), `project` (optional; requires `agent`), `type` optional filter (`skills` | `rules` | `mcp`). It walks `agents/{global|agent|agent/project}/{skills|rules|mcp}/` and returns the tree plus file contents. Each file is tagged with `layer`, `rel`, and the remote `key`. Merge order for the client: **project > agent > global**. Files larger than 1 MiB page with `part` / `partSize` like `download`.
 
-1. `list` `agents/cursor/<project>/skills/` (then `rules/`, `mcp/`) → `download` each file into the project `.cursor/…` paths above.
-2. Same for `agents/cursor/{skills,rules,mcp}/` → user-level Cursor paths. Skip a file if the project layer already provided that name.
-3. Same for `agents/global/…`.
+`push` args: the same `agent` / `project` plus `files: [{ path, content, encoding? }]`. Paths are relative to that layer root (omit both → `agents/global/`). Parents are created as needed. `mcp.json` must use `${env:...}` placeholders — raw API keys (`fd_…`, `Bearer` tokens that are not `${env:…}`) are rejected. No local disk watcher; the agent calls the tool with file contents.
 
-Push (Cursor → remote): `mkdir` the remote folder, then `upload` (or the web UI). Strip secrets from `mcp.json` before upload. MCP uploads over 1 MiB auto-chunk (cap 25 MB); bigger files go through the web UI or davflare-cli.
+The depth-1 `list` + `download` / `upload` recipe still works if you need it. MCP uploads over 1 MiB auto-chunk (cap 25 MB); bigger files go through the web UI or davflare-cli.
 
-v2 will add `pull` / `push` tools that walk this tree. v3 will add other agents and conflict policy. Until then, do not auto-sync and do not watch the local disk.
+v3 may add other agents and conflict policy. Do not auto-sync and do not watch the local disk.
 
 ## Web UI
 

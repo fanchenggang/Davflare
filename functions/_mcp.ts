@@ -106,6 +106,8 @@ export type ToolCallApis = {
   sitesList: (query: { withStats?: boolean }) => Promise<Response>;
   sitesConfig: (query: { slug: string; spa: boolean }) => Promise<Response>;
   sitesDelete: (query: { slug: string; purge?: boolean }) => Promise<Response>;
+  /** Product Sites switch; publish_site is 404 when false. */
+  sitesEnabled: () => Promise<boolean>;
 };
 
 export const MCP_TOOLS = [
@@ -367,6 +369,85 @@ export const MCP_TOOLS = [
         },
       },
       required: ["slug"],
+    },
+  },
+  {
+    name: "pull",
+    description:
+      "Walk agents/{global|agent|agent/project}/{skills|rules|mcp}/ and return the tree plus file contents. Merge order for the client: project > agent > global (files are tagged with layer and remote key). Large files page with part/partSize like download.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: {
+          type: "string",
+          description: "Optional agent slug, e.g. cursor. Omit to read the global layer only.",
+        },
+        project: {
+          type: "string",
+          description: "Optional project/workspace name under that agent. Requires agent.",
+        },
+        type: {
+          type: "string",
+          enum: ["skills", "rules", "mcp"],
+          description: "Optional folder filter (skills, rules, or mcp)",
+        },
+      },
+    },
+  },
+  {
+    name: "push",
+    description:
+      "Upload files into agents/{global|agent|agent/project}/ (mkdir as needed). mcp.json must use ${env:...} placeholders — raw API keys are rejected. No local disk watcher; pass file contents.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent: {
+          type: "string",
+          description: "Optional agent slug, e.g. cursor. Omit to write the global layer.",
+        },
+        project: {
+          type: "string",
+          description: "Optional project/workspace name. Requires agent.",
+        },
+        files: {
+          type: "array",
+          description: "Files relative to that layer root, e.g. skills/commit/SKILL.md or mcp/mcp.json",
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Relative path under the layer root" },
+              content: { type: "string", description: "File content (utf8 text or base64)" },
+              encoding: {
+                type: "string",
+                enum: ["utf8", "base64"],
+                default: "utf8",
+                description: "How to decode content; default utf8",
+              },
+            },
+            required: ["path", "content"],
+          },
+        },
+      },
+      required: ["files"],
+    },
+  },
+  {
+    name: "publish_site",
+    description:
+      "Copy a drive folder onto sites/{slug}/ (overwrite same names; does not wipe SPA config). Slug is [a-z0-9][a-z0-9-]{0,62}. Errors if the Sites feature switch is off.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        slug: {
+          type: "string",
+          description: "Site slug [a-z0-9][a-z0-9-]{0,62}",
+        },
+        source: {
+          type: "string",
+          description: "Source folder key in the drive",
+        },
+      },
+      required: ["slug", "source"],
     },
   },
 ] as const;
@@ -649,6 +730,283 @@ function asOptionalBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+export const AGENT_LAYOUT_TYPES = ["skills", "rules", "mcp"] as const;
+export type AgentLayoutType = (typeof AGENT_LAYOUT_TYPES)[number];
+export const AGENT_MERGE_ORDER = ["project", "agent", "global"] as const;
+export type AgentLayer = (typeof AGENT_MERGE_ORDER)[number];
+export const AGENT_WALK_ORDER: AgentLayer[] = ["global", "agent", "project"];
+
+const SITE_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+const AGENT_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+export function isSiteSlug(slug: string): boolean {
+  return SITE_SLUG_RE.test(slug);
+}
+
+export function isAgentLayoutType(value: string): value is AgentLayoutType {
+  return (AGENT_LAYOUT_TYPES as readonly string[]).includes(value);
+}
+
+/** Davflare keys (`fd_` + hex) or Bearer / Authorization values that are not `${env:...}`. */
+export function mcpJsonHasRawSecrets(text: string): boolean {
+  if (/\bfd_[0-9a-fA-F]{16,}\b/.test(text)) return true;
+  const bearer = /Bearer\s+(\S+)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = bearer.exec(text))) {
+    const token = match[1].replace(/[,"']+$/g, "");
+    if (!/^\$\{env:[^}]+\}/i.test(token)) return true;
+  }
+  if (/"X-Api-Key"\s*:\s*"(?!\$\{env:)[^"]+"/i.test(text)) return true;
+  if (/"Authorization"\s*:\s*"(?!Bearer \$\{env:)[^"]+"/i.test(text)) return true;
+  return false;
+}
+
+function normalizeAgentSlug(raw: string): string | { error: string } {
+  const slug = raw.trim().toLowerCase();
+  if (!slug) return { error: "agent is empty" };
+  if (slug === "global") {
+    return { error: "omit agent to use the global layer; 'global' is not an agent slug" };
+  }
+  if (!AGENT_SLUG_RE.test(slug)) {
+    return { error: "agent must be a lowercase slug like cursor" };
+  }
+  return slug;
+}
+
+function normalizeProjectName(raw: string): string | { error: string } {
+  const name = raw.trim();
+  if (!name) return { error: "project is empty" };
+  if (
+    name.includes("/") ||
+    name.includes("\\") ||
+    name === "." ||
+    name === ".." ||
+    name.includes("..")
+  ) {
+    return { error: "project must be a single path segment" };
+  }
+  if ((AGENT_LAYOUT_TYPES as readonly string[]).includes(name)) {
+    return { error: "project cannot be skills, rules, or mcp" };
+  }
+  return name;
+}
+
+export function agentLayerPrefixes(opts: {
+  agent?: string;
+  project?: string;
+  type?: string;
+}):
+  | { ok: true; typeFilter: AgentLayoutType | null; layers: Array<{ layer: AgentLayer; prefix: string }> }
+  | { ok: false; error: string } {
+  const typeRaw = typeof opts.type === "string" ? opts.type.trim().toLowerCase() : "";
+  if (typeRaw && !isAgentLayoutType(typeRaw)) {
+    return { ok: false, error: "type must be skills, rules, or mcp" };
+  }
+  const typeFilter = typeRaw ? (typeRaw as AgentLayoutType) : null;
+
+  let agent: string | undefined;
+  if (opts.agent !== undefined && opts.agent !== "") {
+    const parsed = normalizeAgentSlug(opts.agent);
+    if (typeof parsed !== "string") return { ok: false, error: parsed.error };
+    agent = parsed;
+  }
+  let project: string | undefined;
+  if (opts.project !== undefined && opts.project !== "") {
+    if (!agent) return { ok: false, error: "project requires agent" };
+    const parsed = normalizeProjectName(opts.project);
+    if (typeof parsed !== "string") return { ok: false, error: parsed.error };
+    project = parsed;
+  }
+
+  const layers: Array<{ layer: AgentLayer; prefix: string }> = [
+    { layer: "global", prefix: "agents/global/" },
+  ];
+  if (agent) layers.push({ layer: "agent", prefix: `agents/${agent}/` });
+  if (agent && project) {
+    layers.push({ layer: "project", prefix: `agents/${agent}/${project}/` });
+  }
+  return { ok: true, typeFilter, layers };
+}
+
+export function agentPushPrefix(opts: { agent?: string; project?: string }):
+  | { ok: true; prefix: string; layer: AgentLayer }
+  | { ok: false; error: string } {
+  const parsed = agentLayerPrefixes(opts);
+  if (!parsed.ok) return parsed;
+  const last = parsed.layers[parsed.layers.length - 1];
+  return { ok: true, prefix: last.prefix, layer: last.layer };
+}
+
+export function sanitizeAgentRelPath(raw: string): string | { error: string } {
+  const trimmed = raw.trim().replace(/^\/+/, "");
+  if (!trimmed) return { error: "path is required" };
+  const parts = trimmed.split("/").filter((part) => part && part !== ".");
+  if (parts.length === 0) return { error: "path is required" };
+  if (parts.some((part) => part === ".." || part === "\\" || part.includes("\\"))) {
+    return { error: "path cannot contain '..'" };
+  }
+  return parts.join("/");
+}
+
+type ListedItem = { key: string; name: string; isDir: boolean; size: number };
+
+async function listFolderPages(
+  apis: ToolCallApis,
+  path: string
+): Promise<ListedItem[] | { error: string } | "missing"> {
+  const items: ListedItem[] = [];
+  let cursor: string | undefined;
+  do {
+    const response = await apis.list({ path, limit: 1000, cursor });
+    if (response.status === 404) return "missing";
+    if (response.status === 400) {
+      const text = await response.text();
+      return { error: text || "path is not a folder" };
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      return { error: text || `HTTP ${response.status}` };
+    }
+    const body = await readJsonBody(response);
+    if (!body || !Array.isArray(body.items)) {
+      return { error: "list returned unexpected JSON" };
+    }
+    for (const item of body.items) {
+      if (!isPlainObject(item) || typeof item.key !== "string" || !item.key) continue;
+      items.push({
+        key: item.key.replace(/\/+$/, ""),
+        name: typeof item.name === "string" ? item.name : item.key,
+        isDir: item.isDir === true,
+        size: typeof item.size === "number" ? item.size : 0,
+      });
+    }
+    cursor = typeof body.nextCursor === "string" ? body.nextCursor : undefined;
+  } while (cursor);
+  return items;
+}
+
+async function walkFolderFiles(
+  apis: ToolCallApis,
+  root: string
+): Promise<{ files: ListedItem[] } | { error: string } | "missing"> {
+  const folder = root.replace(/\/+$/, "");
+  const first = await listFolderPages(apis, folder);
+  if (first === "missing") return "missing";
+  if ("error" in first) return first;
+  const files: ListedItem[] = [];
+  const queue: string[] = [];
+  const seen = new Set<string>([folder]);
+  for (const item of first) {
+    if (item.isDir) queue.push(item.key);
+    else files.push(item);
+  }
+  while (queue.length) {
+    const next = queue.shift()!;
+    if (seen.has(next)) continue;
+    seen.add(next);
+    const listed = await listFolderPages(apis, next);
+    if (listed === "missing") continue;
+    if ("error" in listed) return listed;
+    for (const item of listed) {
+      if (item.isDir) {
+        if (!seen.has(item.key)) queue.push(item.key);
+      } else {
+        files.push(item);
+      }
+    }
+  }
+  return { files };
+}
+
+async function readPulledFile(
+  apis: ToolCallApis,
+  key: string
+): Promise<Record<string, unknown> | { error: string }> {
+  const statResponse = await apis.stat({ path: key });
+  if (statResponse.ok) {
+    const stat = await readJsonBody(statResponse);
+    const size = stat && typeof stat.size === "number" ? stat.size : NaN;
+    if (Number.isFinite(size) && size > MCP_MAX_BYTES) {
+      const paged = await downloadPartTool(apis, key, 1, MCP_DOWNLOAD_PART_SIZE);
+      if (paged.isError) {
+        return { error: paged.content[0]?.text || "paged download failed" };
+      }
+      try {
+        const parsed = JSON.parse(paged.content[0].text) as Record<string, unknown>;
+        return {
+          ...parsed,
+          key,
+          size,
+          note: "File larger than 1 MiB. Use download with part=N to read the rest.",
+        };
+      } catch {
+        return { error: "paged download returned unexpected JSON" };
+      }
+    }
+  }
+  const response = await apis.download({ path: key });
+  if (response.status >= 400) {
+    const text = await response.text();
+    return { error: text || `HTTP ${response.status}` };
+  }
+  const declared = Number(response.headers.get("Content-Length"));
+  if (Number.isFinite(declared) && declared > MCP_MAX_BYTES) {
+    const paged = await downloadPartTool(apis, key, 1, MCP_DOWNLOAD_PART_SIZE);
+    if (paged.isError) {
+      return { error: paged.content[0]?.text || "paged download failed" };
+    }
+    try {
+      return JSON.parse(paged.content[0].text) as Record<string, unknown>;
+    } catch {
+      return { error: "paged download returned unexpected JSON" };
+    }
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MCP_MAX_BYTES) {
+    return {
+      error: `File larger than 1 MiB (${bytes.byteLength} bytes). Use download with part=1.`,
+    };
+  }
+  const contentType =
+    response.headers.get("Content-Type") || "application/octet-stream";
+  if (isUtf8Text(bytes)) {
+    return {
+      key,
+      size: bytes.byteLength,
+      contentType,
+      encoding: "utf8",
+      content: new TextDecoder("utf-8").decode(bytes),
+    };
+  }
+  return {
+    key,
+    size: bytes.byteLength,
+    contentType,
+    encoding: "base64",
+    content: encodeBase64(bytes),
+  };
+}
+
+async function uploadBytes(
+  apis: ToolCallApis,
+  folder: string,
+  name: string,
+  bytes: Uint8Array
+): Promise<McpToolResult> {
+  if (bytes.byteLength > MCP_MAX_UPLOAD_BYTES) {
+    return toolError(
+      `Content larger than ${Math.floor(MCP_MAX_UPLOAD_BYTES / 1000000)} MB (MCP cap). Use the web UI or API scripts.`
+    );
+  }
+  if (bytes.byteLength > MCP_MAX_BYTES) {
+    const fullKey = folder ? `${folder.replace(/\/+$/, "")}/${name}` : name;
+    return multipartUploadTool(apis, fullKey, bytes);
+  }
+  return wrapApiResponse(
+    await apis.upload({ path: folder, name, body: bytes, overwrite: true })
+  );
+}
+
 function parseToolCall(
   params: unknown
 ): { name: string; args: Record<string, unknown> } | { error: string } {
@@ -848,6 +1206,144 @@ async function callTool(
       if (!slug) return toolError("slug is required");
       const purge = asOptionalBoolean(args.purge) === true;
       return wrapApiResponse(await apis.sitesDelete({ slug, purge }));
+    }
+    case "pull": {
+      const planned = agentLayerPrefixes({
+        agent: asString(args.agent) || undefined,
+        project: asString(args.project) || undefined,
+        type: asString(args.type) || undefined,
+      });
+      if (!planned.ok) return toolError(planned.error);
+      const types = planned.typeFilter
+        ? [planned.typeFilter]
+        : [...AGENT_LAYOUT_TYPES];
+      const files: Array<Record<string, unknown>> = [];
+      for (const layer of planned.layers) {
+        for (const type of types) {
+          const root = `${layer.prefix}${type}`;
+          const walked = await walkFolderFiles(apis, root);
+          if (walked === "missing") continue;
+          if ("error" in walked) return toolError(walked.error);
+          for (const item of walked.files) {
+            const rel = item.key.startsWith(layer.prefix)
+              ? item.key.slice(layer.prefix.length)
+              : item.key;
+            const content = await readPulledFile(apis, item.key);
+            if ("error" in content) return toolError(`${item.key}: ${content.error}`);
+            files.push({
+              ...content,
+              layer: layer.layer,
+              type,
+              rel,
+              key: item.key,
+            });
+          }
+        }
+      }
+      return toolText(
+        JSON.stringify({
+          mergeOrder: [...AGENT_MERGE_ORDER],
+          mergeHint:
+            "When the same rel exists in more than one layer, apply project > agent > global (project wins).",
+          layers: planned.layers,
+          files,
+        })
+      );
+    }
+    case "push": {
+      const dest = agentPushPrefix({
+        agent: asString(args.agent) || undefined,
+        project: asString(args.project) || undefined,
+      });
+      if (!dest.ok) return toolError(dest.error);
+      if (!Array.isArray(args.files)) return toolError("files is required");
+      const uploaded: Array<{ key: string; layer: AgentLayer }> = [];
+      for (const entry of args.files) {
+        if (!isPlainObject(entry)) return toolError("each file must be an object");
+        const rel = sanitizeAgentRelPath(asString(entry.path));
+        if (typeof rel !== "string") return toolError(rel.error);
+        if (!Object.prototype.hasOwnProperty.call(entry, "content")) {
+          return toolError(`${rel}: content is required`);
+        }
+        const decoded = decodeUploadContent(
+          asString(entry.content),
+          typeof entry.encoding === "string" ? entry.encoding : undefined
+        );
+        if (!decoded.ok) return toolError(`${rel}: ${decoded.error}`);
+        const base = rel.split("/").pop() || rel;
+        if (base.toLowerCase() === "mcp.json") {
+          const text = new TextDecoder("utf-8").decode(decoded.bytes);
+          if (mcpJsonHasRawSecrets(text)) {
+            return toolError(
+              `${rel}: mcp.json must not contain raw API keys — use \${env:...} placeholders only`
+            );
+          }
+        }
+        const slash = rel.lastIndexOf("/");
+        const folder =
+          slash >= 0 ? `${dest.prefix}${rel.slice(0, slash)}` : dest.prefix.replace(/\/+$/, "");
+        const name = slash >= 0 ? rel.slice(slash + 1) : rel;
+        if (slash >= 0) {
+          const mkdirResult = await wrapApiResponse(await apis.mkdir({ path: folder }));
+          if (mkdirResult.isError) return mkdirResult;
+        }
+        const uploadedResult = await uploadBytes(apis, folder, name, decoded.bytes);
+        if (uploadedResult.isError) return uploadedResult;
+        uploaded.push({ key: `${dest.prefix}${rel}`, layer: dest.layer });
+      }
+      return toolText(
+        JSON.stringify({
+          layer: dest.layer,
+          prefix: dest.prefix,
+          uploaded,
+        })
+      );
+    }
+    case "publish_site": {
+      if (!(await apis.sitesEnabled())) {
+        return toolError(
+          "Sites feature is off (404). Enable the Sites switch to publish."
+        );
+      }
+      const slug = asString(args.slug).trim().toLowerCase();
+      if (!slug) return toolError("slug is required");
+      if (!isSiteSlug(slug)) {
+        return toolError("slug must match [a-z0-9][a-z0-9-]{0,62}");
+      }
+      const sourceRaw = asString(args.source).trim().replace(/^\/+/, "").replace(/\/+$/, "");
+      if (!sourceRaw) return toolError("source is required");
+      if (sourceRaw.includes("..") || sourceRaw.startsWith("_$flaredrive$")) {
+        return toolError("source is not a usable folder key");
+      }
+      const walked = await walkFolderFiles(apis, sourceRaw);
+      if (walked === "missing") return toolError(`source folder not found: ${sourceRaw}`);
+      if ("error" in walked) return toolError(walked.error);
+      const copied: Array<{ from: string; to: string }> = [];
+      const sourcePrefix = `${sourceRaw}/`;
+      for (const item of walked.files) {
+        const rel = item.key.startsWith(sourcePrefix)
+          ? item.key.slice(sourcePrefix.length)
+          : item.key === sourceRaw
+            ? item.name
+            : item.key.startsWith(`${sourceRaw}/`)
+              ? item.key.slice(sourceRaw.length + 1)
+              : item.name;
+        if (!rel || rel.includes("..")) continue;
+        const to = `sites/${slug}/${rel}`;
+        const copyResult = await wrapApiResponse(
+          await apis.copy({ from: item.key, to, overwrite: true })
+        );
+        if (copyResult.isError) return copyResult;
+        copied.push({ from: item.key, to });
+      }
+      return toolText(
+        JSON.stringify({
+          slug,
+          source: sourceRaw,
+          copied: copied.length,
+          files: copied,
+        })
+      );
     }
     default:
       return toolError(`Unknown tool: ${name}`);
