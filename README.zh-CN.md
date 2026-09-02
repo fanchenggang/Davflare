@@ -41,6 +41,33 @@
 - Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（手动拉取/推送，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
 
+## 跟着做
+
+三条短路径。请用**你自己绑定的域名**——没有别人能打开的公开演示站。
+
+### 用 Cursor 对话发布静态站
+
+1. 在 `#/settings` 保持 **API Key** 和 **MCP** 打开。创建一把密钥（账号菜单 → 开放接口），按 [MCP](#mcp) 写进 Cursor 的 `mcp.json`。
+2. 对 Cursor 说（可直接粘贴）：
+
+   ```
+   把这个文件夹上传到 Davflare 的 sites/hello/（自动建父目录，同名覆盖）。如果是 SPA，再对 slug hello 调用 sites_config。
+   ```
+
+3. 在你绑到**本** Pages 项目的主机上打开 `https://<SITES_HOST>/hello/`。未设置 `SITES_HOST` 并重新部署之前，这个地址打不开。
+
+### 图床拖放并复制链接
+
+1. 打开网盘里的 `#/images`。
+2. 把图片拖到页面上（或点上传）。
+3. 点 **复制链接** 或 **复制 Markdown**（`![](https://<SITES_HOST>/i/{id})`）。公开地址只有在绑定自定义域并设置 Pages 环境变量 `SITES_HOST`（只要主机名）之后才可用。
+
+### 设置里的五个开关
+
+1. 从账号菜单打开 `#/settings`。
+2. 五个开关是 WebDAV、MCP、API Key、静态站点、图床（默认全部开启）。关闭开关不会删除已有文件。
+3. MCP 依赖 API Key：Key 关闭时，即使 MCP 打开，`/mcp` 也是 404。站点和图床的公开地址还需要 `SITES_HOST`。
+
 ## 部署
 
 一键部署：

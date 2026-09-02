@@ -56,6 +56,32 @@ describe("strings / translate", () => {
     expect(translate("validForever")).toBe("Never expires");
   });
 
+  test("MCP copy states API Key 404 dependency", () => {
+    for (const lang of ["zh", "en"] as const) {
+      const mcp = dictionary.mcpRequiresApiKey[lang];
+      const mcpHint = dictionary.flagMcpHint[lang];
+      const keyHint = dictionary.flagApiKeyHint[lang];
+      expect(mcp).toMatch(/API Key/i);
+      expect(mcp).toMatch(/404/);
+      expect(mcpHint).toMatch(/404/);
+      expect(keyHint).toMatch(/404/);
+    }
+  });
+
+  test("SITES_HOST missing hints say bind, env, redeploy", () => {
+    for (const lang of ["zh", "en"] as const) {
+      for (const key of ["sitesHostMissingHint", "imagesHostMissingHint"] as const) {
+        const hint = dictionary[key][lang];
+        expect(hint).toMatch(/SITES_HOST/);
+        expect(hint).toMatch(/https:\/\//);
+        expect(hint).toMatch(lang === "zh" ? /绑定/ : /[Bb]ind/);
+        expect(hint).toMatch(lang === "zh" ? /重新部署/ : /redeploy/);
+      }
+      expect(dictionary.sitesHostMissing[lang]).toMatch(lang === "zh" ? /打不开/ : /will not open/);
+      expect(dictionary.imagesHostMissing[lang]).toMatch(lang === "zh" ? /打不开/ : /will not open/);
+    }
+  });
+
   test("setLang 通知订阅者", () => {
     const seen: string[] = [];
     const unsubscribe = subscribeLang(() => seen.push(getLang()));

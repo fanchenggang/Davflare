@@ -43,6 +43,33 @@ Share (expiry + extract code):
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (manual pull/push; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
+## Follow along
+
+Three short paths. Use **your** bound host — there is no public live demo other people can open.
+
+### Publish a static site from Cursor
+
+1. In `#/settings`, leave **API Key** and **MCP** on. Create a key (account menu → API keys) and paste it into Cursor `mcp.json` as in [MCP](#mcp).
+2. Ask Cursor (copy-paste):
+
+   ```
+   Upload this folder to sites/hello/ on Davflare (mkdir parents, overwrite same names). Then call sites_config for slug hello if this is an SPA.
+   ```
+
+3. Open `https://<SITES_HOST>/hello/` on the hostname you bound to **this** Pages project. Until `SITES_HOST` is set and redeployed, that URL will not open.
+
+### Host an image and copy its URL
+
+1. Open `#/images` in the drive UI.
+2. Drag an image onto the page (or click Upload).
+3. Click **Copy URL** or **Copy Markdown** (`![](https://<SITES_HOST>/i/{id})`). Public URLs only work after you bind a custom domain and set Pages env `SITES_HOST` (hostname only).
+
+### Toggle the five Settings switches
+
+1. Open `#/settings` from the account menu.
+2. The five switches are WebDAV, MCP, API Key, Sites, and Image host (all default on). Stored files are not deleted when a switch is off.
+3. MCP depends on API Key: if Key is off, `/mcp` is 404 even if MCP is on. Sites and image-host public URLs also need `SITES_HOST`.
+
 ## Deploy
 
 One-click:

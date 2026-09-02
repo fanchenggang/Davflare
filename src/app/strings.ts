@@ -31,10 +31,10 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   trash: { zh: "回收站", en: "Trash" },
   sitesSection: { zh: "站点", en: "Sites" },
   sitesTitle: { zh: "静态站点", en: "Static sites" },
-  sitesHostMissing: { zh: "未配置 SITES_HOST,站点访问已禁用", en: "SITES_HOST not set — site visits are disabled" },
+  sitesHostMissing: { zh: "未配置 SITES_HOST，公开地址打不开", en: "SITES_HOST is not set — public URLs will not open" },
   sitesHostMissingHint: {
-    zh: "在 Cloudflare Pages 项目的环境变量中设置 SITES_HOST(如 sites.example.com)并绑定该自定义域,站点才会在此域名下对外服务。详见 docs/sites.md。",
-    en: "Set SITES_HOST as a Cloudflare Pages environment variable (e.g. sites.example.com) and bind that custom domain to serve sites publicly. See docs/sites.md.",
+    zh: "给这个 Pages 项目绑定自定义域，并设置 Pages 环境变量 SITES_HOST（只要主机名，不要 https://），然后重新部署。在此之前公开地址打不开。",
+    en: "Bind a custom domain to this Pages project AND set the Pages env SITES_HOST (hostname only, no https://), then redeploy. Until then public URLs will not open.",
   },
   emptySites: { zh: "还没有站点", en: "No sites yet" },
   emptySitesHint: {
@@ -88,13 +88,13 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   },
   flagMcp: { zh: "MCP", en: "MCP" },
   flagMcpHint: {
-    zh: "关闭后 POST /mcp 返回 404。MCP 依赖 API Key：若 API Key 关闭，即使本开关打开也无法使用。",
-    en: "Off: POST /mcp returns 404. MCP requires API Key — if API Key is off, MCP is unusable even when this switch is on.",
+    zh: "关闭后 POST /mcp 返回 404。MCP 依赖 API Key：若 API Key 关闭，即使本开关打开，/mcp 也是 404。",
+    en: "Off: POST /mcp returns 404. MCP depends on the API Key switch — if Key is off, /mcp is 404 even if MCP is on.",
   },
   flagApiKey: { zh: "API Key", en: "API Key" },
   flagApiKeyHint: {
-    zh: "关闭后隐藏密钥管理，Bearer / X-Api-Key 开放接口返回 401。网页会话接口不受影响。MCP 也将不可用。",
-    en: "Off: hide key management; Bearer / X-Api-Key Open API calls return 401. Session APIs keep working. MCP also becomes unusable.",
+    zh: "关闭后隐藏密钥管理，Bearer / X-Api-Key 开放接口返回 401。网页会话接口不受影响。MCP 也会 404：即使 MCP 开关仍打开，/mcp 也不可用。",
+    en: "Off: hide key management; Bearer / X-Api-Key Open API calls return 401. Session APIs keep working. MCP is also 404: if Key is off, /mcp is 404 even if MCP is on.",
   },
   flagSites: { zh: "静态站点", en: "Static sites" },
   flagSitesHint: {
@@ -116,10 +116,10 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
     zh: "拖放图片上传。公开地址只在站点域名：https://<SITES_HOST>/i/{id}",
     en: "Drop images to upload. Public URLs live only on the sites host: https://<SITES_HOST>/i/{id}",
   },
-  imagesHostMissing: { zh: "未配置 SITES_HOST，图床公开地址不可用", en: "SITES_HOST not set — public image URLs are disabled" },
+  imagesHostMissing: { zh: "未配置 SITES_HOST，公开地址打不开", en: "SITES_HOST is not set — public URLs will not open" },
   imagesHostMissingHint: {
-    zh: "在 Cloudflare Pages 项目的环境变量中设置 SITES_HOST（如 sites.example.com）并绑定该自定义域，图床才会在此域名下以 /i/{id} 对外服务。详见 docs/sites.md。",
-    en: "Set SITES_HOST as a Cloudflare Pages environment variable (e.g. sites.example.com) and bind that custom domain. Images are then served at /i/{id} on that host. See docs/sites.md.",
+    zh: "给这个 Pages 项目绑定自定义域，并设置 Pages 环境变量 SITES_HOST（只要主机名，不要 https://），然后重新部署。在此之前图床公开地址打不开。",
+    en: "Bind a custom domain to this Pages project AND set the Pages env SITES_HOST (hostname only, no https://), then redeploy. Until then public image URLs will not open.",
   },
   emptyImages: { zh: "还没有图片", en: "No images yet" },
   emptyImagesHint: { zh: "把图片拖到这里，或点击上传", en: "Drop an image here, or click upload" },
@@ -137,8 +137,8 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   imageUrlCopied: { zh: "链接已复制", en: "URL copied" },
   imageMarkdownCopied: { zh: "Markdown 已复制", en: "Markdown copied" },
   mcpRequiresApiKey: {
-    zh: "MCP 依赖 API Key。关闭 API Key 后 MCP 不可用，即使 MCP 开关仍打开。",
-    en: "MCP depends on API Key. If API Key is off, MCP is unusable even when the MCP switch is on.",
+    zh: "MCP 依赖 API Key 开关：若 API Key 关闭，即使 MCP 开关打开，/mcp 也是 404。",
+    en: "MCP depends on the API Key switch: if Key is off, /mcp is 404 even if MCP is on.",
   },
   siteFilesCount: { zh: "{count} 个文件", en: "{count} file(s)" },
   siteStatsTruncated: { zh: "统计达到扫描上限,数值为下限", en: "Scan cap reached; figures are lower bounds" },
