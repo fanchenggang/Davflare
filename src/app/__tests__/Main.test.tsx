@@ -1,12 +1,24 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import Main from "../../Main";
 import { ClipboardProvider } from "../clipboard";
 import { DEFAULT_FEATURE_FLAGS, useFeatures } from "../features";
 import { useAuth } from "../auth";
-import { fetchPath } from "../transfer";
-import { setLang, strings } from "../strings";
+import {
+  collectFilesFromDataTransfer,
+  copyPaste,
+  createFolder,
+  downloadArchive,
+  downloadFile,
+  fetchFolderCounts,
+  fetchPath,
+  openFile,
+  searchFiles,
+  selectDirectoryFiles,
+} from "../transfer";
+import { moveToTrash, restoreTrash } from "../trash";
+import { setLang, strings, translate } from "../strings";
 
 jest.mock("../auth", () => ({
   useAuth: jest.fn(),
@@ -18,9 +30,10 @@ jest.mock("../features", () => {
   return { ...actual, useFeatures: jest.fn() };
 });
 
+const mockEnqueue = jest.fn();
 jest.mock("../transferQueue", () => ({
   useTransferQueue: () => [],
-  useUploadEnqueue: () => jest.fn(),
+  useUploadEnqueue: () => mockEnqueue,
 }));
 
 jest.mock("../transfer", () => ({
@@ -57,6 +70,17 @@ jest.mock("../../MimeIcon", () => ({ __esModule: true, default: () => <span /> }
 const mockUseAuth = useAuth as unknown as jest.Mock;
 const mockUseFeatures = useFeatures as unknown as jest.Mock;
 const mockFetchPath = fetchPath as unknown as jest.Mock;
+const mockSearch = searchFiles as unknown as jest.Mock;
+const mockCopyPaste = copyPaste as unknown as jest.Mock;
+const mockCreateFolder = createFolder as unknown as jest.Mock;
+const mockMoveTrash = moveToTrash as unknown as jest.Mock;
+const mockRestore = restoreTrash as unknown as jest.Mock;
+const mockCollect = collectFilesFromDataTransfer as unknown as jest.Mock;
+const mockSelectDir = selectDirectoryFiles as unknown as jest.Mock;
+const mockDownload = downloadFile as unknown as jest.Mock;
+const mockArchive = downloadArchive as unknown as jest.Mock;
+const mockOpen = openFile as unknown as jest.Mock;
+const mockCounts = fetchFolderCounts as unknown as jest.Mock;
 
 const file = {
   key: "a.txt",
@@ -65,6 +89,24 @@ const file = {
   size: 1,
   uploaded: "2026-01-01T00:00:00.000Z",
   contentType: "text/plain",
+};
+
+const folder = {
+  key: "docs",
+  name: "docs",
+  isDir: true,
+  size: 0,
+  uploaded: "2026-01-02T00:00:00.000Z",
+  contentType: "application/x-directory",
+};
+
+const hidden = {
+  key: ".DS_Store",
+  name: ".DS_Store",
+  isDir: false,
+  size: 1,
+  uploaded: "2026-01-03T00:00:00.000Z",
+  contentType: "application/octet-stream",
 };
 
 function renderMain(route: any = { kind: "folder", path: "" }, extra: Partial<React.ComponentProps<typeof Main>> = {}) {
@@ -79,6 +121,7 @@ function renderMain(route: any = { kind: "folder", path: "" }, extra: Partial<Re
     route,
     navigate: jest.fn(),
     onOpenApi: jest.fn(),
+    onContentScroll: jest.fn(),
     ...extra,
   };
   const result = render(
@@ -95,10 +138,15 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   };
+  Element.prototype.scrollIntoView = jest.fn();
+  Object.assign(navigator, {
+    clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+  });
 });
 
 beforeEach(() => {
   setLang("zh");
+  mockEnqueue.mockReset();
   mockUseAuth.mockReturnValue({ username: "alice", login: jest.fn(), logout: jest.fn() });
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
@@ -108,7 +156,28 @@ beforeEach(() => {
     config: { username: "alice", publicRead: false, sitesHost: null, flags: DEFAULT_FEATURE_FLAGS },
   });
   mockFetchPath.mockReset();
-  mockFetchPath.mockResolvedValue([file]);
+  mockFetchPath.mockResolvedValue([file, folder, hidden]);
+  mockSearch.mockReset();
+  mockSearch.mockResolvedValue({ items: [file], hasMore: false });
+  mockCopyPaste.mockReset();
+  mockCopyPaste.mockResolvedValue(undefined);
+  mockCreateFolder.mockReset();
+  mockCreateFolder.mockResolvedValue(undefined);
+  mockMoveTrash.mockReset();
+  mockMoveTrash.mockResolvedValue({ results: [{ id: "t1" }] });
+  mockRestore.mockReset();
+  mockRestore.mockResolvedValue(undefined);
+  mockCollect.mockReset();
+  mockCollect.mockResolvedValue([]);
+  mockSelectDir.mockReset();
+  mockSelectDir.mockResolvedValue([]);
+  mockDownload.mockReset();
+  mockDownload.mockResolvedValue(undefined);
+  mockArchive.mockReset();
+  mockArchive.mockResolvedValue(undefined);
+  mockOpen.mockReset();
+  mockCounts.mockResolvedValue({ docs: 2 });
+  sessionStorage.clear();
 });
 
 describe("Main", () => {
@@ -136,5 +205,193 @@ describe("Main", () => {
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText(strings.trash));
     expect(props.navigate).toHaveBeenCalledWith({ kind: "trash" });
+  });
+
+  test("sites/images/settings/trash stubs", async () => {
+    const { unmount } = renderMain({ kind: "sites" });
+    await waitFor(() => expect(screen.getByText("sites-stub")).toBeInTheDocument());
+    unmount();
+    const r2 = renderMain({ kind: "images" });
+    await waitFor(() => expect(screen.getByText("images-stub")).toBeInTheDocument());
+    r2.unmount();
+    const r3 = renderMain({ kind: "settings" });
+    await waitFor(() => expect(screen.getByText("settings-stub")).toBeInTheDocument());
+    r3.unmount();
+    renderMain({ kind: "trash" });
+    await waitFor(() => expect(screen.getByText("trash-stub")).toBeInTheDocument());
+  });
+
+  test("disabled sites/images flags bounce back to folder", async () => {
+    mockUseFeatures.mockReturnValue({
+      flags: { ...DEFAULT_FEATURE_FLAGS, sites: false, imageHost: false },
+      sitesHost: null,
+      updateFlags: jest.fn(),
+      refresh: jest.fn(),
+      config: { username: "alice", publicRead: false, sitesHost: null, flags: DEFAULT_FEATURE_FLAGS },
+    });
+    const { props } = renderMain({ kind: "sites" });
+    await waitFor(() =>
+      expect(props.navigate).toHaveBeenCalledWith({ kind: "folder", path: "" })
+    );
+  });
+
+  test("copy path, search scope, create folder, keyboard select/delete", async () => {
+    const onNotify = jest.fn();
+    const { props } = renderMain({ kind: "folder", path: "docs/" }, { onNotify });
+    mockFetchPath.mockResolvedValue([file]);
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText(strings.copyPath));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("pathCopied"), "success")
+    );
+
+    fireEvent.click(screen.getByText(strings.searchAll));
+    fireEvent.click(screen.getByText(strings.createFolder));
+    fireEvent.change(screen.getByLabelText(strings.folderName), {
+      target: { value: "newdir" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.create }));
+    await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith("docs/", "newdir"));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(strings.folderName)).not.toBeInTheDocument()
+    );
+
+    fireEvent.click(
+      screen.getByLabelText(translate("selectFileLabel", { name: "a.txt" }))
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.copy }));
+    expect(onNotify).toHaveBeenCalledWith(translate("copiedToClipboard"), "success");
+    fireEvent.click(screen.getByRole("button", { name: strings.delete }));
+    fireEvent.click(screen.getByRole("button", { name: strings.confirmAction }));
+    await waitFor(() => expect(mockMoveTrash).toHaveBeenCalled());
+  });
+
+  test("context menu copy/cut/download and open folder", async () => {
+    const onNotify = jest.fn();
+    const { props } = renderMain({ kind: "folder", path: "" }, { onNotify, view: "list" });
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" }))
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.copy }));
+    expect(onNotify).toHaveBeenCalledWith(translate("copiedToClipboard"), "success");
+
+    fireEvent.click(
+      screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" }))
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.cut }));
+    expect(onNotify).toHaveBeenCalledWith(translate("cutToClipboard"), "success");
+
+    fireEvent.click(
+      screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" }))
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.download }));
+    await waitFor(() => expect(mockDownload).toHaveBeenCalledWith("a.txt"));
+
+    fireEvent.click(screen.getByText("docs"));
+    expect(props.navigate).toHaveBeenCalledWith({ kind: "folder", path: "docs/" });
+  });
+
+  test("rename via F2 and paste clipboard", async () => {
+    const onNotify = jest.fn();
+    renderMain({ kind: "folder", path: "" }, { onNotify });
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+    fireEvent.click(
+      screen.getByLabelText(translate("selectFileLabel", { name: "a.txt" }))
+    );
+    fireEvent.keyDown(window, { key: "F2" });
+    await waitFor(() => expect(screen.getByLabelText(strings.name)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(strings.name), {
+      target: { value: "b.txt" },
+    });
+    fireEvent.click(screen.getByText(strings.ok));
+    await waitFor(() => expect(mockCopyPaste).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.queryByLabelText(strings.name)).not.toBeInTheDocument()
+    );
+
+    fireEvent.click(
+      screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" }))
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.copy }));
+    const pasteBtn = screen.getByRole("button", { name: new RegExp(strings.paste) });
+    fireEvent.click(pasteBtn);
+    await waitFor(() => expect(mockCopyPaste).toHaveBeenCalled());
+  });
+
+  test("keyboard arrows, select all, escape, enter, backspace, delete", async () => {
+    const { props } = renderMain({ kind: "folder", path: "docs/" });
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: " " });
+    fireEvent.keyDown(window, { key: "a", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "Escape" });
+    fireEvent.keyDown(window, { key: "Home" });
+    fireEvent.keyDown(window, { key: "End" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(window, { key: "Backspace" });
+    expect(props.navigate).toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "Delete" });
+  });
+
+  test("window file paste and drag overlay", async () => {
+    const onNotify = jest.fn();
+    renderMain({ kind: "folder", path: "" }, { onNotify });
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+    const pasted = new File(["x"], "image.png", { type: "image/png" });
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: {
+        items: [{ kind: "file", getAsFile: () => pasted }],
+      },
+    });
+    Object.defineProperty(pasteEvent, "target", { value: document.body });
+    window.dispatchEvent(pasteEvent);
+    await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
+
+    mockCollect.mockResolvedValue([new File(["z"], "drop.txt")]);
+    const dt = { types: ["Files"], files: [] };
+    const enter = new Event("dragenter", { bubbles: true, cancelable: true });
+    Object.defineProperty(enter, "dataTransfer", { value: dt });
+    window.dispatchEvent(enter);
+    await waitFor(() => expect(screen.getByText(strings.dropToUpload)).toBeInTheDocument());
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: dt });
+    window.dispatchEvent(drop);
+    await waitFor(() => expect(mockCollect).toHaveBeenCalled());
+  });
+
+  test("global search uses searchFiles", async () => {
+    jest.useFakeTimers();
+    renderMain({ kind: "folder", path: "" }, { search: "hello" });
+    await act(async () => {
+      jest.advanceTimersByTime(350);
+    });
+    await waitFor(() => expect(mockSearch).toHaveBeenCalled());
+    jest.useRealTimers();
+  });
+
+  test("sort by size and date still lists files", async () => {
+    const { rerender, props } = renderMain(
+      { kind: "folder", path: "" },
+      { sort: { field: "size", order: "desc" } }
+    );
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+    rerender(
+      <ClipboardProvider>
+        <Main
+          {...props}
+          sort={{ field: "date", order: "asc" }}
+        />
+      </ClipboardProvider>
+    );
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+  });
+
+  test("username null skips listing", async () => {
+    mockUseAuth.mockReturnValue({ username: null, login: jest.fn(), logout: jest.fn() });
+    renderMain();
+    await waitFor(() => expect(mockFetchPath).not.toHaveBeenCalled());
   });
 });

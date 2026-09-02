@@ -17,7 +17,7 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
     ok,
     status,
     json: async () => body,
-    text: async () => JSON.stringify(body),
+    text: async () => (ok ? JSON.stringify(body) : ""),
   } as unknown as Response;
 }
 
@@ -53,6 +53,17 @@ describe("parseAppConfig", () => {
       imageHost: false,
     });
   });
+
+  test("non-object payload and empty sitesHost fall back", () => {
+    expect(parseAppConfig(null)).toEqual({
+      username: "",
+      publicRead: false,
+      sitesHost: null,
+      flags: DEFAULT_FEATURE_FLAGS,
+    });
+    expect(parseAppConfig({ sitesHost: "" }).sitesHost).toBeNull();
+    expect(parseAppConfig({ publicRead: "yes" }).publicRead).toBe(false);
+  });
 });
 
 describe("config client", () => {
@@ -65,6 +76,21 @@ describe("config client", () => {
     expect(config.flags.webdav).toBe(true);
   });
 
+  test("fetchAppConfig throws on empty error body", async () => {
+    mockAuthFetch.mockResolvedValue(jsonResponse({}, false, 500));
+    await expect(fetchAppConfig()).rejects.toThrow();
+  });
+
+  test("fetchAppConfig uses response text when present", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+      text: async () => "config-down",
+    } as unknown as Response);
+    await expect(fetchAppConfig()).rejects.toThrow("config-down");
+  });
+
   test("patchFeatureFlags PATCHes flags", async () => {
     mockAuthFetch.mockResolvedValue(
       jsonResponse({ username: "a", publicRead: false, webdav: false })
@@ -74,5 +100,15 @@ describe("config client", () => {
     expect(url).toBe("/api/config");
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(init.body)).toEqual({ webdav: false });
+  });
+
+  test("patchFeatureFlags throws on failure", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({}),
+      text: async () => "save-fail",
+    } as unknown as Response);
+    await expect(patchFeatureFlags({ mcp: false })).rejects.toThrow("save-fail");
   });
 });
