@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Davflare",
-  "version": "1.0.0",
-  "description": "Open your Davflare instance from the toolbar. Optional new tab is off by default.",
+  "version": "1.1.0",
+  "description": "Open your Davflare instance from the toolbar.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -25,8 +25,5 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage"],
-  "chrome_url_overrides": {
-    "newtab": "newtab.html"
-  }
+  "permissions": ["storage"]
 }

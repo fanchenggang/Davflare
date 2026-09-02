@@ -38,7 +38,7 @@
 - 图床走同一站点域名的 `/i/{id}`（对象存在 `_$flaredrive$/img/`，不与 `sites/` 或分享链接混用）
 - 拥有者设置页（`#/settings`）五个功能开关（默认全部开启，持久化到 R2）
 - `davflare-cli`：login / ls / mkdir / rm / mv / cp / sync（[cli/README.md](cli/README.md)）
-- 可选 Chrome MV3 扩展（`extension/`）：工具栏打开**你自己的**实例；新标签页覆盖默认关闭
+- 可选 Chrome MV3 扩展（`extension/`）：工具栏打开**你自己的**实例；默认 zip **不会**改 Chrome 新标签页
 - Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（`pull` / `push` 工具，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
 
@@ -191,11 +191,18 @@ Chrome Manifest V3 辅助扩展，用来打开**你自己部署的** Davflare。
 
 - 选项页：粘贴你部署的 Pages / 自定义域名。默认空白，没有内置站点。
 - 点击工具栏图标打开该地址。未填写时改为打开选项页。
-- 「用作新标签页」**默认关闭**。关闭时仍是 Chrome 自带新标签页；打开后新标签页会进入你的网盘。
+- **默认包不会改 Chrome 新标签页。** 只要已加载的 `manifest.json` 里有 `chrome_url_overrides`，Chrome 就会把新标签页当成被覆盖；扩展里再开关也无法恢复。
 
-**加载未打包扩展：** Chrome → `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选本仓库的 `extension/` 目录。
+同一 GitHub Release 附两个 zip：
 
-**Release zip：** 从 [GitHub Releases](https://github.com/fanchenggang/Davflare/releases) 下载 `davflare-extension.zip`，解压后再按上面的方式加载。打 tag（`v*` / `extension-*`）或在 **Actions → Release extension** 里运行工作流会生成该 zip。
+| Zip | 作用 |
+| --- | --- |
+| `davflare-extension.zip` | 仅工具栏 + 选项。不想改新标签页就装这个。 |
+| `davflare-extension-newtab.zip` | 默认包之外另加新标签页覆盖，打开你的实例。需单独下载；不要指望默认 zip 提供该行为。 |
+
+**加载未打包扩展（默认，不改新标签页）：** Chrome → `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选本仓库的 `extension/` 目录。
+
+**Release zip：** 从 [GitHub Releases](https://github.com/fanchenggang/Davflare/releases) 下载后解压再按上面的方式加载。打 tag（`v*` / `extension-*`）或在 **Actions → Release extension** 里运行工作流会附上两个 zip。
 
 ## 图床
 
