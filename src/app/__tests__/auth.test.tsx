@@ -67,7 +67,9 @@ describe("auth / authFetch", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/keys");
-    expect(new Headers(init.headers).get("Authorization")).toBe(`Basic ${authValue()}`);
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBe(`Basic ${authValue()}`);
+    expect(headers.get("X-Davflare-UI")).toBe("1");
   });
 
   test("401 清除凭据", async () => {

@@ -12,6 +12,8 @@
 
 网盘域名（`*.pages.dev` 或应用域）不变。站点域上不开放 `/api`、`/mcp`、`/webdav`。
 
+此域名上先匹配 `/i/{id}`（图床），再走 slug 静态站。图床与站点功能开关互相独立：站点关、图床开时 `/i/{id}` 仍可用；图床关时即使站点开，`/i/*` 也是 404。图片对象存在 `_$flaredrive$/img/{id}`，不在 `sites/` 下。
+
 ## 发布
 
 把目录上传到 `sites/{slug}/`（网页端站点 zip 部署、开放接口、MCP 的 `mkdir` + `upload`，或 davflare-cli cp/sync）。`{slug}` 为 `[a-z0-9][a-z0-9-]{0,62}`。

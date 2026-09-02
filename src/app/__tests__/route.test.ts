@@ -61,6 +61,16 @@ describe("useHashRoute", () => {
     expect(result.current[0]).toEqual({ kind: "folder", path: "a b/中文/" });
   });
 
+  test("navigate 到 settings/images", async () => {
+    const { result } = renderHook(() => useHashRoute());
+    act(() => {
+      result.current[1]({ kind: "settings" });
+    });
+    expect(window.location.hash).toBe("#/settings");
+    await flushEvents();
+    expect(result.current[0]).toEqual({ kind: "settings" });
+  });
+
   test("navigate 到 trash/shares", async () => {
     const { result } = renderHook(() => useHashRoute());
     act(() => {

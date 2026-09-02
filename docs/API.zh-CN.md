@@ -6,6 +6,10 @@
 
 在网页端创建密钥：资源管理栏「API」，或账号菜单「开放接口」。完整密钥只展示一次，服务端仅保存 SHA-256 哈希。鉴权方式为 `Authorization: Bearer <apiKey>` 或 `X-Api-Key: <apiKey>`（不走网页会话）。通过已登录会话调用 `GET` / `POST` / `DELETE` `/api/keys` 管理密钥。API 设置页也有使用说明。
 
+若 **API Key** 功能开关关闭，Bearer / `X-Api-Key` 调用返回 **401**。网页会话（Basic）接口不受影响。**MCP 依赖 API Key**：MCP 开关或 API Key 开关任一关闭时，`POST /mcp` 返回 **404**。
+
+拥有者功能开关存在 R2（`_$flaredrive$/config.json`）。`GET /api/config`（会话）返回 `username`、`publicRead`、`sitesHost` 以及 `webdav` / `mcp` / `apiKey` / `sites` / `imageHost`（默认全部 **true**）。`PATCH /api/config` 提交这些布尔字段，**仅允许 Basic 会话** —— 带 `Bearer` 或 `X-Api-Key` 返回 **403**。
+
 内部 `_$flaredrive$/` 路径会被拒绝。单次操作覆盖超过 1000 个对象会返回 **400**，需要分批处理。
 
 ### 上传
@@ -129,9 +133,42 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 GET / POST / DELETE /api/sites 列站、切 SPA、删站。会话或 API key 均可。详见 [sites.zh-CN.md](./sites.zh-CN.md)。
 
+### 功能开关与图床
+
+```bash
+# 仅会话
+curl "https://<your-domain.com>/api/config" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD"
+
+# PATCH 仅 Basic 会话 —— API Key 会被拒绝（403）
+curl -X PATCH "https://<your-domain.com>/api/config" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -d '{"webdav":false,"imageHost":true}'
+```
+
+图床（仅会话；公开字节在 `SITES_HOST` 上，不在网盘源）：
+
+```bash
+# 列表
+curl "https://<your-domain.com>/api/images" -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD"
+
+# 上传（原始 body + X-File-Name，或 multipart 字段 file）
+curl -X POST "https://<your-domain.com>/api/images" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
+  -H "X-File-Name: shot.png" \
+  --data-binary @shot.png
+
+# 删除
+curl -X DELETE "https://<your-domain.com>/api/images?id=<id>" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD"
+```
+
+公开地址：`https://<SITES_HOST>/i/{id}`。SVG 响应带 `Content-Disposition: attachment` 与 `X-Content-Type-Options: nosniff`。
+
 ### MCP
 
-同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。密钥缺失或无效返回 **HTTP 401**。工具：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`（包装上方 Open API）。超过 1 MiB 的上传自动改走分块（上限 **25 MB**；再大返回工具错误，请用网页端或 davflare-cli）。下载超过 1 MiB 用 `part` / `partSize` 分页。`delete` 默认进回收站；`hard=true` 为永久删除。`sites_*` 管理 `sites/` 下的静态站；`upload` / `delete` 也可以直接操作 `sites/<slug>/`。
+同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。**MCP 依赖 API Key 开关** —— API Key 关闭（或 MCP 关闭）时 `/mcp` 返回 **404**。密钥缺失或无效返回 **HTTP 401**。工具：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`（包装上方 Open API）。超过 1 MiB 的上传自动改走分块（上限 **25 MB**；再大返回工具错误，请用网页端或 davflare-cli）。下载超过 1 MiB 用 `part` / `partSize` 分页。`delete` 默认进回收站；`hard=true` 为永久删除。`sites_*` 管理 `sites/` 下的静态站；`upload` / `delete` 也可以直接操作 `sites/<slug>/`。
 
 ```bash
 # initialize

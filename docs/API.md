@@ -6,6 +6,10 @@
 
 Create keys in the web UI: ExplorerBar 「API」 or account menu 「开放接口」. Full keys are shown once; only SHA-256 hashes are stored. Auth is `Authorization: Bearer <apiKey>` or `X-Api-Key: <apiKey>` (no web session). Manage keys via session-authenticated `GET` / `POST` / `DELETE` `/api/keys`. Usage docs are also on the API settings page.
 
+If the **API Key** feature switch is off, Bearer / `X-Api-Key` calls fail with **401**. The web session (Basic) APIs keep working. **MCP requires API Key**: `POST /mcp` is **404** when either the MCP switch or the API Key switch is off.
+
+Owner feature flags live in R2 (`_$flaredrive$/config.json`). `GET /api/config` (session) returns `username`, `publicRead`, `sitesHost`, and `webdav` / `mcp` / `apiKey` / `sites` / `imageHost` (all default **true**). `PATCH /api/config` with a JSON object of those booleans is **Basic session only** — presenting `Bearer` or `X-Api-Key` returns **403**.
+
 Internal `_$flaredrive$/` keys are rejected. Operations covering more than 1000 objects return **400** and must be batched.
 
 ### Upload
@@ -141,9 +145,42 @@ curl "https://<your-domain.com>/api/search?q=notes&limit=100" \
 
 `GET /api/download` sends `Accept-Ranges: bytes` and honors a single `Range` header with **206** responses, so resumable/chunked downloads work with plain HTTP clients.
 
+### Feature flags and image host
+
+```bash
+# session only
+curl "https://<your-domain.com>/api/config" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD"
+
+# PATCH is Basic session only — API keys are rejected (403)
+curl -X PATCH "https://<your-domain.com>/api/config" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -d '{"webdav":false,"imageHost":true}'
+```
+
+Image host (session only; public bytes are on `SITES_HOST`, not the drive origin):
+
+```bash
+# list
+curl "https://<your-domain.com>/api/images" -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD"
+
+# upload (raw body + X-File-Name, or multipart field file)
+curl -X POST "https://<your-domain.com>/api/images" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD" \
+  -H "X-File-Name: shot.png" \
+  --data-binary @shot.png
+
+# delete
+curl -X DELETE "https://<your-domain.com>/api/images?id=<id>" \
+  -u "$WEBDAV_USERNAME:$WEBDAV_PASSWORD"
+```
+
+Public URL: `https://<SITES_HOST>/i/{id}`. SVG responses use `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`.
+
 ### MCP
 
-Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys.
+Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). **MCP depends on the API Key switch** — if API Key is off (or MCP is off), `/mcp` returns **404**. Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys.
 
 ```bash
 # initialize

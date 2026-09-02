@@ -25,10 +25,8 @@ function LoginDialog() {
     setError(null);
 
     try {
-      const response = await authFetch("/webdav/", {
-        method: "PROPFIND",
+      const response = await authFetch("/api/config", {
         headers: {
-          Depth: "1",
           Authorization: `Basic ${btoa(`${username}:${password}`)}`,
         },
       });

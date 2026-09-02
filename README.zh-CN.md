@@ -30,11 +30,13 @@
 - 文件夹、搜索、拖放，以及图片 / 视频 / PDF 缩略图
 - 分享链接（限时或永久）、提取码、文件夹 zip 下载
 - 回收站，由 `TRASH_RETENTION_DAYS` 控制（默认 30 天；`-1` 关闭；打开回收站时惰性清理最多 200 项）
-- WebDAV Class 1/2，路径 `/webdav`
+- WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端文件管理）
 - API Key，可用于脚本上传、下载与双向同步
-- 远程 MCP，路径 `/mcp`（15 个工具：文件、搜索、移动/复制、分享、站点）。上传超过 1 MiB 自动分块，上限 25 MB；下载用 `part` 分页
+- 远程 MCP，路径 `/mcp`（15 个工具：文件、搜索、移动/复制、分享、站点）。上传超过 1 MiB 自动分块，上限 25 MB；下载用 `part` 分页。**MCP 依赖 API Key**：若 API Key 开关关闭，即使 MCP 开关打开，`/mcp` 也是 404
 - 网页端站点管理（`#/sites`）：zip 一键部署、SPA 开关、按站删除
 - 静态站点走单独域名（`SITES_HOST` + `sites/{slug}/`）；[docs/sites.zh-CN.md](docs/sites.zh-CN.md)
+- 图床走同一站点域名的 `/i/{id}`（对象存在 `_$flaredrive$/img/`，不与 `sites/` 或分享链接混用）
+- 拥有者设置页（`#/settings`）五个功能开关（默认全部开启，持久化到 R2）
 - `davflare-cli`：login / ls / mkdir / rm / mv / cp / sync（[cli/README.md](cli/README.md)）
 - Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（手动拉取/推送，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
@@ -87,6 +89,8 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
+| GET / PATCH | `/api/config` | 会话：用户名、公开读取、sitesHost、功能开关。PATCH 仅 Basic |
+| GET / POST / DELETE | `/api/images` | 图床（会话）：列出、上传、删除。公开字节在 `SITES_HOST /i/{id}` |
 | GET / POST / DELETE | `/api/keys` | 创建、列出、作废密钥（需网页登录会话） |
 | POST / PUT / DELETE | `/api/upload` | 上传文件（multipart / 原始 body / 覆盖 / >100MB 分片） |
 | GET | `/api/list` | 列出当前目录（size、uploaded、etag） |
@@ -104,9 +108,25 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 
 同一把密钥可做双向同步（本地优先，冲突时先备份远端）。详见 [开放接口文档](docs/API.zh-CN.md)。
 
+`GET /api/config`（网页会话）返回用户名、公开读取、`sitesHost` 以及五个功能开关。`PATCH /api/config` 更新开关，**仅允许网页会话（Basic）**，API Key 不能改开关。
+
+## 功能开关
+
+拥有者在设置页（`#/settings`，账号菜单）开关五项能力。配置存在 R2 的 `_$flaredrive$/config.json`，部署后仍保留，**不要**写进 `wrangler.toml`。默认全部**开启**。
+
+| 开关 | 关闭后 |
+| --- | --- |
+| WebDAV | 隐藏 WebDAV 按钮/面板。客户端无法挂载 `/webdav`（404）。网页端文件管理仍走会话接口。 |
+| MCP | `POST /mcp` → 404；隐藏 API 面板里的 MCP 说明。 |
+| API Key | 隐藏密钥管理。Bearer / `X-Api-Key` 开放接口返回 401。网页会话接口不受影响。**MCP 也会 404/不可用**（因为它用 API Key 鉴权）。 |
+| 静态站点 | 隐藏 `#/sites`。`SITES_HOST` 上的 slug 站点 404。不会删除 `sites/` 下的对象。 |
+| 图床 | 隐藏图床界面。`SITES_HOST` 上的 `/i/*` 404。不会删除已存图片。 |
+
+`SITES_HOST` 为空时，基础设施层仍不对外提供站点/图床。绑定主机后，站点与图床开关是额外的产品开关。
+
 ## MCP
 
-同源 Model Context Protocol（Streamable HTTP），路径 `POST /mcp`。鉴权与开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`）。
+同源 Model Context Protocol（Streamable HTTP），路径 `POST /mcp`。鉴权与开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`）。**MCP 依赖 API Key：API Key 开关关闭后，即使 MCP 开关仍打开也无法使用。**
 
 工具（15 个）：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`。
 
@@ -136,6 +156,12 @@ Cursor（`mcp.json`）：
 ## 命令行
 
 [`davflare-cli`](cli/README.md) 是开放接口的命令行客户端：`login`、`ls`、`mkdir`、`rm`、`mv`、`cp`、`sync`。超过 100 MB 自动分块上传，下载支持 HTTP Range 断点续传。安装与同步语义见 `cli/README.md`。
+
+## 图床
+
+在网盘界面（`#/images`）拖放上传图片，复制公开 URL 或 Markdown `![](url)`，列出并删除。对象存在 `_$flaredrive$/img/{id}`，`{id}` 为不可猜测的随机值，不是原文件名。公开地址仅为 `https://<SITES_HOST>/i/{id}`（`SITES_HOST` 不含协议）。SVG 以附件下发（`Content-Disposition: attachment` + `nosniff`），不会当成可执行页面打开。
+
+站点域名上先匹配 `/i/{id}`，再走 slug 静态站。图床开关与站点开关独立：站点关、图床开 → slug 404 但 `/i/{id}` 可用；图床关 → 即使站点开，`/i/*` 也是 404。未配置 `SITES_HOST` 时开关仍在，界面会提示先绑定该域名。
 
 ## Agent 目录
 

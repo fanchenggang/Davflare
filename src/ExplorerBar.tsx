@@ -30,12 +30,13 @@ import {
   ViewList as ViewListIcon,
 } from "@mui/icons-material";
 
+import { useFeatures } from "./app/features";
 import { Density, FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
 import { RecentEntry } from "./app/recent";
 import { strings, translate } from "./app/strings";
 import { warmShadow } from "./app/theme";
 
-export type ExplorerSection = "folder" | "shares" | "trash" | "sites";
+export type ExplorerSection = "folder" | "shares" | "trash" | "sites" | "images" | "settings";
 
 // labelKey 延迟到渲染时取 strings，避免模块级快照导致语言切换后标签不变。
 const TYPE_FILTERS: Array<{ value: FileTypeFilter; labelKey: string }> = [
@@ -100,6 +101,7 @@ function ExplorerBar({
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
   const [recentAnchor, setRecentAnchor] = useState<null | HTMLElement>(null);
+  const { flags } = useFeatures();
 
   const changeSort = (field: SortField) => {
     onSortChange({
@@ -157,9 +159,16 @@ function ExplorerBar({
           <ToggleButton value="shares" aria-label={strings.shares}>
             {strings.shares}
           </ToggleButton>
-          <ToggleButton value="sites" aria-label={strings.sitesSection}>
-            {strings.sitesSection}
-          </ToggleButton>
+          {flags.sites && (
+            <ToggleButton value="sites" aria-label={strings.sitesSection}>
+              {strings.sitesSection}
+            </ToggleButton>
+          )}
+          {flags.imageHost && (
+            <ToggleButton value="images" aria-label={strings.imagesSection}>
+              {strings.imagesSection}
+            </ToggleButton>
+          )}
           <ToggleButton value="trash" aria-label={strings.trash}>
             {strings.trash}
           </ToggleButton>
@@ -199,24 +208,28 @@ function ExplorerBar({
             ))
           )}
         </Menu>
-        <Button
-          size="small"
-          variant="text"
-          startIcon={<WebDavIcon />}
-          onClick={onOpenWebDav}
-          sx={{ color: "text.secondary" }}
-        >
-          {strings.webdav}
-        </Button>
-        <Button
-          size="small"
-          variant="text"
-          startIcon={<ApiIcon />}
-          onClick={onOpenApi}
-          sx={{ color: "text.secondary" }}
-        >
-          {strings.api}
-        </Button>
+        {flags.webdav && (
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<WebDavIcon />}
+            onClick={onOpenWebDav}
+            sx={{ color: "text.secondary" }}
+          >
+            {strings.webdav}
+          </Button>
+        )}
+        {flags.apiKey && (
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<ApiIcon />}
+            onClick={onOpenApi}
+            sx={{ color: "text.secondary" }}
+          >
+            {strings.api}
+          </Button>
+        )}
 
         {inFolder && (
           <Box

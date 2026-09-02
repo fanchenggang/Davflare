@@ -110,4 +110,16 @@ describe("apikeys / curl 示例", () => {
     setLang("zh");
     expect(getLang()).toBe("zh");
   });
+
+  test("formatApiUsage can omit the MCP section", () => {
+    setLang("en");
+    const withMcp = formatApiUsage("https://d.example", "key2");
+    const without = formatApiUsage("https://d.example", "key2", {
+      includeMcp: false,
+    });
+    expect(withMcp).toContain("MCP / Cursor");
+    expect(without).not.toContain("MCP / Cursor");
+    expect(without).toContain("Upload");
+    setLang("zh");
+  });
 });

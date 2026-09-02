@@ -36,6 +36,7 @@ import {
   revokeApiKey,
   uploadCurlExample,
 } from "./app/apikeys";
+import { useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
 import { strings, translate } from "./app/strings";
 import { ApiKeyInfo } from "./app/types";
@@ -76,10 +77,12 @@ function ApiKeysPanel({
     null
   );
   const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const { flags } = useFeatures();
   const usageKey = created?.key || "<apiKey>";
+  const includeMcp = flags.mcp && flags.apiKey;
   const usageText = useMemo(
-    () => formatApiUsage(origin, usageKey),
-    [origin, usageKey]
+    () => formatApiUsage(origin, usageKey, { includeMcp }),
+    [includeMcp, origin, usageKey]
   );
 
   const load = async () => {

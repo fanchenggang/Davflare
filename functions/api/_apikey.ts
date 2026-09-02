@@ -1,3 +1,5 @@
+import { loadFeatureFlags } from "../_flags";
+
 export const KEYS_PREFIX = "_$flaredrive$/apikeys/";
 export const INTERNAL_PREFIX = "_$flaredrive$/";
 
@@ -34,6 +36,11 @@ function extractApiKey(request: Request): string {
     return authorization.slice(7).trim();
   }
   return "";
+}
+
+/** True when the caller presented Bearer / X-Api-Key (not a Basic session). */
+export function hasApiKeyHeader(request: Request): boolean {
+  return Boolean(extractApiKey(request));
 }
 
 export async function sha256Hex(value: string) {
@@ -104,6 +111,10 @@ export async function authorizeApiKey(
   request: Request,
   bucket: R2Bucket
 ): Promise<StoredApiKey | Response> {
+  const flags = await loadFeatureFlags(bucket);
+  if (!flags.apiKey) {
+    return textResponse("API 密钥已关闭", 401);
+  }
   const rawKey = extractApiKey(request);
   if (!rawKey) {
     return textResponse("缺少 API 密钥", 401);

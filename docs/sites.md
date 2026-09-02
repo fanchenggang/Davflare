@@ -12,6 +12,8 @@ Serve folders from R2 as public websites on a **separate hostname**. Same Worker
 
 The drive host (`*.pages.dev` or your app domain) is unchanged. `/api`, `/mcp`, and `/webdav` are not exposed on the sites host.
 
+On this host, `/i/{id}` (image host) is matched **first**, then slug static sites. The image-host and sites feature switches are independent: sites off still serves `/i/{id}` when image host is on; image host off 404s `/i/*` even if sites is on. Image blobs are stored at `_$flaredrive$/img/{id}`, not under `sites/`.
+
 ## Publish
 
 Upload a folder to `sites/{slug}/` (web UI Sites zip deploy, Open API, MCP `mkdir` + `upload`, or davflare-cli cp/sync). `{slug}` is `[a-z0-9][a-z0-9-]{0,62}`.
