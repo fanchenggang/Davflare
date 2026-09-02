@@ -34,8 +34,10 @@ Share (expiry + extract code):
 - Recycle bin with `TRASH_RETENTION_DAYS` (default 30; `-1` disables; lazy purge up to 200 items when trash is opened)
 - WebDAV Class 1/2 at `/webdav`
 - API keys for scripted upload, download, and bidirectional sync
-- Remote MCP at `/mcp` (list, upload, download, mkdir, delete)
+- Remote MCP at `/mcp` (15 tools: files, search, move/copy, shares, sites). Uploads auto-chunk up to 25 MB; downloads page with `part`
+- Sites manager in the UI (`#/sites`): zip deploy, SPA toggle, per-site delete
 - Static sites on a separate host (`SITES_HOST` + `sites/{slug}/`); [docs/sites.md](docs/sites.md)
+- `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (manual pull/push; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
@@ -90,19 +92,27 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 | GET / POST / DELETE | `/api/keys` | Create, list, and revoke keys (session auth) |
 | POST / PUT / DELETE | `/api/upload` | Upload a file (multipart, raw body, overwrite, or chunked >100MB) |
 | GET | `/api/list` | Depth-1 folder listing (size, uploaded, etag) |
-| GET | `/api/download` | Download one file |
+| GET | `/api/download` | Download one file (Range / 206 resume) |
 | POST | `/api/mkdir` | Create a folder (parents auto-created) |
 | POST | `/api/rename` | Rename or move a file or folder |
+| POST | `/api/copy` | Copy a file |
+| GET | `/api/stat` | Object metadata |
+| GET | `/api/search` | Filename substring search |
 | POST | `/api/backup` | Rename remote to `name.conflict-<UTC>` before overwrite |
 | DELETE | `/api/delete` | Hard delete, or `soft=1` to trash |
 | POST | `/api/shares` | Share a file or folder (folder → zip) |
-| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; ~1 MiB cap) |
+| GET / POST / DELETE | `/api/sites` | List, SPA-config, or delete static sites |
+| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; 15 tools) |
 
 Same keys work for a bidirectional sync client (local wins; backup remote on conflict). Details in the [API docs](docs/API.md).
 
 ## MCP
 
-Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`). v1 tools: `list`, `upload`, `download`, `mkdir`, `delete`. MCP uploads/downloads are capped at about 1 MiB; use the web UI for larger files.
+Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`).
+
+Tools (15): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`.
+
+Uploads up to 1 MiB go inline; larger content is auto-chunked (cap **25 MB**). Bigger files: web UI or `davflare-cli`. Downloads over 1 MiB page with `part` / `partSize`. Default `delete` is trash; `hard=true` permanently deletes. Publish a static site by uploading into `sites/{slug}/`, then `sites_config` if you need SPA fallback. Details: [docs/API.md](docs/API.md).
 
 Cursor (`mcp.json`):
 
@@ -121,7 +131,13 @@ Cursor (`mcp.json`):
 
 ## Static sites
 
-Public HTML from `sites/{slug}/` on a **separate hostname** (`SITES_HOST`). Same Worker, Host routing — not `/sites` on the drive origin. Details: [docs/sites.md](docs/sites.md).
+Public HTML from `sites/{slug}/` on a **separate hostname** (`SITES_HOST`). Same Worker, Host routing — not `/sites` on the drive origin.
+
+In the drive UI, **Sites** (`#/sites`) lists each slug with stats, one-click zip deploy, SPA toggle, and delete. MCP `sites_list` / `sites_config` / `sites_delete` wrap the same `/api/sites` endpoints. Details: [docs/sites.md](docs/sites.md).
+
+## CLI
+
+[`davflare-cli`](cli/README.md) is the Open API command-line client: `login`, `ls`, `mkdir`, `rm`, `mv`, `cp`, `sync`. Uploads over 100 MB are chunked; downloads resume with HTTP Range. See `cli/README.md` for install, login, and sync semantics.
 
 ## Agent layouts
 
