@@ -14,7 +14,7 @@ The drive host (`*.pages.dev` or your app domain) is unchanged. `/api`, `/mcp`, 
 
 ## Publish
 
-Upload a folder to `sites/{slug}/` (web UI, Open API, or MCP `mkdir` + `upload`). `{slug}` is `[a-z0-9][a-z0-9-]{0,62}`.
+Upload a folder to `sites/{slug}/` (web UI Sites zip deploy, Open API, MCP `mkdir` + `upload`, or davflare-cli cp/sync). `{slug}` is `[a-z0-9][a-z0-9-]{0,62}`.
 
 ```
 sites/blog/index.html
@@ -26,6 +26,7 @@ Then open `https://sites.<your-domain>/blog/` (or `/blog/style.css`). Missing fi
 ## Management API & UI
 
 - Web UI: open the **Sites** section (`#/sites`) — list sites with stats, one-click zip deploy (client-side unzip + upload queue), SPA toggle, per-site delete. "Manage files" jumps into the regular file manager at `sites/<slug>/`.
+- MCP: `sites_list`, `sites_config`, `sites_delete` (same `/api/sites` handlers).
 - `GET /api/sites` — list sites (`?stats=1` adds cached object count / total size). Session (Basic) or API key.
 - `POST /api/sites` — `{"slug":"blog","spa":true}` toggles SPA fallback. The site must already exist.
 - `DELETE /api/sites?slug=blog` — remove all site files (config kept, so a redeploy keeps the SPA flag); add `&purge=1` to also delete the config.

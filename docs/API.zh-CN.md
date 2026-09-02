@@ -119,11 +119,19 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 ### 分享
 
-`POST /api/shares` 也接受文件夹 key —— 打开分享链接会把整棵子树以 zip 流式下载（提取码和过期时间照常生效）。
+`POST /api/shares` 也接受文件夹 key —— 打开分享链接会把整棵子树以 zip 流式下载（提取码和过期时间照常生效）。分享管理（GET/POST/DELETE /api/shares）同时接受网页会话（Basic）和 API key。
+
+### 复制、stat、搜索
+
+`POST /api/copy` 复制文件（to 已存在则 409，除非 overwrite=1；不支持目录）。`GET /api/stat?path=` 返回 kind / size / etag / uploaded / contentType。`GET /api/search?q=` 按文件名子串搜索（cursor 分页）。`GET /api/download` 会发 Accept-Ranges: bytes，并响应单个 Range 为 206。
+
+### 静态站点 API
+
+GET / POST / DELETE /api/sites 列站、切 SPA、删站。会话或 API key 均可。详见 [sites.zh-CN.md](./sites.zh-CN.md)。
 
 ### MCP
 
-同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。密钥缺失或无效返回 **HTTP 401**。v1 工具：`list`、`upload`、`download`、`mkdir`、`delete`（包装上方 Open API）。经 MCP 上传/下载约 1 MiB 上限，更大则工具错误（会提到 **413** / 网页端）。`delete` 默认进回收站；`hard=true` 为永久删除。
+同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。密钥缺失或无效返回 **HTTP 401**。工具：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`（包装上方 Open API）。超过 1 MiB 的上传自动改走分块（上限 **25 MB**；再大返回工具错误，请用网页端或 davflare-cli）。下载超过 1 MiB 用 `part` / `partSize` 分页。`delete` 默认进回收站；`hard=true` 为永久删除。`sites_*` 管理 `sites/` 下的静态站；`upload` / `delete` 也可以直接操作 `sites/<slug>/`。
 
 ```bash
 # initialize

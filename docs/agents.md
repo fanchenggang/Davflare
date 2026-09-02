@@ -1,6 +1,6 @@
 # Davflare agent layouts (v1)
 
-Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v1 is a **convention + manual pull/push** with the existing five MCP tools (or the web UI). No file watcher. No new MCP methods. Secrets are not stored as files.
+Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v1 is a **convention + manual pull/push** with the existing MCP tools (or the web UI). No file watcher. Secrets are not stored as files.
 
 Merge order when the same name exists at more than one layer: **project > agent > global**.
 
@@ -72,7 +72,7 @@ Pull (remote → Cursor), project first:
 2. Same for `agents/cursor/{skills,rules,mcp}/` → user-level Cursor paths. Skip a file if the project layer already provided that name.
 3. Same for `agents/global/…`.
 
-Push (Cursor → remote): `mkdir` the remote folder, then `upload` (or the web UI). Strip secrets from `mcp.json` before upload. MCP v1 upload cap is 1 MiB; bigger files go through the web UI.
+Push (Cursor → remote): `mkdir` the remote folder, then `upload` (or the web UI). Strip secrets from `mcp.json` before upload. MCP uploads over 1 MiB auto-chunk (cap 25 MB); bigger files go through the web UI or davflare-cli.
 
 v2 will add `pull` / `push` tools that walk this tree. v3 will add other agents and conflict policy. Until then, do not auto-sync and do not watch the local disk.
 

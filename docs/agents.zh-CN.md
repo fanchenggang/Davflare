@@ -1,6 +1,6 @@
 # Davflare Agent 目录约定（v1）
 
-把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v1 只是**约定 + 手动拉取/推送**：用现有五个 MCP 工具或网页端即可。不做文件监听。不新开协议。密钥不当文件存。
+把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v1 只是**约定 + 手动拉取/推送**：用现有 MCP 工具或网页端即可。不做文件监听。密钥不当文件存。
 
 同名文件的合并顺序：**project 覆盖 agent 覆盖 global**。
 
@@ -72,7 +72,7 @@ Cursor 的 `mcp.json` 支持在 `headers` / `url` 里写 `${env:NAME}`。用这�
 2. 再处理 `agents/cursor/{skills,rules,mcp}/` → 用户级路径。project 层已经有的同名文件跳过。
 3. 最后 `agents/global/…`。
 
-推送（Cursor → 远端）：先 `mkdir` 远端目录，再 `upload`（或网页端）。上传 `mcp.json` 前去掉密钥。MCP v1 单文件约 1 MiB，更大走网页。
+推送（Cursor → 远端）：先 `mkdir` 远端目录，再 `upload`（或网页端）。上传 `mcp.json` 前去掉密钥。MCP 上传超过 1 MiB 会自动分块（上限 25 MB）；再大走网页端或 davflare-cli。
 
 v2 会加 `pull` / `push` 两个工具自动走这棵树。v3 再接其它 agent 和冲突策略。在此之前不要自动同步、不要监听本地磁盘。
 
