@@ -8,8 +8,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="${1:-$ROOT}"
-mkdir -p "$OUT"
+OUT_ARG="${1:-$ROOT}"
+mkdir -p "$OUT_ARG"
+OUT="$(cd "$OUT_ARG" && pwd)"
 
 DEFAULT_ZIP="$OUT/davflare-extension.zip"
 NEWTAB_ZIP="$OUT/davflare-extension-newtab.zip"
