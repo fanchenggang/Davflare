@@ -79,4 +79,18 @@ describe("ShareDialog", () => {
       expect(onNotify).toHaveBeenCalledWith(translate("linkCopied"), "success")
     );
   });
+
+  test("revokes an existing share without closing via overlay", async () => {
+    mockRevokeShare.mockResolvedValue(undefined);
+    const onClose = jest.fn();
+    const onNotify = jest.fn();
+    render(<ShareDialog open file={file} onClose={onClose} onNotify={onNotify} />);
+    fireEvent.click(await screen.findByText(strings.revoke));
+    await waitFor(() => expect(mockRevokeShare).toHaveBeenCalledWith("tok1"));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("shareLinkRevoked"), "success")
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByText(share.url)).not.toBeInTheDocument();
+  });
 });

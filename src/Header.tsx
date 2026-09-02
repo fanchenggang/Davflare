@@ -126,6 +126,7 @@ function Header({
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
         onKeyDown={(event) => {
+          event.stopPropagation();
           if (event.key === "Escape") {
             event.preventDefault();
             if (search) onSearchChange("");

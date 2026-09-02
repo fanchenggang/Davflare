@@ -134,24 +134,14 @@ function ShareDialog({
                 {shares.map((share) => (
                   <ListItem
                     key={share.token}
-                    secondaryAction={
-                      <Button
-                        color="error"
-                        onClick={async () => {
-                          try {
-                            setShares((prev) =>
-                              prev.filter((item) => item.token !== share.token)
-                            );
-                            await revokeShare(share.token);
-                          } catch (error) {
-                            onNotify((error as Error).message, "error");
-                            await refresh();
-                          }
-                        }}
-                      >
-                        {strings.revoke}
-                      </Button>
-                    }
+                    alignItems="flex-start"
+                    sx={{
+                      display: "block",
+                      px: 0,
+                      py: 1.25,
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                    }}
                   >
                     <ListItemText
                       primary={
@@ -168,15 +158,43 @@ function ShareDialog({
                       }
                       secondary={share.url}
                       secondaryTypographyProps={{
-                        sx: { wordBreak: "break-all" },
+                        sx: { wordBreak: "break-all", pr: 0 },
                       }}
                     />
-                    <Button
-                      startIcon={<ContentCopyIcon />}
-                      onClick={() => copy(share)}
-                    >
-                      {strings.copy}
-                    </Button>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <Button
+                        type="button"
+                        size="small"
+                        startIcon={<ContentCopyIcon />}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          copy(share);
+                        }}
+                      >
+                        {strings.copy}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="small"
+                        color="error"
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          event.preventDefault();
+                          try {
+                            await revokeShare(share.token);
+                            setShares((prev) =>
+                              prev.filter((item) => item.token !== share.token)
+                            );
+                            onNotify(translate("shareLinkRevoked"), "success");
+                          } catch (error) {
+                            onNotify((error as Error).message, "error");
+                            await refresh();
+                          }
+                        }}
+                      >
+                        {strings.revoke}
+                      </Button>
+                    </Stack>
                   </ListItem>
                 ))}
               </List>

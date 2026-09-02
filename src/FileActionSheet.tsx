@@ -71,7 +71,15 @@ function FileActionSheet({
 
   const run = (action: FileAction) => {
     if (!file) return;
-    onAction(action, file);
+    const target = file;
+    onClose();
+    const openDialog =
+      action === "rename" ||
+      action === "share" ||
+      action === "delete" ||
+      action === "move";
+    if (openDialog) window.setTimeout(() => onAction(action, target), 0);
+    else onAction(action, target);
   };
 
   if (isPhone) {
@@ -126,6 +134,9 @@ function FileActionSheet({
       anchorReference="anchorPosition"
       anchorPosition={anchorPosition ?? { top: 0, left: 0 }}
       disableAutoFocusItem
+      disableAutoFocus
+      disableRestoreFocus
+      disableEnforceFocus
       onClick={(event) => event.stopPropagation()}
       MenuListProps={{ dense: false, sx: { minWidth: 180 } }}
     >

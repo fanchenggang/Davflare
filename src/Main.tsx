@@ -107,17 +107,26 @@ function saveFolderCountCache(counts: Record<string, number>) {
 }
 
 function isTypingTarget(target: EventTarget | null) {
-  if (target instanceof HTMLInputElement) {
-    // 复选框/单选/按钮不是文本输入，键盘导航应继续生效
-    return !["checkbox", "radio", "button", "submit"].includes(target.type);
+  const el =
+    target instanceof HTMLElement
+      ? target
+      : document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+  if (!el) return false;
+  const field = el.closest("input, textarea, select, [contenteditable='true']");
+  if (field instanceof HTMLInputElement) {
+    return !["checkbox", "radio", "button", "submit"].includes(field.type);
   }
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return (
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
+  if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+    return true;
+  }
+  return Boolean(field) || el.isContentEditable;
+}
+
+function shouldIgnoreShortcuts(event: KeyboardEvent) {
+  if (event.isComposing || event.key === "Process") return true;
+  return isTypingTarget(event.target) || isTypingTarget(document.activeElement);
 }
 
 function parentKey(key: string) {
@@ -928,7 +937,7 @@ function Main({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target)) return;
+      if (shouldIgnoreShortcuts(event)) return;
       if (event.key === "Escape") {
         if (hasOpenOverlay()) return;
         if (selectedKeys.length || focusedKey) {
@@ -1112,13 +1121,13 @@ function Main({
           if (file.isDir) await downloadArchive([file.key]);
           else await downloadFile(file.key);
         } else if (action === "rename") {
-          setRenameTarget(file);
+          window.setTimeout(() => setRenameTarget(file), 50);
         } else if (action === "move") {
-          setMoveTarget([file.key]);
+          window.setTimeout(() => setMoveTarget([file.key]), 50);
         } else if (action === "delete") {
-          setConfirmDelete([file.key]);
+          window.setTimeout(() => setConfirmDelete([file.key]), 50);
         } else if (action === "share") {
-          setShareTarget(file);
+          window.setTimeout(() => setShareTarget(file), 50);
         } else if (action === "copy") {
           copyToClipboard([file.key]);
           onNotify(translate("copiedToClipboard"), "success");
@@ -1300,9 +1309,14 @@ function Main({
     input.type = "file";
     input.accept = "*/*";
     input.multiple = true;
-    input.onchange = async () => {
-      if (!input.files) return;
-      enqueueToCwd(Array.from(input.files));
+    input.value = "";
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.onchange = () => {
+      const picked = input.files ? Array.from(input.files) : [];
+      input.value = "";
+      input.remove();
+      if (picked.length) enqueueToCwd(picked);
     };
     input.click();
   };
@@ -1405,7 +1419,7 @@ function Main({
       </Box>
 
       {route.kind === "trash" && (
-        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <TrashView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -1415,7 +1429,7 @@ function Main({
         </Box>
       )}
       {route.kind === "shares" && (
-        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SharesView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -1425,7 +1439,7 @@ function Main({
         </Box>
       )}
       {route.kind === "sites" && flags.sites && (
-        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SitesView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -1438,7 +1452,7 @@ function Main({
         </Box>
       )}
       {route.kind === "images" && flags.imageHost && (
-        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <ImagesView
             onNotify={onNotify}
             onGoFiles={() =>
@@ -1448,7 +1462,7 @@ function Main({
         </Box>
       )}
       {route.kind === "settings" && (
-        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SettingsView onNotify={onNotify} />
         </Box>
       )}
@@ -1464,6 +1478,7 @@ function Main({
               onScroll={handleContentScroll}
               sx={{
                 flexGrow: 1,
+                minHeight: 0,
                 overflowY: "auto",
                 backgroundColor: "background.default",
                 pb: { xs: 8, sm: 0 },

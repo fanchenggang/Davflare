@@ -42,7 +42,7 @@ function SettingsView({ onNotify }: { onNotify: NotifyFn }) {
   };
 
   return (
-    <Box sx={{ px: 2, py: 2, maxWidth: 640 }}>
+    <Box sx={{ px: 2, py: 2, maxWidth: 640, minHeight: 0 }}>
       <Typography variant="h6" sx={{ mb: 0.5 }}>
         {strings.settingsTitle}
       </Typography>

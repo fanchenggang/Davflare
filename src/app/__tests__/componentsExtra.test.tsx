@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import EmptyState from "../../EmptyState";
 import FileActionSheet from "../../FileActionSheet";
@@ -84,7 +84,7 @@ describe("FileActionSheet", () => {
     contentType: "text/plain",
   };
 
-  test("桌面端点击菜单项触发 onAction", () => {
+  test("桌面端点击菜单项触发 onAction", async () => {
     const onAction = jest.fn();
     const onClose = jest.fn();
     render(
@@ -96,7 +96,8 @@ describe("FileActionSheet", () => {
       />
     );
     fireEvent.click(screen.getByText(strings.download));
-    expect(onAction).toHaveBeenCalledWith("download", file);
+    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith("download", file));
   });
 
   test("目录也渲染全部动作（当前无 filesOnly 动作）", () => {
