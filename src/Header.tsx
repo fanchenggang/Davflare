@@ -21,10 +21,12 @@ import {
   LightMode as LightModeIcon,
   Logout as LogoutIcon,
   Search as SearchIcon,
+  Settings as SettingsIcon,
   SettingsBrightness as SystemThemeIcon,
   VpnKey as ApiIcon,
 } from "@mui/icons-material";
 
+import { useFeatures } from "./app/features";
 import { getLang, Lang, setLang, APP_NAME, strings } from "./app/strings";
 import { ThemeModePreference } from "./app/prefs";
 import { Z_INDEX, warmShadow } from "./app/theme";
@@ -38,6 +40,7 @@ function Header({
   onLogout,
   onOpenTransfers,
   onOpenApi,
+  onOpenSettings,
   themeMode,
   onThemeModeChange,
   elevated = false,
@@ -49,6 +52,7 @@ function Header({
   onLogout: () => void;
   onOpenTransfers: () => void;
   onOpenApi: () => void;
+  onOpenSettings: () => void;
   themeMode: ThemeModePreference;
   onThemeModeChange: (mode: ThemeModePreference) => void;
   elevated?: boolean;
@@ -57,6 +61,7 @@ function Header({
   const [themeAnchor, setThemeAnchor] = useState<null | HTMLElement>(null);
   const [langAnchor, setLangAnchor] = useState<null | HTMLElement>(null);
   const transferQueue = useTransferQueue();
+  const { flags } = useFeatures();
 
   const activeTasks = transferQueue.filter((task) =>
     ["pending", "in-progress", "paused"].includes(task.status)
@@ -266,7 +271,7 @@ function Header({
             {translate("loggedInAs", { name: username })}
           </MenuItem>
         )}
-        {username && (
+        {username && flags.apiKey && (
           <MenuItem
             onClick={() => {
               setAccountAnchor(null);
@@ -275,6 +280,17 @@ function Header({
           >
             <ApiIcon sx={{ marginRight: 1 }} />
             {strings.apiKeys}
+          </MenuItem>
+        )}
+        {username && (
+          <MenuItem
+            onClick={() => {
+              setAccountAnchor(null);
+              onOpenSettings();
+            }}
+          >
+            <SettingsIcon sx={{ marginRight: 1 }} />
+            {strings.settings}
           </MenuItem>
         )}
         {username && (

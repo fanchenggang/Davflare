@@ -19,6 +19,7 @@ function renderHeader(props: Partial<React.ComponentProps<typeof Header>> = {}) 
     onLogout: jest.fn(),
     onOpenTransfers: jest.fn(),
     onOpenApi: jest.fn(),
+    onOpenSettings: jest.fn(),
     themeMode: "system" as const,
     onThemeModeChange: jest.fn(),
   };
@@ -90,5 +91,13 @@ describe("Header", () => {
     fireEvent.click(screen.getByLabelText(strings.account));
     fireEvent.click(screen.getByText(strings.logout));
     expect(onLogout).toHaveBeenCalled();
+  });
+
+  test("账号菜单：打开设置", () => {
+    const onOpenSettings = jest.fn();
+    renderHeader({ username: "alice", onOpenSettings });
+    fireEvent.click(screen.getByLabelText(strings.account));
+    fireEvent.click(screen.getByText(strings.settings));
+    expect(onOpenSettings).toHaveBeenCalled();
   });
 });

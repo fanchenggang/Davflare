@@ -434,7 +434,16 @@ const API_GUIDE: Record<Lang, (ctx: { origin: string; key: string }) => string[]
   ],
 };
 
-export function formatApiUsage(origin: string, apiKey = "<apiKey>") {
+export function formatApiUsage(
+  origin: string,
+  apiKey = "<apiKey>",
+  options?: { includeMcp?: boolean }
+) {
   const key = apiKey || "<apiKey>";
-  return API_GUIDE[getLang()]({ origin, key }).join("\n");
+  let text = API_GUIDE[getLang()]({ origin, key }).join("\n");
+  if (options?.includeMcp === false) {
+    text = text.replace(/\n—— MCP \/ Cursor ——[\s\S]*?(?=\n—— )/, "");
+    text = text.replace(/\n— MCP \/ Cursor —[\s\S]*?(?=\n— )/, "");
+  }
+  return text;
 }

@@ -1,4 +1,5 @@
 import { authorizeApiKey } from "./api/_apikey";
+import { featureDisabledResponse, loadFeatureFlags } from "./_flags";
 import { onRequestPost as copyOnPost } from "./api/copy";
 import { onRequestDelete as deleteOnDelete } from "./api/delete";
 import { onRequestGet as downloadOnGet } from "./api/download";
@@ -271,6 +272,10 @@ function makeApis(context: McpContext): ToolCallApis {
 
 export const onRequest: PagesFunction<McpEnv> = async (context) => {
   const { request, env } = context;
+  const flags = await loadFeatureFlags(env.BUCKET);
+  if (!flags.mcp || !flags.apiKey) {
+    return featureDisabledResponse();
+  }
   const method = request.method.toUpperCase();
 
   if (method === "OPTIONS") {

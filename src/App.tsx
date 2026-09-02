@@ -15,6 +15,7 @@ import LoginDialog from "./LoginDialog";
 import Main from "./Main";
 import TransferManager from "./TransferManager";
 import { AuthProvider, useAuth } from "./app/auth";
+import { FeaturesProvider, useFeatures } from "./app/features";
 import { ClipboardProvider } from "./app/clipboard";
 import { NoticeAction, NoticeOptions, NoticeSeverity, NotifyFn } from "./app/notify";
 import { translate, useLang } from "./app/strings";
@@ -73,6 +74,7 @@ function AppContent({
 }) {
   useLang(); // 语言切换时触发整树重渲染
   const { username, logout } = useAuth();
+  const { flags } = useFeatures();
   const transferQueue = useTransferQueue();
   const [route, navigate] = useHashRoute();
   const [search, setSearch] = useState("");
@@ -163,7 +165,8 @@ function AppContent({
         username={username}
         onLogout={logout}
         onOpenTransfers={() => setShowTransfers(true)}
-        onOpenApi={() => setShowApiKeys(true)}
+        onOpenApi={() => flags.apiKey && setShowApiKeys(true)}
+        onOpenSettings={() => navigate({ kind: "settings" })}
         themeMode={themeMode}
         onThemeModeChange={onThemeModeChange}
         elevated={contentScrolled}
@@ -178,7 +181,7 @@ function AppContent({
         onSortChange={setSort}
         route={route}
         navigate={navigate}
-        onOpenApi={() => setShowApiKeys(true)}
+        onOpenApi={() => flags.apiKey && setShowApiKeys(true)}
         onContentScroll={setContentScrolled}
       />
       {username === null && <LoginDialog />}
@@ -215,11 +218,13 @@ function AppContent({
         </Alert>
       </Snackbar>
       <TransferManager open={showTransfers} onClose={() => setShowTransfers(false)} />
-      <ApiKeysPanel
-        open={showApiKeys}
-        onClose={() => setShowApiKeys(false)}
-        onNotify={onNotify}
-      />
+      {flags.apiKey && (
+        <ApiKeysPanel
+          open={showApiKeys}
+          onClose={() => setShowApiKeys(false)}
+          onNotify={onNotify}
+        />
+      )}
     </Stack>
   );
 }
@@ -254,11 +259,13 @@ function ThemedApp() {
 function App() {
   return (
     <AuthProvider>
-      <TransferQueueProvider>
-        <ClipboardProvider>
-          <ThemedApp />
-        </ClipboardProvider>
-      </TransferQueueProvider>
+      <FeaturesProvider>
+        <TransferQueueProvider>
+          <ClipboardProvider>
+            <ThemedApp />
+          </ClipboardProvider>
+        </TransferQueueProvider>
+      </FeaturesProvider>
     </AuthProvider>
   );
 }

@@ -32,11 +32,13 @@ Share (expiry + extract code):
 - Folders, search, drag-and-drop, image/video/PDF thumbnails
 - Share links with expiry or forever, extract code, and folder zip download
 - Recycle bin with `TRASH_RETENTION_DAYS` (default 30; `-1` disables; lazy purge up to 200 items when trash is opened)
-- WebDAV Class 1/2 at `/webdav`
+- WebDAV Class 1/2 at `/webdav` (can be switched off without affecting the web file manager)
 - API keys for scripted upload, download, and bidirectional sync
-- Remote MCP at `/mcp` (15 tools: files, search, move/copy, shares, sites). Uploads auto-chunk up to 25 MB; downloads page with `part`
+- Remote MCP at `/mcp` (15 tools: files, search, move/copy, shares, sites). Uploads auto-chunk up to 25 MB; downloads page with `part`. **MCP requires an API Key** — if the API Key switch is off, `/mcp` is 404 even when the MCP switch is on
 - Sites manager in the UI (`#/sites`): zip deploy, SPA toggle, per-site delete
 - Static sites on a separate host (`SITES_HOST` + `sites/{slug}/`); [docs/sites.md](docs/sites.md)
+- Image host on the same sites hostname at `/i/{id}` (stored under `_$flaredrive$/img/`, not `sites/` or share links)
+- Owner Settings (`#/settings`) with five persistent feature switches (default all on)
 - `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (manual pull/push; see [docs/agents.md](docs/agents.md))
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
@@ -89,6 +91,8 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET / PATCH | `/api/config` | Session: username, public-read, sitesHost, feature flags. PATCH is Basic-only |
+| GET / POST / DELETE | `/api/images` | Image host (session): list, upload, delete. Public bytes on `SITES_HOST /i/{id}` |
 | GET / POST / DELETE | `/api/keys` | Create, list, and revoke keys (session auth) |
 | POST / PUT / DELETE | `/api/upload` | Upload a file (multipart, raw body, overwrite, or chunked >100MB) |
 | GET | `/api/list` | Depth-1 folder listing (size, uploaded, etag) |
@@ -106,9 +110,25 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 
 Same keys work for a bidirectional sync client (local wins; backup remote on conflict). Details in the [API docs](docs/API.md).
 
+`GET /api/config` (session) returns username, public-read, `sitesHost`, and the five feature flags. `PATCH /api/config` updates flags and is **web session (Basic) only** — API keys cannot change switches.
+
+## Feature switches
+
+Owner-only Settings (`#/settings`, account menu) persist five flags in R2 at `_$flaredrive$/config.json` (survive deploys; not set in `wrangler.toml`). Default: all **on**.
+
+| Switch | Off means |
+| --- | --- |
+| WebDAV | Hide the WebDAV button/panel. Clients cannot mount `/webdav` (404). The web file manager still uses session (Basic) I/O. |
+| MCP | `POST /mcp` → 404; hide MCP copy in the API panel. |
+| API Key | Hide key management. Bearer / `X-Api-Key` Open API calls fail (401). Session APIs keep working. **MCP also becomes 404/unusable** because it authenticates with API keys. |
+| Sites | Hide `#/sites`. Slug sites on `SITES_HOST` 404. Objects under `sites/` are not deleted. |
+| Image host | Hide the image-host UI. `/i/*` on `SITES_HOST` 404. Stored images are not deleted. |
+
+`SITES_HOST` empty still turns public hosting off at the infra level. The Sites / Image host switches are extra product toggles when that host is bound.
+
 ## MCP
 
-Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`).
+Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`). **MCP depends on API Key: if the API Key switch is off, MCP is unusable even if the MCP switch is on.**
 
 Tools (15): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`.
 
@@ -138,6 +158,12 @@ In the drive UI, **Sites** (`#/sites`) lists each slug with stats, one-click zip
 ## CLI
 
 [`davflare-cli`](cli/README.md) is the Open API command-line client: `login`, `ls`, `mkdir`, `rm`, `mv`, `cp`, `sync`. Uploads over 100 MB are chunked; downloads resume with HTTP Range. See `cli/README.md` for install, login, and sync semantics.
+
+## Image host
+
+Upload images in the drive UI (`#/images`): drag/drop, copy the public URL or Markdown `![](url)`, list and delete. Blobs live at `_$flaredrive$/img/{id}` with an unguessable id (not the original filename). Public URL is only `https://<SITES_HOST>/i/{id}` (no scheme in `SITES_HOST`). SVG is served as a download (`Content-Disposition: attachment` + `nosniff`), never as a navigable document.
+
+On the sites host, `/i/{id}` is matched **before** slug static sites. The image-host switch is independent of the sites switch: sites off + image host on → slugs 404 but `/i/{id}` works; image host off → `/i/*` 404 even if sites is on. If `SITES_HOST` is unset, the switch can still exist but the UI tells you to bind the host first.
 
 ## Agent layouts
 

@@ -24,6 +24,18 @@ describe("useHashRoute extras", () => {
     expect(result.current[0]).toEqual({ kind: "sites" });
   });
 
+  test("#/images 与 #/settings 解析为对应分区", () => {
+    setHash("#/images");
+    const images = renderHook(() => useHashRoute());
+    expect(images.result.current[0]).toEqual({ kind: "images" });
+    images.unmount();
+
+    setHash("#/settings");
+    const settings = renderHook(() => useHashRoute());
+    expect(settings.result.current[0]).toEqual({ kind: "settings" });
+    settings.unmount();
+  });
+
   test("navigate 到 sites", async () => {
     const { result } = renderHook(() => useHashRoute());
     act(() => result.current[1]({ kind: "sites" }));

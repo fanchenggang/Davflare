@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { webcrypto } from "crypto";
 import { TextDecoder, TextEncoder } from "util";
 
 if (typeof global.TextEncoder === "undefined") {
@@ -6,4 +7,7 @@ if (typeof global.TextEncoder === "undefined") {
 }
 if (typeof global.TextDecoder === "undefined") {
   (global as any).TextDecoder = TextDecoder;
+}
+if (typeof global.crypto === "undefined") {
+  (global as any).crypto = webcrypto;
 }

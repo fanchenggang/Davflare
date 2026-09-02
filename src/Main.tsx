@@ -43,9 +43,11 @@ import PreviewDialog from "./PreviewDialog";
 import RenameDialog from "./RenameDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
+import SettingsView from "./SettingsView";
 import SitesView from "./SitesView";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
+import ImagesView from "./ImagesView";
 import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
@@ -68,6 +70,7 @@ import {
 } from "./app/transfer";
 import { moveToTrash, restoreTrash } from "./app/trash";
 import { useAuth } from "./app/auth";
+import { useFeatures } from "./app/features";
 import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
 import {
@@ -458,15 +461,29 @@ function Main({
   const loadedListingKey = useRef<string | null>(null);
   const dropDepth = useRef(0);
 
+  const { flags } = useFeatures();
   const cwd = route.kind === "folder" ? route.path : lastFolderPath.current;
   const section: ExplorerSection =
-    route.kind === "shares" || route.kind === "trash" || route.kind === "sites"
+    route.kind === "shares" ||
+    route.kind === "trash" ||
+    route.kind === "sites" ||
+    route.kind === "images" ||
+    route.kind === "settings"
       ? route.kind
       : "folder";
 
   useEffect(() => {
     if (route.kind === "folder") lastFolderPath.current = route.path;
   }, [route]);
+
+  useEffect(() => {
+    if (route.kind === "sites" && !flags.sites) {
+      navigate({ kind: "folder", path: lastFolderPath.current });
+    }
+    if (route.kind === "images" && !flags.imageHost) {
+      navigate({ kind: "folder", path: lastFolderPath.current });
+    }
+  }, [flags.imageHost, flags.sites, navigate, route.kind]);
 
   const handleContentScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -1407,7 +1424,7 @@ function Main({
           />
         </Box>
       )}
-      {route.kind === "sites" && (
+      {route.kind === "sites" && flags.sites && (
         <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SitesView
             onNotify={onNotify}
@@ -1418,6 +1435,21 @@ function Main({
               navigate({ kind: "folder", path: `sites/${slug}/` })
             }
           />
+        </Box>
+      )}
+      {route.kind === "images" && flags.imageHost && (
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+          <ImagesView
+            onNotify={onNotify}
+            onGoFiles={() =>
+              navigate({ kind: "folder", path: lastFolderPath.current })
+            }
+          />
+        </Box>
+      )}
+      {route.kind === "settings" && (
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+          <SettingsView onNotify={onNotify} />
         </Box>
       )}
 

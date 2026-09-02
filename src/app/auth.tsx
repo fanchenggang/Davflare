@@ -70,6 +70,8 @@ export async function authFetch(
   const headers = new Headers(init.headers || {});
   const authorization = basicAuthHeader();
   if (authorization) headers.set("Authorization", authorization);
+  // Lets /webdav keep serving the file manager when the WebDAV mount switch is off.
+  headers.set("X-Davflare-UI", "1");
 
   const response = await fetch(input, { ...init, headers });
   if (response.status === 401) clearCredentials();
