@@ -12,6 +12,8 @@ export const MCP_MAX_UPLOAD_BYTES = 25 * 1000 * 1000;
 export const MCP_UPLOAD_PART_SIZE = 5 * 1024 * 1024;
 /** download 分页读取的分片大小 */
 export const MCP_DOWNLOAD_PART_SIZE = MCP_MAX_BYTES;
+/** Image host upload cap (matches /api/images) */
+export const MCP_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 export type JsonRpcId = string | number | null;
 
@@ -108,6 +110,15 @@ export type ToolCallApis = {
   sitesDelete: (query: { slug: string; purge?: boolean }) => Promise<Response>;
   /** Product Sites switch; publish_site is 404 when false. */
   sitesEnabled: () => Promise<boolean>;
+  imageList: () => Promise<Response>;
+  imageUpload: (query: {
+    name: string;
+    body: Uint8Array;
+    contentType?: string;
+  }) => Promise<Response>;
+  imageDelete: (query: { id: string }) => Promise<Response>;
+  /** Product Image Host switch; image_* tools error when false. */
+  imageHostEnabled: () => Promise<boolean>;
 };
 
 export const MCP_TOOLS = [
@@ -448,6 +459,50 @@ export const MCP_TOOLS = [
         },
       },
       required: ["slug", "source"],
+    },
+  },
+  {
+    name: "image_upload",
+    description:
+      "Upload an image to the image host. Returns id, public url (https://<SITES_HOST>/i/{id}) and Markdown ![](...). Use encoding=base64 for binary. Cap 20 MB. Errors if the Image Host switch is off.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "File name including extension, e.g. shot.png" },
+        content: {
+          type: "string",
+          description: "Image bytes as utf8 text or base64",
+        },
+        encoding: {
+          type: "string",
+          enum: ["utf8", "base64"],
+          default: "base64",
+          description: "How to decode content; default base64 for images",
+        },
+        contentType: {
+          type: "string",
+          description: "Optional MIME type, e.g. image/png. Inferred from name if omitted.",
+        },
+      },
+      required: ["name", "content"],
+    },
+  },
+  {
+    name: "image_list",
+    description:
+      "List hosted images with id, name, size, url, and markdown. Errors if the Image Host switch is off.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "image_delete",
+    description:
+      "Delete a hosted image by id (32 hex chars). Errors if the Image Host switch is off.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Image id from image_upload / image_list" },
+      },
+      required: ["id"],
     },
   },
 ] as const;
@@ -1344,6 +1399,53 @@ async function callTool(
           files: copied,
         })
       );
+    }
+    case "image_list": {
+      if (!(await apis.imageHostEnabled())) {
+        return toolError(
+          "Image Host feature is off (404). Enable the Image Host switch to list images."
+        );
+      }
+      return wrapApiResponse(await apis.imageList());
+    }
+    case "image_upload": {
+      if (!(await apis.imageHostEnabled())) {
+        return toolError(
+          "Image Host feature is off (404). Enable the Image Host switch to upload images."
+        );
+      }
+      const fileName = asString(args.name);
+      const content = asString(args.content);
+      if (!fileName) return toolError("name is required");
+      if (!Object.prototype.hasOwnProperty.call(args, "content")) {
+        return toolError("content is required");
+      }
+      const encoding =
+        typeof args.encoding === "string" ? args.encoding : "base64";
+      const decoded = decodeUploadContent(content, encoding);
+      if (!decoded.ok) return toolError(decoded.error);
+      if (decoded.bytes.byteLength > MCP_MAX_IMAGE_BYTES) {
+        return toolError("Image larger than 20 MB (image host cap).");
+      }
+      const contentType =
+        typeof args.contentType === "string" ? args.contentType : undefined;
+      return wrapApiResponse(
+        await apis.imageUpload({
+          name: fileName,
+          body: decoded.bytes,
+          contentType,
+        })
+      );
+    }
+    case "image_delete": {
+      if (!(await apis.imageHostEnabled())) {
+        return toolError(
+          "Image Host feature is off (404). Enable the Image Host switch to delete images."
+        );
+      }
+      const id = asString(args.id).trim();
+      if (!id) return toolError("id is required");
+      return wrapApiResponse(await apis.imageDelete({ id }));
     }
     default:
       return toolError(`Unknown tool: ${name}`);

@@ -66,6 +66,22 @@ function mockApis(overrides: Partial<ToolCallApis> = {}): ToolCallApis {
     sitesConfig: async () => jsonResponse({ slug: "demo", spa: true }),
     sitesDelete: async () => jsonResponse({ slug: "demo", deleted: 2 }),
     sitesEnabled: async () => true,
+    imageList: async () => jsonResponse({ sitesHost: "sites.example.com", images: [] }),
+    imageUpload: async () =>
+      jsonResponse(
+        {
+          id: "a".repeat(32),
+          name: "shot.png",
+          size: 4,
+          uploaded: "2026-01-01T00:00:00.000Z",
+          contentType: "image/png",
+          url: "https://sites.example.com/i/" + "a".repeat(32),
+          markdown: "![](https://sites.example.com/i/" + "a".repeat(32) + ")",
+        },
+        201
+      ),
+    imageDelete: async () => jsonResponse({ id: "a".repeat(32), deleted: true }),
+    imageHostEnabled: async () => true,
     ...overrides,
   };
 }
@@ -103,8 +119,11 @@ describe("mcp protocol", () => {
       "pull",
       "push",
       "publish_site",
+      "image_upload",
+      "image_list",
+      "image_delete",
     ]);
-    expect(MCP_TOOLS).toHaveLength(18);
+    expect(MCP_TOOLS).toHaveLength(21);
   });
 
   test("parseJsonRpcBody rejects invalid json", () => {
@@ -536,4 +555,55 @@ describe("mcp protocol", () => {
     expect(toolPayload(blocked).content[0].text).toMatch(/404/);
     expect(copy).toHaveBeenCalledTimes(2);
   });
+
+  test("image_upload/list/delete wrap /api/images and respect flag", async () => {
+    const id = "a".repeat(32);
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const imageUpload = jest.fn(async (query: { name: string; body: Uint8Array }) => {
+      expect(query.name).toBe("dot.png");
+      expect(query.body.byteLength).toBeGreaterThan(0);
+      return jsonResponse(
+        {
+          id,
+          name: query.name,
+          size: query.body.byteLength,
+          url: `https://sites.example.com/i/${id}`,
+          markdown: `![](https://sites.example.com/i/${id})`,
+        },
+        201
+      );
+    });
+    const uploaded = await callTool(
+      "image_upload",
+      { name: "dot.png", content: png, encoding: "base64" },
+      { imageUpload, imageHostEnabled: async () => true }
+    );
+    const payload = JSON.parse(toolPayload(uploaded).content[0].text);
+    expect(payload.url).toBe(`https://sites.example.com/i/${id}`);
+    expect(payload.markdown).toContain("/i/");
+    expect(imageUpload).toHaveBeenCalled();
+
+    const listed = await callTool("image_list", {}, {
+      imageList: async () => jsonResponse({ images: [{ id, url: payload.url, markdown: payload.markdown }] }),
+      imageHostEnabled: async () => true,
+    });
+    expect(toolPayload(listed).content[0].text).toContain(id);
+
+    const deleted = await callTool("image_delete", { id }, {
+      imageDelete: async (query) => {
+        expect(query.id).toBe(id);
+        return jsonResponse({ id, deleted: true });
+      },
+      imageHostEnabled: async () => true,
+    });
+    expect(toolPayload(deleted).content[0].text).toContain('"deleted":true');
+
+    const blocked = await callTool(
+      "image_upload",
+      { name: "dot.png", content: png },
+      { imageHostEnabled: async () => false }
+    );
+    expect(toolPayload(blocked).isError).toBe(true);
+  });
+
 });

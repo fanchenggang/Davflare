@@ -32,7 +32,7 @@
 - 回收站，由 `TRASH_RETENTION_DAYS` 控制（默认 30 天；`-1` 关闭；打开回收站时惰性清理最多 200 项）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端文件管理）
 - API Key，可用于脚本上传、下载与双向同步
-- 远程 MCP，路径 `/mcp`（18 个工具：文件、搜索、移动/复制、分享、站点，以及 `pull` / `push` / `publish_site`）。上传超过 1 MiB 自动分块，上限 25 MB；下载用 `part` 分页。**MCP 依赖 API Key**：若 API Key 开关关闭，即使 MCP 开关打开，`/mcp` 也是 404
+- 远程 MCP，路径 `/mcp`（21 个工具：文件、搜索、移动/复制、分享、站点、`pull` / `push` / `publish_site`，以及 `image_upload` / `image_list` / `image_delete`）。上传超过 1 MiB 自动分块，上限 25 MB；下载用 `part` 分页。**MCP 依赖 API Key**：若 API Key 开关关闭，即使 MCP 开关打开，`/mcp` 也是 404
 - 网页端站点管理（`#/sites`）：zip 一键部署、SPA 开关、按站删除
 - 静态站点走单独域名（`SITES_HOST` + `sites/{slug}/`）；[docs/sites.zh-CN.md](docs/sites.zh-CN.md)
 - 图床走同一站点域名的 `/i/{id}`（对象存在 `_$flaredrive$/img/`，不与 `sites/` 或分享链接混用）
@@ -132,7 +132,7 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 | DELETE | `/api/delete` | 硬删除，或 `soft=1` 进回收站 |
 | POST | `/api/shares` | 分享文件或文件夹（文件夹为 zip） |
 | GET / POST / DELETE | `/api/sites` | 列出、配置 SPA、删除静态站 |
-| POST | `/mcp` | 远程 MCP（JSON-RPC 2.0；同一把 API 密钥；18 个工具） |
+| POST | `/mcp` | 远程 MCP（JSON-RPC 2.0；同一把 API 密钥；21 个工具） |
 
 同一把密钥可做双向同步（本地优先，冲突时先备份远端）。详见 [开放接口文档](docs/API.zh-CN.md)。
 
@@ -156,7 +156,7 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 
 同源 Model Context Protocol（Streamable HTTP），路径 `POST /mcp`。鉴权与开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`）。**MCP 依赖 API Key：API Key 开关关闭后，即使 MCP 开关仍打开也无法使用。**
 
-工具（18 个）：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`、`pull`、`push`、`publish_site`。
+工具（21 个）：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`、`pull`、`push`、`publish_site`、`image_upload`、`image_list`、`image_delete`。
 
 不超过 1 MiB 的上传走内联；更大内容自动分块（上限 **25 MB**）。再大请用网页端或 `davflare-cli`。下载超过 1 MiB 用 `part` / `partSize` 分页。`delete` 默认进回收站，`hard=true` 永久删除。把文件上传到 `sites/{slug}/`（或用 `publish_site` 从网盘目录同步）即发布静态站，需要 SPA 回退再调 `sites_config`。`pull` / `push` 走 `agents/…`（合并：project 覆盖 agent 覆盖 global）。详见 [docs/API.zh-CN.md](docs/API.zh-CN.md)。
 

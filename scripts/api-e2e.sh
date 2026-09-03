@@ -319,6 +319,9 @@ assert_contains "mcp tools/list has sites_list" "$TOOLS_JSON" '"name":"sites_lis
 assert_contains "mcp tools/list has pull" "$TOOLS_JSON" '"name":"pull"'
 assert_contains "mcp tools/list has push" "$TOOLS_JSON" '"name":"push"'
 assert_contains "mcp tools/list has publish_site" "$TOOLS_JSON" '"name":"publish_site"'
+assert_contains "mcp tools/list has image_upload" "$TOOLS_JSON" '"name":"image_upload"'
+assert_contains "mcp tools/list has image_list" "$TOOLS_JSON" '"name":"image_list"'
+assert_contains "mcp tools/list has image_delete" "$TOOLS_JSON" '"name":"image_delete"'
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/mcp" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 assert_code "mcp no key 401" "$code" "401"
 MCP_DIR="$DIR/mcp/f"
@@ -351,6 +354,15 @@ args='{"path":"'"$PUBLISH_SRC"'/","name":"index.html","content":"<h1>e2e-site</h
 assert_contains "mcp upload site index" "$(mcp_call upload "$args")" '"key"'
 args='{"slug":"e2eqa","source":"'"$PUBLISH_SRC"'"}'
 assert_contains "mcp publish_site" "$(mcp_call publish_site "$args")" 'e2eqa'
+args='{"name":"e2e.png","encoding":"base64","content":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="}'
+IMG_JSON=$(mcp_call image_upload "$args")
+assert_contains "mcp image_upload url" "$IMG_JSON" '/i/'
+assert_contains "mcp image_upload markdown" "$IMG_JSON" '![]('
+IMG_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('id',''))" "$IMG_JSON")
+if [ -n "$IMG_ID" ]; then ok "mcp image_upload id"; else bad "mcp image_upload id" "empty" "id"; fi
+assert_contains "mcp image_list" "$(mcp_call image_list '{}')" "$IMG_ID"
+args='{"id":"'"$IMG_ID"'"}'
+assert_contains "mcp image_delete" "$(mcp_call image_delete "$args")" '"deleted":true'
 
 args='{"key":"'"$MCP_DIR"'/mcp.txt"}'
 assert_contains "shares accept api key (create)" "$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$A" -H "Content-Type: application/json" -d "$args")" '"token"'
