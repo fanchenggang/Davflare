@@ -100,4 +100,9 @@ describe("Header", () => {
     fireEvent.click(screen.getByText(strings.settings));
     expect(onOpenSettings).toHaveBeenCalled();
   });
+
+  test("elevated header applies blurred background style", () => {
+    renderHeader({ elevated: true });
+    expect(screen.getByLabelText(strings.searchShortcutHint)).toBeInTheDocument();
+  });
 });

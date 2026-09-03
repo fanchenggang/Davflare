@@ -124,4 +124,121 @@ describe("FileGrid extras", () => {
     unmount();
     wrap(<FileGridSkeleton view="grid" density="standard" />);
   });
+
+  test("list view keyboard, context menu and drag", () => {
+    const onOpen = jest.fn();
+    const onOpenMenu = jest.fn();
+    wrap(
+      <FileGrid
+        files={[file]}
+        view="list"
+        selectedKeys={[]}
+        onToggleSelect={jest.fn()}
+        onNavigate={jest.fn()}
+        onOpen={onOpen}
+        onOpenMenu={onOpenMenu}
+        emptyMessage={null}
+      />
+    );
+    const row = screen.getByText(file.name).closest("[data-file-key]")!;
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(onOpen).toHaveBeenCalledWith(file.key);
+    fireEvent.keyDown(row, { key: " " });
+    fireEvent.contextMenu(row);
+    expect(onOpenMenu).toHaveBeenCalled();
+    fireEvent.dragStart(row, {
+      dataTransfer: { setData: jest.fn(), effectAllowed: "move" },
+    });
+  });
+
+  test("grid tile keyboard opens", () => {
+    const onOpen = jest.fn();
+    wrap(
+      <FileGrid
+        files={[file]}
+        view="grid"
+        selectedKeys={[]}
+        onToggleSelect={jest.fn()}
+        onNavigate={jest.fn()}
+        onOpen={onOpen}
+        onOpenMenu={jest.fn()}
+        emptyMessage={null}
+      />
+    );
+    const tile = screen.getByText(file.name).closest("[data-file-key]")!;
+    fireEvent.keyDown(tile, { key: "Enter" });
+    expect(onOpen).toHaveBeenCalledWith(file.key);
+  });
+
+  test("checkbox and more button stop propagation on pointer/mouse down", () => {
+    const onToggle = jest.fn();
+    const onOpenMenu = jest.fn();
+    wrap(
+      <FileGrid
+        files={[file]}
+        view="grid"
+        selectedKeys={[]}
+        onToggleSelect={onToggle}
+        onNavigate={jest.fn()}
+        onOpen={jest.fn()}
+        onOpenMenu={onOpenMenu}
+        emptyMessage={null}
+      />
+    );
+    const checkbox = screen.getByLabelText(
+      translate("selectFileLabel", { name: file.name })
+    );
+    fireEvent.pointerDown(checkbox);
+    fireEvent.mouseDown(checkbox);
+    const more = screen.getByLabelText(
+      translate("fileActionsLabel", { name: file.name })
+    );
+    fireEvent.pointerDown(more);
+    fireEvent.mouseDown(more);
+    fireEvent.click(more);
+    expect(onOpenMenu).toHaveBeenCalled();
+  });
+
+  test("more button wrapper stops propagation on pointer/mouse down", () => {
+    const onOpenMenu = jest.fn();
+    wrap(
+      <FileGrid
+        files={[file]}
+        view="grid"
+        selectedKeys={[]}
+        onToggleSelect={jest.fn()}
+        onNavigate={jest.fn()}
+        onOpen={jest.fn()}
+        onOpenMenu={onOpenMenu}
+        emptyMessage={null}
+      />
+    );
+    const more = screen.getByLabelText(
+      translate("fileActionsLabel", { name: file.name })
+    );
+    const wrapper = more.parentElement!;
+    fireEvent.pointerDown(wrapper);
+    fireEvent.mouseDown(wrapper);
+    fireEvent.click(wrapper);
+    expect(onOpenMenu).toHaveBeenCalled();
+
+    const { unmount } = wrap(
+      <FileGrid
+        files={[file]}
+        view="list"
+        selectedKeys={[]}
+        onToggleSelect={jest.fn()}
+        onNavigate={jest.fn()}
+        onOpen={jest.fn()}
+        onOpenMenu={onOpenMenu}
+        emptyMessage={null}
+      />
+    );
+    const listMore = screen.getAllByLabelText(
+      translate("fileActionsLabel", { name: file.name })
+    ).pop()!;
+    fireEvent.pointerDown(listMore.parentElement!);
+    fireEvent.mouseDown(listMore.parentElement!);
+    unmount();
+  });
 });

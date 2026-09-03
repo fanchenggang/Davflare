@@ -59,4 +59,46 @@ describe("WebDavPanel", () => {
       )
     );
   });
+
+  test("copies username and full guide", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ username: "alice", publicRead: false }),
+    } as unknown as Response);
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    const onNotify = jest.fn();
+    render(<WebDavPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    await screen.findByText("alice");
+
+    fireEvent.click(screen.getByText(strings.copyUsername));
+    fireEvent.click(screen.getAllByRole("button", { name: strings.copyWebDavGuide })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: strings.copyWebDavGuide })[1]);
+    await waitFor(() => expect(onNotify).toHaveBeenCalledTimes(3));
+  });
+
+  test("clipboard failure notifies error", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ username: "alice", publicRead: false }),
+    } as unknown as Response);
+    Object.defineProperty(navigator, "clipboard", {
+      value: {
+        writeText: jest.fn().mockRejectedValue(new Error("denied")),
+      },
+      configurable: true,
+    });
+    const onNotify = jest.fn();
+    render(<WebDavPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    fireEvent.click(await screen.findByText(strings.copyAddress));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("copyFailed2"), "error")
+    );
+  });
+
 });

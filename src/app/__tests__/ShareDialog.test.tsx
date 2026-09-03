@@ -93,4 +93,51 @@ describe("ShareDialog", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByText(share.url)).not.toBeInTheDocument();
   });
+
+  test("create share failure notifies error", async () => {
+    mockCreateShare.mockRejectedValue(new Error("create-fail"));
+    const onNotify = jest.fn();
+    render(<ShareDialog open file={file} onClose={jest.fn()} onNotify={onNotify} />);
+    await screen.findByText(share.url);
+    fireEvent.click(screen.getByText(strings.createShareLink));
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith("create-fail", "error"));
+  });
+
+  test("copy failure notifies error", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: jest.fn().mockRejectedValue(new Error("denied")) },
+      configurable: true,
+    });
+    const onNotify = jest.fn();
+    render(<ShareDialog open file={file} onClose={jest.fn()} onNotify={onNotify} />);
+    fireEvent.click(await screen.findByText(strings.copy));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("copyFailed2"), "error")
+    );
+  });
+
+  test("expiry and extract code passed to createShare", async () => {
+    mockCreateShare.mockResolvedValue({ ...share, token: "tok3" });
+    const onNotify = jest.fn();
+    render(<ShareDialog open file={file} onClose={jest.fn()} onNotify={onNotify} />);
+    await screen.findByText(share.url);
+    fireEvent.mouseDown(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByText(strings.apiExpiry1d));
+    fireEvent.change(screen.getByLabelText(strings.extractCodeOptional), {
+      target: { value: "abcd" },
+    });
+    fireEvent.click(screen.getByText(strings.createShareLink));
+    await waitFor(() =>
+      expect(mockCreateShare).toHaveBeenCalledWith("a.txt", 24, "abcd")
+    );
+  });
+
+  test("revoke failure notifies and reloads", async () => {
+    mockRevokeShare.mockRejectedValue(new Error("revoke-fail"));
+    const onNotify = jest.fn();
+    render(<ShareDialog open file={file} onClose={jest.fn()} onNotify={onNotify} />);
+    fireEvent.click(await screen.findByText(strings.revoke));
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith("revoke-fail", "error"));
+    await waitFor(() => expect(mockListShares.mock.calls.length).toBeGreaterThan(1));
+  });
 });

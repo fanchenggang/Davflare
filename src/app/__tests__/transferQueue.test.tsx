@@ -2,7 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import React from "react";
 
 import { processTransferTask } from "../transfer";
-import { TransferQueueProvider, useTransferQueue, useTransferQueueActions } from "../transferQueue";
+import {
+  TransferQueueProvider,
+  useTransferQueue,
+  useTransferQueueActions,
+  useUploadEnqueue,
+} from "../transferQueue";
 
 jest.mock("../transfer", () => ({
   processTransferTask: jest.fn(),
@@ -215,5 +220,102 @@ describe("transferQueue 状态机", () => {
     });
     // canceled 与 completed 一并清除
     expect(result.current.tasks).toHaveLength(0);
+  });
+
+  test("pause/resume/cancel on non-running pending tasks and clearFailed", async () => {
+    const { result } = renderHook(useQueue, { wrapper: TransferQueueProvider });
+    // 前两个占满并发，第三个保持 pending；pauseAll 会把 pending 标成 paused（无 controller）
+    act(() => {
+      result.current.actions.enqueue(
+        { basedir: "f/", file: makeFile("1.txt") },
+        { basedir: "f/", file: makeFile("2.txt") },
+        { basedir: "f/", file: makeFile("3.txt") }
+      );
+    });
+    await flushMicrotasks();
+    expect(mockProcess).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      result.current.actions.pauseAll();
+    });
+    await flushMicrotasks();
+    const pendingId = result.current.tasks[2].id;
+    expect(result.current.tasks[2].status).toBe("paused");
+
+    // 对已经 paused、没有 controller 的任务再 pause/cancel，走无 controller 分支
+    act(() => {
+      result.current.actions.pause(pendingId);
+    });
+    act(() => {
+      result.current.actions.resume(pendingId);
+    });
+    expect(result.current.tasks[2].status).toBe("pending");
+
+    act(() => {
+      result.current.actions.cancel(pendingId);
+    });
+    expect(result.current.tasks[2].status).toBe("canceled");
+
+    act(() => {
+      result.current.actions.clearCompleted();
+    });
+    expect(result.current.tasks).toHaveLength(2);
+  });
+
+  test("clearFailed removes failed tasks", async () => {
+    mockProcess.mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(useQueue, { wrapper: TransferQueueProvider });
+    act(() => {
+      result.current.actions.enqueue({ basedir: "f/", file: makeFile("x.txt") });
+    });
+    await flushMicrotasks();
+    expect(result.current.tasks[0].status).toBe("failed");
+    act(() => {
+      result.current.actions.clearFailed();
+    });
+    expect(result.current.tasks).toHaveLength(0);
+  });
+
+  test("useUploadEnqueue returns enqueue action", async () => {
+    const { result } = renderHook(useUploadEnqueue, {
+      wrapper: TransferQueueProvider,
+    });
+    act(() => {
+      result.current({ basedir: "f/", file: makeFile("u.txt") });
+    });
+    await flushMicrotasks();
+    expect(result.current).toEqual(expect.any(Function));
+    expect(mockProcess).toHaveBeenCalledTimes(1);
+  });
+
+  test("pause running task aborts its controller", async () => {
+    const { result } = renderHook(useQueue, { wrapper: TransferQueueProvider });
+    act(() => {
+      result.current.actions.enqueue({ basedir: "f/", file: makeFile("p.txt") });
+    });
+    await flushMicrotasks();
+    const id = result.current.tasks[0].id;
+    expect(result.current.tasks[0].status).toBe("in-progress");
+    act(() => {
+      result.current.actions.pause(id);
+    });
+    await flushMicrotasks();
+    expect(result.current.tasks[0].status).toBe("paused");
+  });
+
+  test("progress and state callbacks update task", async () => {
+    mockProcess.mockImplementation(({ onTaskProgress, onTaskState }: any) => {
+      onTaskProgress?.({ loaded: 5, total: 10 });
+      onTaskState?.({ uploadId: "u-callback" });
+      return Promise.resolve();
+    });
+    const { result } = renderHook(useQueue, { wrapper: TransferQueueProvider });
+    act(() => {
+      result.current.actions.enqueue({ basedir: "f/", file: makeFile("c.txt") });
+    });
+    await flushMicrotasks();
+    expect(result.current.tasks[0].loaded).toBe(5);
+    expect(result.current.tasks[0].uploadId).toBe("u-callback");
+    expect(result.current.tasks[0].status).toBe("completed");
   });
 });
