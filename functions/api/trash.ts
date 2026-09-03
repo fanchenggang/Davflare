@@ -96,6 +96,7 @@ async function listTrashItems(bucket: R2Bucket) {
     try {
       parsed = (await data.json()) as Record<string, unknown>;
     } catch {
+      // 单个损坏的回收站元数据不应让整个列表 500，跳过即可。
       continue;
     }
     if (!parsed.originalKey) continue;
@@ -179,7 +180,8 @@ export async function softDeleteKeys(bucket: R2Bucket, keys: string[]) {
     if (!key) continue;
 
     const head = await bucket.head(key);
-    if (head === null && isInternalKey(key)) continue;
+    // 内部元数据（apikeys/trash/shares 等）不允许软删除，无论是否存在 marker。
+    if (isInternalKey(key)) continue;
 
     const descendants = (await listObjects(bucket, `${key}/`)).filter(
       (object) => !object.key.startsWith("_$flaredrive$/")

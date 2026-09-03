@@ -58,9 +58,19 @@ export function clearCredentials() {
   emit();
 }
 
+export function utf8ToBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 export function basicAuthHeader() {
   if (!current) return undefined;
-  return `Basic ${btoa(`${current.username}:${current.password}`)}`;
+  return `Basic ${utf8ToBase64(`${current.username}:${current.password}`)}`;
 }
 
 export async function authFetch(

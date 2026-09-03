@@ -212,13 +212,18 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
   if (completeUploadId) {
     const key = multipartFileKey(url.searchParams.get("path"));
     if (key instanceof Response) return key;
-    let body: { parts?: Array<{ partNumber?: unknown; etag?: unknown }> };
+    let body: unknown;
     try {
       body = await request.json();
     } catch {
       return textResponse("无法解析 JSON", 400);
     }
-    const parts = (body.parts || []).map((part) => ({
+    if (!body || typeof body !== "object" || !Array.isArray((body as { parts?: unknown }).parts)) {
+      return textResponse("parts 参数不合法", 400);
+    }
+    const parts = (
+      (body as { parts: Array<{ partNumber?: unknown; etag?: unknown }> }).parts
+    ).map((part) => ({
       partNumber: Number(part.partNumber),
       etag: String(part.etag ?? ""),
     }));

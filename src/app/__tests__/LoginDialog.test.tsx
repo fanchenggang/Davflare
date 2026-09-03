@@ -10,6 +10,12 @@ const mockAuthFetch = jest.fn();
 jest.mock("../auth", () => ({
   useAuth: () => ({ login: mockLogin, logout: jest.fn(), username: null }),
   authFetch: (...args: unknown[]) => mockAuthFetch(...args),
+  utf8ToBase64: (value: string) => {
+    const bytes = new TextEncoder().encode(value);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  },
 }));
 
 beforeEach(() => {

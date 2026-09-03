@@ -4,7 +4,7 @@ import {
   isInternalKey,
   isPrefixOnlyFolder,
   jsonResponse,
-  normalizeFileKey,
+  normalizeDirKey,
   textResponse,
   touchLastUsed,
 } from "./_apikey";
@@ -19,12 +19,13 @@ export const onRequestGet: PagesFunction<StatEnv> = async (context) => {
   const auth = await authorizeApiKey(request, env.BUCKET);
   if (auth instanceof Response) return auth;
 
-  const key = normalizeFileKey(
+  const keyResult = normalizeDirKey(
     new URL(request.url).searchParams.get("path")
   );
-  if (key instanceof Response) {
-    return textResponse("缺少 path 参数", 400);
+  if (keyResult instanceof Response) {
+    return keyResult;
   }
+  const key = keyResult;
   if (isInternalKey(key)) {
     return textResponse("禁止访问内部目录", 400);
   }

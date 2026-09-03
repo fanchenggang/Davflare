@@ -1,4 +1,5 @@
 import { Zip, ZipPassThrough } from "fflate";
+import { decodeRawPath } from "./_apikey";
 
 // 把选中键（文件或目录）打包为 zip 流。目录递归收齐后代，空目录写占位条目。
 // archive（会话鉴权）与 share（目录分享）共用。
@@ -39,7 +40,9 @@ export async function buildZipStream(
   const emptyDirNames = new Set<string>();
 
   for (const rawKey of selectedKeys) {
-    const key = decodeURIComponent(rawKey).replace(/\/$/, "");
+    // 使用与 API 鉴权层一致的 decodeRawPath（内部已 try/catch），
+    // 避免对真实文件名里的字面量 `%`（如 100%.txt）二次 decode 时抛 URIError。
+    const key = decodeRawPath(rawKey).replace(/\/$/, "");
     if (!key) continue;
 
     const head = await bucket.head(key);

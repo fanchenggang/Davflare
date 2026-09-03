@@ -62,6 +62,18 @@ export function timingSafeEqual(a: string, b: string) {
   return diff === 0;
 }
 
+// UTF-8 安全 Base64：btoa 只接受 Latin-1，非 ASCII 用户名/密码会抛异常。
+// TextEncoder 输出 UTF-8 bytes 后按字节转 binary string。
+export function utf8ToBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 // Basic 认证统一入口：常数时间比较整个 Authorization 头，
 // 各端点不要再用 `===` 明文比对凭据。
 export function verifyBasicAuth(
@@ -73,7 +85,7 @@ export function verifyBasicAuth(
   // btoa(":") 这类固定值成为可被猜中的有效 Basic 头。
   if (!username || !password) return false;
   const authorization = request.headers.get("Authorization") || "";
-  const expected = `Basic ${btoa(`${username}:${password}`)}`;
+  const expected = `Basic ${utf8ToBase64(`${username}:${password}`)}`;
   return timingSafeEqual(authorization, expected);
 }
 

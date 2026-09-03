@@ -227,20 +227,44 @@ export async function generateThumbnail(file: File) {
     });
     ctx.drawImage(image, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
   } else if (file.type === "video/mp4") {
-    // Generate thumbnail from video
-    const video = await new Promise<HTMLVideoElement>(
-      async (resolve, reject) => {
+    // Generate thumbnail from video；成功/失败都必须清理超时器与 objectURL，
+    // 避免缩略图任务在 load 超时后永远悬在 pending。
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const video = await new Promise<HTMLVideoElement>((resolve, reject) => {
+        let settled = false;
         const video = document.createElement("video");
         video.muted = true;
-        video.src = URL.createObjectURL(file);
-        setTimeout(() => reject(new Error("Video load timeout")), 2000);
-        await video.play();
-        video.pause();
-        video.currentTime = 0;
-        resolve(video);
-      }
-    );
-    ctx.drawImage(video, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+        video.playsInline = true;
+        const finish = (fn: () => void) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          fn();
+        };
+        const timer = setTimeout(
+          () => finish(() => reject(new Error("Video load timeout"))),
+          2000
+        );
+        video.onerror = () =>
+          finish(() => reject(new Error("Video load failed")));
+        video.onloadeddata = async () => {
+          try {
+            await video.play();
+            video.pause();
+            video.currentTime = 0;
+            finish(() => resolve(video));
+          } catch (error) {
+            finish(() => reject(error as Error));
+          }
+        };
+        video.src = objectUrl;
+        video.load();
+      });
+      ctx.drawImage(video, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   } else if (file.type === "application/pdf") {
     const pdfjsLib = await import(
       // @ts-ignore
@@ -273,7 +297,9 @@ export async function blobDigest(blob: Blob) {
   return digestHex;
 }
 
-export const SIZE_LIMIT = 100 * 1000 * 1000; // 100MB
+// 分块阈值/分块尺寸统一低于 Workers 约 100MB 单请求上限：
+// 恰好 100MB 的文件若切成一个分块会顶在请求体边缘，这里用 50MB 更安全。
+export const SIZE_LIMIT = 50 * 1000 * 1000; // 50MB
 
 // Folders already ensured this session (so we don't send redundant MKCOLs)
 const ensuredDirs = new Set<string>();

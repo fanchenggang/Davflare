@@ -69,7 +69,9 @@ async function computeSiteStats(
       objects += 1;
       size += object.size;
       if (objects >= SITE_STATS_MAX_OBJECTS) {
-        truncated = true;
+        // 只有服务端还因分页而 truncated 时，统计才是“至少 N 个”的下限；
+        // 恰好等于上限且已读完最后一页时不应误标 truncated。
+        truncated = listing.truncated;
         break;
       }
     }
@@ -102,7 +104,10 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
     let stats = config.stats;
     if (withStats && (!statsSlug || statsSlug === slug)) {
       stats = await computeSiteStats(env.BUCKET, slug, config.stats);
-      await saveSiteConfig(env.BUCKET, { ...config, slug, stats });
+      // 缓存命中时 computeSiteStats 直接返回 config.stats 同一引用，跳过多余写入。
+      if (stats !== config.stats) {
+        await saveSiteConfig(env.BUCKET, { ...config, slug, stats });
+      }
     }
     sites.push({ slug, spa: Boolean(config.spa), stats: stats || null });
   }
@@ -173,7 +178,7 @@ export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
       await env.BUCKET.delete(keys);
       deleted += keys.length;
     }
-    if (deleted >= SITE_DELETE_MAX_OBJECTS && (listing.truncated || keys.length > 0)) {
+    if (deleted >= SITE_DELETE_MAX_OBJECTS && listing.truncated) {
       return new Response(
         `站点对象超过 ${SITE_DELETE_MAX_OBJECTS}，请用 WebDAV/CLI 分批清理`,
         { status: 400 }

@@ -9,7 +9,7 @@ import {
   DialogTitle,
   TextField,
 } from "@mui/material";
-import { authFetch, useAuth } from "./app/auth";
+import { authFetch, useAuth, utf8ToBase64 } from "./app/auth";
 
 function LoginDialog() {
   const { login } = useAuth();
@@ -27,7 +27,7 @@ function LoginDialog() {
     try {
       const response = await authFetch("/api/config", {
         headers: {
-          Authorization: `Basic ${btoa(`${username}:${password}`)}`,
+          Authorization: `Basic ${utf8ToBase64(`${username}:${password}`)}`,
         },
       });
       if (!response.ok) {

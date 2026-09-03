@@ -36,7 +36,7 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof ExplorerBar>> 
     onShowHiddenChange: jest.fn(),
     density: "standard" as const,
     onDensityChange: jest.fn(),
-    recents: [] as { key: string; name: string; isDir: boolean }[],
+    recents: [] as { key: string; name: string; isDir: boolean; at: number }[],
     onOpenRecent: jest.fn(),
     ...overrides,
   };

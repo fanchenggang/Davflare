@@ -42,7 +42,13 @@ async function readShares(
       if (!object.key.endsWith(".json")) continue;
       const data = await bucket.get(object.key);
       if (data === null) continue;
-      const parsed = (await data.json()) as Record<string, unknown>;
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = (await data.json()) as Record<string, unknown>;
+      } catch {
+        // 单个损坏的分享元数据不应让整个列表 500，跳过即可。
+        continue;
+      }
       const token = object.key
         .slice(SHARES_PREFIX.length)
         .replace(/\.json$/, "");

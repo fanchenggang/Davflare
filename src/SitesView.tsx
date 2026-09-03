@@ -36,7 +36,17 @@ import { strings, translate } from "./app/strings";
 import { useUploadEnqueue } from "./app/transferQueue";
 import { humanReadableSize } from "./app/utils";
 
-/** fflate unzip 的 Promise 封装；跳过目录条目与 macOS 压缩噪声 */
+/** 把 zip 条目路径规范成站点目录下的安全相对路径；不安全（穿越/绝对路径）返回 null。 */
+function safeArchivePath(path: string): string | null {
+  if (!path || path.startsWith("/") || /^[A-Za-z]:/.test(path)) return null;
+  // Windows 风格 zip 也可能用反斜杠，统一按 / 解析后再判断穿越。
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.some((part) => part === ".." || part === ".")) return null;
+  return parts.join("/");
+}
+
+/** fflate unzip 的 Promise 封装；跳过目录条目与 macOS 压缩噪声，并过滤不安全路径 */
 async function unzipToFiles(
   data: ArrayBuffer
 ): Promise<{ files: File[]; totalSize: number }> {
@@ -45,12 +55,20 @@ async function unzipToFiles(
   );
   const files: File[] = [];
   let totalSize = 0;
-  for (const [path, content] of Object.entries(entries)) {
-    if (path.endsWith("/") || path.startsWith("__MACOSX/") || path.includes("/__MACOSX/")) {
+  for (const [rawPath, content] of Object.entries(entries)) {
+    const pathForSkip = rawPath.replace(/\\/g, "/");
+    if (
+      pathForSkip.endsWith("/") ||
+      pathForSkip.startsWith("__MACOSX/") ||
+      pathForSkip.includes("/__MACOSX/")
+    ) {
       continue;
     }
+    // zip-slip 防御：只保留相对且不包含 . / .. 的条目；上传队列会按
+    // webkitRelativePath 拼进 sites/<slug>/，不能让 zip 内容逃出站点前缀。
+    const path = safeArchivePath(rawPath);
+    if (path === null) continue;
     const file = new File([content], path.split("/").pop() || path);
-    // 上传队列按 webkitRelativePath 推导远端子路径，这里注入 zip 内相对路径
     Object.defineProperty(file, "webkitRelativePath", { value: path });
     files.push(file);
     totalSize += content.byteLength;

@@ -1,4 +1,5 @@
 import { DOMParser } from "@xmldom/xmldom";
+import { utf8ToBase64 } from "../api/_apikey";
 
 export interface WebDavEnv {
   WEBDAV_USERNAME: string;
@@ -1585,7 +1586,13 @@ async function handleCopy({
     return new Response("Conflict", { status: 409 });
   }
 
-  const destinationExists = await bucket.head(destination);
+  const destinationHead = await bucket.head(destination);
+  // 既有目录可能只有前缀、没有 marker（虚拟目录）；不能用 head 判断存在性。
+  const destinationIsCollection =
+    destinationHead !== null
+      ? isCollectionObject(destinationHead)
+      : await isCollectionPath(bucket, destination);
+  const destinationExists = destinationHead !== null || destinationIsCollection;
   if (dontOverwrite && destinationExists) {
     return new Response("Precondition Failed", { status: 412 });
   }
@@ -1605,6 +1612,12 @@ async function handleCopy({
       httpMetadata: { contentType: "application/x-directory" },
       customMetadata: { resourcetype: "<collection />" },
     };
+  }
+  // COPY 默认覆盖（Overwrite:T）：若目标是目录（含虚拟目录），先清掉目标子树，
+  // 避免“同名文件 + 子对象并存”的脏状态。源已确认存在后再删目标。
+  if (!dontOverwrite && destinationIsCollection) {
+    const deleteResponse = await deleteDestination(bucket, destination, request);
+    if (!deleteResponse.ok) return deleteResponse;
   }
   const putObject = async (sourceKey: string, targetKey: string) => {
     const source = await bucket.get(sourceKey);
@@ -1715,7 +1728,10 @@ async function handleMove({
     return new Response("Conflict", { status: 409 });
   }
 
-  const destinationExists = await bucket.head(destination);
+  const destinationHead = await bucket.head(destination);
+  // 虚拟目录没有 marker，head 为 null 但仍应视为已存在的目标集合。
+  const destinationExists =
+    destinationHead !== null || (await isCollectionPath(bucket, destination));
   if (!overwrite && destinationExists) {
     return new Response("Precondition Failed", { status: 412 });
   }
@@ -2014,15 +2030,24 @@ async function handlePostCompleteMultipart({
     return new Response("Not Found", { status: 404 });
   }
   const multipartUpload = bucket.resumeMultipartUpload(path, uploadId);
-  let completeBody: { parts: R2UploadedPart[] };
+  let completeBody: unknown;
   try {
     completeBody = await request.json();
   } catch {
     return new Response("Bad Request", { status: 400 });
   }
+  if (
+    !completeBody ||
+    typeof completeBody !== "object" ||
+    !Array.isArray((completeBody as { parts?: unknown }).parts)
+  ) {
+    return new Response("Bad Request", { status: 400 });
+  }
 
   try {
-    const object = await multipartUpload.complete(completeBody.parts);
+    const object = await multipartUpload.complete(
+      (completeBody as { parts: R2UploadedPart[] }).parts
+    );
     return new Response(null, {
       headers: { etag: object.httpEtag },
     });
@@ -2066,7 +2091,7 @@ function handleOptions(): Response {
 function isAuthorized(authorizationHeader: string, username: string, password: string): boolean {
   const encoder = new TextEncoder();
   const header = encoder.encode(authorizationHeader);
-  const expected = encoder.encode(`Basic ${btoa(`${username}:${password}`)}`);
+  const expected = encoder.encode(`Basic ${utf8ToBase64(`${username}:${password}`)}`);
   return timingSafeEqual(header, expected);
 }
 

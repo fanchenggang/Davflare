@@ -201,6 +201,9 @@ export class DavflareClient {
     } catch {
       offset = 0;
     }
+    // 本地已完整时不重复下载；若本地比远端还大则当作损坏，重新全量覆盖。
+    if (offset === total) return false;
+    if (offset > total) offset = 0;
     if (offset > 0 && offset < total) {
       resumed = true; // 尝试续传；服务器不支持 Range 时回退全量
     } else {
