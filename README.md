@@ -120,7 +120,7 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET / PATCH | `/api/config` | Session: username, public-read, sitesHost, feature flags. PATCH is Basic-only |
-| GET / POST / DELETE | `/api/images` | Image host (session): list, upload, delete. Public bytes on `SITES_HOST /i/{id}` |
+| GET / POST / DELETE | `/api/images` | Image host (session or API key): list, upload, delete. Public bytes on `SITES_HOST /i/{id}` |
 | GET / POST / DELETE | `/api/keys` | Create, list, and revoke keys (session auth) |
 | POST / PUT / DELETE | `/api/upload` | Upload a file (multipart, raw body, overwrite, or chunked >100MB) |
 | GET | `/api/list` | Depth-1 folder listing (size, uploaded, etag) |

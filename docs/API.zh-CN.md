@@ -147,7 +147,7 @@ curl -X PATCH "https://<your-domain.com>/api/config" \
   -d '{"webdav":false,"imageHost":true}'
 ```
 
-图床（仅会话；公开字节在 `SITES_HOST` 上，不在网盘源）：
+图床（网页会话 **或** API Key，与 `/api/sites` 相同；公开字节在 `SITES_HOST` 上，不在网盘源）：
 
 ```bash
 # 列表

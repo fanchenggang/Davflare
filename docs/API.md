@@ -159,7 +159,7 @@ curl -X PATCH "https://<your-domain.com>/api/config" \
   -d '{"webdav":false,"imageHost":true}'
 ```
 
-Image host (session only; public bytes are on `SITES_HOST`, not the drive origin):
+Image host (Basic session **or** API key, same as `/api/sites`; public bytes are on `SITES_HOST`, not the drive origin):
 
 ```bash
 # list

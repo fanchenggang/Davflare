@@ -1,4 +1,4 @@
-import { verifyBasicAuth } from "./_apikey";
+import { authorizeApiKey, verifyBasicAuth } from "./_apikey";
 import {
   IMAGE_PREFIX,
   createImageId,
@@ -27,8 +27,13 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-function isAuthorized(request: Request, env: ImagesEnv) {
-  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
+// 会话（Basic）与 API key 均可管图床：MCP image_* 工具以密钥转发到此端点
+async function isAuthorized(request: Request, env: ImagesEnv) {
+  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return true;
+  }
+  const keyAuth = await authorizeApiKey(request, env.BUCKET);
+  return !(keyAuth instanceof Response);
 }
 
 function sanitizeName(name: string) {
@@ -102,7 +107,7 @@ async function listImages(
 
 export const onRequestGet: PagesFunction<ImagesEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const flags = await loadFeatureFlags(env.BUCKET);
@@ -116,7 +121,7 @@ export const onRequestGet: PagesFunction<ImagesEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<ImagesEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const flags = await loadFeatureFlags(env.BUCKET);
@@ -179,7 +184,7 @@ export const onRequestPost: PagesFunction<ImagesEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<ImagesEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
+  if (!(await isAuthorized(request, env))) {
     return new Response("Unauthorized", { status: 401 });
   }
   const flags = await loadFeatureFlags(env.BUCKET);

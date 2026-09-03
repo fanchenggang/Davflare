@@ -118,7 +118,7 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | GET / PATCH | `/api/config` | 会话：用户名、公开读取、sitesHost、功能开关。PATCH 仅 Basic |
-| GET / POST / DELETE | `/api/images` | 图床（会话）：列出、上传、删除。公开字节在 `SITES_HOST /i/{id}` |
+| GET / POST / DELETE | `/api/images` | 图床（会话或 API Key）：列出、上传、删除。公开字节在 `SITES_HOST /i/{id}` |
 | GET / POST / DELETE | `/api/keys` | 创建、列出、作废密钥（需网页登录会话） |
 | POST / PUT / DELETE | `/api/upload` | 上传文件（multipart / 原始 body / 覆盖 / >100MB 分片） |
 | GET | `/api/list` | 列出当前目录（size、uploaded、etag） |
