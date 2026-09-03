@@ -17,6 +17,11 @@ import {
   onRequestGet as sitesOnGet,
   onRequestPost as sitesOnPost,
 } from "./api/sites";
+import {
+  onRequestDelete as imagesOnDelete,
+  onRequestGet as imagesOnGet,
+  onRequestPost as imagesOnPost,
+} from "./api/images";
 import { onRequestGet as statOnGet } from "./api/stat";
 import {
   onRequestDelete as uploadOnDelete,
@@ -270,6 +275,33 @@ function makeApis(context: McpContext): ToolCallApis {
     async sitesEnabled() {
       const flags = await loadFeatureFlags(context.env.BUCKET);
       return flags.sites;
+    },
+    async imageList() {
+      const url = new URL("/api/images", origin);
+      const request = cloneApiRequest(context.request, "GET", url);
+      return imagesOnGet(withRequest(context, request));
+    },
+    async imageUpload({ name, body, contentType }) {
+      const url = new URL("/api/images", origin);
+      const headers: Record<string, string> = {
+        "Content-Type": contentType || "application/octet-stream",
+        "X-File-Name": name,
+      };
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: body as unknown as BodyInit,
+        headers,
+      });
+      return imagesOnPost(withRequest(context, request));
+    },
+    async imageDelete({ id }) {
+      const url = new URL("/api/images", origin);
+      url.searchParams.set("id", id);
+      const request = cloneApiRequest(context.request, "DELETE", url);
+      return imagesOnDelete(withRequest(context, request));
+    },
+    async imageHostEnabled() {
+      const flags = await loadFeatureFlags(context.env.BUCKET);
+      return flags.imageHost;
     },
   };
 }

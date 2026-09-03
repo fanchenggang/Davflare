@@ -34,7 +34,7 @@ Share (expiry + extract code):
 - Recycle bin with `TRASH_RETENTION_DAYS` (default 30; `-1` disables; lazy purge up to 200 items when trash is opened)
 - WebDAV Class 1/2 at `/webdav` (can be switched off without affecting the web file manager)
 - API keys for scripted upload, download, and bidirectional sync
-- Remote MCP at `/mcp` (18 tools: files, search, move/copy, shares, sites, plus `pull` / `push` / `publish_site`). Uploads auto-chunk up to 25 MB; downloads page with `part`. **MCP requires an API Key** — if the API Key switch is off, `/mcp` is 404 even when the MCP switch is on
+- Remote MCP at `/mcp` (21 tools: files, search, move/copy, shares, sites, `pull` / `push` / `publish_site`, plus `image_upload` / `image_list` / `image_delete`). Uploads auto-chunk up to 25 MB; downloads page with `part`. **MCP requires an API Key** — if the API Key switch is off, `/mcp` is 404 even when the MCP switch is on
 - Sites manager in the UI (`#/sites`): zip deploy, SPA toggle, per-site delete
 - Static sites on a separate host (`SITES_HOST` + `sites/{slug}/`); [docs/sites.md](docs/sites.md)
 - Image host on the same sites hostname at `/i/{id}` (stored under `_$flaredrive$/img/`, not `sites/` or share links)
@@ -120,7 +120,7 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET / PATCH | `/api/config` | Session: username, public-read, sitesHost, feature flags. PATCH is Basic-only |
-| GET / POST / DELETE | `/api/images` | Image host (session): list, upload, delete. Public bytes on `SITES_HOST /i/{id}` |
+| GET / POST / DELETE | `/api/images` | Image host (session or API key): list, upload, delete. Public bytes on `SITES_HOST /i/{id}` |
 | GET / POST / DELETE | `/api/keys` | Create, list, and revoke keys (session auth) |
 | POST / PUT / DELETE | `/api/upload` | Upload a file (multipart, raw body, overwrite, or chunked >100MB) |
 | GET | `/api/list` | Depth-1 folder listing (size, uploaded, etag) |
@@ -134,7 +134,7 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 | DELETE | `/api/delete` | Hard delete, or `soft=1` to trash |
 | POST | `/api/shares` | Share a file or folder (folder → zip) |
 | GET / POST / DELETE | `/api/sites` | List, SPA-config, or delete static sites |
-| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; 18 tools) |
+| POST | `/mcp` | Remote MCP (JSON-RPC 2.0; same API keys; 21 tools) |
 
 Same keys work for a bidirectional sync client (local wins; backup remote on conflict). Details in the [API docs](docs/API.md).
 
@@ -158,7 +158,7 @@ Owner-only Settings (`#/settings`, account menu) persist five flags in R2 at `_$
 
 Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same API key as the Open API (`Authorization: Bearer <apiKey>` or `X-Api-Key`). **MCP depends on API Key: if the API Key switch is off, MCP is unusable even if the MCP switch is on.**
 
-Tools (18): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`.
+Tools (21): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`, `image_upload`, `image_list`, `image_delete`.
 
 Uploads up to 1 MiB go inline; larger content is auto-chunked (cap **25 MB**). Bigger files: web UI or `davflare-cli`. Downloads over 1 MiB page with `part` / `partSize`. Default `delete` is trash; `hard=true` permanently deletes. Publish a static site by uploading into `sites/{slug}/` (or `publish_site` from a drive folder), then `sites_config` if you need SPA fallback. `pull` / `push` walk `agents/…` (merge: project > agent > global). Details: [docs/API.md](docs/API.md).
 
