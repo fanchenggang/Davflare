@@ -41,8 +41,27 @@ Share (expiry + extract code):
 - Owner Settings (`#/settings`) with five persistent feature switches (default all on)
 - `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
 - Optional Chrome MV3 extension in `extension/` (toolbar opens **your** instance; default zip does not change new tab)
-- Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (`pull` / `push` tools; see [docs/agents.md](docs/agents.md))
+- Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (`pull` / `push` tools; see [docs/agents.md](docs/agents.md)); reproducible demo in [`agents/examples/hello-site/`](agents/examples/hello-site/)
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
+
+## Try it in Cursor (copy-paste)
+
+1. Leave **API Key** + **MCP** + **Sites** on in `#/settings`. Create a key.
+2. Paste into Cursor `mcp.json` (replace host + key):
+
+```json
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://<your-domain.com>/mcp",
+      "headers": { "Authorization": "Bearer <apiKey>" }
+    }
+  }
+}
+```
+
+3. Open this repo’s [`agents/examples/hello-site/`](agents/examples/hello-site/) and tell Cursor to follow `SKILL.md` (uses only `publish_site` / optional `image_upload`).
+4. When it finishes you get **`https://sites.<your-domain>/hello/`** (your real `SITES_HOST`). No public shared demo.
 
 ## Follow along
 
@@ -50,11 +69,11 @@ Three short paths. Use **your** bound host — there is no public live demo othe
 
 ### Publish a static site from Cursor
 
-1. In `#/settings`, leave **API Key** and **MCP** on. Create a key (account menu → API keys) and paste it into Cursor `mcp.json` as in [MCP](#mcp).
-2. Ask Cursor (copy-paste):
+1. Wire MCP as in [Try it in Cursor](#try-it-in-cursor-copy-paste). Bind Pages env `SITES_HOST` and redeploy.
+2. Ask Cursor (copy-paste), with `agents/examples/hello-site/` in context:
 
    ```
-   Upload this folder to sites/hello/ on Davflare (mkdir parents, overwrite same names). Then call sites_config for slug hello if this is an SPA.
+   Follow agents/examples/hello-site/SKILL.md: upload index.html, then publish_site slug=hello from that folder. Done when https://<SITES_HOST>/hello/ returns 200.
    ```
 
 3. Open `https://<SITES_HOST>/hello/` on the hostname you bound to **this** Pages project. Until `SITES_HOST` is set and redeployed, that URL will not open.
@@ -70,6 +89,12 @@ Three short paths. Use **your** bound host — there is no public live demo othe
 1. Open `#/settings` from the account menu.
 2. The five switches are WebDAV, MCP, API Key, Sites, and Image host (all default on). Stored files are not deleted when a switch is off.
 3. MCP depends on API Key: if Key is off, `/mcp` is 404 even if MCP is on. Sites and image-host public URLs also need `SITES_HOST`.
+
+### Mount WebDAV with rclone (optional)
+
+1. In rclone: `rclone config` → New remote → type `webdav` → URL `https://<your-domain.com>/webdav` → vendor `other` → user/pass = your Pages `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`.
+2. Leave the WebDAV switch on in `#/settings`.
+3. `rclone ls davflare:` (or whatever you named the remote) should list the drive root.
 
 ## Deploy
 
@@ -214,7 +239,7 @@ On the sites host, `/i/{id}` is matched **before** slug static sites. The image-
 
 ## Agent layouts
 
-Skills, rules, and MCP snippets live on R2 under `agents/`. v2 `pull` / `push` walk that tree (or use the web UI). Merge order: project > agent > global. Never store raw API keys in `mcp.json` — use `${env:DAVFLARE_API_KEY}`. Cursor local paths: [docs/agents.md](docs/agents.md).
+Skills, rules, and MCP snippets live on R2 under `agents/`. Repo demo: [`agents/examples/hello-site/`](agents/examples/hello-site/). v2 `pull` / `push` walk the R2 tree (or use the web UI). Merge order: project > agent > global. Never store raw API keys in `mcp.json` — use `${env:DAVFLARE_API_KEY}`. Cursor local paths: [docs/agents.md](docs/agents.md).
 
 ## Development & testing
 

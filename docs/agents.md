@@ -1,5 +1,7 @@
 # Davflare agent layouts (v2)
 
+Repo-only demo (not the R2 tree): [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook.
+
 Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v2 adds MCP `pull` / `push` that walk this tree (the web UI still works). No file watcher. Secrets are not stored as files.
 
 Merge order when the same name exists at more than one layer: **project > agent > global**.
