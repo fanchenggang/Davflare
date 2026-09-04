@@ -1,5 +1,7 @@
 # Davflare Agent 目录约定（v2）
 
+仓库示例（不在 R2 树里）：[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本。
+
 把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v2 增加 MCP `pull` / `push` 自动走这棵树（网页端仍可用）。不做文件监听。密钥不当文件存。
 
 同名文件的合并顺序：**project 覆盖 agent 覆盖 global**。

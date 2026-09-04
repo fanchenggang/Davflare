@@ -39,8 +39,27 @@
 - 拥有者设置页（`#/settings`）五个功能开关（默认全部开启，持久化到 R2）
 - `davflare-cli`：login / ls / mkdir / rm / mv / cp / sync（[cli/README.md](cli/README.md)）
 - 可选 Chrome MV3 扩展（`extension/`）：工具栏打开**你自己的**实例；默认 zip **不会**改 Chrome 新标签页
-- Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（`pull` / `push` 工具，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）
+- Agent 目录约定：`agents/{global|agent|agent/project}/{skills|rules|mcp}/`（`pull` / `push` 工具，见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)）；可复现示例见 [`agents/examples/hello-site/`](agents/examples/hello-site/)
 - 中 / 英界面（标题栏地球图标；默认跟随浏览器语言，并保存在本地）
+
+## 用 Cursor 试一把（复制即用）
+
+1. `#/settings` 保持 **API Key**、**MCP**、**静态站点** 打开，创建一把密钥。
+2. 粘贴到 Cursor 的 `mcp.json`（换成你的域名和密钥）：
+
+```json
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://<your-domain.com>/mcp",
+      "headers": { "Authorization": "Bearer <apiKey>" }
+    }
+  }
+}
+```
+
+3. 打开本仓库 [`agents/examples/hello-site/`](agents/examples/hello-site/)，让 Cursor 按 `SKILL.md` 做（只用现有 `publish_site`，可选 `image_upload`）。
+4. 跑完得到 **`https://sites.<你的域>/hello/`**（你真实的 `SITES_HOST`）。没有别人能打开的公共演示站。
 
 ## 跟着做
 
@@ -48,11 +67,11 @@
 
 ### 用 Cursor 对话发布静态站
 
-1. 在 `#/settings` 保持 **API Key** 和 **MCP** 打开。创建一把密钥（账号菜单 → 开放接口），按 [MCP](#mcp) 写进 Cursor 的 `mcp.json`。
-2. 对 Cursor 说（可直接粘贴）：
+1. 按 [用 Cursor 试一把](#用-cursor-试一把复制即用) 配好 MCP，并绑定 Pages 环境变量 `SITES_HOST` 后重新部署。
+2. 对 Cursor 说（可直接粘贴），上下文带上 `agents/examples/hello-site/`：
 
    ```
-   把这个文件夹上传到 Davflare 的 sites/hello/（自动建父目录，同名覆盖）。如果是 SPA，再对 slug hello 调用 sites_config。
+   按 agents/examples/hello-site/SKILL.md 做：上传 index.html，再 publish_site slug=hello。完成标准：https://<SITES_HOST>/hello/ 返回 200。
    ```
 
 3. 在你绑到**本** Pages 项目的主机上打开 `https://<SITES_HOST>/hello/`。未设置 `SITES_HOST` 并重新部署之前，这个地址打不开。
@@ -68,6 +87,12 @@
 1. 从账号菜单打开 `#/settings`。
 2. 五个开关是 WebDAV、MCP、API Key、静态站点、图床（默认全部开启）。关闭开关不会删除已有文件。
 3. MCP 依赖 API Key：Key 关闭时，即使 MCP 打开，`/mcp` 也是 404。站点和图床的公开地址还需要 `SITES_HOST`。
+
+### 用 rclone 挂 WebDAV（可选）
+
+1. `rclone config` → New remote → 类型 `webdav` → URL `https://<your-domain.com>/webdav` → vendor `other` → 用户名/密码 = Pages 里的 `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`。
+2. `#/settings` 里保持 WebDAV 开关打开。
+3. `rclone ls davflare:`（远程名随你）应能列出网盘根目录。
 
 ## 部署
 
@@ -212,7 +237,7 @@ Chrome Manifest V3 辅助扩展，用来打开**你自己部署的** Davflare。
 
 ## Agent 目录
 
-skills / rules / MCP 片段放在 R2 的 `agents/` 下。v2 的 `pull` / `push` 会走这棵树（也可用网页端）。合并顺序：project 覆盖 agent 覆盖 global。`mcp.json` 里不要存明文密钥，用 `${env:DAVFLARE_API_KEY}`。Cursor 落地路径见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)。
+skills / rules / MCP 片段放在 R2 的 `agents/` 下。仓库示例：[`agents/examples/hello-site/`](agents/examples/hello-site/)。v2 的 `pull` / `push` 会走这棵树（也可用网页端）。合并顺序：project 覆盖 agent 覆盖 global。`mcp.json` 里不要存明文密钥，用 `${env:DAVFLARE_API_KEY}`。Cursor 落地路径见 [docs/agents.zh-CN.md](docs/agents.zh-CN.md)。
 
 ## 开发与测试
 
