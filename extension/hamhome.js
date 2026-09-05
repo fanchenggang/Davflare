@@ -2,7 +2,7 @@
 
 /**
  * HamHome compatibility (issue #53): read-only import of a HamHome sync
- * directory — /HamHomeSync/meta.json (bookmarks) and categories.json
+ * directory — /HamHomeSync/bookmarks/meta.json and /HamHomeSync/categories.json
  * (category tree) on the same instance's WebDAV.
  *
  * Field mapping into our model:
@@ -85,7 +85,7 @@ var HamHome = (function () {
   }
 
   /**
-   * @param {string} metaText       contents of /HamHomeSync/meta.json
+   * @param {string} metaText       contents of /HamHomeSync/bookmarks/meta.json
    * @param {string|null} categoriesText contents of categories.json (optional)
    */
   function importFrom(metaText, categoriesText) {

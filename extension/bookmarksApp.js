@@ -33,7 +33,7 @@ var COPY = {
     save: "Save",
     import: "Import",
     hhImport: "HamHome",
-    hhNotFound: "No meta.json found under /HamHomeSync/ on this instance.",
+    hhNotFound: "No bookmarks/meta.json found under /HamHomeSync/ on this instance.",
     hhInvalid: "HamHome data could not be parsed.",
     hhImported: "Imported {n} bookmark(s) from HamHome.",
     hhNone: "Nothing new to import from HamHome.",
@@ -137,7 +137,7 @@ var COPY = {
     save: "保存",
     import: "导入",
     hhImport: "HamHome",
-    hhNotFound: "实例 /HamHomeSync/ 下没有 meta.json。",
+    hhNotFound: "实例 /HamHomeSync/bookmarks/ 下没有 meta.json。",
     hhInvalid: "HamHome 数据无法解析。",
     hhImported: "已从 HamHome 导入 {n} 个书签。",
     hhNone: "HamHome 没有可导入的新书签。",
@@ -1605,7 +1605,8 @@ async function importChromeBookmarks() {
 
 /**
  * HamHome migration (issue #53): read-only import from the same instance's
- * /HamHomeSync/ directory (meta.json + categories.json), merged by URL.
+ * /HamHomeSync/ directory (bookmarks/meta.json + categories.json), merged by URL.
+ * Path matches HamHome sync-engine: META_JSON=/HamHomeSync/bookmarks/meta.json.
  */
 async function importHamHome() {
   var made = await makeClient();
@@ -1619,7 +1620,7 @@ async function importHamHome() {
     password: made.cfg.password,
     basePath: "HamHomeSync",
   });
-  var meta = await hh.getFile("meta.json");
+  var meta = await hh.getFile("bookmarks/meta.json");
   if (!meta.ok) {
     showBanner(errorText(meta.kind), t.openOptions, openOptions);
     return;

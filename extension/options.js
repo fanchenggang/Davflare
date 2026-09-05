@@ -8,7 +8,7 @@ var COPY = {
     urlHint: "Paste the Pages or custom-domain URL of your own Davflare instance.",
     pathLabel: "Bookmark directory",
     pathHint:
-      "Relative to /webdav/. Default is \"bookmarks\"; use e.g. \"qa/bookmarks\" to isolate test data. HamHome import always reads /HamHomeSync/.",
+      "Relative to /webdav/. Default is \"bookmarks\"; use e.g. \"qa/bookmarks\" to isolate test data. HamHome import always reads /HamHomeSync/bookmarks/meta.json + categories.json.",
     modeLabel: "Default toolbar view",
     modeDrive: "Drive (embedded in extension)",
     modeBookmarks: "Bookmark library",
@@ -40,7 +40,7 @@ var COPY = {
     urlHint: "粘贴你自己的 Pages 或自定义域名。",
     pathLabel: "书签目录",
     pathHint:
-      "相对 /webdav/ 的路径。默认为 bookmarks；可填如 qa/bookmarks 隔离测试数据。HamHome 导入固定读 /HamHomeSync/。",
+      "相对 /webdav/ 的路径。默认为 bookmarks；可填如 qa/bookmarks 隔离测试数据。HamHome 导入固定读 /HamHomeSync/bookmarks/meta.json + categories.json。",
     modeLabel: "工具栏默认视图",
     modeDrive: "网盘（扩展内嵌）",
     modeBookmarks: "书签库",

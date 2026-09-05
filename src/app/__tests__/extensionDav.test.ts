@@ -127,6 +127,18 @@ describe("extension/dav.js basePath (issue #54)", () => {
     const empty = clientWith({ basePath: "" }, () => ({ status: 207 }));
     expect(empty.client.paths.dir).toBe(DIR);
   });
+
+  test("HamHome layout reads bookmarks/meta.json under /HamHomeSync (issue #53)", async () => {
+    const hh = clientWith({ basePath: "HamHomeSync" }, () => ({
+      status: 200,
+      text: "{}",
+      headers: { get: () => null },
+    }));
+    await hh.client.getFile("bookmarks/meta.json");
+    expect(hh.calls[0].url).toBe(ROOT + "/HamHomeSync/bookmarks/meta.json");
+    await hh.client.getFile("categories.json");
+    expect(hh.calls[1].url).toBe(ROOT + "/HamHomeSync/categories.json");
+  });
 });
 
 describe("extension/dav.js probe", () => {
