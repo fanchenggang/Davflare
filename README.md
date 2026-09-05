@@ -216,22 +216,35 @@ In the drive UI, **Sites** (`#/sites`) lists each slug with stats, one-click zip
 
 ## Extension
 
-A Chrome Manifest V3 helper that opens **your** Davflare instance. It is not on the Chrome Web Store.
+A Chrome Manifest V3 helper with two toolbar modes — open **your** Davflare drive, or a full bookmark library backed by your instance’s WebDAV. It is not on the Chrome Web Store.
 
 - Options: paste the URL of the Pages / custom-domain host you deployed. The field starts empty — there is no built-in site.
-- Toolbar click opens that URL. If it is unset, the toolbar opens Options instead.
+- **Toolbar modes:** *drive* (default, click opens your instance) or *bookmarks* (click opens the bookmark library page). Pick the default in Options; right-click the toolbar icon to switch anytime.
+- **Save this page** appears in the page context menu — it merges the current tab’s title + URL into your WebDAV bookmark file.
+- WebDAV credentials (same values as your deployment’s `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`) are stored **only** in `chrome.storage.local`; they never sync to a Google account. Saving an instance URL asks for per-site host permission (optional permissions — nothing is pre-granted).
 - The **default** package does **not** change Chrome’s new tab. Chrome treats a new-tab override as permanent for as long as `chrome_url_overrides` is in the loaded manifest — an in-extension toggle cannot undo that.
 
 Two zips on the same GitHub Release:
 
 | Zip | What it does |
 | --- | --- |
-| `davflare-extension.zip` | Toolbar + options only. Load this unless you want Davflare as the new tab. |
+| `davflare-extension.zip` | Toolbar + options + bookmark library. Load this unless you want Davflare as the new tab. |
 | `davflare-extension-newtab.zip` | Same as default, plus a New Tab override that opens your instance. Separate download; do not expect this behavior from the default zip. |
 
 **Load unpacked (default, no new tab):** Chrome → `chrome://extensions` → Developer mode → Load unpacked → select the `extension/` folder in this repo.
 
 **Release zips:** download from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked. A tag (`v*` / `extension-*`) or **Actions → Release extension** attaches both zips.
+
+## Bookmarks (thin bookmarks P2)
+
+The extension’s bookmark library keeps your bookmarks **on your own WebDAV** — no third-party service, no AI. Requires the WebDAV feature switch to be on for your instance.
+
+- **Storage layout** (under your instance’s `/webdav/bookmarks/`): `bookmarks.html` is the authoritative Netscape bookmark file that Chrome/Edge can import directly; `bookmarks.json` is a sidecar carrying tags and notes that the HTML format cannot hold; `workspaces.json`, `tabGroups.json`, and `snapshots.json` hold the features below. Writes go through with `If-Match` (a 412 conflict is surfaced, never silently overwritten).
+- **Library page:** sidebar with folder/tag counts, keyword search over title/URL/tags/notes with **pinyin support** (full spelling and initials, thanks to a bundled compact dictionary), time-range filter, grid/list views, light/dark theme, import from Chrome bookmarks (optional `bookmarks` permission, merge by URL) and export to `bookmarks.html`.
+- **Workspaces:** save the current window — page order, pinned state, native tab-group metadata — and restore all or selected pages into a new window (duplicate URLs skipped, pinned/group state restored).
+- **Tab groups:** local rule engine (domain suffix / URL / title / regex, AND-combined) that groups the current window into native tab groups with custom title/color/collapse/priority; unmatched tabs can fall back to root-domain grouping. Rules sync via `tabGroups.json`.
+- **Snapshots:** capture the current page as a single self-contained HTML file (images best-effort inlined where CORS allows; scripts/iframes stripped; 8 MB cap) onto `bookmarks/snapshots/`. View, download, update, or delete from the bookmark editor. Cross-origin assets without CORS headers cannot be inlined (browser security), and restricted pages such as `chrome://` cannot be captured.
+- **Errors never fail silently:** a disabled WebDAV switch (404), missing server credentials (403), wrong credentials (401), and edit conflicts (412) each get a distinct message with a shortcut to Options.
 
 ## Image host
 
