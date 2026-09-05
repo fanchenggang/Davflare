@@ -53,11 +53,15 @@ function normalizeInstanceUrl(raw) {
   return href;
 }
 
+/**
+ * Toolbar routing. Both modes land on the extension shell page
+ * (bookmarks.html) — the mode only picks the view it opens with:
+ * drive = embedded instance, bookmarks = bookmark library.
+ */
 function resolveToolbarTarget(settings) {
   var merged = mergeSettings(settings);
   if (merged.toolbarMode === "bookmarks") return { action: "bookmarks" };
-  var url = normalizeInstanceUrl(merged.instanceUrl);
-  if (url) return { action: "open", url: url };
+  if (normalizeInstanceUrl(merged.instanceUrl)) return { action: "drive" };
   return { action: "options" };
 }
 

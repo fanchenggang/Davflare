@@ -94,9 +94,9 @@ async function loadConfig() {
   };
 }
 
-async function openBookmarksPage() {
-  var url = chrome.runtime.getURL(BOOKMARKS_PAGE);
-  var tabs = await chrome.tabs.query({ url: url });
+async function openLibraryPage(view) {
+  var baseUrl = chrome.runtime.getURL(BOOKMARKS_PAGE);
+  var tabs = await chrome.tabs.query({ url: baseUrl + "*"});
   if (tabs && tabs.length > 0) {
     var tab = tabs[0];
     await chrome.tabs.update(tab.id, { active: true });
@@ -105,18 +105,18 @@ async function openBookmarksPage() {
     }
     return;
   }
-  chrome.tabs.create({ url: url });
+  chrome.tabs.create({ url: baseUrl + "?view=" + view });
 }
 
 async function handleToolbarClick() {
   var stored = await chrome.storage.sync.get(["instanceUrl", "toolbarMode"]);
   var target = resolveToolbarTarget(mergeSettings(stored));
   if (target.action === "bookmarks") {
-    await openBookmarksPage();
+    await openLibraryPage("bookmarks");
     return;
   }
-  if (target.action === "open") {
-    chrome.tabs.create({ url: target.url });
+  if (target.action === "drive") {
+    await openLibraryPage("drive");
     return;
   }
   chrome.runtime.openOptionsPage();

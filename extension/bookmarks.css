@@ -689,6 +689,26 @@ dialog textarea {
   cursor: not-allowed;
 }
 
+/* ---------- drive view (embedded instance) ---------- */
+
+#viewDrive {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 36px);
+}
+
+#viewDrive .topbar {
+  flex: none;
+}
+
+.driveFrame {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
 /* ---------- workspaces ---------- */
 
 .wsList {
