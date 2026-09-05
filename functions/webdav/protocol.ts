@@ -1055,10 +1055,19 @@ async function handleGet({
     }
   }
 
-  const object = await bucket.get(path, {
-    onlyIf: getConditionalHeaders(request.headers, true),
-    range: request.headers,
-  });
+  // R2 对非法/不可满足的 Range 头会抛 InvalidRange（HTTP 416 同类错误）。
+  // 这里回退为全量读取，避免未捕获异常变成 500（与 /api/download 的处理一致）。
+  let object: R2ObjectBody | R2Object | null;
+  try {
+    object = await bucket.get(path, {
+      onlyIf: getConditionalHeaders(request.headers, true),
+      range: request.headers,
+    });
+  } catch {
+    object = await bucket.get(path, {
+      onlyIf: getConditionalHeaders(request.headers, true),
+    });
+  }
   if (object === null) {
     return new Response("Not Found", { status: 404 });
   }

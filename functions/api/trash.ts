@@ -298,11 +298,18 @@ async function handleRestore(request: Request, env: TrashEnv) {
       continue;
     }
 
-    const metadata = (await metadataObject.json()) as {
+    // 与 listTrashItems 一致：单个损坏的回收站元数据不应让整个请求 500。
+    let metadata: {
       originalKey?: string;
       virtualDir?: boolean;
       items?: Array<{ source: string; target: string }>;
     };
+    try {
+      metadata = (await metadataObject.json()) as typeof metadata;
+    } catch {
+      results.push({ trashKey, status: "error", message: "回收站项目损坏" });
+      continue;
+    }
     if (!metadata.originalKey || !metadata.items) {
       results.push({ trashKey, status: "error", message: "回收站项目损坏" });
       continue;
