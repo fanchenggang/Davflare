@@ -258,3 +258,17 @@ npx wrangler pages dev build       # http://localhost:8788，前端 + functions 
 | 文档 | README(.zh-CN).md 功能列表与分享链接行为说明（默认落地页 / ?download=1 直链 / ?raw=1 内联）、docs/API(.zh-CN).md Shares 端点行为重写、e2e 断言计数更新（79 → ~170） | ✅ 与实现逐条核对 |
 
 **本批验证汇总**：`npx tsc --noEmit` 0 错误；`CI=true npx react-scripts test --watchAll=false` **53 套件 463 用例全绿**（基线 449 + 14）；`npm run build` 成功；`SKIP_BUILD=1 bash scripts/run-e2e.sh` **171 项断言全过（0 FAIL）**。取舍说明：`?raw=1` 对非可预览类型（octet-stream 等）回退 attachment 而非强行 inline；过期分享的 Chip 显示「已过期」并用 warning 色；落地页不展示有效期信息（规格未要求，避免泄露多余元数据）。
+
+## 测试覆盖率体系与后端直测（第四轮 C 组，2026-09-05）
+
+| 批 | 内容 | 结果 |
+|----|------|------|
+| 测试基础设施 | 新增 `src/app/testUtils.ts`（jsonResponse/AsAuthFetchMock/clearStorage/PROPFIND XML fixture/MCP rpc 构造器，12 个测试文件去重改造）；package.json jest 配置 `collectCoverageFrom` 纳入 `functions/**`（`src/index.js`、testUtils、InMemoryBucket 排除）；新增 `functionsLoader.test.ts` 强制加载全部 functions 模块绕过 CRA jest roots 限制；coverageThreshold 按「实测-0.5」棘轮（src / functions / global 三组路径键，注意 jest 阈值 glob 键是逐文件校验、路径键才是分组聚合）；cli 加 `test:coverage`（v8 provider）与 vitest.config.ts | ✅ src 组阈值 91.6/84.5/85.9/93.5（stmts/branch/funcs/lines），functions 组 58.67/53.23/66.69/60.92 |
+| CI 工作流 | `.github/workflows/ci.yml`：push main + 全 PR，三 job——frontend（npm ci → typecheck → test:ci → build）、cli（npm ci → npm test，独立 lockfile 缓存）、e2e（`npm install --no-save wrangler@4` 钉版本后跑 `npm run test:e2e`，本地完整预演通过） | ✅ 本地预演 171 断言全过 |
+| cli 补测 | client.ts（>100MB 三段式真实临时文件分块、分块失败 abort 清理、Range 断点续传 206/200/等长跳过/偏大重下、ApiError 文本回退、createKeyWithSession/revokeKey）、config.ts（XDG 临时目录注入、0600 权限、环境变量覆盖/合并、损坏文件）、util.ts 全覆盖、index.ts（commander 分发 + 错误路径） | ✅ cli 6 文件 58 用例全绿；stmts 86.11% / branch 90.09%，client.ts lines 98.56%、config.ts 100% |
+| 后端直测 | 新增 `src/app/testInMemoryBucket.ts`：R2Bucket 内存模拟（get/put/delete/head 含 onlyIf 条件语义、list 忠实模拟 prefix/cursor/delimiter/include/UTF-8 字典序/truncated、multipart 全生命周期）；新增 5 个测试套件 185 用例：webdavProtocol（84：304/206/412/423/LOCK 互斥与刷新/Overwrite/内部前缀/鉴权 fail-closed）、trashApi（25：marker/虚拟目录/父级重建/惰性过期）、shareToken（32：落地页转义/download/raw 安全头/提取码 cookie/410/404）、uploadApi（20：413/乱序/缺块/abort 幂等）、middleware（24：SPA/404.html/穿越/Host 接管） | ✅ **functions/ 覆盖率 lines 18.75% → 61.42%、branches 53.73%**；protocol.ts 80.16%、trash 98.05%、shares 96.55%、share token 92.86%、upload 92.82%、middleware 97.62% |
+| 顺手修的两个后端健壮性 bug | ① protocol.ts handleGet 未捕获 R2 InvalidRange → 非法 Range 500（现回退全量 200，与 download.ts 同类处理一致）；② trash.ts handleRestore 对损坏元数据 JSON 无 try/catch → 整个还原 500（现返回结构化「回收站项目损坏」） | ✅ 各有用例固化 |
+| 前端洼地补测 | 新增 5 套件 104 用例：hooksExtra（30：快捷键全分支/多选 shift/拖拽遮罩/粘贴上传）、transferMultipart（28：分块/断点续传/AbortError 时序/缩略图副作用）、PreviewDialogExtra（13：缩放钳制/平移/旋转补偿/倍速/pager）、AppExtra（10：队列顶替/去重/主题三态）、MainExtra（23：加载更多/undo 闭环/拖拽入文件夹） | ✅ **src/ lines 84.94 → 94.01%、branches 75.88 → 85.04%**；useKeyboardShortcuts/useMultiSelect/useUploadInputs/useDragDropUpload/usePasteUpload 全部 100% lines |
+| 顺手修的两个前端交互 bug | ① useMultiSelect shift 范围选择失效（setState updater 延迟求值期间 selectionAnchor 已被覆写为点击目标，退化为「原选中+目标」→ updater 前捕获 anchor）；② App Snackbar 队列重开竞态（退场完成前 effect 重开，onExited 永不触发，消息每轮 autoHideDuration 重闪 → shownSnackKeyRef 挡住已展示消息的重开） | ✅ jsdom 复现→修复→回归，AppExtra 断言「12s 后消失且不再重闪」 |
+
+**本批验证汇总**：`npx tsc --noEmit` 0 错误；`CI=true npx react-scripts test --watchAll=false` **64 套件 754 用例全绿**（基线 53/463 → +11 套件/+291 用例）；`npm run build` 成功；`SKIP_BUILD=1 bash scripts/run-e2e.sh` **171 断言全过（0 FAIL）**；cli `npm test` 58 用例全绿。已知环境限制：upload.ts 的 multipart/form-data 分支在 whatwg-fetch 测试环境无法解析 multipart 请求体（e2e 兜底）；protocol.ts handlePutMultipart 对未知 uploadId 的 part PUT 未捕获（边缘，已记录）。

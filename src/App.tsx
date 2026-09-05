@@ -99,6 +99,7 @@ function AppContent({
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const notified = useRef(new Set<string>());
+  const shownSnackKeyRef = useRef<number | null>(null);
 
   const pushSnack = useCallback(
     (snack: Omit<SnackbarMessage, "key">) => {
@@ -109,9 +110,15 @@ function AppContent({
     []
   );
 
-  // 队列化展示：上一条退出动画结束后再弹下一条，连续消息不再互相覆盖
+  // 队列化展示：上一条退出动画结束后再弹下一条，连续消息不再互相覆盖。
+  // onExited 是队列消费点；退场期间队首仍是已展示过的消息，用 shownSnackKeyRef
+  // 挡住重开——否则 effect 会在退出动画完成前把 Snackbar 重新打开，onExited
+  // 永不触发，消息每轮 autoHideDuration 重闪一次。
   useEffect(() => {
     if (snackOpen || snackQueue.length === 0) return;
+    const head = snackQueue[0];
+    if (shownSnackKeyRef.current === head.key) return;
+    shownSnackKeyRef.current = head.key;
     setSnackOpen(true);
   }, [snackOpen, snackQueue]);
 
