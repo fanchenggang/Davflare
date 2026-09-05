@@ -154,7 +154,7 @@ function TransferManager({
             />
             <Typography variant="body2" color="text.secondary">
               {translate("overallProgress")}：{humanReadableSize(loaded)} / {humanReadableSize(total)}
-              {overallSpeed > 0 && taskStatusText(uploads, overallSpeed, overallEta)}
+              {overallSpeed > 0 && taskStatusText(overallSpeed, overallEta)}
             </Typography>
             <Stack spacing={2}>
               {uploads.map((task) => {
@@ -272,11 +272,7 @@ function TransferManager({
   );
 }
 
-function taskStatusText(
-  uploads: TransferTask[],
-  overallSpeed: number,
-  overallEta: string
-) {
+function taskStatusText(overallSpeed: number, overallEta: string) {
   const speed = humanReadableSpeed(overallSpeed);
   const parts = [speed, overallEta ? translate("etaRemaining", { time: overallEta }) : ""].filter(Boolean);
   return parts.length ? ` · ${parts.join(" · ")}` : "";

@@ -139,18 +139,29 @@ describe("transfer / searchFiles", () => {
 });
 
 describe("transfer / fetchFolderCounts", () => {
-  test("并发统计并静默失败项", async () => {
-    const xmlFor = (path: string) => `<?xml version="1.0"?><multistatus>
-  <response><href>/webdav/${path}/</href><propstat><prop><resourcetype><collection/></resourcetype></prop></propstat></response>
-  <response><href>/webdav/${path}/a.txt</href><propstat><prop><getcontenttype>text/plain</getcontenttype><getcontentlength>1</getcontentlength></prop></propstat></response>
-</multistatus>`;
-    mockAuthFetch.mockImplementation(async (url: string) => {
-      const path = String(url).split("/webdav/")[1] ?? "";
-      if (path.includes("bad")) return jsonResponse({}, false, 500);
-      return xmlResponse(xmlFor(path));
+  test("批量端点一次取回全部计数", async () => {
+    mockAuthFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      expect(String(url)).toBe("/api/counts");
+      expect(init?.method).toBe("POST");
+      const body = JSON.parse(String(init?.body)) as { paths: string[] };
+      expect(body.paths).toEqual(["a", "bad"]);
+      return jsonResponse({ counts: { a: 3, "bad-x": 0 } }, true, 200);
     });
-    const counts = await fetchFolderCounts(["a", "bad"], 2);
-    expect(counts).toEqual({ a: 1 });
+    const counts = await fetchFolderCounts(["a", "bad"]);
+    expect(counts).toEqual({ a: 3, "bad-x": 0 });
+  });
+
+  test("端点失败时返回空对象", async () => {
+    mockAuthFetch.mockImplementation(async () => jsonResponse({}, false, 500));
+    const counts = await fetchFolderCounts(["a"]);
+    expect(counts).toEqual({});
+  });
+
+  test("空列表不发请求", async () => {
+    mockAuthFetch.mockClear();
+    const counts = await fetchFolderCounts([]);
+    expect(counts).toEqual({});
+    expect(mockAuthFetch).not.toHaveBeenCalled();
   });
 });
 

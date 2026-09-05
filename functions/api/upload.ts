@@ -7,7 +7,6 @@ import {
   jsonResponse,
   textResponse,
   touchLastUsed,
-  type StoredApiKey,
 } from "./_apikey";
 
 interface UploadEnv {

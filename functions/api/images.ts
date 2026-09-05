@@ -1,4 +1,8 @@
-import { authorizeApiKey, verifyBasicAuth } from "./_apikey";
+import {
+  isSessionOrKeyAuthorized,
+  jsonResponse,
+  textResponse,
+} from "./_apikey";
 import {
   IMAGE_PREFIX,
   createImageId,
@@ -19,22 +23,6 @@ interface ImagesEnv {
 }
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-  });
-}
-
-// 会话（Basic）与 API key 均可管图床：MCP image_* 工具以密钥转发到此端点
-async function isAuthorized(request: Request, env: ImagesEnv) {
-  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
-    return true;
-  }
-  const keyAuth = await authorizeApiKey(request, env.BUCKET);
-  return !(keyAuth instanceof Response);
-}
 
 function sanitizeName(name: string) {
   const cleaned = name.replace(/\\/g, "/").split("/").pop() || "";
@@ -91,7 +79,6 @@ async function listImages(
     const listing = await bucket.list({
       prefix: IMAGE_PREFIX,
       cursor,
-      // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata", "customMetadata"],
     });
     for (const object of listing.objects) {
@@ -107,8 +94,13 @@ async function listImages(
 
 export const onRequestGet: PagesFunction<ImagesEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
   const flags = await loadFeatureFlags(env.BUCKET);
   if (!flags.imageHost) {
@@ -121,8 +113,13 @@ export const onRequestGet: PagesFunction<ImagesEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<ImagesEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
   const flags = await loadFeatureFlags(env.BUCKET);
   if (!flags.imageHost) {
@@ -184,8 +181,13 @@ export const onRequestPost: PagesFunction<ImagesEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<ImagesEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
   const flags = await loadFeatureFlags(env.BUCKET);
   if (!flags.imageHost) {

@@ -2089,6 +2089,9 @@ function handleOptions(): Response {
 }
 
 function isAuthorized(authorizationHeader: string, username: string, password: string): boolean {
+  // fail closed：凭据未配置或为空时一律拒绝（与 api/_apikey.ts 的 verifyBasicAuth 对齐），
+  // 避免 btoa("undefined:undefined") / btoa(":") 这类固定值成为可被猜中的有效 Basic 头。
+  if (!username || !password) return false;
   const encoder = new TextEncoder();
   const header = encoder.encode(authorizationHeader);
   const expected = encoder.encode(`Basic ${utf8ToBase64(`${username}:${password}`)}`);

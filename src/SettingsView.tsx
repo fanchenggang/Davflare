@@ -12,6 +12,7 @@ import {
 import { FeatureFlagName, FeatureFlags, useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
 import { strings } from "./app/strings";
+import { errorMessage } from "./app/utils";
 
 const SWITCHES: Array<{
   key: FeatureFlagName;
@@ -35,7 +36,7 @@ function SettingsView({ onNotify }: { onNotify: NotifyFn }) {
       await updateFlags({ [key]: value } as Partial<FeatureFlags>);
       onNotify(strings.flagSaved, "success");
     } catch (error) {
-      onNotify((error as Error).message || strings.flagSaveFailed, "error");
+      onNotify(errorMessage(error) || strings.flagSaveFailed, "error");
     } finally {
       setPending(null);
     }

@@ -6,7 +6,11 @@ import {
   normalizeSitesHost,
   siteConfigKey,
 } from "../_sites";
-import { authorizeApiKey, verifyBasicAuth } from "./_apikey";
+import {
+  isSessionOrKeyAuthorized,
+  jsonResponse,
+  textResponse,
+} from "./_apikey";
 
 interface SitesApiEnv {
   BUCKET: R2Bucket;
@@ -18,22 +22,6 @@ interface SitesApiEnv {
 const SITE_STATS_MAX_OBJECTS = 5000;
 const SITE_STATS_TTL_MS = 10 * 60 * 1000;
 const SITE_DELETE_MAX_OBJECTS = 5000;
-
-// 会话（Basic）与 API key 均可管理站点：MCP sites 工具以密钥转发到此端点
-async function isAuthorized(request: Request, env: SitesApiEnv) {
-  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
-    return true;
-  }
-  const keyAuth = await authorizeApiKey(request, env.BUCKET);
-  return !(keyAuth instanceof Response);
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 async function listSiteSlugs(bucket: R2Bucket): Promise<string[]> {
   const slugs: string[] = [];
@@ -89,8 +77,13 @@ async function saveSiteConfig(bucket: R2Bucket, config: SiteConfig): Promise<voi
 
 export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
 
   const url = new URL(request.url);
@@ -120,8 +113,13 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
 
   let body: { slug?: string; spa?: boolean };
@@ -152,8 +150,13 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
 
   const slug = (new URL(request.url).searchParams.get("slug") || "").trim().toLowerCase();

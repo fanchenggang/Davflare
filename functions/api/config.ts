@@ -1,4 +1,9 @@
-import { hasApiKeyHeader, verifyBasicAuth } from "./_apikey";
+import {
+  hasApiKeyHeader,
+  jsonResponse,
+  textResponse,
+  verifyBasicAuth,
+} from "./_apikey";
 import {
   loadFeatureFlags,
   normalizeFeatureFlags,
@@ -13,13 +18,6 @@ interface ConfigEnv {
   WEBDAV_PASSWORD: string;
   WEBDAV_PUBLIC_READ?: string;
   SITES_HOST?: string;
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-  });
 }
 
 export type ConfigWriteAuth = "ok" | "unauthorized" | "api-key-forbidden";
@@ -50,7 +48,7 @@ function configBody(
 export const onRequestGet: PagesFunction<ConfigEnv> = async (context) => {
   const { request, env } = context;
   if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
-    return new Response("Unauthorized", { status: 401 });
+    return textResponse("Unauthorized", 401);
   }
 
   const flags = await loadFeatureFlags(env.BUCKET);
@@ -68,7 +66,7 @@ export const onRequestPatch: PagesFunction<ConfigEnv> = async (context) => {
     return new Response("API keys cannot change feature flags", { status: 403 });
   }
   if (auth !== "ok") {
-    return new Response("Unauthorized", { status: 401 });
+    return textResponse("Unauthorized", 401);
   }
 
   let body: unknown;

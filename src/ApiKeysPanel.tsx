@@ -40,6 +40,7 @@ import { useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
 import { strings, translate } from "./app/strings";
 import { ApiKeyInfo } from "./app/types";
+import { errorMessage } from "./app/utils";
 
 function formatExpiry(expiresAt: string | null) {
   if (!expiresAt) return strings.apiNever;
@@ -90,7 +91,7 @@ function ApiKeysPanel({
     try {
       setKeys(await listApiKeys());
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setLoading(false);
     }
@@ -147,7 +148,7 @@ function ApiKeysPanel({
       await load();
       onNotify(translate("keyCreatedToast"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setCreating(false);
     }
@@ -160,7 +161,7 @@ function ApiKeysPanel({
       await revokeApiKey(id);
       onNotify(translate("keyRevokedToast"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
       await load();
     }
   };

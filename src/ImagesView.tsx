@@ -25,7 +25,7 @@ import { useFeatures } from "./app/features";
 import { HostedImage, deleteImage, listImages, uploadImage } from "./app/images";
 import { NotifyFn } from "./app/notify";
 import { strings, translate } from "./app/strings";
-import { humanReadableSize } from "./app/utils";
+import { errorMessage, humanReadableSize } from "./app/utils";
 
 function isImageFile(file: File) {
   if (file.type.startsWith("image/")) return true;
@@ -51,7 +51,7 @@ function ImagesView({
       const data = await listImages();
       setImages(data.images);
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     }
   }, [onNotify]);
 
@@ -78,7 +78,7 @@ function ImagesView({
         setImages((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
         onNotify(translate("uploadedToast", { name: created.name }), "success");
       } catch (error) {
-        onNotify((error as Error).message, "error");
+        onNotify(errorMessage(error), "error");
       }
     }
   };
@@ -101,7 +101,7 @@ function ImagesView({
       setImages((prev) => prev.filter((item) => item.id !== target.id));
       onNotify(strings.imageDeleted, "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     }
   };
 

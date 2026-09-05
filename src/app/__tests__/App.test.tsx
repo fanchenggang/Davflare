@@ -1,13 +1,11 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import App, { enqueueSnack, SnackbarMessage } from "../../App";
 import { setLang, strings } from "../strings";
 
 jest.mock("../transferQueue", () => {
-  const React = require("react");
   return {
-    TransferQueueProvider: ({ children }: { children: React.ReactNode }) => children,
+    TransferQueueProvider: ({ children }: { children: JSX.Element }) => children,
     useTransferQueue: () => [],
     useTransferQueueActions: () => ({}),
     useTransferQueueGlobalPaused: () => false,

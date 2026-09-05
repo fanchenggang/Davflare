@@ -48,7 +48,7 @@ import { strings, translate } from "./app/strings";
 import { Z_INDEX, warmShadow } from "./app/theme";
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
-import { encodeKey, humanReadableSize } from "./app/utils";
+import { encodeKey, errorMessage, humanReadableSize } from "./app/utils";
 
 const LINE_NUMBER_CAP = 2000;
 const HIGHLIGHT_MAX_BYTES = 1024 * 1024;
@@ -298,7 +298,7 @@ function PreviewDialog({
         setUrl(objectUrl);
       } catch (error) {
         if (canceled || (error as Error).name === "AbortError") return;
-        onNotify((error as Error).message, "error");
+        onNotify(errorMessage(error), "error");
       } finally {
         if (!canceled) setLoading(false);
       }
@@ -359,7 +359,7 @@ function PreviewDialog({
       }
       await downloadFile(file.key);
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     }
   };
 

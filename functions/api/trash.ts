@@ -1,4 +1,9 @@
-import { ensureFolderMarkers, isInternalKey, verifyBasicAuth } from "./_apikey";
+import {
+  ensureFolderMarkers,
+  isInternalKey,
+  textResponse,
+  verifyBasicAuth,
+} from "./_apikey";
 
 interface TrashEnv {
   BUCKET: R2Bucket;
@@ -50,10 +55,6 @@ function retentionDaysFrom(env: TrashEnv): number {
   return Number.isFinite(parsed) ? parsed : 30;
 }
 
-function isAuthorized(request: Request, env: TrashEnv) {
-  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
-}
-
 function basename(key: string) {
   return key.replace(/\/$/, "").split("/").pop() ?? "";
 }
@@ -65,7 +66,6 @@ async function listObjects(bucket: R2Bucket, prefix: string) {
     const listing = await bucket.list({
       prefix,
       cursor,
-      // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata", "customMetadata"],
     });
     objects.push(...listing.objects);
@@ -114,8 +114,8 @@ async function listTrashItems(bucket: R2Bucket) {
 
 export const onRequestGet: PagesFunction<TrashEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return textResponse("Unauthorized", 401);
   }
   await purgeExpiredTrash(env.BUCKET, retentionDaysFrom(env));
   return new Response(
@@ -126,8 +126,8 @@ export const onRequestGet: PagesFunction<TrashEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<TrashEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return textResponse("Unauthorized", 401);
   }
 
   const url = new URL(request.url);
@@ -139,8 +139,8 @@ export const onRequestPost: PagesFunction<TrashEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<TrashEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return textResponse("Unauthorized", 401);
   }
 
   let body: { trashKeys?: string[]; all?: boolean };

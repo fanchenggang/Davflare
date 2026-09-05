@@ -16,6 +16,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { authFetch } from "./app/auth";
 import { NotifyFn } from "./app/notify";
 import { strings, translate } from "./app/strings";
+import { errorMessage } from "./app/utils";
 
 interface WebDavInfo {
   username: string;
@@ -46,7 +47,7 @@ function WebDavPanel({
         if (!canceled) setInfo(data);
       })
       .catch((error) => {
-        if (!canceled) onNotify((error as Error).message, "error");
+        if (!canceled) onNotify(errorMessage(error), "error");
       })
       .finally(() => {
         if (!canceled) setLoading(false);

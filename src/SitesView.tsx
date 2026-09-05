@@ -34,7 +34,7 @@ import { NotifyFn } from "./app/notify";
 import { SiteInfo, SitesResponse, deleteSite, listSites, siteUrl, updateSiteConfig } from "./app/sites";
 import { strings, translate } from "./app/strings";
 import { useUploadEnqueue } from "./app/transferQueue";
-import { humanReadableSize } from "./app/utils";
+import { errorMessage, humanReadableSize } from "./app/utils";
 
 /** 把 zip 条目路径规范成站点目录下的安全相对路径；不安全（穿越/绝对路径）返回 null。 */
 function safeArchivePath(path: string): string | null {
@@ -242,7 +242,7 @@ function SitesView({
       try {
         setData(await listSites(withStats));
       } catch (error) {
-        if (!withStats) onNotify((error as Error).message, "error");
+        if (!withStats) onNotify(errorMessage(error), "error");
       }
     },
     [onNotify]
@@ -269,7 +269,7 @@ function SitesView({
       await updateSiteConfig(site.slug, spa);
       onNotify(translate("siteConfigSaved"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
       await load(false);
     }
   };
@@ -304,7 +304,7 @@ function SitesView({
       setDeploySite(null);
       setDeployFile(null);
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setDeploying(false);
     }
@@ -319,7 +319,7 @@ function SitesView({
       onNotify(translate("siteDeleted", { name: site.slug, count: deleted }), "success");
       await load(false);
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     }
   };
 

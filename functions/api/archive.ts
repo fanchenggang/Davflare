@@ -1,5 +1,10 @@
 import { buildZipStream } from "./_zip";
-import { decodeRawPath, isInternalKey, verifyBasicAuth } from "./_apikey";
+import {
+  decodeRawPath,
+  isInternalKey,
+  textResponse,
+  verifyBasicAuth,
+} from "./_apikey";
 
 interface ArchiveEnv {
   BUCKET: R2Bucket;
@@ -11,7 +16,7 @@ export const onRequestPost: PagesFunction<ArchiveEnv> = async (context) => {
   const { request, env } = context;
 
   if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
-    return new Response("Unauthorized", { status: 401 });
+    return textResponse("Unauthorized", 401);
   }
 
   let selectedKeys: string[];

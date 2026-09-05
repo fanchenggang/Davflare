@@ -102,28 +102,24 @@ export interface SearchResponse {
   nextCursor?: string;
 }
 
-// 并发统计一批文件夹的直接子项数（惰性计数），失败的键不出现在结果里
+// 批量统计文件夹的直接子项数（惰性计数）：单次 POST /api/counts 拿回全部，
+// 失败整体返回空（调用方保留占位文案）
 export async function fetchFolderCounts(
-  keys: string[],
-  concurrency = 3
+  keys: string[]
 ): Promise<Record<string, number>> {
-  const results: Record<string, number> = {};
-  const queue = [...keys];
-  const workers = Array.from(
-    { length: Math.max(1, Math.min(concurrency, queue.length)) },
-    async () => {
-      while (queue.length) {
-        const key = queue.shift()!;
-        try {
-          results[key] = (await fetchPath(key)).length;
-        } catch {
-          // 单个失败静默，前端保留占位文案
-        }
-      }
-    }
-  );
-  await Promise.all(workers);
-  return results;
+  if (!keys.length) return {};
+  try {
+    const res = await authFetch("/api/counts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: keys.slice(0, 100) }),
+    });
+    if (!res.ok) return {};
+    const data = (await res.json()) as { counts?: Record<string, number> };
+    return data.counts ?? {};
+  } catch {
+    return {};
+  }
 }
 
 export async function searchFiles(

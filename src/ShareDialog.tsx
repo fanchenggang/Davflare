@@ -24,6 +24,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { createShare, formatShareClipboard, listShares, revokeShare } from "./app/share";
 import { NotifyFn } from "./app/notify";
 import { FileItem, ShareInfo } from "./app/types";
+import { errorMessage } from "./app/utils";
 
 function ShareDialog({
   open,
@@ -47,7 +48,7 @@ function ShareDialog({
       const all = await listShares();
       setShares(all.filter((share) => share.key === file.key));
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     }
   };
 
@@ -78,7 +79,7 @@ function ShareDialog({
         // ignore; user can still copy from the list
       }
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setLoading(false);
     }
@@ -187,7 +188,7 @@ function ShareDialog({
                             );
                             onNotify(translate("shareLinkRevoked"), "success");
                           } catch (error) {
-                            onNotify((error as Error).message, "error");
+                            onNotify(errorMessage(error), "error");
                             await refresh();
                           }
                         }}

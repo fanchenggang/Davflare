@@ -1,8 +1,8 @@
 import {
-  authorizeApiKey,
   isCollectionObject,
   isInternalKey,
-  verifyBasicAuth,
+  isSessionOrKeyAuthorized,
+  textResponse,
 } from "./_apikey";
 
 interface SharesEnv {
@@ -12,15 +12,6 @@ interface SharesEnv {
 }
 
 const SHARES_PREFIX = "_$flaredrive$/shares/";
-
-// 会话（Basic）与 API key 均可管理分享：MCP/脚本侧需要以密钥创建与撤销分享
-async function isAuthorized(request: Request, env: SharesEnv) {
-  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
-    return true;
-  }
-  const keyAuth = await authorizeApiKey(request, env.BUCKET);
-  return !(keyAuth instanceof Response);
-}
 
 function basename(key: string) {
   return key.replace(/\/$/, "").split("/").pop() ?? "";
@@ -74,8 +65,13 @@ async function readShares(
 
 export const onRequestGet: PagesFunction<SharesEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
   return new Response(JSON.stringify(await readShares(env.BUCKET, request)), {
     headers: { "Content-Type": "application/json" },
@@ -84,8 +80,13 @@ export const onRequestGet: PagesFunction<SharesEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
 
   let body: { key?: string; expiresInHours?: number; extractCode?: string };
@@ -158,8 +159,13 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<SharesEnv> = async (context) => {
   const { request, env } = context;
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))) {
+    return textResponse("Unauthorized", 401);
   }
 
   const token = new URL(request.url).searchParams.get("token");
