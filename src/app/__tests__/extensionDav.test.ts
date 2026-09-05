@@ -141,6 +141,89 @@ describe("extension/dav.js basePath (issue #54)", () => {
   });
 });
 
+describe("extension/dav.js ensureDir nested basePath (issue #60)", () => {
+  test("MKCOLs each basePath segment in order (a/ then a/b/)", async () => {
+    const { client, calls } = clientWith({ basePath: "a/b" }, (_url, init) => {
+      if ((init.method as string) === "MKCOL") return { status: 201 };
+      return { status: 204 };
+    });
+    expect(await client.ensureDir()).toEqual({ ok: true });
+    expect(calls.map((c) => (c.init.method as string) + " " + c.url)).toEqual([
+      "MKCOL " + ROOT + "/a/",
+      "MKCOL " + ROOT + "/a/b/",
+    ]);
+  });
+
+  test("treats 405 on an intermediate segment as already-exists and continues", async () => {
+    const { client, calls } = clientWith({ basePath: "qa/bookmarks" }, (url, init) => {
+      if ((init.method as string) === "MKCOL") {
+        // parent already there; create the leaf
+        if (url.endsWith("/qa/")) return { status: 405 };
+        return { status: 201 };
+      }
+      return { status: 204 };
+    });
+    expect(await client.ensureDir()).toEqual({ ok: true });
+    expect(calls.map((c) => (c.init.method as string) + " " + c.url)).toEqual([
+      "MKCOL " + ROOT + "/qa/",
+      "MKCOL " + ROOT + "/qa/bookmarks/",
+    ]);
+  });
+
+  test("putBookmarks MKCOLs nested basePath before PUT", async () => {
+    const nestedDir = ROOT + "/_pm_qa/bookmarks/";
+    const { client, calls } = clientWith({ basePath: "_pm_qa/bookmarks" }, (_url, init) => {
+      if ((init.method as string) === "MKCOL") return { status: 201 };
+      return { status: 204 };
+    });
+    expect(
+      await client.putBookmarks({ html: "<DL><p></DL><p>", json: '{"bookmarks":[]}' })
+    ).toEqual({ ok: true, jsonSaved: true });
+    expect(calls.map((c) => (c.init.method as string) + " " + c.url)).toEqual([
+      "MKCOL " + ROOT + "/_pm_qa/",
+      "MKCOL " + nestedDir,
+      "PUT " + nestedDir + "bookmarks.html",
+      "PUT " + nestedDir + "bookmarks.json",
+    ]);
+  });
+
+  test("putFile under nested basePath MKCOLs basePath segments then file parents", async () => {
+    const nestedDir = ROOT + "/a/b/";
+    const { client, calls } = clientWith({ basePath: "a/b" }, (_url, init) => {
+      if ((init.method as string) === "MKCOL") return { status: 201 };
+      return { status: 201 };
+    });
+    expect(
+      await client.putFile("snapshots/s1.html", "<html></html>", "text/html; charset=utf-8")
+    ).toEqual({ ok: true });
+    expect(calls.map((c) => (c.init.method as string) + " " + c.url)).toEqual([
+      "MKCOL " + ROOT + "/a/",
+      "MKCOL " + nestedDir,
+      "MKCOL " + nestedDir + "snapshots/",
+      "PUT " + nestedDir + "snapshots/s1.html",
+    ]);
+  });
+
+  test("a single MKCOL of a nested leaf would 409 — segmented create avoids it", async () => {
+    // Simulate a strict server: MKCOL fails with 409 when any parent is missing.
+    const created = new Set<string>();
+    const { client, calls } = clientWith({ basePath: "a/b/c" }, (url, init) => {
+      if ((init.method as string) !== "MKCOL") return { status: 204 };
+      const path = url.slice(ROOT.length); // e.g. /a/ or /a/b/
+      const parent = path.replace(/[^/]+\/$/, "");
+      if (parent !== "/" && !created.has(parent)) return { status: 409 };
+      created.add(path);
+      return { status: 201 };
+    });
+    expect(await client.ensureDir()).toEqual({ ok: true });
+    expect(calls.filter((c) => c.init.method === "MKCOL").map((c) => c.url)).toEqual([
+      ROOT + "/a/",
+      ROOT + "/a/b/",
+      ROOT + "/a/b/c/",
+    ]);
+  });
+});
+
 describe("extension/dav.js probe", () => {
   test("maps 207/404/401/403 to ok, disabled, unauthorized, notConfigured", async () => {
     const ok = clientWith({}, () => ({ status: 207 }));
