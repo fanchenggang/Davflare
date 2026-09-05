@@ -130,6 +130,14 @@ var DavflareDav = (function () {
       return { ok: true };
     }
 
+    /** DELETE one file under bookmarks/; a missing file counts as deleted. */
+    async function deleteFile(fileName) {
+      var res = await request("DELETE", dir + fileName);
+      if (res.status === 0) return { ok: false, kind: "network" };
+      if (res.ok || res.status === 404) return { ok: true };
+      return { ok: false, kind: mapStatusKind(res.status) };
+    }
+
     async function getBookmarks() {
       var html = await getFile(HTML_PATH);
       if (!html.ok) return html;
@@ -171,6 +179,7 @@ var DavflareDav = (function () {
     }
 
     return {
+      deleteFile: deleteFile,
       ensureDir: ensureDir,
       getFile: getFile,
       getBookmarks: getBookmarks,

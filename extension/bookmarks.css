@@ -662,6 +662,33 @@ dialog textarea {
   margin-top: 10px;
 }
 
+#snapSection {
+  margin-top: 16px;
+}
+
+#snapSection legend {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  padding: 0;
+}
+
+.snapActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.snapActions button {
+  font-size: 0.8125rem;
+  padding: 5px 12px;
+}
+
+.snapActions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ---------- workspaces ---------- */
 
 .wsList {
