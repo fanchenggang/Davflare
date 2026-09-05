@@ -214,22 +214,35 @@ Cursor（`mcp.json`）：
 
 ## 扩展
 
-Chrome Manifest V3 辅助扩展，用来打开**你自己部署的** Davflare。不在 Chrome 网上应用店上架。
+Chrome Manifest V3 辅助扩展，双模式工具栏：打开**你自己部署的** Davflare 网盘，或打开由实例 WebDAV 支撑的书签库。不在 Chrome 网上应用店上架。
 
 - 选项页：粘贴你部署的 Pages / 自定义域名。默认空白，没有内置站点。
-- 点击工具栏图标打开该地址。未填写时改为打开选项页。
+- **工具栏双模式**：*网盘*（默认，点击打开实例）或 *书签*（点击打开书签库页）。在选项页设置默认模式，随时右键工具栏图标快速切换。
+- 页面右键菜单有「收藏此页」——把当前标签页的标题 + URL 合并进你 WebDAV 上的书签文件。
+- WebDAV 凭据（与部署时的 `WEBDAV_USERNAME` / `WEBDAV_PASSWORD` 一致）**仅**保存在 `chrome.storage.local`，不会同步到 Google 账号。保存实例地址时会按需申请该站点的 host 权限（可选权限，不预授权任何域名）。
 - **默认包不会改 Chrome 新标签页。** 只要已加载的 `manifest.json` 里有 `chrome_url_overrides`，Chrome 就会把新标签页当成被覆盖；扩展里再开关也无法恢复。
 
 同一 GitHub Release 附两个 zip：
 
 | Zip | 作用 |
 | --- | --- |
-| `davflare-extension.zip` | 仅工具栏 + 选项。不想改新标签页就装这个。 |
+| `davflare-extension.zip` | 工具栏 + 选项 + 书签库。不想改新标签页就装这个。 |
 | `davflare-extension-newtab.zip` | 默认包之外另加新标签页覆盖，打开你的实例。需单独下载；不要指望默认 zip 提供该行为。 |
 
 **加载未打包扩展（默认，不改新标签页）：** Chrome → `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选本仓库的 `extension/` 目录。
 
 **Release zip：** 从 [GitHub Releases](https://github.com/fanchenggang/Davflare/releases) 下载后解压再按上面的方式加载。打 tag（`v*` / `extension-*`）或在 **Actions → Release extension** 里运行工作流会附上两个 zip。
+
+## 薄书签（P2）
+
+扩展的书签库把书签存在**你自己的 WebDAV 上**——不依赖第三方服务，不含任何 AI。要求实例的 WebDAV 功能开关已打开。
+
+- **存储布局**（实例 `/webdav/bookmarks/` 下）：`bookmarks.html` 是权威的 Netscape 书签文件，可直接用 Chrome/Edge「导入书签」；`bookmarks.json` 是旁路文件，承载 HTML 格式放不下的标签与备注；`workspaces.json`、`tabGroups.json`、`snapshots.json` 分别对应下面几个功能。写入带 `If-Match`，出现 412 冲突会明确提示重试，绝不静默覆盖。
+- **书签库页**：侧栏分类/标签计数；搜索覆盖标题/URL/标签/备注，**支持拼音**（全拼与首字母，内置精简字典）；时间范围筛选；网格/列表视图；明暗主题；从 Chrome 书签导入（可选 `bookmarks` 权限，按 URL 合并）与导出 `bookmarks.html`。
+- **工作区**：把当前窗口存为工作区——页面顺序、固定状态、原生标签组元数据——之后可全部或勾选恢复到新窗口（URL 去重，还原固定与分组）。
+- **Tab 分组**：本地规则引擎（域名后缀 / URL / 标题 / 正则，多条件 AND），一键把当前窗口收进原生标签组，可自定义标题/颜色/折叠/优先级；未命中可按根域名兜底。规则经 `tabGroups.json` 同步。
+- **快照**：把页面捕获为单文件 HTML（CORS 允许的图片尽力内联；剥离 script/iframe；8 MB 上限）存到 `bookmarks/snapshots/`，在书签编辑里查看、下载、更新、删除。无 CORS 头的跨域资源无法内联（浏览器安全限制），`chrome://` 等受限页无法捕获。
+- **错误不静默**：WebDAV 开关关闭（404）、服务端未配置凭据（403）、凭据错误（401）、编辑冲突（412）各有独立文案，并提供打开设置的入口。
 
 ## 图床
 
