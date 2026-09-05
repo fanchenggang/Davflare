@@ -1,4 +1,7 @@
-import { authorizeApiKey, verifyBasicAuth } from "./_apikey";
+import {
+  isSessionOrKeyAuthorized,
+  textResponse,
+} from "./_apikey";
 
 interface SearchEnv {
   BUCKET: R2Bucket;
@@ -6,20 +9,18 @@ interface SearchEnv {
   WEBDAV_PASSWORD: string;
 }
 
-// 会话（Basic）与 API key 均可搜索：MCP search 工具以密钥转发到此端点
-async function isAuthorized(request: Request, env: SearchEnv) {
-  if (verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
-    return true;
-  }
-  const keyAuth = await authorizeApiKey(request, env.BUCKET);
-  return !(keyAuth instanceof Response);
-}
-
 export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
   const { request, env } = context;
 
-  if (!(await isAuthorized(request, env))) {
-    return new Response("Unauthorized", { status: 401 });
+  if (
+    !(await isSessionOrKeyAuthorized(
+      request,
+      env.BUCKET,
+      env.WEBDAV_USERNAME,
+      env.WEBDAV_PASSWORD
+    ))
+  ) {
+    return textResponse("Unauthorized", 401);
   }
 
   const url = new URL(request.url);
@@ -51,7 +52,6 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
     const listing = await env.BUCKET.list({
       cursor,
       limit: SCAN_PAGE,
-      // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata", "customMetadata"],
     });
 

@@ -95,8 +95,8 @@ function isExpired(expiresAt: string | null | undefined) {
   return Number.isFinite(ts) && ts <= Date.now();
 }
 
-async function listStoredKeys(bucket: R2Bucket): Promise<StoredApiKey[]> {
-  const records: StoredApiKey[] = [];
+export async function listStoredKeys(bucket: R2Bucket): Promise<StoredApiKey[]> {
+  const jsonKeys: string[] = [];
   let cursor: string | undefined;
   do {
     const listing = await bucket.list({
@@ -104,19 +104,24 @@ async function listStoredKeys(bucket: R2Bucket): Promise<StoredApiKey[]> {
       cursor,
     });
     for (const object of listing.objects) {
-      if (!object.key.endsWith(".json")) continue;
-      const data = await bucket.get(object.key);
-      if (data === null) continue;
-      try {
-        records.push((await data.json()) as StoredApiKey);
-      } catch {
-        // skip corrupt metadata
-      }
+      if (object.key.endsWith(".json")) jsonKeys.push(object.key);
     }
     if (!listing.truncated) break;
     cursor = listing.cursor;
   } while (true);
-  return records;
+  // 每个密钥一次 get，并行取回；单个损坏的元数据跳过即可
+  const settled = await Promise.all(
+    jsonKeys.map(async (key): Promise<StoredApiKey | null> => {
+      const data = await bucket.get(key);
+      if (data === null) return null;
+      try {
+        return (await data.json()) as StoredApiKey;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return settled.filter((record): record is StoredApiKey => record !== null);
 }
 
 export async function authorizeApiKey(
@@ -149,8 +154,15 @@ export async function authorizeApiKey(
   return matched;
 }
 
+// lastUsed 写节流：API 请求频繁时避免每个请求都产生一次 R2 put。
+const LAST_USED_WRITE_INTERVAL_MS = 60_000;
+
 export async function touchLastUsed(bucket: R2Bucket, record: StoredApiKey) {
   try {
+    const last = record.lastUsedAt ? Date.parse(record.lastUsedAt) : NaN;
+    if (Number.isFinite(last) && Date.now() - last < LAST_USED_WRITE_INTERVAL_MS) {
+      return;
+    }
     const next = { ...record, lastUsedAt: new Date().toISOString() };
     await bucket.put(`${KEYS_PREFIX}${record.id}.json`, JSON.stringify(next), {
       httpMetadata: { contentType: "application/json" },
@@ -158,6 +170,18 @@ export async function touchLastUsed(bucket: R2Bucket, record: StoredApiKey) {
   } catch {
     // last-used is best-effort
   }
+}
+
+/** Basic 会话与 API key 任一通过即可（MCP/脚本转发端点统一用这个）。 */
+export async function isSessionOrKeyAuthorized(
+  request: Request,
+  bucket: R2Bucket,
+  username: string,
+  password: string
+): Promise<boolean> {
+  if (verifyBasicAuth(request, username, password)) return true;
+  const keyAuth = await authorizeApiKey(request, bucket);
+  return !(keyAuth instanceof Response);
 }
 
 export function isInternalKey(key: string) {
@@ -242,7 +266,6 @@ export async function listDescendants(
     const listing = await bucket.list({
       prefix: `${dirKey}/`,
       cursor,
-      // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata", "customMetadata"],
     });
     for (const object of listing.objects) {

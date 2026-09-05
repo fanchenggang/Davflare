@@ -332,3 +332,56 @@
 | 第 4 批（P2） | C davflare-cli | 无，可全程并行 |
 
 每批验证：`npm run typecheck && npm run test:ci && npm run build && npm run test:e2e`；GUI 部分按 TEST_CASES.md 冒烟；CLI 另跑 `cli/e2e.sh`。
+
+---
+
+# 第四轮（2026-09-05）：代码优化 · 界面美化 · 测试覆盖率
+
+> 基于全仓调研（代码质量 / UI 现状 / 测试覆盖三线并查）制定，分三个 PR 落地：
+> `refactor/code-optimization`、`feat/ui-polish`、`test/coverage-boost`。
+> 关键结论：85% Lines 仅为前端 src/ 的口径（statements 82.4%、branches 75.7%），
+> functions/（8058 行）不在度量内、约 4400 行核心逻辑无单测；测试不进 CI、无 coverageThreshold。
+
+## A. 代码优化（refactor/code-optimization，本批落地）
+
+- **A1 后端重复逻辑收敛**：`jsonResponse` 5 份 → 统一 import `_apikey.ts`；`isAuthorized` 7 份 →
+  Basic-only 端点直用 `verifyBasicAuth`，Basic-or-key 端点统一 `isSessionOrKeyAuthorized`；
+  keys.ts 收编共享 `StoredApiKey`/`sha256Hex`/`listStoredKeys`。裸 `new Response("Unauthorized")` 全部走 `textResponse`。
+- **A2 WebDAV 鉴权 fail-closed**：`protocol.ts isAuthorized` 对空凭据一律拒绝（对齐 `_apikey.ts`）。
+- **A3 鉴权链路性能**：`listStoredKeys` 并行 get；`touchLastUsed` 60s 节流，避免每请求一次 R2 put。
+- **A4 工程细节**：`@cloudflare/workers-types` 升级消 7 处 R2 `include` @ts-ignore；
+  tsconfig 开启 `noUnusedLocals/noUnusedParameters/noImplicitOverride/noFallthroughCasesInSwitch`；删除 web-vitals 死依赖。
+- **A5 错误处理**：前端 `errorMessage()` 收敛 37 处 `(error as Error).message`（Error.message / Response.status / 兜底三态）。
+- **A6 Main.tsx 拆分**：1756 → ~1060 行；PathBar 独立；抽 `useFolderListing/useMultiSelect/useFolderCounts/
+  useKeyboardShortcuts/usePasteUpload/useDragDropUpload/useUploadInputs` + `app/interaction.ts` 纯函数。
+- **A7 渲染与网络**：FileGrid `React.memo`（回调 useCallback + emptyMessage useMemo 稳定 props）；
+  PreviewDialog/SitesView/ImagesView `React.lazy` 拆 chunk；新增 `POST /api/counts` 批量计数替代逐目录 PROPFIND 的 N+1。
+- **遗留**：CRA→Vite + Jest→Vitest + MUI v5→v7（原第二轮 A4）仍需独立分支；后端 JSON 错误格式统一涉及 API 兼容性，暂缓。
+
+## B. 界面美化（feat/ui-polish，本批落地）
+
+- **B1 一致性快赢**：`theme.motion` 动效 token + CssBaseline 全局 `prefers-reduced-motion` 兜底；
+  8 处橙色 alpha 字面量收敛；滚动条样式（webkit + scrollbar-width 亮暗双套）；`theme-color` 暗色 meta；
+  PreviewDialog 淡入过渡替代 `transitionDuration={0}`；`borderRadius: 999` 写法统一；MimeIcon 暗色提亮补全；缩略图 blur-up 淡入。
+- **B2 Ctrl+K 命令面板**：文件搜索（/api/search + 高亮 + 键盘选择）+ 动作命令注册表（上传/新建文件夹/切视图/切主题/切语言/跳转分享回收站）。
+- **B3 文件详情侧栏**：右 Drawer 大图预览 + 元数据（大小/时间/类型/路径）+ 快捷操作行。
+- **B4 分享管理收尾**：二维码（qrcode dataURL）+ 过期倒计时徽标 + 创建时间。
+- **B5 分享落地页**：`functions/share/[[token]].ts` 服务端渲染零脚本落地页（文件名/大小/分享时间 + 预览/下载），提取码表单亮暗双套，安全响应头不回退。
+- **B6 a11y**：skip-to-content、Header 改 AppBar、ConfirmDialog 聚焦安全按钮、网格 `role="grid"` 语义。
+
+## C. 测试覆盖率提升（test/coverage-boost，本批落地）
+
+- **C1 基础设施**：共享测试工具（jsonResponse 工厂 / renderMain + authFetch / localStorage helper / PROPFIND XML fixture）；jest `coverageThreshold`。
+- **C2 后端直测**：InMemoryBucket（mock R2）直测 functions/——webdav/protocol（条件请求/Range/LOCK/MOVE/内部前缀）、trash/shares/share token、upload 三段式、_middleware 安全边界。
+- **C3 前端洼地**：新 hooks、transfer.ts 分支、PreviewDialog、App.tsx；目标 lines 90% / branches 85%。
+- **C4 cli + CI**：vitest coverage 配置 + client/index 补测；GitHub Actions workflow（typecheck + test + build + e2e）。
+
+## 第四轮批次
+
+| 批次 | 内容 | PR |
+|------|------|----|
+| 第 1 批 | A1-A7 代码优化 | refactor/code-optimization |
+| 第 2 批 | B1-B6 界面美化 | feat/ui-polish |
+| 第 3 批 | C1-C4 测试覆盖率 | test/coverage-boost |
+
+每批验证：`npm run typecheck && npm run test:ci && npm run build && npm run test:e2e`；UI 批次做浏览器 GUI 冒烟。

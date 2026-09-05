@@ -28,7 +28,7 @@ import {
 import { NotifyFn } from "./app/notify";
 import { strings, translate } from "./app/strings";
 import { TrashItem } from "./app/types";
-import { humanReadableSize } from "./app/utils";
+import { errorMessage, humanReadableSize } from "./app/utils";
 
 function TrashView({
   onNotify,
@@ -50,7 +50,7 @@ function TrashView({
       setItems(await listTrash());
       setSelected([]);
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setLoading(false);
     }
@@ -84,7 +84,7 @@ function TrashView({
         onNotify(translate("restoreDone"), "success");
       }
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       await load();
     }
@@ -95,7 +95,7 @@ function TrashView({
       await permanentDeleteTrash(selected);
       onNotify(translate("permanentDeletedToast"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setConfirm(null);
       await load();
@@ -107,7 +107,7 @@ function TrashView({
       await permanentDeleteTrash([], true);
       onNotify(translate("trashClearedToast"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setConfirm(null);
       await load();

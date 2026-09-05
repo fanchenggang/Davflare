@@ -19,6 +19,7 @@ import EmptyState from "./EmptyState";
 import { formatShareClipboard, listShares, revokeShare } from "./app/share";
 import { NotifyFn } from "./app/notify";
 import { ShareInfo } from "./app/types";
+import { errorMessage } from "./app/utils";
 
 function SharesView({
   onNotify,
@@ -35,7 +36,7 @@ function SharesView({
     try {
       setShares(await listShares());
     } catch (error) {
-      onNotify((error as Error).message, "error");
+      onNotify(errorMessage(error), "error");
     } finally {
       setLoading(false);
     }
@@ -120,7 +121,7 @@ function SharesView({
                         await revokeShare(token);
                         onNotify(translate("shareLinkRevoked"), "success");
                       } catch (error) {
-                        onNotify((error as Error).message, "error");
+                        onNotify(errorMessage(error), "error");
                         await load();
                       }
                     }}

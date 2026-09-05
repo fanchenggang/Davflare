@@ -159,7 +159,6 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
       delimiter: "/",
       cursor: cursorParam,
       limit,
-      // @ts-ignore `include` is supported by R2 but missing from this types version.
       include: ["httpMetadata", "customMetadata"],
     });
     collectPage(listing, folder, itemsByKey);
@@ -171,7 +170,6 @@ export const onRequestGet: PagesFunction<ListEnv> = async (context) => {
         prefix: folder,
         delimiter: "/",
         cursor,
-        // @ts-ignore `include` is supported by R2 but missing from this types version.
         include: ["httpMetadata", "customMetadata"],
       });
       collectPage(listing, folder, itemsByKey);

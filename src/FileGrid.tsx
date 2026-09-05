@@ -759,4 +759,6 @@ function thumbnail(file: FileItem, size: number) {
   );
 }
 
-export default FileGrid;
+// 浅比较 props：Main 侧回调均为 useCallback、emptyMessage 已 useMemo，
+// 对话框/菜单等无关状态更新时跳过整表重渲染。
+export default React.memo(FileGrid);

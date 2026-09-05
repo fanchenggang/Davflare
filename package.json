@@ -7,20 +7,19 @@
     "@emotion/styled": "^11.11.5",
     "@mui/icons-material": "^5.15.21",
     "@mui/material": "^5.15.21",
-    "@xmldom/xmldom": "^0.8.11",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@xmldom/xmldom": "^0.8.11",
     "fflate": "^0.8.3",
     "p-limit": "^6.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "5.0.1",
-    "typescript": "^5.5.3",
-    "web-vitals": "^2.1.4"
+    "typescript": "^5.5.3"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -56,6 +55,6 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@cloudflare/workers-types": "^4.20240620.0"
+    "@cloudflare/workers-types": "^5.20260905.1"
   }
 }

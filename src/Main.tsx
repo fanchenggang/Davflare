@@ -1,34 +1,15 @@
 import { isPreviewable } from "./app/preview";
 import React, {
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import {
-  Box,
-  Breadcrumbs,
-  Button,
-  CircularProgress,
-  IconButton,
-  Link,
-  Menu,
-  MenuItem,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from "@mui/material";
-import {
-  ArrowBack as ArrowBackIcon,
-  ContentCopy as ContentCopyIcon,
-  ExpandMore as ExpandMoreIcon,
-  Folder as FolderIcon,
-  FolderOpen as FolderOpenIcon,
-  SearchOff as SearchOffIcon,
-} from "@mui/icons-material";
+import { Box, Button, CircularProgress, Stack, Typography } from "@mui/material";
+import { FolderOpen as FolderOpenIcon, SearchOff as SearchOffIcon } from "@mui/icons-material";
 
 import ConfirmDialog from "./ConfirmDialog";
 import CreateFolderDialog from "./CreateFolderDialog";
@@ -39,15 +20,13 @@ import FileGrid, { FileGridSkeleton } from "./FileGrid";
 import MobileNav from "./MobileNav";
 import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
-import PreviewDialog from "./PreviewDialog";
+import PathBar, { SearchScope } from "./PathBar";
 import RenameDialog from "./RenameDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
-import SitesView from "./SitesView";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
-import ImagesView from "./ImagesView";
 import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
@@ -62,335 +41,34 @@ import {
   createFolder,
   downloadArchive,
   downloadFile,
-  fetchFolderCounts,
   fetchPath,
   openFile,
-  searchFiles,
   selectDirectoryFiles,
 } from "./app/transfer";
 import { moveToTrash, restoreTrash } from "./app/trash";
-import { useAuth } from "./app/auth";
+import { transferKeys, useUploadInputs } from "./app/useUploadInputs";
+import { useDragDropUpload } from "./app/useDragDropUpload";
+import { useFolderCounts } from "./app/useFolderCounts";
+import { useFolderListing } from "./app/useFolderListing";
+import { useKeyboardShortcuts } from "./app/useKeyboardShortcuts";
+import { useMultiSelect } from "./app/useMultiSelect";
+import { usePasteUpload } from "./app/usePasteUpload";
 import { useFeatures } from "./app/features";
-import { useTransferQueue, useUploadEnqueue } from "./app/transferQueue";
 import { FileItem } from "./app/types";
-import {
-  basename,
-  fileTypeCategory,
-  formatListingSize,
-  isDirectory,
-  isJunkFileName,
-  uniqueName,
-  uniquifyUploadFiles,
-} from "./app/utils";
+import { errorMessage, fileTypeCategory, formatListingSize, isDirectory, isJunkFileName } from "./app/utils";
+import { parentKey } from "./app/interaction";
 
-export type SearchScope = "folder" | "global";
+// 重组件按需加载：只有真正打开预览 / 进入对应 section 时才拉取对应 chunk
+const PreviewDialog = lazy(() => import("./PreviewDialog"));
+const SitesView = lazy(() => import("./SitesView"));
+const ImagesView = lazy(() => import("./ImagesView"));
 
-const FOLDER_COUNT_CACHE_KEY = "flaredrive.folderCounts";
-const FOLDER_COUNT_FILL_MAX = 50;
-
-function loadFolderCountCache(): Record<string, number> {
-  try {
-    return JSON.parse(
-      sessionStorage.getItem(FOLDER_COUNT_CACHE_KEY) || "{}"
-    ) as Record<string, number>;
-  } catch {
-    return {};
-  }
-}
-
-function saveFolderCountCache(counts: Record<string, number>) {
-  try {
-    sessionStorage.setItem(FOLDER_COUNT_CACHE_KEY, JSON.stringify(counts));
-  } catch {
-    // 忽略持久化失败
-  }
-}
-
-function isTypingTarget(target: EventTarget | null) {
-  const el =
-    target instanceof HTMLElement
-      ? target
-      : document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-  if (!el) return false;
-  const field = el.closest("input, textarea, select, [contenteditable='true']");
-  if (field instanceof HTMLInputElement) {
-    return !["checkbox", "radio", "button", "submit"].includes(field.type);
-  }
-  if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
-    return true;
-  }
-  return Boolean(field) || el.isContentEditable;
-}
-
-function shouldIgnoreShortcuts(event: KeyboardEvent) {
-  if (event.isComposing || event.key === "Process") return true;
-  return isTypingTarget(event.target) || isTypingTarget(document.activeElement);
-}
-
-function parentKey(key: string) {
-  const trimmed = key.replace(/\/$/, "");
-  const index = trimmed.lastIndexOf("/");
-  return index >= 0 ? trimmed.slice(0, index + 1) : "";
-}
-
-function stampPastedName(file: File) {
-  const subtype = (file.type.split("/")[1] || "png").replace("jpeg", "jpg");
-  const ext = subtype.split("+")[0] || "png";
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${strings.pastedImage} ${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(
-    now.getDate()
-  )}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.${ext}`;
-}
-
-function dragHasFiles(event: DragEvent | React.DragEvent) {
-  const types = event.dataTransfer?.types;
-  if (!types) return false;
-  const list = Array.from(types as ArrayLike<string>);
-  if (list.includes("application/x-flaredrive")) return false;
-  return list.includes("Files");
-}
-
-function hasOpenOverlay() {
-  const nodes = document.querySelectorAll(".MuiModal-root");
-  for (let i = 0; i < nodes.length; i++) { const node = nodes[i];
-    if (node.getAttribute("aria-hidden") !== "true") return true;
-  }
-  return false;
-}
-
-function PathBar({
-  cwd,
-  onNavigate,
-  stats,
-  searchScope,
-  onSearchScopeChange,
-  searchQuery,
-  onNotify,
-}: {
-  cwd: string;
-  onNavigate: (path: string) => void;
-  stats: string;
-  searchScope: SearchScope;
-  onSearchScopeChange: (scope: SearchScope) => void;
-  searchQuery: string;
-  onNotify: NotifyFn;
-}) {
-  const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
-  const atRoot = parts.length === 0;
-  const pathText = atRoot ? "/" : `/${parts.join("/")}/`;
-  const parentPath =
-    atRoot || parts.length === 1 ? "" : `${parts.slice(0, -1).join("/")}/`;
-  const [siblingsAnchor, setSiblingsAnchor] = useState<null | HTMLElement>(null);
-  const [siblings, setSiblings] = useState<FileItem[] | null>(null);
-  const openSiblings = async (event: React.MouseEvent<HTMLButtonElement>) => {
-    setSiblingsAnchor(event.currentTarget);
-    setSiblings(null);
-    try {
-      const items = await fetchPath(parentPath);
-      setSiblings(items.filter((item) => item.isDir));
-    } catch {
-      setSiblings([]);
-    }
-  };
-  const copyPath = async () => {
-    try {
-      await navigator.clipboard.writeText(pathText);
-      onNotify(translate("pathCopied"), "success");
-    } catch {
-      onNotify(translate("copyFailed"), "error");
-    }
-  };
-
+function SectionLoading() {
   return (
-    <Box sx={{ px: 1.5, pb: 1.25, pt: 0.25 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <IconButton
-          size="small"
-          aria-label={strings.goUp}
-          disabled={atRoot}
-          onClick={() =>
-            onNavigate(parts.slice(0, -1).join("/") + (parts.length > 1 ? "/" : ""))
-          }
-          sx={{
-            visibility: atRoot ? "hidden" : "visible",
-            opacity: atRoot ? 0 : 1,
-            pointerEvents: atRoot ? "none" : "auto",
-          }}
-        >
-          <ArrowBackIcon fontSize="small" />
-        </IconButton>
-        <Breadcrumbs
-          separator="›"
-          sx={{
-            flexGrow: 1,
-            "& .MuiTypography-root": { fontWeight: 600, fontSize: "0.9rem" },
-            "& .MuiLink-root": { fontWeight: 500, fontSize: "0.9rem" },
-          }}
-        >
-          {parts.length === 0 ? (
-            <Typography color="text.primary">{strings.allFiles}</Typography>
-          ) : (
-            <Link component="button" onClick={() => onNavigate("")}>
-              {strings.allFiles}
-            </Link>
-          )}
-          {parts.map((part, index) =>
-            index === parts.length - 1 ? (
-              <Typography key={index} color="text.primary">
-                {part}
-              </Typography>
-            ) : (
-              <Link
-                key={index}
-                component="button"
-                onClick={() =>
-                  onNavigate(parts.slice(0, index + 1).join("/") + "/")
-                }
-              >
-                {part}
-              </Link>
-            )
-          )}
-        </Breadcrumbs>
-        <IconButton
-          size="small"
-          aria-label={strings.copyPath}
-          onClick={copyPath}
-          sx={{ flexShrink: 0 }}
-        >
-          <ContentCopyIcon fontSize="small" />
-        </IconButton>
-        {!atRoot && (
-          <Tooltip title={strings.siblingFolders}>
-            <IconButton
-              size="small"
-              aria-label={strings.siblingFolders}
-              onClick={openSiblings}
-              sx={{ flexShrink: 0, mr: -0.5 }}
-            >
-              <ExpandMoreIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-        <Menu
-          anchorEl={siblingsAnchor}
-          open={Boolean(siblingsAnchor)}
-          onClose={() => setSiblingsAnchor(null)}
-        >
-          {siblings === null && (
-            <MenuItem disabled>{strings.loading}</MenuItem>
-          )}
-          {siblings !== null && siblings.length === 0 && (
-            <MenuItem disabled>{strings.noSiblingFolder}</MenuItem>
-          )}
-          {siblings !== null &&
-            siblings.map((item) => (
-              <MenuItem
-                key={item.key}
-                selected={item.key === cwd.replace(/\/$/, "")}
-                onClick={() => {
-                  setSiblingsAnchor(null);
-                  onNavigate(item.key);
-                }}
-              >
-                <FolderIcon fontSize="small" sx={{ mr: 1, color: "primary.main" }} />
-                {item.name}
-              </MenuItem>
-            ))}
-        </Menu>
-      </Box>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          flexWrap: "wrap",
-          paddingLeft: "40px",
-          minHeight: 32,
-        }}
-      >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            px: 1,
-            py: 0.25,
-            borderRadius: "999px",
-            backgroundColor: "background.default",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {stats}
-        </Typography>
-        <Box sx={{ flexGrow: 1 }} />
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={searchScope}
-          onChange={(_, value: SearchScope | null) => {
-            if (value) onSearchScopeChange(value);
-          }}
-          aria-label={strings.searchScope}
-          sx={{
-            backgroundColor: "background.default",
-            "& .MuiToggleButton-root": {
-              border: "none",
-              px: 1.25,
-              py: 0.25,
-              fontSize: "0.75rem",
-              "&.Mui-selected": {
-                backgroundColor: "background.paper",
-                color: "primary.main",
-                boxShadow: (theme) =>
-                  warmShadow(theme.palette.mode === "dark", "0 1px 2px", 0.08),
-              },
-            },
-          }}
-        >
-          <ToggleButton value="folder">{strings.searchHere}</ToggleButton>
-          <ToggleButton value="global">{strings.searchAll}</ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
-      {searchQuery ? (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ paddingLeft: "40px", paddingTop: 0.5 }}
-        >
-          {searchScope === "global" ? strings.searchAll : strings.searchHere}：
-          {searchQuery}
-        </Typography>
-      ) : null}
+    <Box sx={{ display: "flex", justifyContent: "center", padding: 6 }}>
+      <CircularProgress size={28} />
     </Box>
   );
-}
-
-async function transferKeys(
-  keys: string[],
-  destination: string,
-  mode: "copy" | "cut"
-) {
-  let existing: FileItem[] = [];
-  try {
-    existing = await fetchPath(destination);
-  } catch {
-    existing = [];
-  }
-  const taken = new Set(existing.map((file) => file.name));
-
-  for (const key of keys) {
-    const name = basename(key);
-    if (mode === "cut") {
-      const parent = key.slice(0, key.length - name.length);
-      if (parent === destination) continue;
-    }
-    const targetName = uniqueName(name, taken);
-    await copyPaste(key, `${destination}${targetName}`, mode === "cut");
-    taken.add(targetName);
-  }
 }
 
 function Main({
@@ -424,16 +102,11 @@ function Main({
     cut: cutToClipboard,
     clear: clearClipboard,
   } = useClipboard();
-  const transferQueue = useTransferQueue();
-  const uploadEnqueue = useUploadEnqueue();
-  const { username } = useAuth();
+  const recents = useRecent();
+  const { flags } = useFeatures();
 
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [searchHasMore, setSearchHasMore] = useState(false);
-  const [searchCursor, setSearchCursor] = useState<string | undefined>();
+  const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
   const [showWebDav, setShowWebDav] = useState(false);
@@ -447,12 +120,6 @@ function Main({
     "standard"
   );
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
-  const [folderCounts, setFolderCounts] = useState<Record<string, number>>(
-    loadFolderCountCache
-  );
-  const folderCountInFlight = useRef(new Set<string>());
-  const recents = useRecent();
-  const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -463,14 +130,27 @@ function Main({
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
-  const [dropActive, setDropActive] = useState(false);
-  const [focusedKey, setFocusedKey] = useState<string | null>(null);
-  const selectionAnchor = useRef<string | null>(null);
   const lastFolderPath = useRef("");
-  const loadedListingKey = useRef<string | null>(null);
-  const dropDepth = useRef(0);
 
-  const { flags } = useFeatures();
+  // 跨 hook 的桥接：useFolderListing 在选择/计数 hook 之前声明，
+  // 通过 ref 转发其回调到后声明的 setter。
+  const folderCountsSetterRef = useRef<
+    (update: (prev: Record<string, number>) => Record<string, number>) => void
+  >(() => {});
+  const clearSelectionRef = useRef<() => void>(() => {});
+  const onListingLoaded = useCallback(
+    (path: string, count: number) => {
+      folderCountsSetterRef.current((prev) => ({ ...prev, [path]: count }));
+    },
+    []
+  );
+  const onListingChanged = useCallback(() => {
+    clearSelectionRef.current();
+  }, []);
+  const clearSelection = useCallback(() => {
+    clearSelectionRef.current();
+  }, []);
+
   const cwd = route.kind === "folder" ? route.path : lastFolderPath.current;
   const section: ExplorerSection =
     route.kind === "shares" ||
@@ -480,6 +160,28 @@ function Main({
     route.kind === "settings"
       ? route.kind
       : "folder";
+
+  const {
+    files,
+    listingPending,
+    isGlobalSearch,
+    loadListing,
+    searchHasMore,
+    loadMoreSentinelRef,
+  } = useFolderListing({
+    route,
+    cwd,
+    debouncedSearch,
+    searchScope,
+    onNotify,
+    onListingLoaded,
+    onListingChanged,
+  });
+
+  const { transferQueue, takenForCwd, enqueueToDir } = useUploadInputs({
+    cwd,
+    files,
+  });
 
   useEffect(() => {
     if (route.kind === "folder") lastFolderPath.current = route.path;
@@ -506,10 +208,6 @@ function Main({
   }, [cwd]);
 
   useEffect(() => {
-    setFocusedKey(null);
-  }, [cwd, section]);
-
-  useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
     }, 300);
@@ -521,73 +219,6 @@ function Main({
       navigate({ kind: "folder", path: lastFolderPath.current });
     }
   }, [navigate, route.kind, search]);
-
-  const isGlobalSearch = Boolean(debouncedSearch) && searchScope === "global";
-  const listingKey =
-    route.kind === "folder"
-      ? isGlobalSearch
-        ? `folder:${cwd}||search:${debouncedSearch}`
-        : `folder:${cwd}`
-      : route.kind;
-
-  const loadListing = useCallback(async () => {
-    if (route.kind !== "folder") {
-      setFiles([]);
-      setLoading(false);
-      loadedListingKey.current = listingKey;
-      return;
-    }
-    if (username === null) {
-      setFiles([]);
-      setLoading(false);
-      return;
-    }
-
-    const silent = loadedListingKey.current === listingKey;
-    if (!silent) setLoading(true);
-    try {
-      if (isGlobalSearch) {
-        const result = await searchFiles(debouncedSearch);
-        setFiles(result.items);
-        setSearchHasMore(result.hasMore);
-        setSearchCursor(result.nextCursor);
-      } else {
-        const items = await fetchPath(cwd);
-        setFiles(items);
-        setFolderCounts((prev) => ({
-          ...prev,
-          [cwd.replace(/\/$/, "")]: items.length,
-        }));
-        setSearchHasMore(false);
-        setSearchCursor(undefined);
-      }
-      const listingChanged = loadedListingKey.current !== listingKey;
-      loadedListingKey.current = listingKey;
-      if (listingChanged) setSelectedKeys([]);
-    } catch (error) {
-      const alreadyLoaded = loadedListingKey.current === listingKey;
-      loadedListingKey.current = listingKey;
-      if (!alreadyLoaded) setFiles([]);
-      onNotify((error as Error).message, "error", {
-        duration: 8000,
-        action: { label: strings.retry, onClick: () => loadListing() },
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    cwd,
-    debouncedSearch,
-    listingKey,
-    onNotify,
-    route.kind,
-    isGlobalSearch,
-    username,
-  ]);
-
-  useEffect(() => {
-    loadListing();
-  }, [loadListing]);
 
   const activeUploads = transferQueue.filter(
     (task) =>
@@ -602,66 +233,6 @@ function Main({
     }
     previousActive.current = activeUploads;
   }, [activeUploads, loadListing]);
-
-  const [loadingMore, setLoadingMore] = useState(false);
-  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
-  const loadMore = useCallback(async () => {
-    if (!isGlobalSearch || !searchCursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const result = await searchFiles(debouncedSearch, searchCursor);
-      setFiles((prev) => [...prev, ...result.items]);
-      setSearchHasMore(result.hasMore);
-      setSearchCursor(result.nextCursor);
-    } catch (error) {
-      onNotify((error as Error).message, "error");
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [
-    debouncedSearch,
-    isGlobalSearch,
-    loadingMore,
-    onNotify,
-    searchCursor,
-  ]);
-
-  // 全盘搜索触底自动加载：IO 为主，scroll 捕获阶段兜底（部分嵌入环境 IO 不发回调）
-  useEffect(() => {
-    if (!searchHasMore) return;
-    const node = loadMoreSentinelRef.current;
-    if (!node) return;
-
-    const maybeLoad = () => {
-      const rect = node.getBoundingClientRect();
-      if (rect.top < window.innerHeight + 200 && rect.bottom > -200) {
-        loadMore();
-      }
-    };
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) loadMore();
-      },
-      { rootMargin: "200px" }
-    );
-    observer.observe(node);
-
-    let lastCheck = 0;
-    const onScroll = () => {
-      // rAF 在部分嵌入环境会被暂停，直接用时间戳节流
-      const now = Date.now();
-      if (now - lastCheck < 150) return;
-      lastCheck = now;
-      maybeLoad();
-    };
-    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
-    const initial = window.setTimeout(maybeLoad, 0);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("scroll", onScroll, { capture: true });
-      window.clearTimeout(initial);
-    };
-  }, [loadMore, searchHasMore]);
 
   const sortedFiles = useMemo(() => {
     const items = [...files];
@@ -727,80 +298,33 @@ function Main({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleFiles, lang]);
 
+  const {
+    selectedKeys,
+    setSelectedKeys,
+    focusedKey,
+    setFocusedKey,
+    toggleSelect,
+    selectAll,
+    jumpFocused,
+    moveFocused,
+  } = useMultiSelect(visibleFiles);
+
+  useEffect(() => {
+    setFocusedKey(null);
+  }, [cwd, section, setFocusedKey]);
+
+  const { folderCounts, setFolderCounts } = useFolderCounts({
+    active: route.kind === "folder" && !isGlobalSearch,
+    visibleFiles,
+  });
+  folderCountsSetterRef.current = setFolderCounts;
+  clearSelectionRef.current = () => setSelectedKeys([]);
+
   useEffect(() => {
     if (focusedKey && !visibleFiles.some((file) => file.key === focusedKey)) {
       setFocusedKey(null);
     }
-  }, [focusedKey, visibleFiles]);
-
-  const scrollFocusedIntoView = useCallback((key: string) => {
-    const nodes = document.querySelectorAll<HTMLElement>("[data-file-key]");
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      if (node.dataset.fileKey === key) {
-        node.scrollIntoView({ block: "nearest" });
-        return;
-      }
-    }
-  }, []);
-
-  const jumpFocused = useCallback(
-    (index: number, extendSelection: boolean) => {
-      if (!visibleFiles.length) return;
-      const clamped = Math.max(0, Math.min(index, visibleFiles.length - 1));
-      const next = visibleFiles[clamped];
-      setFocusedKey(next.key);
-      if (extendSelection) {
-        setSelectedKeys((prev) =>
-          prev.includes(next.key) ? prev : [...prev, next.key]
-        );
-      }
-      scrollFocusedIntoView(next.key);
-    },
-    [scrollFocusedIntoView, visibleFiles]
-  );
-
-  const moveFocused = useCallback(
-    (delta: number, extendSelection: boolean) => {
-      if (!visibleFiles.length) return;
-      const currentIndex = focusedKey
-        ? visibleFiles.findIndex((file) => file.key === focusedKey)
-        : -1;
-      jumpFocused(currentIndex + delta, extendSelection);
-    },
-    [focusedKey, jumpFocused, visibleFiles]
-  );
-
-  // 惰性补全可见文件夹的子项计数（缓存到 sessionStorage，重复进入不重复请求）
-  useEffect(() => {
-    if (route.kind !== "folder" || isGlobalSearch) return;
-    const targets = visibleFiles
-      .filter(
-        (file) =>
-          file.isDir &&
-          folderCounts[file.key] === undefined &&
-          !folderCountInFlight.current.has(file.key)
-      )
-      .slice(0, FOLDER_COUNT_FILL_MAX);
-    if (!targets.length) return;
-    for (const target of targets) folderCountInFlight.current.add(target.key);
-    let cancelled = false;
-    fetchFolderCounts(targets.map((target) => target.key)).then((counts) => {
-      for (const target of targets) {
-        folderCountInFlight.current.delete(target.key);
-      }
-      if (cancelled) return;
-      if (Object.keys(counts).length === 0) return;
-      setFolderCounts((prev) => {
-        const next = { ...prev, ...counts };
-        saveFolderCountCache(next);
-        return next;
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [folderCounts, isGlobalSearch, route.kind, visibleFiles]);
+  }, [focusedKey, setFocusedKey, visibleFiles]);
 
   const navigateFolder = useCallback(
     (path: string) => {
@@ -832,45 +356,6 @@ function Main({
     navigateFolder(key);
   }, [files, navigateFolder]);
 
-  const toggleSelect = useCallback(
-    (key: string, event?: { shiftKey?: boolean }) => {
-      setSelectedKeys((prev) => {
-        if (event?.shiftKey && selectionAnchor.current) {
-          const anchorIndex = visibleFiles.findIndex(
-            (file) => file.key === selectionAnchor.current
-          );
-          const targetIndex = visibleFiles.findIndex(
-            (file) => file.key === key
-          );
-          if (anchorIndex >= 0 && targetIndex >= 0) {
-            const [start, end] =
-              anchorIndex <= targetIndex
-                ? [anchorIndex, targetIndex]
-                : [targetIndex, anchorIndex];
-            const merged = new Set(prev);
-            for (const file of visibleFiles.slice(start, end + 1)) {
-              merged.add(file.key);
-            }
-            return [...merged];
-          }
-        }
-        return prev.includes(key)
-          ? prev.filter((item) => item !== key)
-          : [...prev, key];
-      });
-      selectionAnchor.current = key;
-    },
-    [visibleFiles]
-  );
-
-  const selectAll = useCallback(() => {
-    setSelectedKeys((prev) => {
-      const all = visibleFiles.map((file) => file.key);
-      if (prev.length === all.length) return [];
-      return all;
-    });
-  }, [visibleFiles]);
-
   const handleOpenMenu = useCallback(
     (position: { clientX: number; clientY: number }, file: FileItem) => {
       setContextMenu({
@@ -890,7 +375,7 @@ function Main({
       if (isPreviewable(file)) {
         setPreviewFile(file);
       } else {
-        openFile(key).catch((error) => onNotify((error as Error).message, "error"));
+        openFile(key).catch((error) => onNotify(errorMessage(error), "error"));
       }
     },
     [files, onNotify]
@@ -907,208 +392,38 @@ function Main({
     );
   }, [previewFile, visibleFiles]);
 
-  const takenForCwd = useMemo(() => {
-    const taken = new Set(files.map((item) => item.name));
-    for (const task of transferQueue) {
-      if (task.type !== "upload") continue;
-      if (task.basedir !== cwd) continue;
-      if (task.status === "canceled" || task.status === "completed") continue;
-      const rest = task.remoteKey.startsWith(cwd)
-        ? task.remoteKey.slice(cwd.length)
-        : task.name;
-      taken.add(rest.split("/").filter(Boolean)[0] || task.name);
-    }
-    return taken;
-  }, [cwd, files, transferQueue]);
-
-  const enqueueToDir = useCallback(
-    (incoming: File[], basedir: string, taken: Iterable<string>) => {
-      if (!incoming.length) return;
-      const unique = uniquifyUploadFiles(incoming, taken);
-      uploadEnqueue(...unique.map((file) => ({ file, basedir })));
-    },
-    [uploadEnqueue]
-  );
-
   const enqueueToCwd = useCallback(
     (incoming: File[]) => enqueueToDir(incoming, cwd, takenForCwd),
     [cwd, enqueueToDir, takenForCwd]
   );
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (shouldIgnoreShortcuts(event)) return;
-      if (event.key === "Escape") {
-        if (hasOpenOverlay()) return;
-        if (selectedKeys.length || focusedKey) {
-          event.preventDefault();
-          setSelectedKeys([]);
-          setFocusedKey(null);
-        }
-        return;
-      }
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        if (hasOpenOverlay()) return;
-        event.preventDefault();
-        moveFocused(event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
-        return;
-      }
-      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-        if (hasOpenOverlay()) return;
-        event.preventDefault();
-        moveFocused(event.key === "ArrowRight" ? 1 : -1, event.shiftKey);
-        return;
-      }
-      if (event.key === "Home" || event.key === "End") {
-        if (hasOpenOverlay()) return;
-        event.preventDefault();
-        jumpFocused(
-          event.key === "Home" ? 0 : visibleFiles.length - 1,
-          event.shiftKey
-        );
-        return;
-      }
-      if (event.key === " " && focusedKey) {
-        if (hasOpenOverlay()) return;
-        event.preventDefault();
-        toggleSelect(focusedKey);
-        return;
-      }
-      if ((event.key === "a" || event.key === "A") && (event.metaKey || event.ctrlKey)) {
-        if (hasOpenOverlay()) return;
-        event.preventDefault();
-        selectAll();
-        return;
-      }
-      if (event.key === "F2") {
-        if (hasOpenOverlay()) return;
-        const activeKey = focusedKey ?? (selectedKeys.length === 1 ? selectedKeys[0] : null);
-        if (!activeKey) return;
-        const file = visibleFiles.find((item) => item.key === activeKey);
-        if (!file) return;
-        event.preventDefault();
-        setRenameTarget(file);
-        return;
-      }
-      if (event.key === "Backspace") {
-        // Backspace 语义是「返回上级」而不是删除，避免破坏性误触；Delete 才删除。
-        if (hasOpenOverlay()) return;
-        if (route.kind !== "folder" || !route.path) return;
-        event.preventDefault();
-        navigateFolder(parentKey(route.path));
-        return;
-      }
-      if (event.key === "Delete") {
-        if (hasOpenOverlay()) return;
-        const targets =
-          selectedKeys.length > 0
-            ? selectedKeys
-            : focusedKey
-            ? [focusedKey]
-            : [];
-        if (!targets.length) return;
-        event.preventDefault();
-        setConfirmDelete(targets);
-        return;
-      }
-      if (event.key === "Enter") {
-        if (hasOpenOverlay()) return;
-        const activeKey = focusedKey ?? (selectedKeys.length === 1 ? selectedKeys[0] : null);
-        if (!activeKey) return;
-        const file = visibleFiles.find((item) => item.key === activeKey);
-        if (!file) return;
-        event.preventDefault();
-        if (file.isDir) navigateFolder(file.key);
-        else handleOpen(file.key);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    focusedKey,
-    handleOpen,
-    jumpFocused,
-    moveFocused,
-    navigateFolder,
+  useKeyboardShortcuts({
     route,
-    selectAll,
-    selectedKeys,
-    toggleSelect,
     visibleFiles,
-  ]);
+    selectedKeys,
+    focusedKey,
+    setSelectedKeys: clearSelection,
+    setFocusedKey,
+    moveFocused,
+    jumpFocused,
+    toggleSelect,
+    selectAll,
+    navigateFolder,
+    onOpen: handleOpen,
+    onRename: setRenameTarget,
+    onDelete: setConfirmDelete,
+  });
 
-  useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      if (route.kind !== "folder") return;
-      if (isTypingTarget(event.target)) return;
-      if (hasOpenOverlay()) return;
-      const items = event.clipboardData?.items;
-      if (!items) return;
-      const pasted: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind !== "file") continue;
-        const file = item.getAsFile();
-        if (file) pasted.push(file);
-      }
-      if (!pasted.length) return;
-      event.preventDefault();
-      const named = pasted.map((file) => {
-        const generic =
-          file.type.startsWith("image/") &&
-          (!file.name || /^image\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name));
-        if (!generic) return file;
-        return new File([file], stampPastedName(file), {
-          type: file.type,
-          lastModified: file.lastModified,
-        });
-      });
-      enqueueToCwd(named);
-      onNotify(translate("enqueuedUploads", { count: named.length }), "success");
-    };
-    window.addEventListener("paste", onPaste);
-    return () => window.removeEventListener("paste", onPaste);
-  }, [enqueueToCwd, onNotify, route.kind]);
+  usePasteUpload({
+    active: route.kind === "folder",
+    enqueueToCwd,
+    onNotify,
+  });
 
-  useEffect(() => {
-    if (route.kind !== "folder") {
-      dropDepth.current = 0;
-      setDropActive(false);
-      return;
-    }
-    const onEnter = (event: DragEvent) => {
-      if (!dragHasFiles(event)) return;
-      dropDepth.current += 1;
-      setDropActive(true);
-    };
-    const onLeave = () => {
-      dropDepth.current = Math.max(0, dropDepth.current - 1);
-      if (dropDepth.current === 0) setDropActive(false);
-    };
-    const onOver = (event: DragEvent) => {
-      if (!dragHasFiles(event)) return;
-      event.preventDefault();
-    };
-    const onDrop = async (event: DragEvent) => {
-      const wasFiles = dragHasFiles(event);
-      dropDepth.current = 0;
-      setDropActive(false);
-      if (!wasFiles || !event.dataTransfer) return;
-      event.preventDefault();
-      const dropped = await collectFilesFromDataTransfer(event.dataTransfer);
-      if (dropped.length) enqueueToCwd(dropped);
-    };
-    window.addEventListener("dragenter", onEnter);
-    window.addEventListener("dragleave", onLeave);
-    window.addEventListener("dragover", onOver);
-    window.addEventListener("drop", onDrop);
-    return () => {
-      window.removeEventListener("dragenter", onEnter);
-      window.removeEventListener("dragleave", onLeave);
-      window.removeEventListener("dragover", onOver);
-      window.removeEventListener("drop", onDrop);
-    };
-  }, [enqueueToCwd, route.kind]);
+  const dropActive = useDragDropUpload({
+    active: route.kind === "folder",
+    enqueueToCwd,
+  });
 
   const handleContextAction = useCallback(
     async (action: FileAction, file: FileItem) => {
@@ -1136,7 +451,7 @@ function Main({
           onNotify(translate("cutToClipboard"), "success");
         }
       } catch (error) {
-        onNotify((error as Error).message, "error");
+        onNotify(errorMessage(error), "error");
       }
     },
     [copyToClipboard, cutToClipboard, handleOpen, navigateFolder, onNotify]
@@ -1157,7 +472,7 @@ function Main({
       await runRename();
       onNotify(translate("renameDone"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error", {
+      onNotify(errorMessage(error), "error", {
         duration: 8000,
         action: { label: strings.retry, onClick: () => runRename().catch(() => {}) },
       });
@@ -1187,7 +502,7 @@ function Main({
                     onNotify(translate("undoDeleteDone"), "success");
                   })
                   .catch((error) =>
-                    onNotify((error as Error).message, "error")
+                    onNotify(errorMessage(error), "error")
                   )
                   .finally(() => loadListing());
               },
@@ -1195,7 +510,7 @@ function Main({
           : undefined,
       });
     } catch (error) {
-      onNotify((error as Error).message, "error", {
+      onNotify(errorMessage(error), "error", {
         action: {
           label: strings.retry,
           onClick: () => runDelete().then(() => loadListing()).catch(() => {}),
@@ -1220,7 +535,7 @@ function Main({
       await runPaste();
       onNotify(translate("pasteDone"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error", {
+      onNotify(errorMessage(error), "error", {
         duration: 8000,
         action: { label: strings.retry, onClick: () => runPaste().catch(() => {}) },
       });
@@ -1240,7 +555,7 @@ function Main({
       setSelectedKeys([]);
       onNotify(translate("moveDone"), "success");
     } catch (error) {
-      onNotify((error as Error).message, "error", {
+      onNotify(errorMessage(error), "error", {
         action: {
           label: strings.retry,
           onClick: () => runMove().then(() => loadListing()).catch(() => {}),
@@ -1282,7 +597,7 @@ function Main({
         setSelectedKeys([]);
         await loadListing();
       } catch (error) {
-        onNotify((error as Error).message, "error", {
+        onNotify(errorMessage(error), "error", {
           action: {
             label: strings.retry,
             onClick: () => runMove().then(() => loadListing()).catch(() => {}),
@@ -1304,7 +619,7 @@ function Main({
     enqueueToDir(droppedFiles, dest, taken);
   };
 
-  const openFilePicker = () => {
+  const openFilePicker = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "*/*";
@@ -1319,12 +634,57 @@ function Main({
       if (picked.length) enqueueToCwd(picked);
     };
     input.click();
-  };
+  }, [enqueueToCwd]);
 
-  const openFolderPicker = async () => {
+  const openFolderPicker = useCallback(async () => {
     const picked = await selectDirectoryFiles();
     if (picked.length) enqueueToCwd(picked);
-  };
+  }, [enqueueToCwd]);
+
+  const handleDownload = useCallback(
+    (file: FileItem) => {
+      (file.isDir
+        ? downloadArchive([file.key])
+        : downloadFile(file.key)
+      ).catch((error) => onNotify(errorMessage(error), "error"));
+    },
+    [onNotify]
+  );
+
+  const emptyMessage = useMemo(
+    () =>
+      debouncedSearch ? (
+        <EmptyState
+          variant="search"
+          icon={<SearchOffIcon />}
+          title={strings.noSearchResult}
+          description={strings.noSearchResultHint}
+          actions={
+            <Button variant="outlined" onClick={() => onSearchChange("")}>
+              {strings.clearSearch}
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          variant="folder"
+          icon={<FolderOpenIcon />}
+          title={strings.noFiles}
+          description={strings.noFilesHint}
+          actions={
+            <>
+              <Button variant="contained" onClick={openFilePicker}>
+                {strings.upload}
+              </Button>
+              <Button variant="outlined" onClick={() => setShowCreateFolder(true)}>
+                {strings.createFolder}
+              </Button>
+            </>
+          }
+        />
+      ),
+    [debouncedSearch, onSearchChange, openFilePicker]
+  );
 
   const handleSectionChange = (next: ExplorerSection) => {
     onSearchChange("");
@@ -1341,10 +701,6 @@ function Main({
     clipboard && clipboard.keys.length > 0 && route.kind === "folder"
   );
 
-  const listingPending =
-    loading ||
-    (route.kind === "folder" && loadedListingKey.current !== listingKey);
-
   useEffect(() => {
     if (!pendingOpen || listingPending) return;
     const found = files.find((item) => item.key === pendingOpen);
@@ -1352,7 +708,7 @@ function Main({
       if (isPreviewable(found)) setPreviewFile(found);
       else {
         openFile(found.key).catch((error) =>
-          onNotify((error as Error).message, "error")
+          onNotify(errorMessage(error), "error")
         );
       }
     } else {
@@ -1440,25 +796,29 @@ function Main({
       )}
       {route.kind === "sites" && flags.sites && (
         <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
-          <SitesView
-            onNotify={onNotify}
-            onGoFiles={() =>
-              navigate({ kind: "folder", path: lastFolderPath.current })
-            }
-            onManageFiles={(slug) =>
-              navigate({ kind: "folder", path: `sites/${slug}/` })
-            }
-          />
+          <Suspense fallback={<SectionLoading />}>
+            <SitesView
+              onNotify={onNotify}
+              onGoFiles={() =>
+                navigate({ kind: "folder", path: lastFolderPath.current })
+              }
+              onManageFiles={(slug) =>
+                navigate({ kind: "folder", path: `sites/${slug}/` })
+              }
+            />
+          </Suspense>
         </Box>
       )}
       {route.kind === "images" && flags.imageHost && (
         <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
-          <ImagesView
-            onNotify={onNotify}
-            onGoFiles={() =>
-              navigate({ kind: "folder", path: lastFolderPath.current })
-            }
-          />
+          <Suspense fallback={<SectionLoading />}>
+            <ImagesView
+              onNotify={onNotify}
+              onGoFiles={() =>
+                navigate({ kind: "folder", path: lastFolderPath.current })
+              }
+            />
+          </Suspense>
         </Box>
       )}
       {route.kind === "settings" && (
@@ -1498,54 +858,10 @@ function Main({
                 onOpen={handleOpen}
                 onOpenMenu={handleOpenMenu}
                 onDropOnFolder={handleDropOnFolder}
-                onDownload={(file) => {
-                  (file.isDir
-                    ? downloadArchive([file.key])
-                    : downloadFile(file.key)
-                  ).catch((error) =>
-                    onNotify((error as Error).message, "error")
-                  );
-                }}
+                onDownload={handleDownload}
                 onShareFile={(file) => setShareTarget(file)}
                 onDeleteFile={(file) => setConfirmDelete([file.key])}
-                emptyMessage={
-                  debouncedSearch ? (
-                    <EmptyState
-                      variant="search"
-                      icon={<SearchOffIcon />}
-                      title={strings.noSearchResult}
-                      description={strings.noSearchResultHint}
-                      actions={
-                        <Button
-                          variant="outlined"
-                          onClick={() => onSearchChange("")}
-                        >
-                          {strings.clearSearch}
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <EmptyState
-                      variant="folder"
-                      icon={<FolderOpenIcon />}
-                      title={strings.noFiles}
-                      description={strings.noFilesHint}
-                      actions={
-                        <>
-                          <Button variant="contained" onClick={openFilePicker}>
-                            {strings.upload}
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            onClick={() => setShowCreateFolder(true)}
-                          >
-                            {strings.createFolder}
-                          </Button>
-                        </>
-                      }
-                    />
-                  )
-                }
+                emptyMessage={emptyMessage}
               />
               {searchHasMore && (
                 <Stack
@@ -1588,7 +904,7 @@ function Main({
             onNotify(translate("folderCreated"), "success");
             await loadListing();
           } catch (error) {
-            onNotify((error as Error).message, "error");
+            onNotify(errorMessage(error), "error");
           }
         }}
       />
@@ -1655,30 +971,32 @@ function Main({
         </Box>
       )}
 
-      <PreviewDialog
-        file={previewFile}
-        siblings={previewSiblings}
-        onSibling={(file) => {
-          pushRecent({ key: file.key, name: file.name, isDir: false });
-          setPreviewFile(file);
-        }}
-        onClose={() => setPreviewFile(null)}
-        onNotify={onNotify}
-        onShare={() => {
-          if (previewFile) setShareTarget(previewFile);
-        }}
-        onRename={() => {
-          if (previewFile) {
-            setRenameTarget(previewFile);
-            setPreviewFile(null);
-          }
-        }}
-        onDelete={() => {
-          if (previewFile) {
-            setConfirmDelete([previewFile.key]);
-          }
-        }}
-      />
+      <Suspense fallback={null}>
+        <PreviewDialog
+          file={previewFile}
+          siblings={previewSiblings}
+          onSibling={(file) => {
+            pushRecent({ key: file.key, name: file.name, isDir: false });
+            setPreviewFile(file);
+          }}
+          onClose={() => setPreviewFile(null)}
+          onNotify={onNotify}
+          onShare={() => {
+            if (previewFile) setShareTarget(previewFile);
+          }}
+          onRename={() => {
+            if (previewFile) {
+              setRenameTarget(previewFile);
+              setPreviewFile(null);
+            }
+          }}
+          onDelete={() => {
+            if (previewFile) {
+              setConfirmDelete([previewFile.key]);
+            }
+          }}
+        />
+      </Suspense>
 
       <MoveDialog
         open={Boolean(moveTarget)}
@@ -1725,7 +1043,7 @@ function Main({
               await downloadArchive(selectedKeys);
             }
           } catch (error) {
-            onNotify((error as Error).message, "error");
+            onNotify(errorMessage(error), "error");
           }
         }}
         onRename={() => {

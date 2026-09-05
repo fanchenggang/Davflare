@@ -166,3 +166,20 @@ export function uniquifyUploadFiles(files: File[], taken: Iterable<string>): Fil
     });
   });
 }
+
+// 统一从 catch 的 unknown 里提取可展示的文案：Error 取 message，
+// Response-like 取状态码，其余兜底固定提示。
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof (error as { status: unknown }).status === "number"
+  ) {
+    return translate("requestFailedStatus", {
+      status: String((error as { status: number }).status),
+    });
+  }
+  return translate("requestFailed");
+}

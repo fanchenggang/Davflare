@@ -237,7 +237,7 @@ describe("Main", () => {
 
   test("copy path, search scope, create folder, keyboard select/delete", async () => {
     const onNotify = jest.fn();
-    const { props } = renderMain({ kind: "folder", path: "docs/" }, { onNotify });
+    renderMain({ kind: "folder", path: "docs/" }, { onNotify });
     mockFetchPath.mockResolvedValue([file]);
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
 

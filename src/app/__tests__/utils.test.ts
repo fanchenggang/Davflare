@@ -1,4 +1,4 @@
-import { dictionary, setLang, translate } from "../strings";
+import { dictionary, setLang } from "../strings";
 import {
   basename,
   encodeKey,

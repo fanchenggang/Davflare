@@ -1,26 +1,17 @@
+import {
+  KEYS_PREFIX,
+  StoredApiKey,
+  jsonResponse,
+  listStoredKeys,
+  sha256Hex,
+  textResponse,
+  verifyBasicAuth,
+} from "./_apikey";
+
 interface KeysEnv {
   BUCKET: R2Bucket;
   WEBDAV_USERNAME: string;
   WEBDAV_PASSWORD: string;
-}
-
-import { verifyBasicAuth } from "./_apikey";
-
-const KEYS_PREFIX = "_$flaredrive$/apikeys/";
-
-interface StoredApiKey {
-  id: string;
-  name: string;
-  prefix: string;
-  keyHash: string;
-  createdAt: string;
-  expiresAt: string | null;
-  createdBy?: string;
-  lastUsedAt?: string | null;
-}
-
-function isAuthorized(request: Request, env: KeysEnv) {
-  return verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD);
 }
 
 function usernameFromBasic(request: Request): string {
@@ -33,13 +24,6 @@ function usernameFromBasic(request: Request): string {
   } catch {
     return "";
   }
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-  });
 }
 
 function createId() {
@@ -61,16 +45,6 @@ function keyPrefix(key: string) {
   return key.slice(0, Math.min(8, key.length));
 }
 
-async function sha256Hex(value: string) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value)
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 function publicKey(record: StoredApiKey) {
   return {
     id: record.id,
@@ -83,27 +57,8 @@ function publicKey(record: StoredApiKey) {
   };
 }
 
-async function listStoredKeys(bucket: R2Bucket): Promise<StoredApiKey[]> {
-  const records: StoredApiKey[] = [];
-  let cursor: string | undefined;
-  do {
-    const listing = await bucket.list({
-      prefix: KEYS_PREFIX,
-      cursor,
-    });
-    for (const object of listing.objects) {
-      if (!object.key.endsWith(".json")) continue;
-      const data = await bucket.get(object.key);
-      if (data === null) continue;
-      try {
-        records.push((await data.json()) as StoredApiKey);
-      } catch {
-        // skip corrupt metadata
-      }
-    }
-    if (!listing.truncated) break;
-    cursor = listing.cursor;
-  } while (true);
+async function listKeysSorted(bucket: R2Bucket): Promise<StoredApiKey[]> {
+  const records = await listStoredKeys(bucket);
   records.sort((a, b) =>
     String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
   );
@@ -112,17 +67,17 @@ async function listStoredKeys(bucket: R2Bucket): Promise<StoredApiKey[]> {
 
 export const onRequestGet: PagesFunction<KeysEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return textResponse("Unauthorized", 401);
   }
-  const keys = await listStoredKeys(env.BUCKET);
+  const keys = await listKeysSorted(env.BUCKET);
   return jsonResponse(keys.map(publicKey));
 };
 
 export const onRequestPost: PagesFunction<KeysEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return textResponse("Unauthorized", 401);
   }
 
   let body: { name?: string; expiresInHours?: number | null; key?: string };
@@ -179,8 +134,8 @@ export const onRequestPost: PagesFunction<KeysEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<KeysEnv> = async (context) => {
   const { request, env } = context;
-  if (!isAuthorized(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
+  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+    return textResponse("Unauthorized", 401);
   }
 
   const id = new URL(request.url).searchParams.get("id");

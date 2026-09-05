@@ -124,6 +124,14 @@ assert_code "paged unique total = 5" "$TOTAL" "5"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/api/list?path=$DIR/paged/&limit=0" -H "$A")
 assert_code "limit=0 rejected" "$code" "400"
 
+echo "== counts 批量计数 =="
+code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" -X POST "$BASE/api/counts" -H "$BASIC" -H "Content-Type: application/json" -d "{\"paths\":[\"$DIR/paged\",\"$DIR/nonexistent-dir\"]}")
+assert_code "counts 200" "$code" "200"
+assert_contains "counts paged dir = 5" "$(cat /tmp/o.json)" "\"$DIR/paged\":5"
+assert_contains "counts missing dir = 0" "$(cat /tmp/o.json)" "\"$DIR/nonexistent-dir\":0"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/counts" -H "$A" -H "Content-Type: application/json" -d '{"paths":["x"]}')
+assert_code "counts api key = 401" "$code" "401"
+
 echo "== 大文件分块上传（除末块外 ≥5MiB）=="
 P1BIN="/tmp/fd-suite-$$.p1.bin"; head -c 5242880 /dev/zero > "$P1BIN"
 P2BIN="/tmp/fd-suite-$$.p2.bin"; printf 'tail-content\n' > "$P2BIN"

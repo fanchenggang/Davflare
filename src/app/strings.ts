@@ -299,6 +299,14 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   moveHere: { zh: "移动到此处", en: "Move here" },
   etaRemaining: { zh: "剩余 {time}", en: "{time} left" },
   etaSeconds: { zh: "{n} 秒", en: "{n}s" },
+  requestFailed: {
+    zh: "操作失败，请重试",
+    en: "Operation failed, please retry",
+  },
+  requestFailedStatus: {
+    zh: "操作失败（HTTP {status}），请重试",
+    en: "Operation failed (HTTP {status}), please retry",
+  },
   etaMinSec: { zh: "{m} 分 {s} 秒", en: "{m}m {s}s" },
   etaHourMin: { zh: "{h} 时 {m} 分", en: "{h}h {m}m" },
   justNow: { zh: "刚刚", en: "Just now" },
