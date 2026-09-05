@@ -524,22 +524,24 @@ export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
   const wantsDownload = url.searchParams.get("download") === "1";
   const wantsRaw = url.searchParams.get("raw") === "1";
 
-  // 与 GET 对齐：目录分享（含无 marker 的虚拟目录）下载的是 zip 流，无固定长度
-  if (metadata.isDir) {
-    return new Response(null, {
-      headers: {
-        "Content-Type": "application/zip",
-        "Cache-Control": "no-store",
-      },
-    });
-  }
-
-  // HEAD 与 GET 语义对齐：默认是零脚本落地页（text/html）
+  // HEAD 与 GET 语义对齐：默认落地页 text/html；?download=1 / ?raw=1 才是 zip/文件本体
   if (!wantsDownload && !wantsRaw) {
     return new Response(null, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+
+  // 目录分享下载的是 zip 流，无固定长度
+  if (metadata.isDir) {
+    return new Response(null, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }
