@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-// main.tsx 在 import 时把 window.DavflareDrive 挂到 window 上;
-// 这里用 jsdom + chrome mock 验证挂载、权限门与凭据播种的最小行为。
-// 完整渲染 <App/> 的链路由手动用例覆盖(见 TESTING.md),避免在测试里
-// 真正拉起整个应用打网络请求。
+// main.tsx 静态 import 了整棵 <App/>；在 bridge 单测里 mock 掉，
+// 避免冷启动拉起 React+MUI 整树导致 CI 上偶发超过默认 5s timeout。
+// 完整渲染链路由手动用例覆盖（见 TESTING.md）。
+vi.mock("../../App", () => ({
+  default: function MockApp() {
+    return null;
+  },
+}));
 
 const storageStore: Record<string, unknown> = {};
 
@@ -39,10 +43,12 @@ describe("DavflareDrive bridge", () => {
     document.body.innerHTML = "";
     window.localStorage.clear();
     for (const key of Object.keys(storageStore)) delete storageStore[key];
+    vi.resetModules();
   });
 
   afterEach(() => {
     delete (globalThis as unknown as { chrome?: unknown }).chrome;
+    delete (window as unknown as { DavflareDrive?: unknown }).DavflareDrive;
     vi.restoreAllMocks();
   });
 
