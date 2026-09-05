@@ -4,11 +4,13 @@ import { strings, translate } from "./app/strings";
 import {
   Box,
   Button,
+  Chip,
   List,
   ListItem,
   ListItemText,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -16,10 +18,11 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 
 import EmptyState from "./EmptyState";
-import { formatShareClipboard, listShares, revokeShare } from "./app/share";
+import ShareQrButton from "./ShareQrButton";
+import { formatShareClipboard, listShares, revokeShare, shareExpiryView } from "./app/share";
 import { NotifyFn } from "./app/notify";
 import { ShareInfo } from "./app/types";
-import { errorMessage } from "./app/utils";
+import { errorMessage, formatDateTime, formatRelativeDateTime } from "./app/utils";
 
 function SharesView({
   onNotify,
@@ -90,7 +93,9 @@ function SharesView({
         />
       ) : (
         <List>
-          {shares.map((share) => (
+          {shares.map((share) => {
+            const expiry = shareExpiryView(share.expiresAt);
+            return (
             <ListItem
               key={share.token}
               sx={{
@@ -103,6 +108,7 @@ function SharesView({
               }}
               secondaryAction={
                 <Stack direction="row" spacing={0.5}>
+                  <ShareQrButton url={share.url} />
                   <Button
                     size="small"
                     startIcon={<ContentCopyIcon />}
@@ -134,6 +140,7 @@ function SharesView({
               <ListItemText
                 primary={share.name}
                 primaryTypographyProps={{ fontWeight: 600 }}
+                secondaryTypographyProps={{ component: "div" }}
                 secondary={
                   <>
                     <Typography
@@ -143,19 +150,40 @@ function SharesView({
                     >
                       {share.url}
                     </Typography>
-                    {[
-                      share.expiresAt
-                        ? translate("expiresAtLabel", { time: new Date(share.expiresAt).toLocaleString() })
-                        : strings.validForever,
-                      share.extractCode ? translate("extractCodeLabel", { code: share.extractCode }) : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    <Stack
+                      direction="row"
+                      spacing={0.5}
+                      sx={{ mt: 0.75, flexWrap: "wrap", rowGap: 0.5 }}
+                    >
+                      {share.createdAt && (
+                        <Tooltip title={formatDateTime(share.createdAt)} enterDelay={400}>
+                          <Chip
+                            size="small"
+                            label={translate("shareCreatedAt", {
+                              time: formatRelativeDateTime(share.createdAt),
+                            })}
+                          />
+                        </Tooltip>
+                      )}
+                      <Chip
+                        size="small"
+                        color={expiry?.urgent ? "warning" : "default"}
+                        label={expiry ? expiry.label : strings.shareNeverExpires}
+                      />
+                      {share.extractCode && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={translate("extractCodeLabel", { code: share.extractCode })}
+                        />
+                      )}
+                    </Stack>
                   </>
                 }
               />
             </ListItem>
-          ))}
+            );
+          })}
         </List>
       )}
     </>

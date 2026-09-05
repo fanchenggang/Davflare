@@ -43,7 +43,8 @@ export interface ShareInfo {
   key: string;
   name: string;
   expiresAt: string | null;
-  createdAt: string;
+  /** 旧分享记录可能没有 createdAt（该字段后加），缺省时不展示 */
+  createdAt?: string;
   url: string;
   extractCode?: string | null;
   hasExtractCode?: boolean;
