@@ -54,6 +54,7 @@ var COPY = {
     drive: "Drive",
     driveReload: "Reload",
     driveOpenExternal: "Open in new tab",
+    libReload: "Reload library",
     driveNeedsBuild: "Drive view needs a one-time build: run “npm run build:extension” in the repo, then reload the extension.",
     settings: "Settings",
     addDialogTitle: "Add bookmark",
@@ -208,6 +209,7 @@ var COPY = {
     drive: "网盘",
     driveReload: "刷新",
     driveOpenExternal: "新标签页打开",
+    libReload: "刷新书签库",
     driveNeedsBuild: "网盘视图需要先构建一次：在仓库根目录运行「npm run build:extension」，然后重新加载扩展。",
     settings: "设置",
     addDialogTitle: "添加书签",
@@ -341,6 +343,11 @@ var state = {
   bytes: 0,
 };
 
+// refresh()/persist() 进行中时暂缓应用外部缓存（#77）：外部写入先落
+// chrome.storage，本页 PUT 用的是内存 etag/model，中途替换会导致条件失败
+// 或吞掉本地变更；等 PUT/GET 收敛后由其自身 saveCache 触发下一次 onChanged。
+var inflightSync = 0;
+
 var appState = {
   view: "bookmarks",
   workspaces: { version: 1, workspaces: [] },
@@ -468,6 +475,32 @@ function renderFromCache() {
   });
 }
 
+/* ---------- live updates from other contexts (#77) ----------
+ * popup / 右键快藏成功后会把最新 model+etag 写进 bookmarksCache（storage
+ * 是两端共享的唯一通道）。库页面若已打开，靠 onChanged 把新收藏即时并入
+ * 列表与搜索结果，不再需要整页刷新；写入失败（quota）时由工具栏的
+ * 刷新按钮兜底。 */
+chrome.storage.onChanged.addListener(function (changes, area) {
+  if (area !== "local") return;
+  var change = changes[CACHE_KEY];
+  if (!change || !change.newValue || !change.newValue.model) return;
+  applyExternalCache(change.newValue);
+});
+
+function applyExternalCache(cache) {
+  // 自己刚写回的缓存（refresh/persist 的 saveCache 回声）：syncedAt 相同，
+  // 内存已是该内容，重复渲染只会闪烁。
+  if (cache.syncedAt && cache.syncedAt === state.syncedAt) return;
+  // 本页有 PUT/GET 在途：等它收敛（成功写回或 412→refresh），避免中途
+  // 换掉内存 model/etag 导致写入丢失或条件请求失效。
+  if (inflightSync > 0) return;
+  state.model = Bookmarks.normalizeModel(cache.model);
+  state.etag = cache.etag || null;
+  state.syncedAt = cache.syncedAt || 0;
+  state.bytes = cache.bytes || 0;
+  renderAll();
+}
+
 function computeBytes() {
   return Bookmarks.serializeHtml(state.model).length + Bookmarks.modelToJsonText(state.model).length;
 }
@@ -491,6 +524,7 @@ function showLibraryError(kind) {
 async function refresh() {
   hideBanner();
   $("loading").classList.remove("hidden");
+  inflightSync++;
   try {
     var made = await makeClient();
     if (!made.cfg.instanceUrl) {
@@ -522,37 +556,43 @@ async function refresh() {
     showLibraryError("network");
     renderAll();
   } finally {
+    inflightSync--;
     $("loading").classList.add("hidden");
   }
 }
 
 async function persist() {
-  var made = await makeClient();
-  if (!made.cfg.instanceUrl) {
-    showBanner(t.needConfig, t.openSettings, openSettings);
+  inflightSync++;
+  try {
+    var made = await makeClient();
+    if (!made.cfg.instanceUrl) {
+      showBanner(t.needConfig, t.openSettings, openSettings);
+      return false;
+    }
+    var put = await made.client.putBookmarks({
+      html: Bookmarks.serializeHtml(state.model),
+      json: Bookmarks.modelToJsonText(state.model),
+      etag: state.etag,
+    });
+    if (put.ok) {
+      if (put.etag) state.etag = put.etag;
+      state.bytes = computeBytes();
+      state.syncedAt = Date.now();
+      saveCache();
+      hideBanner();
+      renderAll();
+      return true;
+    }
+    if (put.kind === "conflict") {
+      showBanner(t.errConflict);
+      await refresh();
+      return false;
+    }
+    showBanner(errorText(put.kind), t.openSettings, openSettings);
     return false;
+  } finally {
+    inflightSync--;
   }
-  var put = await made.client.putBookmarks({
-    html: Bookmarks.serializeHtml(state.model),
-    json: Bookmarks.modelToJsonText(state.model),
-    etag: state.etag,
-  });
-  if (put.ok) {
-    if (put.etag) state.etag = put.etag;
-    state.bytes = computeBytes();
-    state.syncedAt = Date.now();
-    saveCache();
-    hideBanner();
-    renderAll();
-    return true;
-  }
-  if (put.kind === "conflict") {
-    showBanner(t.errConflict);
-    await refresh();
-    return false;
-  }
-  showBanner(errorText(put.kind), t.openSettings, openSettings);
-  return false;
 }
 
 /* ---------- banners ---------- */
@@ -2203,6 +2243,7 @@ function applyCopy() {
   $("switchDrive").textContent = t.drive;
   $("driveRefresh").textContent = t.driveReload;
   $("driveExternal").textContent = t.driveOpenExternal;
+  $("libRefresh").textContent = t.libReload;
   $("switchWorkspaces").textContent = t.viewWorkspaces;
   $("switchTabRules").textContent = t.viewTabRules;
   $("switchSettings").textContent = t.viewSettings;
@@ -2300,6 +2341,11 @@ function wireEvents() {
   });
   $("driveRefresh").addEventListener("click", function () {
     if (window.DavflareDrive && driveMountedUrl) window.DavflareDrive.reload();
+  });
+  // 显式刷新入口（#77）：条件 GET，未变更时 304 秒回；外部写入漏报
+  // （如缓存写入失败）时用它兜底。
+  $("libRefresh").addEventListener("click", function () {
+    refresh();
   });
   $("driveExternal").addEventListener("click", async function () {
     var cfg = await loadConfig();

@@ -347,6 +347,7 @@ button.danger {
 .topbar input[type="search"],
 .topbar select,
 .topbar .viewToggle,
+.topbar #libRefresh,
 .topbar #themeToggle {
   height: 36px;
   font-size: 0.875rem;
@@ -383,6 +384,13 @@ button.danger {
 }
 
 #themeToggle {
+  background: var(--paper);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 7px 12px;
+}
+
+#libRefresh {
   background: var(--paper);
   color: var(--text);
   border: 1px solid var(--line);

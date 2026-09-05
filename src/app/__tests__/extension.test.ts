@@ -295,3 +295,35 @@ describe("Davflare Chrome extension / release zip", () => {
     expect(names).toContain("drive/drive.js");
   });
 });
+
+describe("Davflare Chrome extension / library live refresh (#77)", () => {
+  const app = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const shell = fs.readFileSync(path.join(extDir, "bookmarks.html"), "utf8");
+  const css = fs.readFileSync(path.join(extDir, "bookmarks.css"), "utf8");
+
+  test("open library page applies external bookmarkCache writes via storage.onChanged", () => {
+    // popup / 右键快藏成功后只写 chrome.storage 的 bookmarksCache；已打开的
+    // 库页面必须监听该变化，否则写入成功后列表/搜索仍落在旧 model 上。
+    expect(app).toContain("chrome.storage.onChanged.addListener");
+    expect(app).toMatch(/area !== "local"/);
+    expect(app).toContain("applyExternalCache");
+    // 自写回声（syncedAt 相同）不得重复渲染；refresh/persist 在途时不得
+    // 中途替换内存 model/etag（会让 PUT 丢本地变更或条件请求失效）。
+    expect(app).toMatch(
+      /function applyExternalCache\(cache\)\s*\{[\s\S]*?syncedAt === state\.syncedAt[\s\S]*?inflightSync > 0[\s\S]*?renderAll\(\);/
+    );
+    expect(app).toMatch(
+      /async function refresh\(\)[\s\S]*?inflightSync\+\+[\s\S]*?finally\s*\{[\s\S]*?inflightSync--/
+    );
+    expect(app).toMatch(
+      /async function persist\(\)[\s\S]*?inflightSync\+\+[\s\S]*?finally\s*\{[\s\S]*?inflightSync--/
+    );
+  });
+
+  test("library topbar has an explicit reload entry wired to refresh()", () => {
+    expect(shell).toContain('id="libRefresh"');
+    expect(app).toMatch(/libRefresh"\)\.addEventListener\("click"[\s\S]{0,120}refresh\(\)/);
+    expect(app).toContain('$("libRefresh").textContent = t.libReload;');
+    expect(css).toContain("#libRefresh");
+  });
+});
