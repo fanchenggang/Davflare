@@ -20,14 +20,16 @@ const packageScript = path.join(repoRoot, "scripts/package-extension.sh");
 const {
   DEFAULT_NTP,
   DEFAULT_SETTINGS,
+  TOOLBAR_MODES,
   mergeSettings,
   normalizeInstanceUrl,
   resolveNewTabTarget,
   resolveToolbarTarget,
 } = nodeRequire("../../../extension/url.js") as {
   DEFAULT_NTP: string;
-  DEFAULT_SETTINGS: { instanceUrl: string };
-  mergeSettings: (stored: unknown) => { instanceUrl: string };
+  DEFAULT_SETTINGS: { instanceUrl: string; toolbarMode: string };
+  TOOLBAR_MODES: string[];
+  mergeSettings: (stored: unknown) => { instanceUrl: string; toolbarMode: string };
   normalizeInstanceUrl: (raw: unknown) => string;
   resolveNewTabTarget: (settings: unknown) => { action: string; url?: string };
   resolveToolbarTarget: (settings: unknown) => { action: string; url?: string };
@@ -59,13 +61,20 @@ describe("Davflare Chrome extension / default package", () => {
     fs.readFileSync(path.join(extDir, "manifest.json"), "utf8")
   ) as Record<string, unknown>;
 
-  test("is Manifest V3 with action, options, and storage — no NTP override", () => {
+  test("is Manifest V3 with action, options, and bookmarks permissions — no NTP override", () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.action).toBeTruthy();
     expect((manifest.options_ui as { page: string }).page).toBe("options.html");
-    expect(manifest.permissions).toEqual(["storage"]);
+    expect(manifest.permissions).toEqual([
+      "storage",
+      "activeTab",
+      "contextMenus",
+      "favicon",
+      "notifications",
+    ]);
+    expect(manifest.optional_permissions).toEqual(["bookmarks"]);
     expect(manifest.host_permissions).toBeUndefined();
-    expect(manifest.optional_host_permissions).toBeUndefined();
+    expect(manifest.optional_host_permissions).toEqual(["http://*/*", "https://*/*"]);
     expect(manifest.chrome_url_overrides).toBeUndefined();
     expect(Object.prototype.hasOwnProperty.call(manifest, "chrome_url_overrides")).toBe(
       false
@@ -103,18 +112,28 @@ describe("Davflare Chrome extension / default package", () => {
 });
 
 describe("Davflare Chrome extension / settings defaults", () => {
-  test("instance URL is empty and leftover newTab flags are ignored", () => {
-    expect(DEFAULT_SETTINGS).toEqual({ instanceUrl: "" });
-    expect(mergeSettings(undefined)).toEqual({ instanceUrl: "" });
-    expect(mergeSettings({})).toEqual({ instanceUrl: "" });
+  test("instance URL is empty, mode defaults to drive, and leftover flags are ignored", () => {
+    expect(DEFAULT_SETTINGS).toEqual({ instanceUrl: "", toolbarMode: "drive" });
+    expect(TOOLBAR_MODES).toEqual(["drive", "bookmarks"]);
+    expect(mergeSettings(undefined)).toEqual({ instanceUrl: "", toolbarMode: "drive" });
+    expect(mergeSettings({})).toEqual({ instanceUrl: "", toolbarMode: "drive" });
     expect(mergeSettings({ newTab: true, instanceUrl: 1 })).toEqual({
       instanceUrl: "",
+      toolbarMode: "drive",
     });
     expect(
       mergeSettings({ newTab: true, instanceUrl: "https://drive.example" })
     ).toEqual({
       instanceUrl: "https://drive.example",
+      toolbarMode: "drive",
     });
+  });
+
+  test("only the two known toolbar modes are accepted", () => {
+    expect(mergeSettings({ toolbarMode: "bookmarks" }).toolbarMode).toBe("bookmarks");
+    expect(mergeSettings({ toolbarMode: "drive" }).toolbarMode).toBe("drive");
+    expect(mergeSettings({ toolbarMode: "newtab" }).toolbarMode).toBe("drive");
+    expect(mergeSettings({ toolbarMode: 42 }).toolbarMode).toBe("drive");
   });
 });
 
@@ -142,6 +161,16 @@ describe("Davflare Chrome extension / toolbar URL helper", () => {
       url: "http://localhost:8788",
     });
     expect(normalizeInstanceUrl("drive.example")).toBe("https://drive.example");
+  });
+
+  test("bookmark mode routes to the library page even before a URL is configured", () => {
+    expect(resolveToolbarTarget({ toolbarMode: "bookmarks" })).toEqual({
+      action: "bookmarks",
+    });
+    expect(
+      resolveToolbarTarget({ instanceUrl: "https://drive.example", toolbarMode: "bookmarks" })
+    ).toEqual({ action: "bookmarks" });
+    expect(resolveToolbarTarget({ toolbarMode: "drive" })).toEqual({ action: "options" });
   });
 });
 
@@ -176,7 +205,7 @@ describe("Davflare Chrome extension / release zips", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  test("default zip has no chrome_url_overrides and no newtab files", () => {
+  test("default zip has no chrome_url_overrides and ships the bookmark library", () => {
     const manifest = unzipManifest(defaultZip);
     const names = unzipList(defaultZip);
     expect(manifest.chrome_url_overrides).toBeUndefined();
@@ -188,6 +217,12 @@ describe("Davflare Chrome extension / release zips", () => {
     expect(names).toContain("manifest.json");
     expect(names).toContain("options.html");
     expect(names).toContain("background.js");
+    expect(names).toContain("bookmarks.html");
+    expect(names).toContain("bookmarks.css");
+    expect(names).toContain("bookmarksApp.js");
+    expect(names).toContain("bookmarksView.js");
+    expect(names).toContain("bookmarks.js");
+    expect(names).toContain("dav.js");
   });
 
   test("newtab zip includes chrome_url_overrides and newtab files", () => {

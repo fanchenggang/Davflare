@@ -72,7 +72,9 @@ label {
   margin-bottom: 6px;
 }
 
-input[type="url"] {
+input[type="url"],
+input[type="text"],
+input[type="password"] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -82,10 +84,43 @@ input[type="url"] {
   background: #fff;
 }
 
-input[type="url"]:focus {
+input[type="url"]:focus,
+input[type="text"]:focus,
+input[type="password"]:focus {
   outline: none;
   border-color: var(--orange);
   box-shadow: 0 0 0 4px var(--focus);
+}
+
+.section {
+  margin: 22px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.section legend {
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.section label:not(.radio) {
+  margin-top: 12px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  font-size: 0.875rem;
+  margin: 0 0 6px;
+  cursor: pointer;
+}
+
+.radio input {
+  accent-color: var(--orange);
 }
 
 .actions {
@@ -93,6 +128,7 @@ input[type="url"]:focus {
   align-items: center;
   gap: 14px;
   margin-top: 22px;
+  flex-wrap: wrap;
 }
 
 button {
@@ -109,6 +145,16 @@ button {
 
 button:hover {
   background: var(--orange-dark);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--orange-dark);
+  border: 1px solid var(--orange);
+}
+
+button.ghost:hover {
+  background: var(--focus);
 }
 
 button:focus-visible {

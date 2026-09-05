@@ -7,7 +7,10 @@
 
 var DEFAULT_SETTINGS = {
   instanceUrl: "",
+  toolbarMode: "drive",
 };
+
+var TOOLBAR_MODES = ["drive", "bookmarks"];
 
 var DEFAULT_NTP = "chrome://new-tab-page/";
 
@@ -15,6 +18,7 @@ function mergeSettings(stored) {
   var src = stored && typeof stored === "object" ? stored : {};
   return {
     instanceUrl: typeof src.instanceUrl === "string" ? src.instanceUrl : "",
+    toolbarMode: src.toolbarMode === "bookmarks" ? "bookmarks" : "drive",
   };
 }
 
@@ -51,6 +55,7 @@ function normalizeInstanceUrl(raw) {
 
 function resolveToolbarTarget(settings) {
   var merged = mergeSettings(settings);
+  if (merged.toolbarMode === "bookmarks") return { action: "bookmarks" };
   var url = normalizeInstanceUrl(merged.instanceUrl);
   if (url) return { action: "open", url: url };
   return { action: "options" };
@@ -66,6 +71,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     DEFAULT_NTP: DEFAULT_NTP,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+    TOOLBAR_MODES: TOOLBAR_MODES,
     mergeSettings: mergeSettings,
     normalizeInstanceUrl: normalizeInstanceUrl,
     resolveNewTabTarget: resolveNewTabTarget,

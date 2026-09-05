@@ -31,13 +31,54 @@
           Paste the Pages or custom-domain URL of your own Davflare instance.
         </p>
 
+        <fieldset class="section">
+          <legend id="modeLabel">Default toolbar action</legend>
+          <label class="radio" for="modeDrive">
+            <input type="radio" id="modeDrive" name="toolbarMode" value="drive" />
+            <span id="modeDriveText">Open drive</span>
+          </label>
+          <label class="radio" for="modeBookmarks">
+            <input type="radio" id="modeBookmarks" name="toolbarMode" value="bookmarks" />
+            <span id="modeBookmarksText">Open bookmark library</span>
+          </label>
+          <p class="hint" id="modeHint">Right-click the toolbar icon to switch anytime.</p>
+        </fieldset>
+
+        <fieldset class="section">
+          <legend id="davLabel">WebDAV credentials</legend>
+          <label for="davUser" id="userLabel">Username</label>
+          <input
+            id="davUser"
+            name="davUser"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="off"
+          />
+          <label for="davPass" id="passLabel">Password</label>
+          <input
+            id="davPass"
+            name="davPass"
+            type="password"
+            autocomplete="new-password"
+            spellcheck="false"
+          />
+          <p class="hint" id="davHint">
+            Stored only on this device. Same values as your deployment's
+            WEBDAV_USERNAME / WEBDAV_PASSWORD.
+          </p>
+        </fieldset>
+
         <div class="actions">
           <button type="submit" id="save">Save</button>
+          <button type="button" id="testConn" class="ghost">Test connection</button>
           <p id="status" class="status" role="status"></p>
         </div>
+        <p id="probeStatus" class="status" role="status"></p>
       </form>
     </main>
     <script src="url.js"></script>
+    <script src="dav.js"></script>
     <script src="options.js"></script>
   </body>
 </html>
