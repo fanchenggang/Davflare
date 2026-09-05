@@ -7,7 +7,13 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
   fallbackLetter: (item: unknown) => string;
   filterBookmarks: (
     model: unknown,
-    opts?: { query?: string; folder?: string | null; tag?: string | null }
+    opts?: {
+      query?: string;
+      folder?: string | null;
+      tag?: string | null;
+      since?: number;
+    },
+    pinyinTools?: { matchText: (text: unknown, query: string) => boolean } | null
   ) => Array<Record<string, unknown>>;
   formatDate: (ms: number, lang?: string) => string;
   formatBytes: (n: number) => string;
@@ -129,5 +135,35 @@ describe("extension/bookmarksView.js filterBookmarks", () => {
 
     const miss = BookmarksView.filterBookmarks(model, { folder: "Dev", tag: "infra" });
     expect(miss).toEqual([]);
+  });
+
+  test("the since filter bounds the added time", () => {
+    const recent = Date.now() - 1000;
+    const old = Date.now() - 30 * 86400000;
+    const timed = {
+      version: 1,
+      bookmarks: [
+        { id: "new", title: "New", url: "https://new.example", added: recent },
+        { id: "old", title: "Old", url: "https://old.example", added: old },
+      ],
+    };
+    const week = Date.now() - 7 * 86400000;
+    expect(
+      BookmarksView.filterBookmarks(timed, { since: week }).map((b) => b.id)
+    ).toEqual(["new"]);
+    expect(BookmarksView.filterBookmarks(timed, { since: 0 })).toHaveLength(2);
+  });
+
+  test("ascii queries also hit the injected pinyin matcher", () => {
+    const pinyinTools = {
+      matchText: (text: unknown, query: string) =>
+        String(text).indexOf("云") !== -1 && query === "txy",
+    };
+    expect(
+      BookmarksView.filterBookmarks(model, { query: "txy" }, pinyinTools).map((b) => b.id)
+    ).toEqual(["2"]);
+    expect(
+      BookmarksView.filterBookmarks(model, { query: "txy" }).map((b) => b.id)
+    ).toEqual([]);
   });
 });

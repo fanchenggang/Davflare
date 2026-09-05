@@ -17,7 +17,13 @@
           </div>
         </header>
 
-        <nav class="nav">
+        <div class="viewSwitch" role="tablist">
+          <button id="switchBookmarks" class="navItem active" type="button">Bookmarks</button>
+          <button id="switchWorkspaces" class="navItem" type="button">Workspaces</button>
+          <button id="switchTabRules" class="navItem" type="button">Tab groups</button>
+        </div>
+
+        <nav class="nav" id="bookmarksNav">
           <button class="navItem" id="navAll" data-filter="all" type="button">
             <span id="navAllText">All bookmarks</span>
             <span class="count" id="navAllCount">0</span>
@@ -44,22 +50,51 @@
       </aside>
 
       <main class="main">
-        <header class="topbar">
-          <input id="search" type="search" spellcheck="false" placeholder="Search bookmarks…" />
-          <select id="folderSelect"></select>
-          <div class="spacer"></div>
-          <div class="viewToggle" role="group" aria-label="View">
-            <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
-            <button id="viewList" type="button" title="List">☰</button>
-          </div>
-          <button id="themeToggle" type="button" title="Theme">☾</button>
-        </header>
+        <div id="viewBookmarks">
+          <header class="topbar">
+            <input id="search" type="search" spellcheck="false" placeholder="Search bookmarks…" />
+            <select id="folderSelect"></select>
+            <select id="sinceSelect"></select>
+            <div class="spacer"></div>
+            <div class="viewToggle" role="group" aria-label="View">
+              <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
+              <button id="viewList" type="button" title="List">☰</button>
+            </div>
+            <button id="themeToggle" type="button" title="Theme">☾</button>
+          </header>
 
-        <div id="banner" class="banner hidden"></div>
-        <p id="loading" class="loading hidden">Loading…</p>
-        <section id="cards" class="cards"></section>
-        <section id="rows" class="rows hidden"></section>
-        <p id="emptyState" class="empty hidden"></p>
+          <div id="banner" class="banner hidden"></div>
+          <p id="loading" class="loading hidden">Loading…</p>
+          <section id="cards" class="cards"></section>
+          <section id="rows" class="rows hidden"></section>
+          <p id="emptyState" class="empty hidden"></p>
+        </div>
+
+        <div id="viewWorkspaces" class="hidden">
+          <header class="topbar">
+            <button id="saveWindowBtn" class="primary" type="button">Save current window</button>
+            <span id="wsCount" class="topHint"></span>
+            <div class="spacer"></div>
+          </header>
+          <div id="bannerWs" class="banner hidden"></div>
+          <section id="wsList" class="wsList"></section>
+          <p id="wsEmpty" class="empty hidden"></p>
+        </div>
+
+        <div id="viewTabRules" class="hidden">
+          <header class="topbar">
+            <button id="applyGroupsBtn" class="primary" type="button">Group current window</button>
+            <label class="checkLabel" id="fallbackLabel">
+              <input type="checkbox" id="fallbackDomain" />
+              <span id="fallbackText">Group the rest by domain</span>
+            </label>
+            <div class="spacer"></div>
+            <button id="ruleAddBtn" class="ghost" type="button">Add rule</button>
+          </header>
+          <div id="bannerRules" class="banner hidden"></div>
+          <section id="ruleList" class="rows"></section>
+          <p id="rulesEmpty" class="empty hidden"></p>
+        </div>
       </main>
     </div>
 
@@ -78,6 +113,70 @@
       </form>
     </dialog>
 
+    <dialog id="tagDialog">
+      <form id="tagForm" novalidate>
+        <h2 id="tagDialogTitle">Edit bookmark</h2>
+        <p id="tagTarget" class="dialogSubtitle"></p>
+        <label for="tagInput" id="tagInputLabel">Tags (comma separated)</label>
+        <input id="tagInput" type="text" spellcheck="false" placeholder="dev, docs" />
+        <label for="noteInput" id="noteInputLabel">Note</label>
+        <textarea id="noteInput" rows="3" spellcheck="false"></textarea>
+        <menu>
+          <button id="tagCancel" class="ghost" type="button">Cancel</button>
+          <button id="tagSave" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="wsNameDialog">
+      <form id="wsNameForm" novalidate>
+        <h2 id="wsNameTitle">Workspace name</h2>
+        <input id="wsNameInput" type="text" spellcheck="false" />
+        <p id="wsNameError" class="status err"></p>
+        <menu>
+          <button id="wsNameCancel" class="ghost" type="button">Cancel</button>
+          <button id="wsNameSave" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="ruleDialog">
+      <form id="ruleForm" novalidate>
+        <h2 id="ruleDialogTitle">Grouping rule</h2>
+        <label for="ruleDomain" id="ruleDomainLabel">Domains (comma separated)</label>
+        <input id="ruleDomain" type="text" spellcheck="false" placeholder="github.com, gitlab.com" />
+        <label for="ruleUrl" id="ruleUrlLabel">URL contains</label>
+        <input id="ruleUrl" type="text" spellcheck="false" />
+        <label for="ruleTitle" id="ruleTitleLabel">Title contains</label>
+        <input id="ruleTitle" type="text" spellcheck="false" />
+        <label for="ruleRegex" id="ruleRegexLabel">URL regex</label>
+        <input id="ruleRegex" type="text" spellcheck="false" />
+        <p id="ruleError" class="status err"></p>
+        <div class="ruleGrid">
+          <div>
+            <label for="ruleName" id="ruleNameLabel">Group title</label>
+            <input id="ruleName" type="text" spellcheck="false" />
+          </div>
+          <div>
+            <label for="ruleColor" id="ruleColorLabel">Color</label>
+            <select id="ruleColor"></select>
+          </div>
+          <div>
+            <label for="ruleOrder" id="ruleOrderLabel">Priority</label>
+            <input id="ruleOrder" type="number" step="1" />
+          </div>
+        </div>
+        <label class="checkLabel" id="ruleCollapsedLabel">
+          <input type="checkbox" id="ruleCollapsed" />
+          <span id="ruleCollapsedText">Collapse the group</span>
+        </label>
+        <menu>
+          <button id="ruleCancel" class="ghost" type="button">Cancel</button>
+          <button id="ruleSave" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="confirmDialog">
       <p id="confirmText"></p>
       <menu>
@@ -89,7 +188,11 @@
     <script src="url.js"></script>
     <script src="bookmarks.js"></script>
     <script src="dav.js"></script>
+    <script src="pinyinDict.js"></script>
+    <script src="pinyin.js"></script>
     <script src="bookmarksView.js"></script>
+    <script src="workspaces.js"></script>
+    <script src="tabRules.js"></script>
     <script src="bookmarksApp.js"></script>
   </body>
 </html>

@@ -25,7 +25,15 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "activeTab", "contextMenus", "favicon", "notifications"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "favicon",
+    "notifications",
+    "tabs",
+    "tabGroups"
+  ],
   "optional_permissions": ["bookmarks"],
   "optional_host_permissions": ["http://*/*", "https://*/*"]
 }

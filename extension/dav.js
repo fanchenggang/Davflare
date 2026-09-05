@@ -99,24 +99,46 @@ var DavflareDav = (function () {
     }
 
     /**
-     * Load both files. A 404 on the html is ambiguous (missing file vs flag
-     * off), so probe the root to disambiguate before treating it as empty.
+     * GET one file under bookmarks/. A 404 is ambiguous (missing file vs
+     * feature flag off), so probe the root to disambiguate.
      */
-    async function getBookmarks() {
-      var res = await request("GET", dir + HTML_PATH);
+    async function getFile(fileName) {
+      var res = await request("GET", dir + fileName);
       if (res.status === 0) return { ok: false, kind: "network" };
       if (res.status === 404) {
         var probeRes = await probe();
         if (!probeRes.ok) return probeRes;
-        return { ok: true, missing: true, html: "", etag: null, jsonText: null };
+        return { ok: true, missing: true, text: null, etag: null };
       }
       if (!res.ok) return { ok: false, kind: res.kind };
+      return { ok: true, missing: false, text: res.text, etag: res.etag };
+    }
+
+    /** PUT one file under bookmarks/; sends If-Match when an etag is given. */
+    async function putFile(fileName, body, contentType, etag) {
+      var mk = await ensureDir();
+      if (!mk.ok) return mk;
+      var headers = { "Content-Type": contentType };
+      if (etag) headers["If-Match"] = etag;
+      var res = await request("PUT", dir + fileName, {
+        body: String(body == null ? "" : body),
+        headers: headers,
+      });
+      if (res.status === 0) return { ok: false, kind: "network" };
+      if (res.status === 412) return { ok: false, kind: "conflict" };
+      if (!res.ok) return { ok: false, kind: res.kind };
+      return { ok: true };
+    }
+
+    async function getBookmarks() {
+      var html = await getFile(HTML_PATH);
+      if (!html.ok) return html;
       var jsonText = await getJsonText();
       return {
         ok: true,
-        missing: false,
-        html: res.text,
-        etag: res.etag,
+        missing: Boolean(html.missing),
+        html: html.text || "",
+        etag: html.etag,
         jsonText: jsonText,
       };
     }
@@ -150,10 +172,12 @@ var DavflareDav = (function () {
 
     return {
       ensureDir: ensureDir,
+      getFile: getFile,
       getBookmarks: getBookmarks,
       paths: { root: root, dir: dir, html: dir + HTML_PATH, json: dir + JSON_PATH },
       probe: probe,
       putBookmarks: putBookmarks,
+      putFile: putFile,
     };
   }
 
