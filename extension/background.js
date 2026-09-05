@@ -85,10 +85,12 @@ function notify(title, message) {
 }
 
 async function loadConfig() {
-  var sync = await chrome.storage.sync.get(["instanceUrl"]);
+  var sync = await chrome.storage.sync.get(["instanceUrl", "bookmarkPath"]);
   var local = await chrome.storage.local.get(["davUsername", "davPassword"]);
+  var merged = mergeSettings(sync);
   return {
-    instanceUrl: mergeSettings(sync).instanceUrl,
+    instanceUrl: merged.instanceUrl,
+    basePath: merged.bookmarkPath,
     username: typeof local.davUsername === "string" ? local.davUsername : "",
     password: typeof local.davPassword === "string" ? local.davPassword : "",
   };

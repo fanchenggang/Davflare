@@ -28,7 +28,11 @@ var DavflareDav = (function () {
     var opts = options || {};
     var base = String(opts.instanceUrl || "").replace(/\/+$/, "");
     var root = base + "/webdav";
-    var dir = root + "/bookmarks/";
+    // Relative directory under /webdav holding all bookmark data (issue #54):
+    // configurable so test instances and multi-library setups stay isolated.
+    var basePath = String(opts.basePath || "").trim().replace(/^\/+|\/+$/g, "");
+    if (!basePath) basePath = "bookmarks";
+    var dir = root + "/" + basePath + "/";
     var username = String(opts.username || "");
     var password = String(opts.password || "");
     var fetchImpl = opts.fetchImpl || (typeof fetch === "function" ? fetch : null);

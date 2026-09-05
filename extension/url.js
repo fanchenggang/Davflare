@@ -8,9 +8,31 @@
 var DEFAULT_SETTINGS = {
   instanceUrl: "",
   toolbarMode: "drive",
+  bookmarkPath: "bookmarks",
 };
 
 var TOOLBAR_MODES = ["drive", "bookmarks"];
+
+var DEFAULT_BOOKMARK_PATH = "bookmarks";
+
+/**
+ * Relative WebDAV directory for all bookmark data (issue #54). Accepts
+ * nested segments like "qa/bookmarks"; empty/./.. segments or anything
+ * suspicious falls back to the default.
+ */
+function sanitizeBookmarkPath(raw) {
+  if (typeof raw !== "string") return DEFAULT_BOOKMARK_PATH;
+  var trimmed = raw.trim().replace(/^\/+|\/+$/g, "");
+  if (!trimmed) return DEFAULT_BOOKMARK_PATH;
+  var segs = [];
+  var parts = trimmed.split("/");
+  for (var i = 0; i < parts.length; i++) {
+    var seg = parts[i];
+    if (seg === "." || seg === "..") return DEFAULT_BOOKMARK_PATH;
+    if (seg) segs.push(seg);
+  }
+  return segs.length ? segs.join("/") : DEFAULT_BOOKMARK_PATH;
+}
 
 var DEFAULT_NTP = "chrome://new-tab-page/";
 
@@ -19,6 +41,7 @@ function mergeSettings(stored) {
   return {
     instanceUrl: typeof src.instanceUrl === "string" ? src.instanceUrl : "",
     toolbarMode: src.toolbarMode === "bookmarks" ? "bookmarks" : "drive",
+    bookmarkPath: sanitizeBookmarkPath(src.bookmarkPath),
   };
 }
 
@@ -73,6 +96,7 @@ function resolveNewTabTarget(settings) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    DEFAULT_BOOKMARK_PATH: DEFAULT_BOOKMARK_PATH,
     DEFAULT_NTP: DEFAULT_NTP,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     TOOLBAR_MODES: TOOLBAR_MODES,
@@ -80,5 +104,6 @@ if (typeof module !== "undefined" && module.exports) {
     normalizeInstanceUrl: normalizeInstanceUrl,
     resolveNewTabTarget: resolveNewTabTarget,
     resolveToolbarTarget: resolveToolbarTarget,
+    sanitizeBookmarkPath: sanitizeBookmarkPath,
   };
 }

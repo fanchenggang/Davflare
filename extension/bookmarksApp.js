@@ -32,6 +32,11 @@ var COPY = {
     add: "Add",
     save: "Save",
     import: "Import",
+    hhImport: "HamHome",
+    hhNotFound: "No meta.json found under /HamHomeSync/ on this instance.",
+    hhInvalid: "HamHome data could not be parsed.",
+    hhImported: "Imported {n} bookmark(s) from HamHome.",
+    hhNone: "Nothing new to import from HamHome.",
     export: "Export",
     drive: "Drive",
     driveReload: "Reload",
@@ -131,6 +136,11 @@ var COPY = {
     add: "添加",
     save: "保存",
     import: "导入",
+    hhImport: "HamHome",
+    hhNotFound: "实例 /HamHomeSync/ 下没有 meta.json。",
+    hhInvalid: "HamHome 数据无法解析。",
+    hhImported: "已从 HamHome 导入 {n} 个书签。",
+    hhNone: "HamHome 没有可导入的新书签。",
     export: "导出",
     drive: "网盘",
     driveReload: "刷新",
@@ -312,10 +322,12 @@ function toggleTheme() {
 /* ---------- data ---------- */
 
 async function loadConfig() {
-  var sync = await chrome.storage.sync.get(["instanceUrl"]);
+  var sync = await chrome.storage.sync.get(["instanceUrl", "bookmarkPath"]);
   var local = await chrome.storage.local.get(["davUsername", "davPassword"]);
+  var merged = mergeSettings(sync);
   return {
-    instanceUrl: mergeSettings(sync).instanceUrl,
+    instanceUrl: merged.instanceUrl,
+    basePath: merged.bookmarkPath,
     username: typeof local.davUsername === "string" ? local.davUsername : "",
     password: typeof local.davPassword === "string" ? local.davPassword : "",
   };
@@ -1591,6 +1603,47 @@ async function importChromeBookmarks() {
   if (ok) flashStatus(fmt(added > 0 ? t.importDone : t.importNone, { n: added }));
 }
 
+/**
+ * HamHome migration (issue #53): read-only import from the same instance's
+ * /HamHomeSync/ directory (meta.json + categories.json), merged by URL.
+ */
+async function importHamHome() {
+  var made = await makeClient();
+  if (!made.cfg.instanceUrl) {
+    showBanner(t.needConfig, t.openOptions, openOptions);
+    return;
+  }
+  var hh = DavflareDav.createDavClient({
+    instanceUrl: made.cfg.instanceUrl,
+    username: made.cfg.username,
+    password: made.cfg.password,
+    basePath: "HamHomeSync",
+  });
+  var meta = await hh.getFile("meta.json");
+  if (!meta.ok) {
+    showBanner(errorText(meta.kind), t.openOptions, openOptions);
+    return;
+  }
+  if (meta.missing) {
+    showBanner(t.hhNotFound);
+    return;
+  }
+  var cats = await hh.getFile("categories.json");
+  var result = HamHome.importFrom(
+    meta.text,
+    cats.ok && !cats.missing ? cats.text : null
+  );
+  if (!result.ok) {
+    showBanner(t.hhInvalid);
+    return;
+  }
+  var before = state.model.bookmarks.length;
+  state.model = Bookmarks.mergeModels(state.model, result.model);
+  var added = state.model.bookmarks.length - before;
+  var ok = await persist();
+  if (ok) flashStatus(fmt(added > 0 ? t.hhImported : t.hhNone, { n: added }));
+}
+
 function exportHtml() {
   var blob = new Blob([Bookmarks.serializeHtml(state.model)], { type: "text/html" });
   var url = URL.createObjectURL(blob);
@@ -1695,6 +1748,7 @@ function applyCopy() {
   $("loading").textContent = t.loading;
   $("addBtn").textContent = t.add;
   $("importBtn").textContent = t.import;
+  $("hhImportBtn").textContent = t.hhImport;
   $("exportBtn").textContent = t.export;
   $("driveBtn").textContent = t.drive;
   $("settingsBtn").textContent = t.settings;
@@ -1857,6 +1911,7 @@ function wireEvents() {
     if (fn) fn();
   });
   $("importBtn").addEventListener("click", importChromeBookmarks);
+  $("hhImportBtn").addEventListener("click", importHamHome);
   $("exportBtn").addEventListener("click", exportHtml);
   $("settingsBtn").addEventListener("click", openOptions);
   $("saveWindowBtn").addEventListener("click", saveCurrentWindow);
