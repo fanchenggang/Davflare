@@ -6,6 +6,9 @@ var COPY = {
     tagline: "Open the drive you deployed. No built-in host.",
     urlLabel: "Instance URL",
     urlHint: "Paste the Pages or custom-domain URL of your own Davflare instance.",
+    pathLabel: "Bookmark directory",
+    pathHint:
+      "Relative to /webdav/. Default is \"bookmarks\"; use e.g. \"qa/bookmarks\" to isolate test data. HamHome import always reads /HamHomeSync/bookmarks/meta.json + categories.json.",
     modeLabel: "Default toolbar view",
     modeDrive: "Drive (embedded in extension)",
     modeBookmarks: "Bookmark library",
@@ -35,6 +38,9 @@ var COPY = {
     tagline: "打开你自己部署的网盘。扩展不内置任何站点。",
     urlLabel: "实例地址",
     urlHint: "粘贴你自己的 Pages 或自定义域名。",
+    pathLabel: "书签目录",
+    pathHint:
+      "相对 /webdav/ 的路径。默认为 bookmarks；可填如 qa/bookmarks 隔离测试数据。HamHome 导入固定读 /HamHomeSync/bookmarks/meta.json + categories.json。",
     modeLabel: "工具栏默认视图",
     modeDrive: "网盘（扩展内嵌）",
     modeBookmarks: "书签库",
@@ -94,6 +100,8 @@ function applyCopy() {
   document.getElementById("tagline").textContent = t.tagline;
   document.getElementById("urlLabel").textContent = t.urlLabel;
   document.getElementById("urlHint").textContent = t.urlHint;
+  document.getElementById("pathLabel").textContent = t.pathLabel;
+  document.getElementById("pathHint").textContent = t.pathHint;
   document.getElementById("modeLabel").textContent = t.modeLabel;
   document.getElementById("modeDriveText").textContent = t.modeDrive;
   document.getElementById("modeBookmarksText").textContent = t.modeBookmarks;
@@ -108,10 +116,11 @@ function applyCopy() {
 }
 
 var strings = applyCopy();
-var syncStore = chromeArea("sync", { instanceUrl: "", toolbarMode: "drive" });
+var syncStore = chromeArea("sync", { instanceUrl: "", toolbarMode: "drive", bookmarkPath: "bookmarks" });
 var localStore = chromeArea("local", { davUsername: "", davPassword: "" });
 var form = document.getElementById("form");
 var urlInput = document.getElementById("instanceUrl");
+var pathInput = document.getElementById("bookmarkPath");
 var modeDrive = document.getElementById("modeDrive");
 var modeBookmarks = document.getElementById("modeBookmarks");
 var userInput = document.getElementById("davUser");
@@ -130,9 +139,10 @@ function setProbe(message, kind) {
 }
 
 function loadSettings() {
-  syncStore.get(["instanceUrl", "toolbarMode"], function (stored) {
+  syncStore.get(["instanceUrl", "toolbarMode", "bookmarkPath"], function (stored) {
     var merged = mergeSettings(stored);
     urlInput.value = merged.instanceUrl;
+    pathInput.value = merged.bookmarkPath;
     (merged.toolbarMode === "bookmarks" ? modeBookmarks : modeDrive).checked = true;
   });
   localStore.get(["davUsername", "davPassword"], function (stored) {
@@ -176,12 +186,17 @@ form.addEventListener("submit", function (event) {
     return;
   }
   syncStore.set(
-    { instanceUrl: normalized, toolbarMode: selectedMode() },
+    {
+      instanceUrl: normalized,
+      toolbarMode: selectedMode(),
+      bookmarkPath: sanitizeBookmarkPath(pathInput.value),
+    },
     function () {
       localStore.set(
         { davUsername: userInput.value.trim(), davPassword: passInput.value },
         async function () {
           urlInput.value = normalized;
+          pathInput.value = sanitizeBookmarkPath(pathInput.value);
           var perm = await ensureOriginPermission(normalized);
           if (!normalized) setStatus(strings.cleared, "ok");
           else if (perm.granted) setStatus(strings.saved, "ok");

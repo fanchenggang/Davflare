@@ -31,6 +31,20 @@
           Paste the Pages or custom-domain URL of your own Davflare instance.
         </p>
 
+        <label for="bookmarkPath" id="pathLabel">Bookmark directory</label>
+        <input
+          id="bookmarkPath"
+          name="bookmarkPath"
+          type="text"
+          spellcheck="false"
+          autocapitalize="off"
+          placeholder="bookmarks"
+        />
+        <p class="hint" id="pathHint">
+          Relative to /webdav/. Default is "bookmarks"; use e.g. "qa/bookmarks" to
+          isolate test data. HamHome import always reads /HamHomeSync/bookmarks/meta.json + categories.json.
+        </p>
+
         <fieldset class="section">
           <legend id="modeLabel">Default toolbar view</legend>
           <label class="radio" for="modeDrive">

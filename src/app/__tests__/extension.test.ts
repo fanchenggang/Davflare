@@ -18,6 +18,7 @@ const newtabOverlayDir = path.join(repoRoot, "extension-newtab");
 const packageScript = path.join(repoRoot, "scripts/package-extension.sh");
 
 const {
+  DEFAULT_BOOKMARK_PATH,
   DEFAULT_NTP,
   DEFAULT_SETTINGS,
   TOOLBAR_MODES,
@@ -25,14 +26,21 @@ const {
   normalizeInstanceUrl,
   resolveNewTabTarget,
   resolveToolbarTarget,
+  sanitizeBookmarkPath,
 } = nodeRequire("../../../extension/url.js") as {
+  DEFAULT_BOOKMARK_PATH: string;
   DEFAULT_NTP: string;
-  DEFAULT_SETTINGS: { instanceUrl: string; toolbarMode: string };
+  DEFAULT_SETTINGS: { instanceUrl: string; toolbarMode: string; bookmarkPath: string };
   TOOLBAR_MODES: string[];
-  mergeSettings: (stored: unknown) => { instanceUrl: string; toolbarMode: string };
+  mergeSettings: (stored: unknown) => {
+    instanceUrl: string;
+    toolbarMode: string;
+    bookmarkPath: string;
+  };
   normalizeInstanceUrl: (raw: unknown) => string;
   resolveNewTabTarget: (settings: unknown) => { action: string; url?: string };
   resolveToolbarTarget: (settings: unknown) => { action: string; url?: string };
+  sanitizeBookmarkPath: (raw: unknown) => string;
 };
 
 function walkFiles(dir: string): string[] {
@@ -116,19 +124,33 @@ describe("Davflare Chrome extension / default package", () => {
 
 describe("Davflare Chrome extension / settings defaults", () => {
   test("instance URL is empty, mode defaults to drive, and leftover flags are ignored", () => {
-    expect(DEFAULT_SETTINGS).toEqual({ instanceUrl: "", toolbarMode: "drive" });
+    expect(DEFAULT_SETTINGS).toEqual({
+      instanceUrl: "",
+      toolbarMode: "drive",
+      bookmarkPath: "bookmarks",
+    });
     expect(TOOLBAR_MODES).toEqual(["drive", "bookmarks"]);
-    expect(mergeSettings(undefined)).toEqual({ instanceUrl: "", toolbarMode: "drive" });
-    expect(mergeSettings({})).toEqual({ instanceUrl: "", toolbarMode: "drive" });
+    expect(mergeSettings(undefined)).toEqual({
+      instanceUrl: "",
+      toolbarMode: "drive",
+      bookmarkPath: "bookmarks",
+    });
+    expect(mergeSettings({})).toEqual({
+      instanceUrl: "",
+      toolbarMode: "drive",
+      bookmarkPath: "bookmarks",
+    });
     expect(mergeSettings({ newTab: true, instanceUrl: 1 })).toEqual({
       instanceUrl: "",
       toolbarMode: "drive",
+      bookmarkPath: "bookmarks",
     });
     expect(
       mergeSettings({ newTab: true, instanceUrl: "https://drive.example" })
     ).toEqual({
       instanceUrl: "https://drive.example",
       toolbarMode: "drive",
+      bookmarkPath: "bookmarks",
     });
   });
 
@@ -137,6 +159,19 @@ describe("Davflare Chrome extension / settings defaults", () => {
     expect(mergeSettings({ toolbarMode: "drive" }).toolbarMode).toBe("drive");
     expect(mergeSettings({ toolbarMode: "newtab" }).toolbarMode).toBe("drive");
     expect(mergeSettings({ toolbarMode: 42 }).toolbarMode).toBe("drive");
+  });
+
+  test("bookmark path is a sanitized relative WebDAV directory (issue #54)", () => {
+    expect(DEFAULT_BOOKMARK_PATH).toBe("bookmarks");
+    expect(sanitizeBookmarkPath("qa/bookmarks")).toBe("qa/bookmarks");
+    expect(sanitizeBookmarkPath("/lib/")).toBe("lib");
+    expect(sanitizeBookmarkPath("  ")).toBe("bookmarks");
+    expect(sanitizeBookmarkPath("../etc")).toBe("bookmarks");
+    expect(sanitizeBookmarkPath("a//b")).toBe("a/b");
+    expect(sanitizeBookmarkPath(42)).toBe("bookmarks");
+    expect(mergeSettings({ bookmarkPath: "private/dir" }).bookmarkPath).toBe(
+      "private/dir"
+    );
   });
 });
 
@@ -229,6 +264,7 @@ describe("Davflare Chrome extension / release zips", () => {
     expect(names).toContain("pinyin.js");
     expect(names).toContain("pinyinDict.js");
     expect(names).toContain("snapshots.js");
+    expect(names).toContain("hamhome.js");
   });
 
   test("newtab zip includes chrome_url_overrides and newtab files", () => {

@@ -108,6 +108,39 @@ describe("extension/dav.js request basics", () => {
   });
 });
 
+describe("extension/dav.js basePath (issue #54)", () => {
+  test("defaults to bookmarks/ and honors a custom relative directory", async () => {
+    const def = clientWith({}, () => ({ status: 207 }));
+    expect(def.client.paths.dir).toBe(DIR);
+
+    const custom = clientWith({ basePath: "qa/bookmarks" }, () => ({ status: 207 }));
+    expect(custom.client.paths.dir).toBe(ROOT + "/qa/bookmarks/");
+    expect(custom.client.paths.html).toBe(ROOT + "/qa/bookmarks/bookmarks.html");
+    await custom.client.probe();
+    // the probe always targets the webdav root, independent of basePath
+    expect(custom.calls[0].url).toBe(ROOT + "/");
+  });
+
+  test("slashes around the basePath are trimmed; empty falls back to bookmarks", () => {
+    const slashed = clientWith({ basePath: "/HamHomeSync/" }, () => ({ status: 207 }));
+    expect(slashed.client.paths.dir).toBe(ROOT + "/HamHomeSync/");
+    const empty = clientWith({ basePath: "" }, () => ({ status: 207 }));
+    expect(empty.client.paths.dir).toBe(DIR);
+  });
+
+  test("HamHome layout reads bookmarks/meta.json under /HamHomeSync (issue #53)", async () => {
+    const hh = clientWith({ basePath: "HamHomeSync" }, () => ({
+      status: 200,
+      text: "{}",
+      headers: { get: () => null },
+    }));
+    await hh.client.getFile("bookmarks/meta.json");
+    expect(hh.calls[0].url).toBe(ROOT + "/HamHomeSync/bookmarks/meta.json");
+    await hh.client.getFile("categories.json");
+    expect(hh.calls[1].url).toBe(ROOT + "/HamHomeSync/categories.json");
+  });
+});
+
 describe("extension/dav.js probe", () => {
   test("maps 207/404/401/403 to ok, disabled, unauthorized, notConfigured", async () => {
     const ok = clientWith({}, () => ({ status: 207 }));
