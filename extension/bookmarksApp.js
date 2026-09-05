@@ -1379,11 +1379,15 @@ async function captureSnapshotFor(bookmark) {
   }
 
   var made = await makeClient();
+  var previous = Snapshots.findByBookmarkId(appState.snapshots, bookmark.id);
   var id = Snapshots.makeId();
   var put = await made.client.putFile(Snapshots.fileName(id), html, "text/html; charset=utf-8");
   if (!put.ok) {
     setSnapStatus(errorText(put.kind));
     return;
+  }
+  if (previous && previous.id && previous.id !== id) {
+    await made.client.deleteFile(Snapshots.fileName(previous.id));
   }
   appState.snapshots = Snapshots.upsert(appState.snapshots, {
     id: id,
