@@ -93,6 +93,32 @@ var DavflareDav = (function () {
       return { ok: false, kind: mapStatusKind(res.status) };
     }
 
+    /**
+     * MKCOL bookmarks/ plus every intermediate folder in fileName
+     * (e.g. snapshots/ for snapshots/<id>.html). Server PUT returns 409
+     * when a parent collection is missing.
+     */
+    async function ensureParentDirs(fileName) {
+      var mk = await ensureDir();
+      if (!mk.ok) return mk;
+      var parts = String(fileName || "").split("/");
+      if (parts.length < 2) return { ok: true };
+      var prefix = "";
+      for (var i = 0; i < parts.length - 1; i++) {
+        var seg = parts[i];
+        if (!seg || seg === "." || seg === "..") {
+          return { ok: false, kind: "http400" };
+        }
+        prefix += seg + "/";
+        var res = await request("MKCOL", dir + prefix);
+        if (res.status === 0) return { ok: false, kind: "network" };
+        if (res.ok || res.status === 405) continue;
+        if (res.status === 404) return { ok: false, kind: "disabled" };
+        return { ok: false, kind: mapStatusKind(res.status) };
+      }
+      return { ok: true };
+    }
+
     async function getJsonText() {
       var res = await request("GET", dir + JSON_PATH);
       return res.status === 200 ? res.text : null;
@@ -116,7 +142,7 @@ var DavflareDav = (function () {
 
     /** PUT one file under bookmarks/; sends If-Match when an etag is given. */
     async function putFile(fileName, body, contentType, etag) {
-      var mk = await ensureDir();
+      var mk = await ensureParentDirs(fileName);
       if (!mk.ok) return mk;
       var headers = { "Content-Type": contentType };
       if (etag) headers["If-Match"] = etag;
@@ -128,6 +154,14 @@ var DavflareDav = (function () {
       if (res.status === 412) return { ok: false, kind: "conflict" };
       if (!res.ok) return { ok: false, kind: res.kind };
       return { ok: true };
+    }
+
+    /** DELETE one file under bookmarks/; a missing file counts as deleted. */
+    async function deleteFile(fileName) {
+      var res = await request("DELETE", dir + fileName);
+      if (res.status === 0) return { ok: false, kind: "network" };
+      if (res.ok || res.status === 404) return { ok: true };
+      return { ok: false, kind: mapStatusKind(res.status) };
     }
 
     async function getBookmarks() {
@@ -171,6 +205,7 @@ var DavflareDav = (function () {
     }
 
     return {
+      deleteFile: deleteFile,
       ensureDir: ensureDir,
       getFile: getFile,
       getBookmarks: getBookmarks,

@@ -4,6 +4,7 @@ const nodeRequire = createRequire(import.meta.url);
 
 const DavflareDav = nodeRequire("../../../extension/dav.js") as {
   createDavClient: (options: Record<string, unknown>) => {
+    deleteFile: (fileName: string) => Promise<Resolved>;
     ensureDir: () => Promise<Resolved>;
     getBookmarks: () => Promise<Resolved>;
     getFile: (fileName: string) => Promise<Resolved>;
@@ -176,7 +177,7 @@ describe("extension/dav.js getBookmarks", () => {
 
 describe("extension/dav.js putBookmarks", () => {
   test("creates the folder (tolerating 405), puts html with If-Match, then json", async () => {
-    const { client, calls } = clientWith({}, (url, init) => {
+    const { client, calls } = clientWith({}, (url: string, init) => {
       const method = (init.method as string) || "";
       if (method === "MKCOL") return { status: 405 };
       if (url.endsWith("bookmarks.json")) return { status: 204 };
@@ -270,7 +271,7 @@ describe("extension/dav.js generic getFile / putFile", () => {
   });
 
   test("putFile sends If-Match with the etag and maps 412 to conflict", async () => {
-    const { client, calls } = clientWith({}, (url, init) => {
+    const { client, calls } = clientWith({}, (url: string, init) => {
       if ((init.method as string) === "MKCOL") return { status: 201 };
       if (url.endsWith("tabGroups.json") && (init.headers as Record<string, string>)["If-Match"]) {
         return { status: 412 };
@@ -293,5 +294,42 @@ describe("extension/dav.js generic getFile / putFile", () => {
       ok: true,
     });
     expect((calls[1].init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
+  });
+
+  test("putFile MKCOLs nested parent folders before PUT", async () => {
+    const { client, calls } = clientWith({}, (_url, init) => {
+      if ((init.method as string) === "MKCOL") return { status: 201 };
+      return { status: 201 };
+    });
+    expect(
+      await client.putFile("snapshots/snap-1.html", "<html></html>", "text/html; charset=utf-8")
+    ).toEqual({ ok: true });
+    expect(calls.map((c) => c.init.method + " " + c.url)).toEqual([
+      "MKCOL " + DIR,
+      "MKCOL " + DIR + "snapshots/",
+      "PUT " + DIR + "snapshots/snap-1.html",
+    ]);
+  });
+});
+
+describe("extension/dav.js deleteFile", () => {
+  test("maps 204/404 to ok and other statuses to kinds", async () => {
+    const gone = clientWith({}, () => ({ status: 204 }));
+    expect(await gone.client.deleteFile("snapshots/snap-1.html")).toEqual({ ok: true });
+
+    const missing = clientWith({}, () => ({ status: 404 }));
+    expect(await missing.client.deleteFile("snapshots/snap-1.html")).toEqual({ ok: true });
+
+    const denied = clientWith({}, () => ({ status: 401 }));
+    expect(await denied.client.deleteFile("snapshots/snap-1.html")).toEqual({
+      ok: false,
+      kind: "unauthorized",
+    });
+
+    const offline = clientWith({}, () => ({ status: 0 }));
+    expect(await offline.client.deleteFile("snapshots/snap-1.html")).toEqual({
+      ok: false,
+      kind: "network",
+    });
   });
 });
