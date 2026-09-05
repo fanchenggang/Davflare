@@ -1,19 +1,19 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
 import AuthThumbnail from "../../AuthThumbnail";
 import { authFetch } from "../auth";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
-jest.mock("../../MimeIcon", () => ({
+vi.mock("../../MimeIcon", () => ({
   __esModule: true,
   default: () => <span data-testid="mime-icon-fallback" />,
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
+const mockAuthFetch = authFetch as unknown as Mock;
 
 beforeEach(() => {
   mockAuthFetch.mockReset();
@@ -27,7 +27,7 @@ describe("AuthThumbnail", () => {
   });
 
   test("加载成功显示 objectURL 图片", async () => {
-    const createObjectURL = jest.fn(() => "blob:thumb");
+    const createObjectURL = vi.fn(() => "blob:thumb");
     const original = URL.createObjectURL;
     URL.createObjectURL = createObjectURL as any;
 

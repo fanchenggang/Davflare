@@ -16,7 +16,7 @@
  *   R2ObjectBody 的其他消费方式 getReader/asyncIterator 由 buffer 直读）
  *
  * 注意：本文件不放在 __tests__（CRA 会把 __tests__ 下所有文件当测试套件），
- * 并已在 package.json 的 jest.collectCoverageFrom 中排除。
+ * 并已在 vite.config.ts 的 coverage.exclude 中排除。
  */
 import { ReadableStream as NodeReadableStream } from "stream/web";
 

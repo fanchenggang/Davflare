@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import {
   blobDigest,
   collectFilesFromDataTransfer,
@@ -18,18 +19,18 @@ import {
   type PropfindEntry,
 } from "../testUtils";
 
-jest.mock("p-limit", () => ({
+vi.mock("p-limit", () => ({
   __esModule: true,
   default: () => (fn: () => Promise<unknown>) => fn(),
 }));
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
-  basicAuthHeader: jest.fn(() => "Basic abc"),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
+  basicAuthHeader: vi.fn(() => "Basic abc"),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);
-const mockBasic = basicAuthHeader as unknown as jest.Mock;
+const mockBasic = basicAuthHeader as unknown as Mock;
 
 // 空 href 跳过 / 纯 collection 目录 / 带缩略图的图片（等价于原手写 XML）
 const PROPFIND_LEFTOVERS: PropfindEntry[] = [
@@ -48,10 +49,10 @@ beforeEach(() => {
   mockBasic.mockReturnValue("Basic abc");
   setLang("zh");
   if (!(URL as any).createObjectURL) {
-    (URL as any).createObjectURL = jest.fn(() => "blob:x");
+    (URL as any).createObjectURL = vi.fn(() => "blob:x");
   }
   if (!(URL as any).revokeObjectURL) {
-    (URL as any).revokeObjectURL = jest.fn();
+    (URL as any).revokeObjectURL = vi.fn();
   }
 });
 
@@ -80,16 +81,16 @@ describe("downloadArchive success", () => {
       blob: async () => new Blob(["zip"]),
       text: async () => "",
     } as unknown as Response);
-    const click = jest.fn();
+    const click = vi.fn();
     const orig = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag);
       if (tag === "a") (el as HTMLAnchorElement).click = click;
       return el;
     });
     await downloadArchive(["a.txt"], "pack.zip");
     expect(click).toHaveBeenCalled();
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 });
 
@@ -112,8 +113,8 @@ describe("blobDigest / generateThumbnail", () => {
       }
     }
     (global as any).Image = MockImage;
-    HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
-      drawImage: jest.fn(),
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      drawImage: vi.fn(),
     })) as any;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
       cb(new Blob(["png"], { type: "image/png" }));
@@ -133,8 +134,8 @@ describe("blobDigest / generateThumbnail", () => {
       }
     }
     (global as any).Image = MockImage;
-    HTMLCanvasElement.prototype.getContext = jest.fn(() => ({
-      drawImage: jest.fn(),
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+      drawImage: vi.fn(),
     })) as any;
     await expect(
       generateThumbnail(new File(["xx"], "a.png", { type: "image/png" }))
@@ -270,11 +271,11 @@ describe("xhr / multipart leftovers", () => {
       } as unknown as Response);
     const file = new File(["ab"], "big.bin", { type: "application/octet-stream" });
     Object.defineProperty(file, "size", { value: SIZE_LIMIT });
-    file.slice = jest.fn(() => new Blob(["ab"])) as any;
-    const onState = jest.fn();
+    file.slice = vi.fn(() => new Blob(["ab"])) as any;
+    const onState = vi.fn();
     const res = await multipartUpload("big.bin", file, {
       onState,
-      onUploadProgress: jest.fn(),
+      onUploadProgress: vi.fn(),
     });
     expect(res.ok).toBe(true);
     expect(onState).toHaveBeenCalled();

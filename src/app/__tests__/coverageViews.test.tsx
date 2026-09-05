@@ -1,4 +1,4 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import ImagesView from "../../ImagesView";
@@ -9,38 +9,38 @@ import { deleteImage, listImages, uploadImage } from "../images";
 import { deleteSite, listSites, updateSiteConfig } from "../sites";
 import { setLang, strings, translate } from "../strings";
 
-jest.mock("../features", () => {
-  const actual = jest.requireActual("../features");
-  return { ...actual, useFeatures: jest.fn() };
+vi.mock("../features", async () => {
+  const actual = await vi.importActual("../features");
+  return { ...actual, useFeatures: vi.fn() };
 });
 
-jest.mock("../sites", () => {
-  const actual = jest.requireActual("../sites");
+vi.mock("../sites", async () => {
+  const actual = await vi.importActual("../sites");
   return {
     ...actual,
-    listSites: jest.fn(),
-    updateSiteConfig: jest.fn(),
-    deleteSite: jest.fn(),
+    listSites: vi.fn(),
+    updateSiteConfig: vi.fn(),
+    deleteSite: vi.fn(),
   };
 });
 
-jest.mock("../images", () => {
-  const actual = jest.requireActual("../images");
+vi.mock("../images", async () => {
+  const actual = await vi.importActual("../images");
   return {
     ...actual,
-    listImages: jest.fn(),
-    uploadImage: jest.fn(),
-    deleteImage: jest.fn(),
+    listImages: vi.fn(),
+    uploadImage: vi.fn(),
+    deleteImage: vi.fn(),
   };
 });
 
-const mockEnqueue = jest.fn();
-jest.mock("../transferQueue", () => ({
+const mockEnqueue = vi.fn();
+vi.mock("../transferQueue", () => ({
   useUploadEnqueue: () => mockEnqueue,
 }));
 
 let mockZipMode = "ok";
-jest.mock("fflate", () => ({
+vi.mock("fflate", () => ({
   unzip: (_data: Uint8Array, cb: (err: Error | null, out: Record<string, Uint8Array>) => void) => {
     if (mockZipMode === "error") {
       cb(new Error("bad zip"), {});
@@ -65,13 +65,13 @@ jest.mock("fflate", () => ({
   },
 }));
 
-const mockUseFeatures = useFeatures as unknown as jest.Mock;
-const mockListSites = listSites as unknown as jest.Mock;
-const mockUpdateSite = updateSiteConfig as unknown as jest.Mock;
-const mockDeleteSite = deleteSite as unknown as jest.Mock;
-const mockListImages = listImages as unknown as jest.Mock;
-const mockUploadImage = uploadImage as unknown as jest.Mock;
-const mockDeleteImage = deleteImage as unknown as jest.Mock;
+const mockUseFeatures = useFeatures as unknown as Mock;
+const mockListSites = listSites as unknown as Mock;
+const mockUpdateSite = updateSiteConfig as unknown as Mock;
+const mockDeleteSite = deleteSite as unknown as Mock;
+const mockListImages = listImages as unknown as Mock;
+const mockUploadImage = uploadImage as unknown as Mock;
+const mockDeleteImage = deleteImage as unknown as Mock;
 
 const hosted = {
   id: "img1",
@@ -112,17 +112,17 @@ beforeEach(() => {
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
     sitesHost: "sites.example.com",
-    updateFlags: jest.fn().mockResolvedValue(undefined),
+    updateFlags: vi.fn().mockResolvedValue(undefined),
   });
   Object.assign(navigator, {
-    clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   });
 });
 
 describe("SettingsView leftovers", () => {
   test("toggles a flag and notifies success", async () => {
-    const onNotify = jest.fn();
-    const updateFlags = jest.fn().mockResolvedValue(undefined);
+    const onNotify = vi.fn();
+    const updateFlags = vi.fn().mockResolvedValue(undefined);
     mockUseFeatures.mockReturnValue({
       flags: DEFAULT_FEATURE_FLAGS,
       sitesHost: null,
@@ -130,7 +130,7 @@ describe("SettingsView leftovers", () => {
     });
     render(<SettingsView onNotify={onNotify} />);
     expect(screen.getByText(strings.imagesHostMissing)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: strings.flagWebdav }));
+    fireEvent.click(screen.getByRole("switch", { name: strings.flagWebdav }));
     await waitFor(() => expect(updateFlags).toHaveBeenCalledWith({ webdav: false }));
     await waitFor(() =>
       expect(onNotify).toHaveBeenCalledWith(strings.flagSaved, "success")
@@ -138,8 +138,8 @@ describe("SettingsView leftovers", () => {
   });
 
   test("toggle failure notifies error", async () => {
-    const onNotify = jest.fn();
-    const updateFlags = jest.fn().mockRejectedValue(new Error("nope"));
+    const onNotify = vi.fn();
+    const updateFlags = vi.fn().mockRejectedValue(new Error("nope"));
     mockUseFeatures.mockReturnValue({
       flags: { ...DEFAULT_FEATURE_FLAGS, mcp: false },
       sitesHost: "h",
@@ -159,13 +159,13 @@ describe("ImagesView leftovers", () => {
       flags: { ...DEFAULT_FEATURE_FLAGS, imageHost: false },
       sitesHost: null,
     });
-    const { container } = render(<ImagesView onNotify={jest.fn()} />);
+    const { container } = render(<ImagesView onNotify={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   test("list error notifies", async () => {
     mockListImages.mockRejectedValue(new Error("images-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("images-fail", "error"));
   });
@@ -181,8 +181,8 @@ describe("ImagesView leftovers", () => {
       name: "new.png",
     });
     mockDeleteImage.mockResolvedValue(undefined);
-    const onNotify = jest.fn();
-    const onGoFiles = jest.fn();
+    const onNotify = vi.fn();
+    const onGoFiles = vi.fn();
     render(<ImagesView onNotify={onNotify} onGoFiles={onGoFiles} />);
     await waitFor(() => expect(screen.getByText("photo.png")).toBeInTheDocument());
 
@@ -217,8 +217,8 @@ describe("ImagesView leftovers", () => {
 
   test("clipboard copy failure notifies", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [hosted] });
-    (navigator.clipboard.writeText as jest.Mock).mockRejectedValue(new Error("denied"));
-    const onNotify = jest.fn();
+    (navigator.clipboard.writeText as Mock).mockRejectedValue(new Error("denied"));
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText("photo.png")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: strings.copyImageUrl })[0]);
@@ -230,7 +230,7 @@ describe("ImagesView leftovers", () => {
   test("mixed drop uploads images and warns for non-images", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [] });
     mockUploadImage.mockResolvedValue(hosted);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText(strings.uploadImages)).toBeInTheDocument());
     const dropZone = screen.getByText(strings.uploadImages).closest("div")!.parentElement!.parentElement!;
@@ -250,7 +250,7 @@ describe("ImagesView leftovers", () => {
   test("upload failure notifies error", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [] });
     mockUploadImage.mockRejectedValue(new Error("upload-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText(strings.uploadImages)).toBeInTheDocument());
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
@@ -263,7 +263,7 @@ describe("ImagesView leftovers", () => {
   test("delete failure notifies error", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [hosted] });
     mockDeleteImage.mockRejectedValue(new Error("delete-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText("photo.png")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: strings.deleteImage })[0]);
@@ -273,7 +273,7 @@ describe("ImagesView leftovers", () => {
 
   test("drag enter and leave toggle drop overlay", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [] });
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText(strings.uploadImages)).toBeInTheDocument());
     const dropZone = screen.getByText(strings.uploadImages).closest("div")!.parentElement!.parentElement!;
@@ -285,7 +285,7 @@ describe("ImagesView leftovers", () => {
 
   test("refresh and upload button actions", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [hosted] });
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText("photo.png")).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText(strings.refresh));
@@ -296,7 +296,7 @@ describe("ImagesView leftovers", () => {
 
   test("cancel image delete dialog keeps item", async () => {
     mockListImages.mockResolvedValue({ sitesHost: "h", images: [hosted] });
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<ImagesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText("photo.png")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: strings.deleteImage })[0]);
@@ -309,10 +309,10 @@ describe("ImagesView leftovers", () => {
 describe("SitesView leftovers", () => {
   test("list error notifies and empty go-files works", async () => {
     mockListSites.mockRejectedValue(new Error("sites-fail"));
-    const onNotify = jest.fn();
-    const onGoFiles = jest.fn();
+    const onNotify = vi.fn();
+    const onGoFiles = vi.fn();
     render(
-      <SitesView onNotify={onNotify} onGoFiles={onGoFiles} onManageFiles={jest.fn()} />
+      <SitesView onNotify={onNotify} onGoFiles={onGoFiles} onManageFiles={vi.fn()} />
     );
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("sites-fail", "error"));
   });
@@ -324,16 +324,16 @@ describe("SitesView leftovers", () => {
     });
     mockUpdateSite.mockResolvedValue(undefined);
     mockDeleteSite.mockResolvedValue(3);
-    const onNotify = jest.fn();
-    const onManage = jest.fn();
-    const open = jest.fn();
+    const onNotify = vi.fn();
+    const onManage = vi.fn();
+    const open = vi.fn();
     window.open = open;
     render(
       <SitesView onNotify={onNotify} onManageFiles={onManage} />
     );
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("checkbox", { name: strings.siteSpaLabel }));
+    fireEvent.click(screen.getByRole("switch", { name: strings.siteSpaLabel }));
     await waitFor(() => expect(mockUpdateSite).toHaveBeenCalledWith("blog", false));
 
     fireEvent.click(screen.getAllByRole("button", { name: strings.openSite })[0]);
@@ -371,18 +371,18 @@ describe("SitesView leftovers", () => {
       .mockResolvedValueOnce({ sitesHost: "h", sites: [site] })
       .mockResolvedValue({ sitesHost: "h", sites: [site] });
     mockUpdateSite.mockRejectedValue(new Error("spa-fail"));
-    const onNotify = jest.fn();
-    render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("checkbox", { name: strings.siteSpaLabel }));
+    fireEvent.click(screen.getByRole("switch", { name: strings.siteSpaLabel }));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("spa-fail", "error"));
   });
 
   test("site copy failure notifies error", async () => {
     mockListSites.mockResolvedValue({ sitesHost: "h", sites: [site] });
-    (navigator.clipboard.writeText as jest.Mock).mockRejectedValue(new Error("denied"));
-    const onNotify = jest.fn();
-    render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+    (navigator.clipboard.writeText as Mock).mockRejectedValue(new Error("denied"));
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: strings.copy })[0]);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith(strings.copyFailed2, "error"));
@@ -391,8 +391,8 @@ describe("SitesView leftovers", () => {
   test("site delete failure notifies error", async () => {
     mockListSites.mockResolvedValue({ sitesHost: "h", sites: [site] });
     mockDeleteSite.mockRejectedValue(new Error("delete-fail"));
-    const onNotify = jest.fn();
-    render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
     fireEvent.click(screen.getByText(strings.deleteSite));
     fireEvent.click(screen.getAllByText(strings.deleteSite).pop()!);
@@ -401,8 +401,8 @@ describe("SitesView leftovers", () => {
 
   test("refresh button reloads sites", async () => {
     mockListSites.mockResolvedValue({ sitesHost: "h", sites: [site] });
-    const onNotify = jest.fn();
-    render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText(strings.refresh));
     await waitFor(() => expect(mockListSites.mock.calls.length).toBeGreaterThan(1));
@@ -410,8 +410,8 @@ describe("SitesView leftovers", () => {
 
   test("deploy dialog cancel and clear switch", async () => {
     mockListSites.mockResolvedValue({ sitesHost: "h", sites: [site] });
-    const onNotify = jest.fn();
-    render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
     fireEvent.click(screen.getByText(strings.deployZip));
     fireEvent.click(screen.getByLabelText(strings.deployZipClear));
@@ -428,8 +428,8 @@ describe("SitesView leftovers", () => {
     ];
     for (const scenario of scenarios) {
       mockZipMode = scenario.mode;
-      const onNotify = jest.fn();
-      const view = render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+      const onNotify = vi.fn();
+      const view = render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
       await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
       fireEvent.click(screen.getByText(strings.deployZip));
       const input = document.querySelector('input[accept=".zip,application/zip"]') as HTMLInputElement;
@@ -445,8 +445,8 @@ describe("SitesView leftovers", () => {
   test("escape closes deploy dialog and delete confirm cancel keeps site", async () => {
     mockListSites.mockResolvedValue({ sitesHost: "h", sites: [site] });
     mockDeleteSite.mockResolvedValue(3);
-    const onNotify = jest.fn();
-    render(<SitesView onNotify={onNotify} onManageFiles={jest.fn()} />);
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText(strings.deployZip));

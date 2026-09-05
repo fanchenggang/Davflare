@@ -1,4 +1,4 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import PreviewDialog from "../../PreviewDialog";
@@ -7,16 +7,16 @@ import { downloadFile } from "../transfer";
 import { setLang, strings } from "../strings";
 import { FileItem } from "../types";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
-jest.mock("../transfer", () => ({
-  downloadFile: jest.fn(),
+vi.mock("../transfer", () => ({
+  downloadFile: vi.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
-const mockDownload = downloadFile as unknown as jest.Mock;
+const mockAuthFetch = authFetch as unknown as Mock;
+const mockDownload = downloadFile as unknown as Mock;
 
 const textFile: FileItem = {
   key: "notes.txt",
@@ -31,8 +31,8 @@ beforeEach(() => {
   setLang("zh");
   mockAuthFetch.mockReset();
   mockDownload.mockReset();
-  (URL as any).createObjectURL = jest.fn(() => "blob:preview");
-  (URL as any).revokeObjectURL = jest.fn();
+  (URL as any).createObjectURL = vi.fn(() => "blob:preview");
+  (URL as any).revokeObjectURL = vi.fn();
 });
 
 describe("PreviewDialog", () => {
@@ -55,15 +55,15 @@ describe("PreviewDialog", () => {
         },
       },
     });
-    const onShare = jest.fn();
+    const onShare = vi.fn();
     render(
       <PreviewDialog
         file={textFile}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
         onShare={onShare}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
@@ -78,15 +78,15 @@ describe("PreviewDialog", () => {
       headers: { get: () => null },
       body: null,
     });
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(
       <PreviewDialog
         file={textFile}
-        onClose={jest.fn()}
+        onClose={vi.fn()}
         onNotify={onNotify}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(onNotify).toHaveBeenCalled());
@@ -96,11 +96,11 @@ describe("PreviewDialog", () => {
     render(
       <PreviewDialog
         file={null}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     expect(screen.queryByText(strings.share)).not.toBeInTheDocument();
@@ -120,7 +120,7 @@ function blobFetch(type: string) {
 describe("PreviewDialog leftovers", () => {
   test("image preview rotate, download, siblings", async () => {
     mockAuthFetch.mockResolvedValue(blobFetch("image/png"));
-    const onSibling = jest.fn();
+    const onSibling = vi.fn();
     const img: FileItem = {
       key: "a.png",
       name: "a.png",
@@ -135,11 +135,11 @@ describe("PreviewDialog leftovers", () => {
         file={img}
         siblings={[img, img2]}
         onSibling={onSibling}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(screen.getByLabelText(strings.nextFile)).toBeEnabled());
@@ -163,11 +163,11 @@ describe("PreviewDialog leftovers", () => {
     render(
       <PreviewDialog
         file={big}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() =>
@@ -196,7 +196,7 @@ describe("PreviewDialog leftovers", () => {
       },
     });
     Object.assign(navigator, {
-      clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
     const jsonFile: FileItem = {
       key: "a.json",
@@ -206,15 +206,15 @@ describe("PreviewDialog leftovers", () => {
       uploaded: "",
       contentType: "application/json",
     };
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(
       <PreviewDialog
         file={jsonFile}
-        onClose={jest.fn()}
+        onClose={vi.fn()}
         onNotify={onNotify}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() =>
@@ -239,11 +239,11 @@ describe("PreviewDialog leftovers", () => {
     const { unmount } = render(
       <PreviewDialog
         file={video}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(screen.getByText("a.mp4")).toBeInTheDocument());
@@ -254,11 +254,11 @@ describe("PreviewDialog leftovers", () => {
     const r2 = render(
       <PreviewDialog
         file={audio}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(document.querySelector("audio")).toBeTruthy());
@@ -269,11 +269,11 @@ describe("PreviewDialog leftovers", () => {
     render(
       <PreviewDialog
         file={pdf}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(document.querySelector("iframe")).toBeTruthy());

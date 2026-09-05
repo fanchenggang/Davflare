@@ -1,10 +1,11 @@
+import { vi } from "vitest";
 import { deleteSite, listSites, siteUrl, updateSiteConfig } from "../sites";
 import { authFetch } from "../auth";
 import { setLang } from "../strings";
 import { asAuthFetchMock } from "../testUtils";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);

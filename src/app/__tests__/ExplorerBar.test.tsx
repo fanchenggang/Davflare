@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 
@@ -5,39 +6,39 @@ import ExplorerBar from "../../ExplorerBar";
 import { DEFAULT_FEATURE_FLAGS, useFeatures } from "../features";
 import { setLang, strings } from "../strings";
 
-jest.mock("../features", () => {
-  const actual = jest.requireActual("../features");
-  return { ...actual, useFeatures: jest.fn() };
+vi.mock("../features", async () => {
+  const actual = await vi.importActual("../features");
+  return { ...actual, useFeatures: vi.fn() };
 });
 
-const mockUseFeatures = useFeatures as unknown as jest.Mock;
+const mockUseFeatures = useFeatures as unknown as Mock;
 
 function renderBar(overrides: Partial<React.ComponentProps<typeof ExplorerBar>> = {}) {
   const props = {
     section: "folder" as const,
-    onSectionChange: jest.fn(),
-    onUploadFile: jest.fn(),
-    onUploadFolder: jest.fn(),
-    onCreateFolder: jest.fn(),
-    onOpenTextPad: jest.fn(),
-    onPaste: jest.fn(),
+    onSectionChange: vi.fn(),
+    onUploadFile: vi.fn(),
+    onUploadFolder: vi.fn(),
+    onCreateFolder: vi.fn(),
+    onOpenTextPad: vi.fn(),
+    onPaste: vi.fn(),
     canPaste: false,
     clipboardCount: 0,
     clipboardMode: null as "copy" | "cut" | null,
     view: "grid" as const,
-    onViewChange: jest.fn(),
+    onViewChange: vi.fn(),
     sort: { field: "name" as const, order: "asc" as const },
-    onSortChange: jest.fn(),
-    onOpenWebDav: jest.fn(),
-    onOpenApi: jest.fn(),
+    onSortChange: vi.fn(),
+    onOpenWebDav: vi.fn(),
+    onOpenApi: vi.fn(),
     typeFilter: "all" as const,
-    onTypeFilterChange: jest.fn(),
+    onTypeFilterChange: vi.fn(),
     showHidden: false,
-    onShowHiddenChange: jest.fn(),
+    onShowHiddenChange: vi.fn(),
     density: "standard" as const,
-    onDensityChange: jest.fn(),
+    onDensityChange: vi.fn(),
     recents: [] as { key: string; name: string; isDir: boolean; at: number }[],
-    onOpenRecent: jest.fn(),
+    onOpenRecent: vi.fn(),
     ...overrides,
   };
   const result = render(<ExplorerBar {...props} />);
@@ -50,7 +51,7 @@ beforeEach(() => {
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
     sitesHost: null,
-    updateFlags: jest.fn(),
+    updateFlags: vi.fn(),
   });
 });
 
@@ -105,7 +106,7 @@ describe("ExplorerBar", () => {
         { key: "docs/", name: "docs", isDir: true, at: 1 },
         { key: "a.txt", name: "a.txt", isDir: false, at: 2 },
       ],
-      onOpenRecent: jest.fn(),
+      onOpenRecent: vi.fn(),
     });
     fireEvent.click(screen.getByText(strings.recent));
     fireEvent.click(screen.getByText(/^docs/));

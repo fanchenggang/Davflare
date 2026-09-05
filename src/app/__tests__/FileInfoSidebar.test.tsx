@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
@@ -7,18 +8,18 @@ import { downloadArchive, downloadFile } from "../transfer";
 import { setLang, strings, translate } from "../strings";
 import { FileItem } from "../types";
 
-jest.mock("../transfer", () => ({
-  downloadFile: jest.fn(),
-  downloadArchive: jest.fn(),
+vi.mock("../transfer", () => ({
+  downloadFile: vi.fn(),
+  downloadArchive: vi.fn(),
 }));
 
-jest.mock("../../AuthThumbnail", () => ({
+vi.mock("../../AuthThumbnail", () => ({
   __esModule: true,
   default: () => <span data-testid="auth-thumb" />,
 }));
 
-const mockDownload = downloadFile as unknown as jest.Mock;
-const mockArchive = downloadArchive as unknown as jest.Mock;
+const mockDownload = downloadFile as unknown as Mock;
+const mockArchive = downloadArchive as unknown as Mock;
 
 const file: FileItem = {
   key: "docs/pic file.png",
@@ -45,12 +46,12 @@ function renderSidebar(
   const props = {
     open: true,
     file: fileArg,
-    onClose: jest.fn(),
-    onShare: jest.fn(),
-    onRename: jest.fn(),
-    onMove: jest.fn(),
-    onDelete: jest.fn(),
-    onNotify: jest.fn(),
+    onClose: vi.fn(),
+    onShare: vi.fn(),
+    onRename: vi.fn(),
+    onMove: vi.fn(),
+    onDelete: vi.fn(),
+    onNotify: vi.fn(),
     ...overrides,
   };
   const result = render(
@@ -63,7 +64,7 @@ function renderSidebar(
 
 beforeAll(() => {
   Object.assign(navigator, {
-    clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   });
 });
 
@@ -73,7 +74,7 @@ beforeEach(() => {
   mockDownload.mockResolvedValue(undefined);
   mockArchive.mockReset();
   mockArchive.mockResolvedValue(undefined);
-  (navigator.clipboard.writeText as jest.Mock).mockClear();
+  (navigator.clipboard.writeText as Mock).mockClear();
 });
 
 describe("FileInfoSidebar", () => {

@@ -1,15 +1,15 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import MoveDialog from "../../MoveDialog";
 import { fetchPath } from "../transfer";
 import { setLang, strings } from "../strings";
 
-jest.mock("../transfer", () => ({
-  fetchPath: jest.fn(),
+vi.mock("../transfer", () => ({
+  fetchPath: vi.fn(),
 }));
 
-const mockFetchPath = fetchPath as unknown as jest.Mock;
+const mockFetchPath = fetchPath as unknown as Mock;
 
 function folderItem(key: string, name = key) {
   return { key, name, isDir: true, size: 0, uploaded: "", contentType: "application/x-directory" };
@@ -27,9 +27,9 @@ describe("MoveDialog", () => {
       <MoveDialog
         open
         sourceKeys={["a.txt"]}
-        onClose={jest.fn()}
-        onMove={jest.fn()}
-        onError={jest.fn()}
+        onClose={vi.fn()}
+        onMove={vi.fn()}
+        onError={vi.fn()}
       />
     );
     await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
@@ -44,9 +44,9 @@ describe("MoveDialog", () => {
       <MoveDialog
         open
         sourceKeys={["a.txt"]}
-        onClose={jest.fn()}
-        onMove={jest.fn()}
-        onError={jest.fn()}
+        onClose={vi.fn()}
+        onMove={vi.fn()}
+        onError={vi.fn()}
       />
     );
     fireEvent.click(await screen.findByText("docs"));
@@ -56,9 +56,9 @@ describe("MoveDialog", () => {
 
   test("加载失败调用 onError", async () => {
     mockFetchPath.mockRejectedValue(new Error("boom"));
-    const onError = jest.fn();
+    const onError = vi.fn();
     render(
-      <MoveDialog open sourceKeys={["a.txt"]} onClose={jest.fn()} onMove={jest.fn()} onError={onError} />
+      <MoveDialog open sourceKeys={["a.txt"]} onClose={vi.fn()} onMove={vi.fn()} onError={onError} />
     );
     await waitFor(() => expect(onError).toHaveBeenCalled());
   });
@@ -69,9 +69,9 @@ describe("MoveDialog", () => {
       <MoveDialog
         open
         sourceKeys={["docs/a.txt"]}
-        onClose={jest.fn()}
-        onMove={jest.fn()}
-        onError={jest.fn()}
+        onClose={vi.fn()}
+        onMove={vi.fn()}
+        onError={vi.fn()}
       />
     );
     // 根目录不是源目录，按钮可用；切到 docs/ 后按钮禁用
@@ -81,9 +81,9 @@ describe("MoveDialog", () => {
 
   test("点击移动调用 onMove 当前目录", async () => {
     mockFetchPath.mockResolvedValue([folderItem("docs", "docs")]);
-    const onMove = jest.fn();
+    const onMove = vi.fn();
     render(
-      <MoveDialog open sourceKeys={["docs/a.txt"]} onClose={jest.fn()} onMove={onMove} onError={jest.fn()} />
+      <MoveDialog open sourceKeys={["docs/a.txt"]} onClose={vi.fn()} onMove={onMove} onError={vi.fn()} />
     );
     fireEvent.click(screen.getByRole("button", { name: strings.moveHere }));
     expect(onMove).toHaveBeenCalledWith("");

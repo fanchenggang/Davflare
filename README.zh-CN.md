@@ -113,7 +113,7 @@
 
 ### 手动部署 Cloudflare Pages
 
-- 框架预设：**None（React CRA，不是 Docusaurus）**
+- 框架预设：**None（React/Vite，不是 Docusaurus）**
 - 输出目录：`build`
 - 然后绑定 `BUCKET`、设置上述环境变量，并重新部署
 
@@ -247,9 +247,10 @@ skills / rules / MCP 片段放在 R2 的 `agents/` 下。仓库示例：[`agents
 npm install
 
 npm run typecheck   # tsc --noEmit (covers src/ and functions/)
-npm test            # Jest unit tests (interactive watch)
-npm run test:ci     # Jest unit tests, single CI-friendly run
-npm run build       # production build into build/
+npm test            # Vitest 单测（单次运行）
+npm run test:ci     # 同一套件（保留脚本名以兼容 CI 文档）
+npm run test:coverage   # Vitest + v8 覆盖率（含阈值校验）
+npm run build       # typecheck + 生产构建到 build/
 
 npm run test:e2e    # one-shot API regression: build → wrangler pages dev (local miniflare R2) → scripts/api-e2e.sh
 SKIP_BUILD=1 npm run test:e2e   # reuse an existing build/ for faster iterations

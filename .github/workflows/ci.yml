@@ -30,6 +30,10 @@ jobs:
       - name: Unit tests
         run: npm run test:ci
 
+      # v8 覆盖率 + global/src/functions 三组阈值校验（见 vite.config.ts coverage.thresholds）
+      - name: Coverage thresholds
+        run: npm run test:coverage
+
       - name: Build
         run: npm run build
 

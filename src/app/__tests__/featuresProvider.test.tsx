@@ -1,17 +1,17 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 
 import { authFetch, useAuth } from "../auth";
 import { FeaturesProvider, useFeatures } from "../features";
 import { asAuthFetchMock } from "../testUtils";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
-  useAuth: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
+  useAuth: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);
-const mockUseAuth = useAuth as unknown as jest.Mock;
+const mockUseAuth = useAuth as unknown as Mock;
 
 function Probe() {
   const { flags, sitesHost, config, refresh, updateFlags } = useFeatures();

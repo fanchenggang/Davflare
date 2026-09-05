@@ -1,4 +1,4 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import TrashView from "../../TrashView";
@@ -6,15 +6,15 @@ import { listTrash, permanentDeleteTrash, restoreTrash } from "../trash";
 import { setLang, strings, translate } from "../strings";
 import { TrashItem } from "../types";
 
-jest.mock("../trash", () => ({
-  listTrash: jest.fn(),
-  permanentDeleteTrash: jest.fn(),
-  restoreTrash: jest.fn(),
+vi.mock("../trash", () => ({
+  listTrash: vi.fn(),
+  permanentDeleteTrash: vi.fn(),
+  restoreTrash: vi.fn(),
 }));
 
-const mockListTrash = listTrash as unknown as jest.Mock;
-const mockPermanent = permanentDeleteTrash as unknown as jest.Mock;
-const mockRestore = restoreTrash as unknown as jest.Mock;
+const mockListTrash = listTrash as unknown as Mock;
+const mockPermanent = permanentDeleteTrash as unknown as Mock;
+const mockRestore = restoreTrash as unknown as Mock;
 
 const item: TrashItem = {
   trashKey: "t1",
@@ -34,8 +34,8 @@ beforeEach(() => {
 describe("TrashView", () => {
   test("empty trash state", async () => {
     mockListTrash.mockResolvedValue([]);
-    const onGoFiles = jest.fn();
-    render(<TrashView onNotify={jest.fn()} onGoFiles={onGoFiles} />);
+    const onGoFiles = vi.fn();
+    render(<TrashView onNotify={vi.fn()} onGoFiles={onGoFiles} />);
     await waitFor(() => expect(screen.getByText(strings.emptyTrash)).toBeInTheDocument());
     fireEvent.click(screen.getByText(strings.goToFiles));
     expect(onGoFiles).toHaveBeenCalled();
@@ -44,7 +44,7 @@ describe("TrashView", () => {
   test("select and restore", async () => {
     mockListTrash.mockResolvedValue([item]);
     mockRestore.mockResolvedValue([{ trashKey: "t1", status: "restored" }]);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText("a.txt"));
     fireEvent.click(screen.getByText(strings.restoreBtn));
@@ -56,7 +56,7 @@ describe("TrashView", () => {
 
   test("load error notifies", async () => {
     mockListTrash.mockRejectedValue(new Error("trash-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("trash-fail", "error"));
   });
@@ -66,7 +66,7 @@ describe("TrashView", () => {
     mockListTrash.mockReturnValue(
       new Promise<TrashItem[]>((resolve) => { resolveList = resolve; })
     );
-    const { container } = render(<TrashView onNotify={jest.fn()} />);
+    const { container } = render(<TrashView onNotify={vi.fn()} />);
     expect(container.querySelector(".MuiSkeleton-root")).toBeTruthy();
     resolveList([]);
   });
@@ -74,7 +74,7 @@ describe("TrashView", () => {
   test("permanent delete selected item through confirm dialog", async () => {
     mockListTrash.mockResolvedValue([item]);
     mockPermanent.mockResolvedValue(undefined);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText("a.txt"));
     fireEvent.click(screen.getByText(strings.permanentDelete));
@@ -91,7 +91,7 @@ describe("TrashView", () => {
   test("empty trash through confirm dialog", async () => {
     mockListTrash.mockResolvedValue([item]);
     mockPermanent.mockResolvedValue(undefined);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     await screen.findByText("a.txt");
     fireEvent.click(screen.getByText(strings.clearTrash));
@@ -108,7 +108,7 @@ describe("TrashView", () => {
     mockRestore.mockResolvedValue([
       { trashKey: "t1", status: "error", message: "目标位置已存在" },
     ]);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText("a.txt"));
     fireEvent.click(screen.getByText(strings.restoreBtn));
@@ -120,7 +120,7 @@ describe("TrashView", () => {
   test("permanent delete failure notifies error", async () => {
     mockListTrash.mockResolvedValue([item]);
     mockPermanent.mockRejectedValue(new Error("perm-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText("a.txt"));
     fireEvent.click(screen.getByText(strings.permanentDelete));
@@ -132,7 +132,7 @@ describe("TrashView", () => {
 
   test("row click toggles selection off", async () => {
     mockListTrash.mockResolvedValue([item]);
-    render(<TrashView onNotify={jest.fn()} />);
+    render(<TrashView onNotify={vi.fn()} />);
     const row = await screen.findByText("a.txt");
     fireEvent.click(row);
     const restoreBtn = screen.getByText(strings.restoreBtn).closest("button")!;
@@ -143,7 +143,7 @@ describe("TrashView", () => {
 
   test("checkbox toggles selection", async () => {
     mockListTrash.mockResolvedValue([item]);
-    render(<TrashView onNotify={jest.fn()} />);
+    render(<TrashView onNotify={vi.fn()} />);
     const checkbox = (await screen.findByRole("checkbox")) as HTMLInputElement;
     fireEvent.click(checkbox);
     expect(screen.getByText(strings.restoreBtn).closest("button")!.disabled).toBe(false);
@@ -152,7 +152,7 @@ describe("TrashView", () => {
   test("restore rejection notifies error", async () => {
     mockListTrash.mockResolvedValue([item]);
     mockRestore.mockRejectedValue(new Error("restore-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText("a.txt"));
     fireEvent.click(screen.getByText(strings.restoreBtn));
@@ -162,7 +162,7 @@ describe("TrashView", () => {
   test("empty trash rejection notifies error", async () => {
     mockListTrash.mockResolvedValue([item]);
     mockPermanent.mockRejectedValue(new Error("empty-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     await screen.findByText("a.txt");
     fireEvent.click(screen.getByText(strings.clearTrash));
@@ -172,7 +172,7 @@ describe("TrashView", () => {
 
   test("cancel delete dialog leaves item untouched", async () => {
     mockListTrash.mockResolvedValue([item]);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<TrashView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText("a.txt"));
     fireEvent.click(screen.getByText(strings.permanentDelete));

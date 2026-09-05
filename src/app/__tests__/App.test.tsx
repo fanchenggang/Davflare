@@ -1,43 +1,44 @@
+import { vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import App, { enqueueSnack, SnackbarMessage } from "../../App";
 import { setLang, strings } from "../strings";
 
-jest.mock("../transferQueue", () => {
+vi.mock("../transferQueue", () => {
   return {
     TransferQueueProvider: ({ children }: { children: JSX.Element }) => children,
     useTransferQueue: () => [],
     useTransferQueueActions: () => ({}),
     useTransferQueueGlobalPaused: () => false,
-    useUploadEnqueue: () => jest.fn(),
+    useUploadEnqueue: () => vi.fn(),
   };
 });
 
 
-jest.mock("../../Main", () => ({
+vi.mock("../../Main", () => ({
   __esModule: true,
   default: () => <div>main-stub</div>,
 }));
 
-// 真实 CommandPalette 会引 transfer.ts → p-limit（ESM-only），CRA 的 jest 不转换
-// node_modules，套件加载即崩。App 层测试只需验证 cmd/ctrl+K 能开关面板，桩化即可。
-jest.mock("../../CommandPalette", () => ({
+// 真实 CommandPalette 会引 transfer.ts → p-limit（ESM-only），单测环境无法
+// 直载，套件加载即崩。App 层测试只需验证 cmd/ctrl+K 能开关面板，桩化即可。
+vi.mock("../../CommandPalette", () => ({
   __esModule: true,
   default: ({ open }: { open: boolean }) =>
     open ? <div>command-palette-stub</div> : null,
 }));
 
-jest.mock("../../LoginDialog", () => ({
+vi.mock("../../LoginDialog", () => ({
   __esModule: true,
   default: () => <div>login-stub</div>,
 }));
 
-jest.mock("../../TransferManager", () => ({
+vi.mock("../../TransferManager", () => ({
   __esModule: true,
   default: () => null,
 }));
 
-jest.mock("../../ApiKeysPanel", () => ({
+vi.mock("../../ApiKeysPanel", () => ({
   __esModule: true,
   default: () => null,
 }));

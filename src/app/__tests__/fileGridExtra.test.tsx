@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
@@ -6,12 +7,12 @@ import FileGrid, { FileGridSkeleton } from "../../FileGrid";
 import { strings, translate } from "../strings";
 import { FileItem } from "../types";
 
-jest.mock("../../AuthThumbnail", () => ({
+vi.mock("../../AuthThumbnail", () => ({
   __esModule: true,
   default: () => <span data-testid="auth-thumb" />,
 }));
 
-jest.mock("../../MimeIcon", () => ({
+vi.mock("../../MimeIcon", () => ({
   __esModule: true,
   default: () => <span data-testid="mime-icon" />,
 }));
@@ -46,10 +47,10 @@ describe("FileGrid extras", () => {
         files={[]}
         view="list"
         selectedKeys={[]}
-        onToggleSelect={jest.fn()}
-        onNavigate={jest.fn()}
-        onOpen={jest.fn()}
-        onOpenMenu={jest.fn()}
+        onToggleSelect={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpen={vi.fn()}
+        onOpenMenu={vi.fn()}
         emptyMessage={<div>empty-here</div>}
       />
     );
@@ -57,14 +58,14 @@ describe("FileGrid extras", () => {
   });
 
   test("grid tiles, highlight, checkbox, ctrl-click, drop, drag, quick actions", () => {
-    const onToggle = jest.fn();
-    const onDrop = jest.fn();
-    const onDownload = jest.fn();
-    const onShare = jest.fn();
-    const onDelete = jest.fn();
-    const onOpenMenu = jest.fn();
-    const onNavigate = jest.fn();
-    const onOpen = jest.fn();
+    const onToggle = vi.fn();
+    const onDrop = vi.fn();
+    const onDownload = vi.fn();
+    const onShare = vi.fn();
+    const onDelete = vi.fn();
+    const onOpenMenu = vi.fn();
+    const onNavigate = vi.fn();
+    const onOpen = vi.fn();
     wrap(
       <FileGrid
         files={[file, folder]}
@@ -108,7 +109,7 @@ describe("FileGrid extras", () => {
 
     fireEvent.pointerDown(folderTile);
     fireEvent.dragStart(folderTile, {
-      dataTransfer: { setData: jest.fn(), effectAllowed: "move" },
+      dataTransfer: { setData: vi.fn(), effectAllowed: "move" },
     });
 
     fireEvent.click(screen.getByLabelText(`${file.name} ${strings.download}`));
@@ -126,15 +127,15 @@ describe("FileGrid extras", () => {
   });
 
   test("list view keyboard, context menu and drag", () => {
-    const onOpen = jest.fn();
-    const onOpenMenu = jest.fn();
+    const onOpen = vi.fn();
+    const onOpenMenu = vi.fn();
     wrap(
       <FileGrid
         files={[file]}
         view="list"
         selectedKeys={[]}
-        onToggleSelect={jest.fn()}
-        onNavigate={jest.fn()}
+        onToggleSelect={vi.fn()}
+        onNavigate={vi.fn()}
         onOpen={onOpen}
         onOpenMenu={onOpenMenu}
         emptyMessage={null}
@@ -147,21 +148,21 @@ describe("FileGrid extras", () => {
     fireEvent.contextMenu(row);
     expect(onOpenMenu).toHaveBeenCalled();
     fireEvent.dragStart(row, {
-      dataTransfer: { setData: jest.fn(), effectAllowed: "move" },
+      dataTransfer: { setData: vi.fn(), effectAllowed: "move" },
     });
   });
 
   test("grid tile keyboard opens", () => {
-    const onOpen = jest.fn();
+    const onOpen = vi.fn();
     wrap(
       <FileGrid
         files={[file]}
         view="grid"
         selectedKeys={[]}
-        onToggleSelect={jest.fn()}
-        onNavigate={jest.fn()}
+        onToggleSelect={vi.fn()}
+        onNavigate={vi.fn()}
         onOpen={onOpen}
-        onOpenMenu={jest.fn()}
+        onOpenMenu={vi.fn()}
         emptyMessage={null}
       />
     );
@@ -171,16 +172,16 @@ describe("FileGrid extras", () => {
   });
 
   test("checkbox and more button stop propagation on pointer/mouse down", () => {
-    const onToggle = jest.fn();
-    const onOpenMenu = jest.fn();
+    const onToggle = vi.fn();
+    const onOpenMenu = vi.fn();
     wrap(
       <FileGrid
         files={[file]}
         view="grid"
         selectedKeys={[]}
         onToggleSelect={onToggle}
-        onNavigate={jest.fn()}
-        onOpen={jest.fn()}
+        onNavigate={vi.fn()}
+        onOpen={vi.fn()}
         onOpenMenu={onOpenMenu}
         emptyMessage={null}
       />
@@ -200,15 +201,15 @@ describe("FileGrid extras", () => {
   });
 
   test("more button wrapper stops propagation on pointer/mouse down", () => {
-    const onOpenMenu = jest.fn();
+    const onOpenMenu = vi.fn();
     wrap(
       <FileGrid
         files={[file]}
         view="grid"
         selectedKeys={[]}
-        onToggleSelect={jest.fn()}
-        onNavigate={jest.fn()}
-        onOpen={jest.fn()}
+        onToggleSelect={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpen={vi.fn()}
         onOpenMenu={onOpenMenu}
         emptyMessage={null}
       />
@@ -227,9 +228,9 @@ describe("FileGrid extras", () => {
         files={[file]}
         view="list"
         selectedKeys={[]}
-        onToggleSelect={jest.fn()}
-        onNavigate={jest.fn()}
-        onOpen={jest.fn()}
+        onToggleSelect={vi.fn()}
+        onNavigate={vi.fn()}
+        onOpen={vi.fn()}
         onOpenMenu={onOpenMenu}
         emptyMessage={null}
       />

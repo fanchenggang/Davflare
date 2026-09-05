@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 /**
  * transfer.ts 分块上传（multipartUpload）与 processTransferTask 的分支补充：
  * 创建/分片/重试/断点续传/完成各阶段失败路径，缩略图副作用，收集与选择器回退。
@@ -18,28 +19,28 @@ import { setLang } from "../strings";
 import { asAuthFetchMock, jsonResponse } from "../testUtils";
 import type { UploadPart } from "../types";
 
-jest.mock("p-limit", () => ({
+vi.mock("p-limit", () => ({
   __esModule: true,
   default: () => (fn: () => Promise<unknown>) => fn(),
 }));
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
-  basicAuthHeader: jest.fn(() => "Basic abc"),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
+  basicAuthHeader: vi.fn(() => "Basic abc"),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);
-const mockBasic = basicAuthHeader as unknown as jest.Mock;
+const mockBasic = basicAuthHeader as unknown as Mock;
 
 beforeEach(() => {
   mockAuthFetch.mockReset();
   mockBasic.mockReturnValue("Basic abc");
   setLang("zh");
   if (!(URL as any).createObjectURL) {
-    (URL as any).createObjectURL = jest.fn(() => "blob:x");
+    (URL as any).createObjectURL = vi.fn(() => "blob:x");
   }
   if (!(URL as any).revokeObjectURL) {
-    (URL as any).revokeObjectURL = jest.fn();
+    (URL as any).revokeObjectURL = vi.fn();
   }
   // jsdom 的 Blob 可能缺 arrayBuffer()，blobDigest 依赖它；用 FileReader 补齐
   if (typeof (Blob.prototype as any).arrayBuffer !== "function") {
@@ -52,17 +53,17 @@ beforeEach(() => {
       });
     };
   }
-  jest.spyOn(console, "log").mockImplementation(() => {});
+  vi.spyOn(console, "log").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  (console.log as jest.Mock).mockRestore();
+  (console.log as Mock).mockRestore();
 });
 
 function bigFile(size = SIZE_LIMIT * 2, type = "application/octet-stream"): File {
   const file = new File(["chunk"], "big.bin", { type });
   Object.defineProperty(file, "size", { value: size });
-  file.slice = jest.fn((start: number, end: number) => {
+  file.slice = vi.fn((start: number, end: number) => {
     const len = Math.max(0, Math.min(end, size) - start);
     return new Blob([new Uint8Array(len)]);
   }) as any;
@@ -177,8 +178,8 @@ describe("multipartUpload 失败路径", () => {
         reads += 1;
         return reads > 1;
       },
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
     } as unknown as AbortSignal;
     await expect(
       multipartUpload("big.bin", bigFile(SIZE_LIMIT), { signal })
@@ -222,8 +223,8 @@ describe("multipartUpload 成功与续传", () => {
   test("上传单分片文件：进度回调与 onState 持久化", async () => {
     mockAuthFetch.mockResolvedValueOnce(okCreate());
     mockAuthFetch.mockResolvedValueOnce(okComplete());
-    const onUploadProgress = jest.fn();
-    const onState = jest.fn();
+    const onUploadProgress = vi.fn();
+    const onState = vi.fn();
     const res = await multipartUpload("big.bin", bigFile(SIZE_LIMIT), {
       onUploadProgress,
       onState,
@@ -247,7 +248,7 @@ describe("multipartUpload 成功与续传", () => {
 
   test("断点续传：已有 uploadId + uploadedParts 只补缺失分片", async () => {
     mockAuthFetch.mockResolvedValueOnce(okComplete());
-    const onUploadProgress = jest.fn();
+    const onUploadProgress = vi.fn();
     const uploadedParts: UploadPart[] = [{ partNumber: 1, etag: '"e1"' }];
     const res = await multipartUpload("big.bin", bigFile(SIZE_LIMIT * 2), {
       uploadId: "u9",
@@ -304,8 +305,8 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
       }
     }
     (global as any).Image = MockImage;
-    HTMLCanvasElement.prototype.getContext = jest.fn(
-      () => ({ drawImage: jest.fn() }) as any
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({ drawImage: vi.fn() }) as any
     ) as any;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
       cb(new Blob(["png"], { type: "image/png" }));
@@ -319,7 +320,7 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
       .mockResolvedValueOnce(okComplete());
 
     const file = bigFile(SIZE_LIMIT * 2, "image/png");
-    const onTaskState = jest.fn();
+    const onTaskState = vi.fn();
     const res = await processTransferTask({
       task: uploadTask(file),
       onTaskState,
@@ -341,8 +342,8 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
       }
     }
     (global as any).Image = MockImage;
-    HTMLCanvasElement.prototype.getContext = jest.fn(
-      () => ({ drawImage: jest.fn() }) as any
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({ drawImage: vi.fn() }) as any
     ) as any;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
       cb(new Blob(["png"], { type: "image/png" }));
@@ -365,15 +366,15 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
   test("generateThumbnail 失败不阻塞上传（video 载入失败分支）", async () => {
     // video/mp4：创建 video 后手动触发 onerror
     const origCreate = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = origCreate(tag);
       if (tag === "video") {
         queueMicrotask(() => (el as HTMLVideoElement).onerror?.(new Event("error")));
       }
       return el;
     });
-    HTMLCanvasElement.prototype.getContext = jest.fn(
-      () => ({ drawImage: jest.fn() }) as any
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({ drawImage: vi.fn() }) as any
     ) as any;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
       cb(new Blob(["png"], { type: "image/png" }));
@@ -388,23 +389,23 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
       task: uploadTask(bigFile(SIZE_LIMIT * 2, "video/mp4")),
     });
     expect(res.ok).toBe(true);
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 
   test("video 缩略图成功分支：loadeddata + play", async () => {
-    jest
+    vi
       .spyOn(HTMLVideoElement.prototype, "play")
-      .mockResolvedValue(undefined as unknown as Promise<void>);
+      .mockResolvedValue(undefined);
     const origCreate = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = origCreate(tag);
       if (tag === "video") {
         queueMicrotask(() => (el as HTMLVideoElement).onloadeddata?.(new Event("loadeddata")));
       }
       return el;
     });
-    HTMLCanvasElement.prototype.getContext = jest.fn(
-      () => ({ drawImage: jest.fn() }) as any
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({ drawImage: vi.fn() }) as any
     ) as any;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
       cb(new Blob(["png"], { type: "image/png" }));
@@ -420,7 +421,7 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
       task: uploadTask(bigFile(SIZE_LIMIT * 2, "video/mp4")),
     });
     expect(res.ok).toBe(true);
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 
   test("非媒体类型跳过缩略图直接上传（小文件）", async () => {
@@ -429,7 +430,7 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
       .mockResolvedValueOnce(okComplete());
 
     const file = new File(["hello"], "plain.txt", { type: "text/plain" });
-    const onTaskProgress = jest.fn();
+    const onTaskProgress = vi.fn();
     const res = await processTransferTask({
       task: uploadTask(file),
       onTaskProgress,
@@ -454,8 +455,8 @@ describe("processTransferTask 缩略图副作用与分块路径", () => {
 
 describe("generateThumbnail / pdf 分支", () => {
   test("pdf 走远程 pdf.js 动态导入，测试环境加载失败即拒绝", async () => {
-    HTMLCanvasElement.prototype.getContext = jest.fn(
-      () => ({ drawImage: jest.fn() }) as any
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({ drawImage: vi.fn() }) as any
     ) as any;
     await expect(
       generateThumbnail(new File(["pdf"], "a.pdf", { type: "application/pdf" }))
@@ -463,8 +464,8 @@ describe("generateThumbnail / pdf 分支", () => {
   });
 
   test("非图片/视频/pdf 直接出空画布缩略图", async () => {
-    HTMLCanvasElement.prototype.getContext = jest.fn(
-      () => ({ drawImage: jest.fn() }) as any
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      () => ({ drawImage: vi.fn() }) as any
     ) as any;
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) {
       cb(new Blob(["png"], { type: "image/png" }));
@@ -535,7 +536,7 @@ describe("selectDirectoryFiles 补充分支", () => {
       throw new Error("security");
     };
     const orig = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag) as HTMLInputElement;
       if (tag === "input") {
         el.click = () => {
@@ -550,13 +551,13 @@ describe("selectDirectoryFiles 补充分支", () => {
     });
     const files = await selectDirectoryFiles();
     expect(files[0].name).toBe("fallback.txt");
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 
   test("input oncancel 返回空数组", async () => {
     delete (window as any).showDirectoryPicker;
     const orig = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag) as HTMLInputElement;
       if (tag === "input") {
         el.click = () => el.oncancel?.(new Event("cancel") as any);
@@ -564,7 +565,7 @@ describe("selectDirectoryFiles 补充分支", () => {
       return el;
     });
     await expect(selectDirectoryFiles()).resolves.toEqual([]);
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 });
 

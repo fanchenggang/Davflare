@@ -115,7 +115,7 @@ After the first deploy:
 
 ### Manual Cloudflare Pages
 
-- Framework preset: **None (React CRA, not Docusaurus)**
+- Framework preset: **None (React/Vite, not Docusaurus)**
 - Output directory: `build`
 - Then bind `BUCKET`, set the env vars above, and retry deploy
 
@@ -249,9 +249,10 @@ Skills, rules, and MCP snippets live on R2 under `agents/`. Repo demo: [`agents/
 npm install
 
 npm run typecheck   # tsc --noEmit (covers src/ and functions/)
-npm test            # Jest unit tests (interactive watch)
-npm run test:ci     # Jest unit tests, single CI-friendly run
-npm run build       # production build into build/
+npm test            # Vitest unit tests, single run
+npm run test:ci     # same suite (script name kept for CI compatibility)
+npm run test:coverage   # Vitest + v8 coverage (thresholds enforced)
+npm run build       # typecheck + production build into build/
 
 npm run test:e2e    # one-shot API regression: build → wrangler pages dev (local miniflare R2) → scripts/api-e2e.sh
 SKIP_BUILD=1 npm run test:e2e   # reuse an existing build/ for faster iterations

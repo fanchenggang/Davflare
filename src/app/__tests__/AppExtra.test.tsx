@@ -1,8 +1,8 @@
+import { vi } from "vitest";
 /**
  * App.tsx 覆盖补充：Snackbar 队列消费（排队/error 时长/action 回调/上传完成失败
  * 通知去重）、主题三态切换持久化、快捷键的输入保护分支。
  */
-import React from "react";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import App from "../../App";
@@ -12,17 +12,17 @@ import type { TransferTask } from "../types";
 let mockNotify: ((message: string, severity?: any, options?: any) => void) | null = null;
 let mockQueueTasks: TransferTask[] = [];
 
-jest.mock("../transferQueue", () => {
+vi.mock("../transferQueue", () => {
   return {
     TransferQueueProvider: ({ children }: { children: JSX.Element }) => children,
     useTransferQueue: () => mockQueueTasks,
     useTransferQueueActions: () => ({}),
     useTransferQueueGlobalPaused: () => false,
-    useUploadEnqueue: () => jest.fn(),
+    useUploadEnqueue: () => vi.fn(),
   };
 });
 
-jest.mock("../../Main", () => ({
+vi.mock("../../Main", () => ({
   __esModule: true,
   default: (props: { onNotify: (m: string, s?: any, o?: any) => void }) => {
     mockNotify = props.onNotify;
@@ -30,24 +30,24 @@ jest.mock("../../Main", () => ({
   },
 }));
 
-jest.mock("../../CommandPalette", () => ({
+vi.mock("../../CommandPalette", () => ({
   __esModule: true,
   default: ({ open }: { open: boolean }) =>
     open ? <div>command-palette-stub</div> : null,
 }));
 
-jest.mock("../../LoginDialog", () => ({
+vi.mock("../../LoginDialog", () => ({
   __esModule: true,
   default: () => <div>login-stub</div>,
 }));
 
-jest.mock("../../TransferManager", () => ({
+vi.mock("../../TransferManager", () => ({
   __esModule: true,
   default: ({ open }: { open: boolean }) =>
     open ? <div>transfers-stub</div> : null,
 }));
 
-jest.mock("../../ApiKeysPanel", () => ({
+vi.mock("../../ApiKeysPanel", () => ({
   __esModule: true,
   default: () => null,
 }));
@@ -72,7 +72,7 @@ beforeEach(() => {
 
 describe("App Snackbar 队列", () => {
   test("连续 success 消息：后发的顶到队首，前一条排队随后展示", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       render(<App />);
       await act(async () => {});
@@ -83,7 +83,7 @@ describe("App Snackbar 队列", () => {
       expect(screen.getByText("第二条")).toBeInTheDocument();
       expect(screen.queryByText("第一条")).not.toBeInTheDocument();
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
@@ -100,28 +100,28 @@ describe("App Snackbar 队列", () => {
 
   // 修复后行为：8s 自动隐藏 → 退场动画完成 → onExited 排空队列，消息消失不再重闪
   test("error autoHideDuration 到点后自动隐藏且不再重闪", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       render(<App />);
       await act(async () => {});
       act(() => mockNotify!("出错了", "error"));
       expect(screen.getByText("出错了")).toBeInTheDocument();
       // 8s 自动隐藏；分两段推进：先到隐藏点，再等退场动画触发 onExited
-      act(() => jest.advanceTimersByTime(8200));
-      act(() => jest.advanceTimersByTime(3000));
+      act(() => vi.advanceTimersByTime(8200));
+      act(() => vi.advanceTimersByTime(3000));
       expect(screen.queryByText("出错了")).not.toBeInTheDocument();
       // 修复前消息会在每轮 autoHideDuration 到点后重新进场；这里确认持续消失
-      act(() => jest.advanceTimersByTime(12000));
+      act(() => vi.advanceTimersByTime(12000));
       expect(screen.queryByText("出错了")).not.toBeInTheDocument();
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
   test("action 按钮触发回调", async () => {
     render(<App />);
     await act(async () => {});
-    const onClick = jest.fn();
+    const onClick = vi.fn();
     act(() =>
       mockNotify!("失败", "error", {
         action: { label: strings.transfers, onClick },

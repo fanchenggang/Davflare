@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
@@ -6,12 +7,12 @@ import FileGrid from "../../FileGrid";
 import { translate } from "../strings";
 import { FileItem } from "../types";
 
-jest.mock("../../AuthThumbnail", () => ({
+vi.mock("../../AuthThumbnail", () => ({
   __esModule: true,
   default: () => <span data-testid="auth-thumb" />,
 }));
 
-jest.mock("../../MimeIcon", () => ({
+vi.mock("../../MimeIcon", () => ({
   __esModule: true,
   default: () => <span data-testid="mime-icon" />,
 }));
@@ -41,10 +42,10 @@ function renderList(
     files: [file, folder],
     view: "list" as const,
     selectedKeys: [] as string[],
-    onToggleSelect: jest.fn(),
-    onNavigate: jest.fn(),
-    onOpen: jest.fn(),
-    onOpenMenu: jest.fn(),
+    onToggleSelect: vi.fn(),
+    onNavigate: vi.fn(),
+    onOpen: vi.fn(),
+    onOpenMenu: vi.fn(),
     ...overrides,
   };
   const result = render(

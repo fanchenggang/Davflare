@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import {
   backupCurlExample,
   createApiKey,
@@ -16,8 +17,8 @@ import { authFetch } from "../auth";
 import { getLang, setLang } from "../strings";
 import { asAuthFetchMock } from "../testUtils";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);

@@ -1,5 +1,5 @@
 import { alpha } from "@mui/material/styles";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Button,
@@ -444,7 +444,7 @@ function ExplorerBar({
                 size="small"
                 checked={showHidden}
                 onChange={(event) => onShowHiddenChange(event.target.checked)}
-                inputProps={{ "aria-label": strings.showHidden }}
+                slotProps={{ input: { "aria-label": strings.showHidden } }}
               />
             }
             label={

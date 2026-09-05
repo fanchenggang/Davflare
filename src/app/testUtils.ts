@@ -1,3 +1,4 @@
+import { type Mock } from "vitest";
 /**
  * 共享测试工具：供 src/app/__tests__ 下的测试套件复用。
  *
@@ -39,8 +40,8 @@ export function httpJsonResponse(body: unknown, status = 200): Response {
  * authFetch mock
  * ------------------------------------------------------------------ */
 
-/** 在 jest.fn() 上附加常用响应 helper 的 authFetch mock 类型。 */
-export interface AuthFetchMock extends jest.Mock {
+/** 在 vi.fn() 上附加常用响应 helper 的 authFetch mock 类型。 */
+export interface AuthFetchMock extends Mock {
   /** 模拟 2xx JSON 响应（默认 200；status=201 可覆盖 created 场景）。 */
   mockOk(body: unknown, status?: number): AuthFetchMock;
   /** 模拟非 2xx：text() 返回 message（默认空串，走各 client 的默认文案分支）。 */
@@ -51,7 +52,7 @@ export interface AuthFetchMock extends jest.Mock {
   mockErrorOnce(status: number, message?: string): AuthFetchMock;
 }
 
-/** 给已存在的 jest.fn（如 jest.mock 工厂里的 authFetch）附加 helper 并返回。 */
+/** 给已存在的 vi.fn（如 vi.mock 工厂里的 authFetch）附加 helper 并返回。 */
 export function asAuthFetchMock(fetchFn: unknown): AuthFetchMock {
   const fn = fetchFn as AuthFetchMock;
   fn.mockOk = (body: unknown, status = 200) => {

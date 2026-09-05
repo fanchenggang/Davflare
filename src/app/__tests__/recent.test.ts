@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
 import { loadRecent, pushRecent, useRecent } from "../recent";
@@ -52,7 +53,7 @@ describe("recent / pushRecent", () => {
   });
 
   test("触发 window 事件", () => {
-    const spy = jest.spyOn(window, "dispatchEvent");
+    const spy = vi.spyOn(window, "dispatchEvent");
     pushRecent({ key: "a.txt", name: "a.txt", isDir: false });
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();

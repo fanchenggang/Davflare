@@ -206,8 +206,13 @@ try:
 except Exception:
     print('ZIP-BAD')
 ")" "ZIP-OK"
-DTHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN?download=1")
-assert_contains "dir share HEAD 200 zip" "$DTHEAD" "200|application/zip"
+DTHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN")
+# HEAD 与 GET 语义对齐（TESTING.md 分享落地页批次）：默认落地页 text/html，
+# ?download=1 / ?raw=1 才是 zip/文件本体。（原断言 HEAD 无参即 zip 是旧语义残留，
+# 与 8150589 引入、TESTING.md 记载的现行语义矛盾，基线 2ad064f 上也必失败。）
+assert_contains "dir share HEAD 200 landing-html" "$DTHEAD" "200|text/html"
+DTZIPHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN?download=1")
+assert_contains "dir share HEAD download=1 zip" "$DTZIPHEAD" "200|application/zip"
 assert_contains "dir landing folder badge" "$(curl -s --noproxy '*' "$BASE/share/$DTOKEN")" "Folder (zip download)"
 # 过期：expiresInHours 接受小数（0.00001h = 36ms），落地页与直链都应 410
 EXP_SHARE=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.txt\",\"expiresInHours\":0.00001}")
@@ -463,6 +468,5 @@ for id in $KID; do curl -s --noproxy '*' -X DELETE "$BASE/api/keys?id=$id" -H "$
 rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-*.txt /tmp/suite-*.zip /tmp/suite-*.bin /tmp/suite-share*.png /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json /tmp/mcp-big.json /tmp/mcp-big.bin /tmp/mcp-big-dl.bin /tmp/mcp-part.json 2>/dev/null
 
 echo ""
-echo "=============================="
 echo "PASS: $PASS  FAIL: $FAIL"
 [ "$FAIL" = "0" ]

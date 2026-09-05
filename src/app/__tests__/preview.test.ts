@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import {
   fileExtension,
   fileIconKind,
@@ -111,7 +112,7 @@ describe("preview / prettyJsonOrRaw", () => {
 
 describe("preview / readResponseTextCapped", () => {
   test("Content-Length 超限直接拒绝", async () => {
-    const cancel = jest.fn(() => Promise.resolve());
+    const cancel = vi.fn(() => Promise.resolve());
     const response = {
       headers: { get: (n: string) => (n === "content-length" ? "3000000" : null) },
       body: { cancel },
@@ -142,7 +143,7 @@ describe("preview / readResponseTextCapped", () => {
           let i = 0;
           return {
             read: async () => (i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined }),
-            cancel: jest.fn(() => Promise.resolve()),
+            cancel: vi.fn(() => Promise.resolve()),
           };
         },
       },
@@ -159,7 +160,7 @@ describe("preview / readResponseTextCapped", () => {
           let sent = false;
           return {
             read: async () => (sent ? { done: true, value: undefined } : ((sent = true), { done: false, value: big })),
-            cancel: jest.fn(() => Promise.resolve()),
+            cancel: vi.fn(() => Promise.resolve()),
           };
         },
       },

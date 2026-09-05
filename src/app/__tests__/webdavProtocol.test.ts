@@ -12,6 +12,33 @@ import {
   makeContext,
 } from "../testInMemoryBucket";
 
+// 环境差异垫片：
+// 1) undici 的 Request 构造器禁止 TRACE/CONNECT 等保留方法（workerd 允许），
+//    这里先用合法方法构造再用 defineProperty 覆盖 method，保证 handler 侧
+//    语义一致（拿到一个「方法名任意」的 Request）。
+// 2) undici 的 Response.redirect() 返回 immutable headers（workerd 允许修改），
+//    protocol.ts 的 301 响应要再叠加 CORS 头，这里把 redirect 换成可变等价物。
+const origResponseRedirect = Response.redirect;
+beforeAll(() => {
+  (Response as any).redirect = (url: string | URL, status: number) =>
+    new Response(null, {
+      status,
+      headers: { Location: url.toString() },
+    });
+});
+afterAll(() => {
+  Response.redirect = origResponseRedirect;
+});
+
+function unknownMethodRequest(path: string, method: string): Request {
+  const request = new Request(`${HOST}${path}`, {
+    method: "PROPFIND",
+    headers: { Authorization: AUTH },
+  });
+  Object.defineProperty(request, "method", { value: method });
+  return request;
+}
+
 const AUTH = basicAuthHeader("user", "pass");
 const HOST = "http://drive.example.com";
 
@@ -148,7 +175,7 @@ describe("webdav OPTIONS / redirect / auth", () => {
   test("unknown method is 405 with Allow header", async () => {
     const bucket = new InMemoryBucket();
     const response = await call(
-      req("/webdav/a.txt", "TRACE", { Authorization: AUTH }),
+      unknownMethodRequest("/webdav/a.txt", "TRACE"),
       makeEnv(bucket)
     );
     expect(response.status).toBe(405);

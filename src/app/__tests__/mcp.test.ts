@@ -1,4 +1,5 @@
 /// <reference types="node" />
+import { vi } from "vitest";
 import { TextDecoder, TextEncoder } from "util";
 beforeAll(() => {
   (global as any).TextEncoder = TextEncoder;
@@ -152,7 +153,7 @@ describe("mcp protocol", () => {
   });
 
   test("upload over the MCP cap is a tool error, not an API call", async () => {
-    const upload = jest.fn();
+    const upload = vi.fn();
     const result = await callTool(
       "upload",
       { name: "big.bin", content: "x".repeat(MCP_MAX_UPLOAD_BYTES + 1), encoding: "utf8" },
@@ -232,7 +233,7 @@ describe("mcp protocol", () => {
   test("download with part returns base64 slice via stat + range", () =>
     (async () => {
       const big = "A".repeat(MCP_DOWNLOAD_PART_SIZE + 10);
-      const downloadRange = jest.fn(async () =>
+      const downloadRange = vi.fn(async () =>
         new Response(big.slice(0, 100), {
           status: 206,
           headers: { "Content-Type": "application/octet-stream" },
@@ -275,26 +276,26 @@ describe("mcp protocol", () => {
   });
 
   test("search/move/copy/stat forward arguments", async () => {
-    const search = jest.fn(async () => httpJsonResponse({ matches: [{ key: "a.txt" }] }));
+    const search = vi.fn(async () => httpJsonResponse({ matches: [{ key: "a.txt" }] }));
     const searchResult = await callTool("search", { query: "a.txt", limit: 10 }, { search });
     expect(search).toHaveBeenCalledWith({ query: "a.txt", limit: 10, cursor: undefined });
     expect(JSON.parse(toolPayload(searchResult).content[0].text).matches).toHaveLength(1);
 
-    const move = jest.fn(async () => httpJsonResponse({ from: "a", to: "b" }));
+    const move = vi.fn(async () => httpJsonResponse({ from: "a", to: "b" }));
     await callTool("move", { from: "a", to: "b", overwrite: true }, { move });
     expect(move).toHaveBeenCalledWith({ from: "a", to: "b", overwrite: true });
 
-    const copy = jest.fn(async () => httpJsonResponse({ copied: true }));
+    const copy = vi.fn(async () => httpJsonResponse({ copied: true }));
     await callTool("copy", { from: "a", to: "b" }, { copy });
     expect(copy).toHaveBeenCalledWith({ from: "a", to: "b", overwrite: undefined });
 
-    const stat = jest.fn(async () => httpJsonResponse({ kind: "file", size: 3 }));
+    const stat = vi.fn(async () => httpJsonResponse({ kind: "file", size: 3 }));
     await callTool("stat", { path: "a.txt" }, { stat });
     expect(stat).toHaveBeenCalledWith({ path: "a.txt" });
   });
 
   test("share tools create, list, revoke", async () => {
-    const shareCreate = jest.fn(async () => httpJsonResponse({ token: "tok-1" }, 201));
+    const shareCreate = vi.fn(async () => httpJsonResponse({ token: "tok-1" }, 201));
     const created = await callTool(
       "share_create",
       { path: "docs/report.pdf", extractCode: "abcd", expiresInHours: 24 },
@@ -307,42 +308,42 @@ describe("mcp protocol", () => {
     });
     expect(JSON.parse(toolPayload(created).content[0].text).token).toBe("tok-1");
 
-    const shareList = jest.fn(async () => httpJsonResponse([{ token: "tok-1" }]));
+    const shareList = vi.fn(async () => httpJsonResponse([{ token: "tok-1" }]));
     const listed = await callTool("share_list", {}, { shareList });
     expect(shareList).toHaveBeenCalledTimes(1);
     expect(JSON.parse(toolPayload(listed).content[0].text)).toHaveLength(1);
 
-    const shareRevoke = jest.fn(async () => new Response(null, { status: 204 }));
+    const shareRevoke = vi.fn(async () => new Response(null, { status: 204 }));
     await callTool("share_revoke", { token: "tok-1" }, { shareRevoke });
     expect(shareRevoke).toHaveBeenCalledWith({ token: "tok-1" });
   });
 
   test("share_create rejects missing path and short codes are left to the API", async () => {
-    const shareCreate = jest.fn(async () => httpJsonResponse({ token: "t" }, 201));
+    const shareCreate = vi.fn(async () => httpJsonResponse({ token: "t" }, 201));
     const missing = await callTool("share_create", {}, { shareCreate });
     expect(toolPayload(missing).isError).toBe(true);
     expect(shareCreate).not.toHaveBeenCalled();
   });
 
   test("sites tools list/config/delete", async () => {
-    const sitesList = jest.fn(async () =>
+    const sitesList = vi.fn(async () =>
       httpJsonResponse({ sitesHost: "sites.example.com", sites: [{ slug: "demo", spa: false }] })
     );
     const listed = await callTool("sites_list", {}, { sitesList });
     expect(sitesList).toHaveBeenCalledWith({ withStats: true });
     expect(JSON.parse(toolPayload(listed).content[0].text).sites[0].slug).toBe("demo");
 
-    const sitesConfig = jest.fn(async () => httpJsonResponse({ slug: "demo", spa: true }));
+    const sitesConfig = vi.fn(async () => httpJsonResponse({ slug: "demo", spa: true }));
     await callTool("sites_config", { slug: "demo", spa: true }, { sitesConfig });
     expect(sitesConfig).toHaveBeenCalledWith({ slug: "demo", spa: true });
 
-    const sitesDelete = jest.fn(async () => httpJsonResponse({ slug: "demo", deleted: 3 }));
+    const sitesDelete = vi.fn(async () => httpJsonResponse({ slug: "demo", deleted: 3 }));
     await callTool("sites_delete", { slug: "demo", purge: true }, { sitesDelete });
     expect(sitesDelete).toHaveBeenCalledWith({ slug: "demo", purge: true });
   });
 
   test("sites_config requires slug and spa", async () => {
-    const sitesConfig = jest.fn(async () => httpJsonResponse({ slug: "demo", spa: true }));
+    const sitesConfig = vi.fn(async () => httpJsonResponse({ slug: "demo", spa: true }));
     const missing = await callTool("sites_config", { slug: "demo" }, { sitesConfig });
     expect(toolPayload(missing).isError).toBe(true);
     expect(sitesConfig).not.toHaveBeenCalled();
@@ -373,13 +374,13 @@ describe("mcp protocol", () => {
       "agents/cursor/rules/typescript.mdc": "agent-rule",
       "agents/cursor/Davflare/skills/pages-deploy/SKILL.md": "project-skill",
     };
-    const list = jest.fn(async ({ path }: { path: string }) => {
+    const list = vi.fn(async ({ path }: { path: string }) => {
       const folder = path.replace(/\/+$/, "");
       const items = trees[folder];
       if (!items) return new Response("目录不存在", { status: 404 });
       return httpJsonResponse({ items });
     });
-    const download = jest.fn(async ({ path }: { path: string }) => {
+    const download = vi.fn(async ({ path }: { path: string }) => {
       const text = contents[path];
       if (!text) return new Response("missing", { status: 404 });
       return new Response(text, { status: 200, headers: { "Content-Type": "text/plain" } });
@@ -438,7 +439,7 @@ describe("mcp protocol", () => {
   });
 
   test("push rejects raw keys in mcp.json", async () => {
-    const upload = jest.fn(async () => httpJsonResponse({ key: "agents/cursor/mcp/mcp.json" }, 201));
+    const upload = vi.fn(async () => httpJsonResponse({ key: "agents/cursor/mcp/mcp.json" }, 201));
     const rejected = await callTool(
       "push",
       {
@@ -502,12 +503,12 @@ describe("mcp protocol", () => {
       ],
       "draft/hello/css": [{ key: "draft/hello/css/app.css", name: "app.css", isDir: false }],
     };
-    const list = jest.fn(async ({ path }: { path: string }) => {
+    const list = vi.fn(async ({ path }: { path: string }) => {
       const items = trees[path.replace(/\/+$/, "")];
       if (!items) return new Response("目录不存在", { status: 404 });
       return httpJsonResponse({ items });
     });
-    const copy = jest.fn(async () => httpJsonResponse({ copied: true }));
+    const copy = vi.fn(async () => httpJsonResponse({ copied: true }));
     const copied = await callTool(
       "publish_site",
       { slug: "hello", source: "draft/hello" },
@@ -541,7 +542,7 @@ describe("mcp protocol", () => {
   test("image_upload/list/delete wrap /api/images and respect flag", async () => {
     const id = "a".repeat(32);
     const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-    const imageUpload = jest.fn(async (query: { name: string; body: Uint8Array }) => {
+    const imageUpload = vi.fn(async (query: { name: string; body: Uint8Array }) => {
       expect(query.name).toBe("dot.png");
       expect(query.body.byteLength).toBeGreaterThan(0);
       return httpJsonResponse(

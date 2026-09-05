@@ -5,11 +5,8 @@
   "dependencies": {
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.5",
-    "@mui/icons-material": "^5.15.21",
-    "@mui/material": "^5.15.21",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
+    "@mui/icons-material": "^7.3.11",
+    "@mui/material": "^7.3.11",
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -19,75 +16,27 @@
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-scripts": "5.0.1",
     "typescript": "^5.5.3"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "test:ci": "CI=true react-scripts test --watchAll=false",
+    "start": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:ci": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "bash scripts/run-e2e.sh",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "jest": {
-    "collectCoverageFrom": [
-      "src/**/*.{js,jsx,ts,tsx}",
-      "functions/**/*.ts",
-      "!src/index.js",
-      "!src/app/testUtils.ts",
-      "!src/app/testInMemoryBucket.ts",
-      "!**/__tests__/**",
-      "!**/*.d.ts"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "statements": 50.22,
-        "branches": 42.67,
-        "functions": 60.87,
-        "lines": 50.97
-      },
-      "./src": {
-        "statements": 91.6,
-        "branches": 84.5,
-        "functions": 85.9,
-        "lines": 93.5
-      },
-      "./functions": {
-        "statements": 58.67,
-        "branches": 53.23,
-        "functions": 66.69,
-        "lines": 60.92
-      }
-    }
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
-  "overrides": {
-    "react-scripts": {
-      "typescript": "^5"
-    }
+    "test:e2e": "bash scripts/run-e2e.sh"
   },
   "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@cloudflare/workers-types": "^5.20260905.1",
-    "@types/qrcode": "^1.5.6"
+    "@testing-library/jest-dom": "^6.4.8",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^2.1.0",
+    "jsdom": "^25.0.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0"
   }
 }

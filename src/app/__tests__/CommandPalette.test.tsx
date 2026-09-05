@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
@@ -7,13 +8,13 @@ import { openFile, searchFiles } from "../transfer";
 import { setLang, strings } from "../strings";
 import { FileItem } from "../types";
 
-jest.mock("../transfer", () => ({
-  searchFiles: jest.fn(),
-  openFile: jest.fn(),
+vi.mock("../transfer", () => ({
+  searchFiles: vi.fn(),
+  openFile: vi.fn(),
 }));
 
-const mockSearch = searchFiles as unknown as jest.Mock;
-const mockOpen = openFile as unknown as jest.Mock;
+const mockSearch = searchFiles as unknown as Mock;
+const mockOpen = openFile as unknown as Mock;
 
 const file: FileItem = {
   key: "docs/readme.md",
@@ -36,11 +37,11 @@ const folder: FileItem = {
 function renderPalette(overrides: Partial<React.ComponentProps<typeof CommandPalette>> = {}) {
   const props = {
     open: true,
-    onClose: jest.fn(),
-    onNavigate: jest.fn(),
-    onNotify: jest.fn(),
-    onOpenTransfers: jest.fn(),
-    onThemeToggle: jest.fn(),
+    onClose: vi.fn(),
+    onNavigate: vi.fn(),
+    onNotify: vi.fn(),
+    onOpenTransfers: vi.fn(),
+    onThemeToggle: vi.fn(),
     ...overrides,
   };
   const result = render(
@@ -66,7 +67,7 @@ beforeEach(() => {
 
 beforeAll(() => {
   // jsdom 未实现 scrollIntoView（选中项滚动跟随会调用）
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 describe("CommandPalette", () => {
@@ -81,7 +82,7 @@ describe("CommandPalette", () => {
   });
 
   test("输入关键词 300ms 防抖后调用 searchFiles 并渲染文件结果", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockSearch.mockResolvedValue({ items: [file], hasMore: false });
     renderPalette();
     const input = screen.getByLabelText(
@@ -90,56 +91,56 @@ describe("CommandPalette", () => {
     fireEvent.change(input, { target: { value: "read" } });
     expect(mockSearch).not.toHaveBeenCalled();
     await act(async () => {
-      jest.advanceTimersByTime(320);
+      vi.advanceTimersByTime(320);
     });
     expect(mockSearch).toHaveBeenCalledWith("read");
     await act(async () => {});
     expect(screen.getByText("readme.md")).toBeInTheDocument();
     expect(queryIndex(0)).toHaveClass("Mui-selected");
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test("Enter 打开文件结果：openFile 被调且面板关闭", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockSearch.mockResolvedValue({ items: [file], hasMore: false });
     const { props } = renderPalette();
     const input = screen.getByLabelText(strings.commandPalettePlaceholder);
     fireEvent.change(input, { target: { value: "read" } });
     await act(async () => {
-      jest.advanceTimersByTime(320);
+      vi.advanceTimersByTime(320);
     });
     await act(async () => {});
     fireEvent.keyDown(input, { key: "Enter" });
     expect(mockOpen).toHaveBeenCalledWith(file.key);
     expect(props.onClose).toHaveBeenCalled();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test("Enter 打开目录结果：onNavigate 被调", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockSearch.mockResolvedValue({ items: [folder], hasMore: false });
     const { props } = renderPalette();
     const input = screen.getByLabelText(strings.commandPalettePlaceholder);
     fireEvent.change(input, { target: { value: "docs" } });
     await act(async () => {
-      jest.advanceTimersByTime(320);
+      vi.advanceTimersByTime(320);
     });
     await act(async () => {});
     fireEvent.keyDown(input, { key: "Enter" });
     expect(mockOpen).not.toHaveBeenCalled();
     expect(props.onNavigate).toHaveBeenCalledWith({ kind: "folder", path: folder.key });
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test("ArrowDown/ArrowUp 在结果与命令间移动选中项", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockSearch.mockResolvedValue({ items: [file], hasMore: false });
     renderPalette();
     const input = screen.getByLabelText(strings.commandPalettePlaceholder);
     // 关键词同时命中文件结果与「切换亮/暗主题」命令，两类条目才会在列表里共存
     fireEvent.change(input, { target: { value: "切换" } });
     await act(async () => {
-      jest.advanceTimersByTime(320);
+      vi.advanceTimersByTime(320);
     });
     await act(async () => {});
 
@@ -152,7 +153,7 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(input, { key: "ArrowUp" });
     expect(queryIndex(0)).toHaveClass("Mui-selected");
     expect(queryIndex(1)).not.toHaveClass("Mui-selected");
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test("点击命令执行对应回调", () => {
