@@ -106,7 +106,7 @@
     /* Completeness */
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true /* Skip type checking all .d.ts files. */,
-    "types": ["@cloudflare/workers-types", "vite/client", "vitest/globals"]
+    "types": ["@cloudflare/workers-types", "vite/client", "vitest/globals", "chrome"]
   },
   "exclude": ["cli", "node_modules", "build", ".wrangler"]
 }

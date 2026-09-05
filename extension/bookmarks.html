@@ -22,6 +22,7 @@
           <button id="switchDrive" class="navItem" type="button">Drive</button>
           <button id="switchWorkspaces" class="navItem" type="button">Workspaces</button>
           <button id="switchTabRules" class="navItem" type="button">Tab groups</button>
+          <button id="switchSettings" class="navItem" type="button">Settings</button>
         </div>
 
         <nav class="nav" id="bookmarksNav">
@@ -40,13 +41,20 @@
             <span class="syncLabel" id="syncLabel">WebDAV</span>
             <span class="syncInfo" id="syncInfo">…</span>
           </div>
-          <div class="footBtns">
-            <button id="addBtn" class="primary" type="button">Add</button>
-            <button id="importBtn" class="ghost" type="button">Import</button>
-            <button id="hhImportBtn" class="ghost" type="button">HamHome</button>
-            <button id="exportBtn" class="ghost" type="button">Export</button>
-            <button id="driveBtn" class="ghost" type="button">Drive</button>
-            <button id="settingsBtn" class="ghost" type="button">Settings</button>
+          <button id="addBtn" class="primary addMain" type="button">Add</button>
+          <div class="footRow">
+            <div class="moreWrap">
+              <button id="moreBtn" class="ghost menuToggle" type="button" aria-haspopup="true" aria-expanded="false">⋯ <span id="moreText">More</span></button>
+              <div id="moreMenu" class="popMenu" role="menu">
+                <button id="importBtn" class="menuItem" type="button">Import</button>
+                <button id="hhImportBtn" class="menuItem" type="button">HamHome</button>
+                <button id="exportBtn" class="menuItem" type="button">Export</button>
+              </div>
+            </div>
+          </div>
+          <div class="footRow quietRow">
+            <button id="driveBtn" class="quiet" type="button">Drive</button>
+            <button id="settingsBtn" class="quiet" type="button">Settings</button>
           </div>
         </footer>
       </aside>
@@ -69,7 +77,7 @@
           <p id="loading" class="loading hidden">Loading…</p>
           <section id="cards" class="cards"></section>
           <section id="rows" class="rows hidden"></section>
-          <p id="emptyState" class="empty hidden"></p>
+          <div id="emptyState" class="emptyState hidden"></div>
         </div>
 
         <div id="viewDrive" class="hidden">
@@ -80,7 +88,7 @@
             <button id="driveExternal" class="ghost" type="button">Open in new tab</button>
           </header>
           <div id="bannerDrive" class="banner hidden"></div>
-          <iframe id="driveFrame" class="driveFrame" title="Davflare drive"></iframe>
+          <div id="driveRoot" class="driveFrame"></div>
         </div>
 
         <div id="viewWorkspaces" class="hidden">
@@ -91,7 +99,7 @@
           </header>
           <div id="bannerWs" class="banner hidden"></div>
           <section id="wsList" class="wsList"></section>
-          <p id="wsEmpty" class="empty hidden"></p>
+          <div id="wsEmpty" class="emptyState hidden"></div>
         </div>
 
         <div id="viewTabRules" class="hidden">
@@ -106,7 +114,88 @@
           </header>
           <div id="bannerRules" class="banner hidden"></div>
           <section id="ruleList" class="rows"></section>
-          <p id="rulesEmpty" class="empty hidden"></p>
+          <div id="rulesEmpty" class="emptyState hidden"></div>
+        </div>
+
+        <div id="viewSettings" class="hidden">
+          <header class="topbar">
+            <span id="setupHint" class="topHint"></span>
+            <div class="spacer"></div>
+          </header>
+          <div id="bannerSettings" class="banner hidden"></div>
+          <section class="settingsCard">
+            <form id="settingsForm" novalidate>
+              <label for="instanceUrl" id="urlLabel">Instance URL</label>
+              <input
+                id="instanceUrl"
+                type="url"
+                inputmode="url"
+                autocomplete="url"
+                spellcheck="false"
+                placeholder="https://your-domain.com"
+              />
+              <p class="hint" id="urlHint">
+                Paste the Pages or custom-domain URL of your own Davflare instance.
+              </p>
+
+              <label for="bookmarkPath" id="pathLabel">Bookmark directory</label>
+              <input
+                id="bookmarkPath"
+                type="text"
+                spellcheck="false"
+                autocapitalize="off"
+                placeholder="bookmarks"
+              />
+              <p class="hint" id="pathHint">
+                Relative to /webdav/. Default is "bookmarks".
+              </p>
+
+              <fieldset class="settingsSection">
+                <legend id="modeLabel">Default toolbar view</legend>
+                <label class="radio" for="modeDrive">
+                  <input type="radio" id="modeDrive" name="toolbarMode" value="drive" />
+                  <span id="modeDriveText">Drive</span>
+                </label>
+                <label class="radio" for="modeBookmarks">
+                  <input type="radio" id="modeBookmarks" name="toolbarMode" value="bookmarks" />
+                  <span id="modeBookmarksText">Bookmark library</span>
+                </label>
+                <p class="hint" id="modeHint">
+                  Both open this page; right-click the toolbar icon to switch anytime.
+                </p>
+              </fieldset>
+
+              <fieldset class="settingsSection">
+                <legend id="davLabel">WebDAV credentials</legend>
+                <label for="davUser" id="userLabel">Username</label>
+                <input
+                  id="davUser"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  autocapitalize="off"
+                />
+                <label for="davPass" id="passLabel">Password</label>
+                <input
+                  id="davPass"
+                  type="password"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                />
+                <p class="hint" id="davHint">
+                  Stored only on this device. Same values as your deployment's
+                  WEBDAV_USERNAME / WEBDAV_PASSWORD.
+                </p>
+              </fieldset>
+
+              <div class="settingsActions">
+                <button type="submit" id="settingsSave" class="primary">Save</button>
+                <button type="button" id="testConn" class="ghost">Test connection</button>
+                <p id="settingsStatus" class="status" role="status"></p>
+              </div>
+              <p id="probeStatus" class="status" role="status"></p>
+            </form>
+          </section>
         </div>
       </main>
     </div>
@@ -221,5 +310,8 @@
     <script src="hamhome.js"></script>
     <script src="snapshots.js"></script>
     <script src="bookmarksApp.js"></script>
+    <!-- 网盘视图是 Web 端 React App 的构建产物(npm run build:extension 生成),
+         文件缺失时 bookmarksApp 会显示构建提示并保留「新标签页打开」兜底。 -->
+    <script type="module" src="drive/drive.js"></script>
   </body>
 </html>

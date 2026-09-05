@@ -22,7 +22,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Zip default and newtab packages
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Zip the extension package
         run: bash scripts/package-extension.sh .
 
       - name: Attach zips to GitHub Release
@@ -30,7 +39,6 @@ jobs:
         with:
           files: |
             davflare-extension.zip
-            davflare-extension-newtab.zip
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           generate_release_notes: true
           fail_on_unmatched_files: true

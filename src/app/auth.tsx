@@ -14,6 +14,14 @@ export interface Credentials {
 
 const STORAGE_KEY = "flaredrive.auth";
 
+// 相对路径 API 请求的基址:Web 端保持空串(请求同源相对路径),
+// 扩展网盘视图指向实例地址(chrome-extension 页面没有同源后端)。
+let apiBase = "";
+
+export function setApiBase(base: string) {
+  apiBase = (base || "").replace(/\/+$/, "");
+}
+
 let current: Credentials | null = load();
 const listeners = new Set<() => void>();
 
@@ -58,8 +66,7 @@ export function clearCredentials() {
   emit();
 }
 
-export function utf8ToBase64(value: string): string {
-  const bytes = new TextEncoder().encode(value);
+export function utf8ToBase64(value: string): string {  const bytes = new TextEncoder().encode(value);
   let binary = "";
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -77,18 +84,22 @@ export async function authFetch(
   input: RequestInfo | URL,
   init: RequestInit = {}
 ) {
+  const resolved =
+    apiBase && typeof input === "string" && input.startsWith("/")
+      ? apiBase + input
+      : input;
   const headers = new Headers(init.headers || {});
   const authorization = basicAuthHeader();
   if (authorization) headers.set("Authorization", authorization);
   // Lets /webdav keep serving the file manager when the WebDAV mount switch is off.
   headers.set("X-Davflare-UI", "1");
 
-  const response = await fetch(input, { ...init, headers });
+  const response = await fetch(resolved, { ...init, headers });
   if (response.status === 401) clearCredentials();
   return response;
 }
 
-function subscribeAuth(listener: () => void) {
+export function subscribeAuth(listener: () => void) {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
