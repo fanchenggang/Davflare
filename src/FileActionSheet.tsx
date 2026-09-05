@@ -19,6 +19,7 @@ import {
   DriveFileMove as MoveIcon,
   Edit as RenameIcon,
   FolderOpen as OpenIcon,
+  InfoOutlined as DetailsIcon,
   Share as ShareIcon,
 } from "@mui/icons-material";
 
@@ -28,6 +29,7 @@ import { strings } from "./app/strings";
 export type FileAction =
   | "open"
   | "download"
+  | "details"
   | "rename"
   | "move"
   | "share"
@@ -44,6 +46,7 @@ const ACTIONS: Array<{
 }> = [
   { id: "open", labelKey: "open", icon: <OpenIcon /> },
   { id: "download", labelKey: "download", icon: <DownloadIcon /> },
+  { id: "details", labelKey: "detailsOpen", icon: <DetailsIcon /> },
   { id: "rename", labelKey: "rename", icon: <RenameIcon /> },
   { id: "move", labelKey: "move", icon: <MoveIcon /> },
   { id: "share", labelKey: "share", icon: <ShareIcon /> },
@@ -74,6 +77,7 @@ function FileActionSheet({
     const target = file;
     onClose();
     const openDialog =
+      action === "details" ||
       action === "rename" ||
       action === "share" ||
       action === "delete" ||

@@ -17,6 +17,7 @@ import EmptyState from "./EmptyState";
 import ExplorerBar, { ExplorerSection } from "./ExplorerBar";
 import FileActionSheet, { FileAction } from "./FileActionSheet";
 import FileGrid, { FileGridSkeleton } from "./FileGrid";
+import FileInfoSidebar from "./FileInfoSidebar";
 import MobileNav from "./MobileNav";
 import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
@@ -127,6 +128,7 @@ function Main({
   } | null>(null);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null);
+  const [detailsFile, setDetailsFile] = useState<FileItem | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
   const [moveTarget, setMoveTarget] = useState<string[] | null>(null);
@@ -411,6 +413,7 @@ function Main({
     navigateFolder,
     onOpen: handleOpen,
     onRename: setRenameTarget,
+    onDetails: setDetailsFile,
     onDelete: setConfirmDelete,
   });
 
@@ -435,6 +438,8 @@ function Main({
         } else if (action === "download") {
           if (file.isDir) await downloadArchive([file.key]);
           else await downloadFile(file.key);
+        } else if (action === "details") {
+          setDetailsFile(file);
         } else if (action === "rename") {
           window.setTimeout(() => setRenameTarget(file), 50);
         } else if (action === "move") {
@@ -930,6 +935,29 @@ function Main({
         currentName={renameTarget?.name ?? ""}
         onClose={() => setRenameTarget(null)}
         onSubmit={handleRenameSubmit}
+      />
+
+      <FileInfoSidebar
+        open={Boolean(detailsFile)}
+        file={detailsFile}
+        onClose={() => setDetailsFile(null)}
+        onNotify={onNotify}
+        onShare={(file) => {
+          setDetailsFile(null);
+          setShareTarget(file);
+        }}
+        onRename={(file) => {
+          setDetailsFile(null);
+          setRenameTarget(file);
+        }}
+        onMove={(file) => {
+          setDetailsFile(null);
+          setMoveTarget([file.key]);
+        }}
+        onDelete={(file) => {
+          setDetailsFile(null);
+          setConfirmDelete([file.key]);
+        }}
       />
 
       <ShareDialog
