@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
 import { processTransferTask } from "../transfer";
@@ -8,12 +9,12 @@ import {
   useUploadEnqueue,
 } from "../transferQueue";
 
-jest.mock("../transfer", () => ({
-  processTransferTask: jest.fn(),
+vi.mock("../transfer", () => ({
+  processTransferTask: vi.fn(),
 }));
 
-// jest.mock 已替换模块实现；这里只借用其类型拿到 mock 断言能力
-const mockProcess = processTransferTask as unknown as jest.Mock;
+// vi.mock 已替换模块实现；这里只借用其类型拿到 mock 断言能力
+const mockProcess = processTransferTask as unknown as Mock;
 
 function makeFile(name: string, size = 10) {
   return new File([new ArrayBuffer(size)], name, { type: "text/plain" });
@@ -54,7 +55,7 @@ describe("transferQueue 状态机", () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test("enqueue 生成任务并携带元数据，effect 立即派发", async () => {
@@ -113,7 +114,7 @@ describe("transferQueue 状态机", () => {
   });
 
   test("失败后 3 秒自动重试一次，重试成功即完成", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     mockProcess
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(undefined);
@@ -127,7 +128,7 @@ describe("transferQueue 状态机", () => {
     expect(result.current.tasks[0].error).toBe("boom");
 
     act(() => {
-      jest.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
     });
     await flushMicrotasks();
     // 自动重试把任务放回队列并跑完

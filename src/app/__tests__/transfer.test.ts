@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import {
   collectFilesFromDataTransfer,
   copyPaste,
@@ -18,14 +19,14 @@ import {
   type PropfindEntry,
 } from "../testUtils";
 
-jest.mock("p-limit", () => ({
+vi.mock("p-limit", () => ({
   __esModule: true,
   default: () => (fn: () => Promise<unknown>) => fn(),
 }));
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
-  basicAuthHeader: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
+  basicAuthHeader: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);

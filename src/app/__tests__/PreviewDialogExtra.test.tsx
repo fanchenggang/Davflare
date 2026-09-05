@@ -1,8 +1,8 @@
+import { vi, type Mock } from "vitest";
 /**
  * PreviewDialog 覆盖补充：图片缩放（滚轮/双击/复位）、指针平移、旋转补偿、
  * 视频倍速、翻页 pager（按钮 + 键盘 + 输入框保护）、文本下载/复制失败、超限流式分支。
  */
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import PreviewDialog from "../../PreviewDialog";
@@ -10,15 +10,15 @@ import { authFetch } from "../auth";
 import { setLang, strings } from "../strings";
 import { FileItem } from "../types";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
-jest.mock("../transfer", () => ({
-  downloadFile: jest.fn(),
+vi.mock("../transfer", () => ({
+  downloadFile: vi.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
+const mockAuthFetch = authFetch as unknown as Mock;
 
 const img: FileItem = {
   key: "a.png",
@@ -62,9 +62,9 @@ function textReaderResponse(text: string) {
   };
 }
 
-function renderPreview(file: FileItem, siblings: FileItem[] = [img], onSibling = jest.fn()) {
-  const onNotify = jest.fn();
-  const onClose = jest.fn();
+function renderPreview(file: FileItem, siblings: FileItem[] = [img], onSibling = vi.fn()) {
+  const onNotify = vi.fn();
+  const onClose = vi.fn();
   const utils = render(
     <PreviewDialog
       file={file}
@@ -72,9 +72,9 @@ function renderPreview(file: FileItem, siblings: FileItem[] = [img], onSibling =
       onSibling={siblings.length > 1 ? onSibling : undefined}
       onClose={onClose}
       onNotify={onNotify}
-      onShare={jest.fn()}
-      onRename={jest.fn()}
-      onDelete={jest.fn()}
+      onShare={vi.fn()}
+      onRename={vi.fn()}
+      onDelete={vi.fn()}
     />
   );
   return { ...utils, onNotify, onClose, onSibling };
@@ -83,12 +83,12 @@ function renderPreview(file: FileItem, siblings: FileItem[] = [img], onSibling =
 beforeEach(() => {
   setLang("zh");
   mockAuthFetch.mockReset();
-  (URL as any).createObjectURL = jest.fn(() => "blob:preview");
-  (URL as any).revokeObjectURL = jest.fn();
+  (URL as any).createObjectURL = vi.fn(() => "blob:preview");
+  (URL as any).revokeObjectURL = vi.fn();
   // jsdom 未实现 Pointer Capture，补最小桩
-  HTMLElement.prototype.setPointerCapture = jest.fn();
-  HTMLElement.prototype.releasePointerCapture = jest.fn();
-  (HTMLElement.prototype as any).hasPointerCapture = jest.fn(() => false);
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  HTMLElement.prototype.releasePointerCapture = vi.fn();
+  (HTMLElement.prototype as any).hasPointerCapture = vi.fn(() => false);
 });
 
 // 旋转按钮是图标（无文本、无 aria-label），从 DialogActions 里挑出唯一的纯图标按钮
@@ -168,7 +168,7 @@ describe("PreviewDialog 图片缩放/平移/旋转", () => {
     const stage = imgEl.parentElement as HTMLElement;
     Object.defineProperty(imgEl, "clientWidth", { value: 400, configurable: true });
     Object.defineProperty(imgEl, "clientHeight", { value: 300, configurable: true });
-    jest
+    vi
       .spyOn(stage, "getBoundingClientRect")
       .mockReturnValue({ width: 200, height: 100, top: 0, left: 0, bottom: 0, right: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
 
@@ -220,7 +220,7 @@ describe("PreviewDialog 视频倍速", () => {
 describe("PreviewDialog 翻页 pager", () => {
   test("prev/next 按钮按边界启停并回调 onSibling", async () => {
     mockAuthFetch.mockResolvedValue(blobFetch("image/png"));
-    const onSibling = jest.fn();
+    const onSibling = vi.fn();
     const utils = renderPreview(img, [img, img2, img3], onSibling);
     const prevBtn = screen.getByLabelText(strings.prevFile);
     expect(prevBtn).toBeDisabled();
@@ -235,11 +235,11 @@ describe("PreviewDialog 翻页 pager", () => {
         file={img2}
         siblings={[img, img2, img3]}
         onSibling={onSibling}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(screen.getByText("b.png")).toBeInTheDocument());
@@ -252,11 +252,11 @@ describe("PreviewDialog 翻页 pager", () => {
         file={img3}
         siblings={[img, img2, img3]}
         onSibling={onSibling}
-        onClose={jest.fn()}
-        onNotify={jest.fn()}
-        onShare={jest.fn()}
-        onRename={jest.fn()}
-        onDelete={jest.fn()}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
       />
     );
     await waitFor(() => expect(screen.getByText("c.png")).toBeInTheDocument());
@@ -265,7 +265,7 @@ describe("PreviewDialog 翻页 pager", () => {
 
   test("键盘左右翻页，输入框聚焦时不抢按键", async () => {
     mockAuthFetch.mockResolvedValue(blobFetch("image/png"));
-    const onSibling = jest.fn();
+    const onSibling = vi.fn();
     renderPreview(img, [img, img2], onSibling);
     await waitFor(() => expect(document.querySelector("img")).toBeTruthy());
     fireEvent.keyDown(window, { key: "ArrowRight" });
@@ -309,9 +309,9 @@ describe("PreviewDialog 文本路径补充分支", () => {
 
   test("纯文本下载走 blob 锚点", async () => {
     mockAuthFetch.mockResolvedValue(textReaderResponse("hello world"));
-    const click = jest.fn();
+    const click = vi.fn();
     const orig = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag);
       if (tag === "a") (el as HTMLAnchorElement).click = click;
       return el;
@@ -320,13 +320,13 @@ describe("PreviewDialog 文本路径补充分支", () => {
     await waitFor(() => expect(screen.getByText("hello world")).toBeInTheDocument());
     fireEvent.click(screen.getByText(strings.download));
     await waitFor(() => expect(click).toHaveBeenCalled());
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 
   test("copyAll 失败时错误提示", async () => {
     mockAuthFetch.mockResolvedValue(textReaderResponse("hello"));
     Object.assign(navigator, {
-      clipboard: { writeText: jest.fn().mockRejectedValue(new Error("denied")) },
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
     });
     const { onNotify } = renderPreview({ ...img, key: "a.txt", name: "a.txt", contentType: "text/plain" });
     await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
@@ -338,7 +338,7 @@ describe("PreviewDialog 文本路径补充分支", () => {
     mockAuthFetch.mockResolvedValue(textReaderResponse("hello"));
     const { onClose } = renderPreview({ ...img, key: "a.txt", name: "a.txt", contentType: "text/plain" });
     await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
-    const blurSpy = jest.spyOn(HTMLElement.prototype, "blur");
+    const blurSpy = vi.spyOn(HTMLElement.prototype, "blur");
     fireEvent.click(screen.getByText(strings.close));
     expect(onClose).toHaveBeenCalled();
     expect(blurSpy).toHaveBeenCalled();

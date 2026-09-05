@@ -1,4 +1,4 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
 import ImagesView from "../../ImagesView";
@@ -9,28 +9,28 @@ import { listImages } from "../images";
 import { listSites } from "../sites";
 import { setLang, strings } from "../strings";
 
-jest.mock("../features", () => {
-  const actual = jest.requireActual("../features");
-  return { ...actual, useFeatures: jest.fn() };
+vi.mock("../features", async () => {
+  const actual = await vi.importActual("../features");
+  return { ...actual, useFeatures: vi.fn() };
 });
 
-jest.mock("../sites", () => {
-  const actual = jest.requireActual("../sites");
-  return { ...actual, listSites: jest.fn() };
+vi.mock("../sites", async () => {
+  const actual = await vi.importActual("../sites");
+  return { ...actual, listSites: vi.fn() };
 });
 
-jest.mock("../images", () => {
-  const actual = jest.requireActual("../images");
-  return { ...actual, listImages: jest.fn() };
+vi.mock("../images", async () => {
+  const actual = await vi.importActual("../images");
+  return { ...actual, listImages: vi.fn() };
 });
 
-jest.mock("../transferQueue", () => ({
-  useUploadEnqueue: () => jest.fn(),
+vi.mock("../transferQueue", () => ({
+  useUploadEnqueue: () => vi.fn(),
 }));
 
-const mockUseFeatures = useFeatures as unknown as jest.Mock;
-const mockListSites = listSites as unknown as jest.Mock;
-const mockListImages = listImages as unknown as jest.Mock;
+const mockUseFeatures = useFeatures as unknown as Mock;
+const mockListSites = listSites as unknown as Mock;
+const mockListImages = listImages as unknown as Mock;
 
 beforeEach(() => {
   setLang("en");
@@ -40,13 +40,13 @@ beforeEach(() => {
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
     sitesHost: null,
-    updateFlags: jest.fn(),
+    updateFlags: vi.fn(),
   });
 });
 
 describe("P0 copy: Settings / Sites / Images", () => {
   test("Settings states MCP is 404 when API Key is off", () => {
-    render(<SettingsView onNotify={jest.fn()} />);
+    render(<SettingsView onNotify={vi.fn()} />);
     expect(screen.getByText(strings.mcpRequiresApiKey)).toBeInTheDocument();
     expect(strings.mcpRequiresApiKey).toMatch(/404/);
     expect(strings.mcpRequiresApiKey).toMatch(/API Key/i);
@@ -59,7 +59,7 @@ describe("P0 copy: Settings / Sites / Images", () => {
 
   test("Sites view is blunt when SITES_HOST is missing", async () => {
     mockListSites.mockResolvedValue({ sitesHost: null, sites: [] });
-    render(<SitesView onNotify={jest.fn()} onManageFiles={jest.fn()} />);
+    render(<SitesView onNotify={vi.fn()} onManageFiles={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByText(strings.sitesHostMissing)).toBeInTheDocument();
     });
@@ -71,7 +71,7 @@ describe("P0 copy: Settings / Sites / Images", () => {
 
   test("Images view is blunt when SITES_HOST is missing", async () => {
     mockListImages.mockResolvedValue({ sitesHost: null, images: [] });
-    render(<ImagesView onNotify={jest.fn()} />);
+    render(<ImagesView onNotify={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByText(strings.imagesHostMissing)).toBeInTheDocument();
     });

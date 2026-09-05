@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import {
   collectFilesFromDataTransfer,
   davHrefToKey,
@@ -12,14 +13,14 @@ import { authFetch } from "../auth";
 import { setLang } from "../strings";
 import { asAuthFetchMock } from "../testUtils";
 
-jest.mock("p-limit", () => ({
+vi.mock("p-limit", () => ({
   __esModule: true,
   default: () => (fn: () => Promise<unknown>) => fn(),
 }));
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
-  basicAuthHeader: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
+  basicAuthHeader: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);
@@ -38,10 +39,10 @@ beforeEach(() => {
   mockAuthFetch.mockReset();
   setLang("zh");
   if (!(URL as any).createObjectURL) {
-    (URL as any).createObjectURL = jest.fn(() => "blob:x");
+    (URL as any).createObjectURL = vi.fn(() => "blob:x");
   }
   if (!(URL as any).revokeObjectURL) {
-    (URL as any).revokeObjectURL = jest.fn();
+    (URL as any).revokeObjectURL = vi.fn();
   }
 });
 
@@ -66,7 +67,7 @@ describe("fetchPath extra", () => {
 describe("open/download", () => {
   test("openFile success", async () => {
     mockAuthFetch.mockResolvedValue(blobResponse(true));
-    const open = jest.fn();
+    const open = vi.fn();
     window.open = open;
     await openFile("a.txt");
     expect(open).toHaveBeenCalled();
@@ -79,16 +80,16 @@ describe("open/download", () => {
 
   test("downloadFile success", async () => {
     mockAuthFetch.mockResolvedValue(blobResponse(true));
-    const click = jest.fn();
+    const click = vi.fn();
     const orig = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag);
       if (tag === "a") (el as HTMLAnchorElement).click = click;
       return el;
     });
     await downloadFile("a.txt");
     expect(click).toHaveBeenCalled();
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
   });
 
   test("downloadArchive failure", async () => {
@@ -139,7 +140,7 @@ describe("selectDirectoryFiles", () => {
     const origPicker = (window as any).showDirectoryPicker;
     delete (window as any).showDirectoryPicker;
     const orig = document.createElement.bind(document);
-    jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag) as HTMLInputElement;
       if (tag === "input") {
         el.click = () => {
@@ -154,7 +155,7 @@ describe("selectDirectoryFiles", () => {
     });
     const files = await selectDirectoryFiles();
     expect(files[0].name).toBe("picked.txt");
-    (document.createElement as jest.Mock).mockRestore();
+    (document.createElement as Mock).mockRestore();
     if (origPicker) (window as any).showDirectoryPicker = origPicker;
   });
 });

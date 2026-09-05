@@ -172,7 +172,7 @@ npm install
 echo 'WEBDAV_USERNAME=admin' >> .dev.vars
 echo 'WEBDAV_PASSWORD=你的密码' >> .dev.vars
 
-npm run build                      # CRA 构建到 build/
+npm run build                      # Vite 构建到 build/（先 tsc --noEmit 类型检查）
 npx wrangler pages dev build       # http://localhost:8788，前端 + functions + 本地模拟 R2
 ```
 
@@ -272,3 +272,15 @@ npx wrangler pages dev build       # http://localhost:8788，前端 + functions 
 | 顺手修的两个前端交互 bug | ① useMultiSelect shift 范围选择失效（setState updater 延迟求值期间 selectionAnchor 已被覆写为点击目标，退化为「原选中+目标」→ updater 前捕获 anchor）；② App Snackbar 队列重开竞态（退场完成前 effect 重开，onExited 永不触发，消息每轮 autoHideDuration 重闪 → shownSnackKeyRef 挡住已展示消息的重开） | ✅ jsdom 复现→修复→回归，AppExtra 断言「12s 后消失且不再重闪」 |
 
 **本批验证汇总**：`npx tsc --noEmit` 0 错误；`CI=true npx react-scripts test --watchAll=false` **64 套件 754 用例全绿**（基线 53/463 → +11 套件/+291 用例）；`npm run build` 成功；`SKIP_BUILD=1 bash scripts/run-e2e.sh` **171 断言全过（0 FAIL）**；cli `npm test` 58 用例全绿。已知环境限制：upload.ts 的 multipart/form-data 分支在 whatwg-fetch 测试环境无法解析 multipart 请求体（e2e 兜底）；protocol.ts handlePutMultipart 对未知 uploadId 的 part PUT 未捕获（边缘，已记录）。
+
+## 现代化批次：CRA → Vite + Jest → Vitest + MUI v5 → v7（2026-09-05）
+
+| 改动 | 内容 | 验证 |
+| --- | --- | --- |
+| 构建迁移 | 移除 react-scripts（连带 @babel/plugin-proposal-private-property-in-object、eslintConfig、browserslist、overrides、package.json jest 字段）；新增 vite@5.4 + @vitejs/plugin-react，`build.outDir` 保持 `build/`（wrangler 部署配置不动）；`public/index.html` 迁至根目录（`%PUBLIC_URL%/` → `/`），入口 `src/index.js` → `src/index.jsx`（⚠ 不能叫 `main.jsx`：macOS 大小写不敏感文件系统上会遮蔽 `Main.tsx`）；`npm run build` = `tsc --noEmit && vite build` | ✅ |
+| 测试迁移 | jest 27 → vitest 2.1（vite.config.ts `test` 字段：jsdom + globals + setupFiles）；`@testing-library/jest-dom` v5 → v6（`/vitest` 入口）；64 个测试文件 codemod：`jest.*` → `vi.*`、`jest.Mock` 类型 → vitest `Mock`、`jest.requireActual` → `await vi.importActual`（工厂改 async）；`setupTests.ts` 增加 `configure({ asyncUtilTimeout: 3000 })`（仅放宽等待上限，不改断言）与 crypto.subtle 兜底（jsdom 的 crypto 无 subtle） | ✅ **64 套件 / 754 用例全绿** |
+| 环境垫片 | vitest jsdom 默认 URL 是 `:3000`，用 `environmentOptions.jsdom.url` 对齐 CRA 的 `http://localhost/`（直链拼接断言依赖 origin）；undici `Request` 拒绝 TRACE 等保留方法、`Response.redirect()` headers immutable（workerd 允许），webdavProtocol.test 用 defineProperty/redirect 垫片对齐 workerd 语义 | ✅ |
+| 覆盖率 | istanbul → v8 provider，阈值按「实测-0.5」重设棘轮（global 84.05/83.51/80.96/84.05、src 96.31/88.46/85.33/96.31、functions 65.27/75.6/72.22/65.27；实测 global 84.55/84.01/81.46/84.55、src 96.81/88.96/85.83/96.81、functions 65.77/76.10/72.72/65.77）；注意 text 报告目录行只聚合该层直属文件，分组总量以 coverage-final.json 汇总为准）；CI 新增 `npm run test:coverage` 阈值步骤 | ✅ |
+| MUI v7 | @mui/material、@mui/icons-material ^5.15 → ^7.3（emotion 11 不动）；FileGrid 旧 Grid API → `<Grid size={{ xs, sm, md, lg }}>`；Typography `textAlign` system prop → `sx`；Switch 的 `inputProps` v7 已不透传 → `slotProps.input`，且 input 显式 `role="switch"`（原隐式 checkbox），相关测试查询同步更新 | ✅ |
+| e2e 陈旧断言修正 | 「dir share HEAD 200 zip」是 8150589 改 HEAD 语义（默认落地页 text/html）前的残留，在基线 2ad064f 上用 CRA 产物复跑同样失败（170/171）；按 TESTING.md 已记载的现行语义改为「默认 text/html + ?download=1 为 zip」，并把 ?download=1 的 HEAD 单独断言（171 → 172 条） | ✅ **172 断言全过** |
+| 体积对比 | build JS 总量：CRA 766,362 B raw / 231,577 B gzip → Vite+MUI7 731,560 B raw / 229,938 B gzip（raw -4.5%、gzip -0.7%） | ✅ |

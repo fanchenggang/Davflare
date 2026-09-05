@@ -1,4 +1,4 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import SharesView from "../../SharesView";
@@ -7,13 +7,13 @@ import { setLang, strings, translate } from "../strings";
 import { ShareInfo } from "../types";
 import { formatDateTime } from "../utils";
 
-jest.mock("../share", () => {
-  const actual = jest.requireActual("../share");
-  return { ...actual, listShares: jest.fn(), revokeShare: jest.fn() };
+vi.mock("../share", async () => {
+  const actual = await vi.importActual("../share");
+  return { ...actual, listShares: vi.fn(), revokeShare: vi.fn() };
 });
 
-const mockListShares = listShares as unknown as jest.Mock;
-const mockRevokeShare = revokeShare as unknown as jest.Mock;
+const mockListShares = listShares as unknown as Mock;
+const mockRevokeShare = revokeShare as unknown as Mock;
 
 const share: ShareInfo = {
   token: "tok1",
@@ -29,7 +29,7 @@ beforeEach(() => {
   mockListShares.mockReset();
   mockRevokeShare.mockReset();
   Object.defineProperty(navigator, "clipboard", {
-    value: { writeText: jest.fn().mockResolvedValue(undefined) },
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
     configurable: true,
   });
 });
@@ -37,8 +37,8 @@ beforeEach(() => {
 describe("SharesView", () => {
   test("empty state and go to files", async () => {
     mockListShares.mockResolvedValue([]);
-    const onGoFiles = jest.fn();
-    render(<SharesView onNotify={jest.fn()} onGoFiles={onGoFiles} />);
+    const onGoFiles = vi.fn();
+    render(<SharesView onNotify={vi.fn()} onGoFiles={onGoFiles} />);
     await waitFor(() => expect(screen.getByText(strings.emptyShares)).toBeInTheDocument());
     fireEvent.click(screen.getByText(strings.goToFiles));
     expect(onGoFiles).toHaveBeenCalled();
@@ -46,7 +46,7 @@ describe("SharesView", () => {
 
   test("lists shares and copies", async () => {
     mockListShares.mockResolvedValue([share]);
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<SharesView onNotify={onNotify} />);
     await waitFor(() => expect(screen.getByText("notes.txt")).toBeInTheDocument());
     fireEvent.click(screen.getByText(strings.copy));
@@ -57,7 +57,7 @@ describe("SharesView", () => {
 
   test("load error notifies", async () => {
     mockListShares.mockRejectedValue(new Error("nope"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<SharesView onNotify={onNotify} />);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("nope", "error"));
   });
@@ -65,7 +65,7 @@ describe("SharesView", () => {
   test("revoke error reloads", async () => {
     mockListShares.mockResolvedValue([share]);
     mockRevokeShare.mockRejectedValue(new Error("revoke-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     render(<SharesView onNotify={onNotify} />);
     fireEvent.click(await screen.findByText(strings.revoke));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("revoke-fail", "error"));
@@ -73,7 +73,7 @@ describe("SharesView", () => {
 
   test("永不过期的分享显示永久有效徽标", async () => {
     mockListShares.mockResolvedValue([share]);
-    render(<SharesView onNotify={jest.fn()} />);
+    render(<SharesView onNotify={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("notes.txt")).toBeInTheDocument());
     expect(screen.getByText(strings.shareNeverExpires)).toBeInTheDocument();
   });
@@ -85,7 +85,7 @@ describe("SharesView", () => {
         expiresAt: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
       },
     ]);
-    render(<SharesView onNotify={jest.fn()} />);
+    render(<SharesView onNotify={vi.fn()} />);
     await screen.findByText("notes.txt");
     const chip = await screen.findByText(translate("shareExpiresIn", { time: "90 分钟" }));
     expect(chip.closest(".MuiChip-root")).toHaveClass("MuiChip-colorWarning");
@@ -94,7 +94,7 @@ describe("SharesView", () => {
   test("创建时间徽标：相对时间 + tooltip 绝对时间", async () => {
     const now = new Date();
     mockListShares.mockResolvedValue([{ ...share, createdAt: now.toISOString() }]);
-    render(<SharesView onNotify={jest.fn()} />);
+    render(<SharesView onNotify={vi.fn()} />);
     await screen.findByText("notes.txt");
     const createdChip = screen.getByText(
       translate("shareCreatedAt", { time: translate("justNow") })
@@ -107,14 +107,14 @@ describe("SharesView", () => {
 
   test("旧记录无 createdAt 时不显示创建徽标", async () => {
     mockListShares.mockResolvedValue([{ ...share, createdAt: undefined }]);
-    render(<SharesView onNotify={jest.fn()} />);
+    render(<SharesView onNotify={vi.fn()} />);
     await screen.findByText("notes.txt");
     expect(screen.queryByText(/创建于/)).not.toBeInTheDocument();
   });
 
   test("二维码按钮弹出含 dataURL 图片的 Popover", async () => {
     mockListShares.mockResolvedValue([share]);
-    render(<SharesView onNotify={jest.fn()} />);
+    render(<SharesView onNotify={vi.fn()} />);
     await screen.findByText("notes.txt");
     fireEvent.click(screen.getByRole("button", { name: strings.shareQrTitle }));
     expect(await screen.findByText(strings.shareQrTitle)).toBeInTheDocument();

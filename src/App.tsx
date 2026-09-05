@@ -8,8 +8,7 @@ import {
   ThemeProvider,
   useMediaQuery,
 } from "@mui/material";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ApiKeysPanel from "./ApiKeysPanel";
 import CommandPalette from "./CommandPalette";
 import Header from "./Header";

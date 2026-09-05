@@ -1,8 +1,8 @@
+import { vi, type Mock } from "vitest";
 /**
  * hooks 覆盖补充：useKeyboardShortcuts / useMultiSelect / useDragDropUpload /
  * usePasteUpload / useUploadInputs(transferKeys) 的分支缺口。
  */
-import React from "react";
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 
 import { useKeyboardShortcuts, KeyboardShortcutsParams } from "../useKeyboardShortcuts";
@@ -11,26 +11,26 @@ import { useDragDropUpload } from "../useDragDropUpload";
 import { usePasteUpload } from "../usePasteUpload";
 import { transferKeys, useUploadInputs } from "../useUploadInputs";
 import { useTransferQueue, useUploadEnqueue } from "../transferQueue";
-import { copyPaste, fetchPath } from "../transfer";
+import { collectFilesFromDataTransfer, copyPaste, fetchPath } from "../transfer";
 import { FileItem } from "../types";
 
-jest.mock("../transferQueue", () => ({
-  useTransferQueue: jest.fn(() => []),
-  useUploadEnqueue: jest.fn(),
+vi.mock("../transferQueue", () => ({
+  useTransferQueue: vi.fn(() => []),
+  useUploadEnqueue: vi.fn(),
 }));
 
-jest.mock("../transfer", () => ({
-  collectFilesFromDataTransfer: jest.fn(),
-  copyPaste: jest.fn(),
-  fetchPath: jest.fn(),
+vi.mock("../transfer", () => ({
+  collectFilesFromDataTransfer: vi.fn(),
+  copyPaste: vi.fn(),
+  fetchPath: vi.fn(),
 }));
 
-const mockCollect = require("../transfer").collectFilesFromDataTransfer as jest.Mock;
-const mockFetchPath = fetchPath as unknown as jest.Mock;
-const mockCopyPaste = copyPaste as unknown as jest.Mock;
-const mockUploadEnqueueFn = jest.fn();
-const mockUseUploadEnqueue = useUploadEnqueue as unknown as jest.Mock;
-const mockUseTransferQueue = useTransferQueue as unknown as jest.Mock;
+const mockCollect = collectFilesFromDataTransfer as unknown as Mock;
+const mockFetchPath = fetchPath as unknown as Mock;
+const mockCopyPaste = copyPaste as unknown as Mock;
+const mockUploadEnqueueFn = vi.fn();
+const mockUseUploadEnqueue = useUploadEnqueue as unknown as Mock;
+const mockUseTransferQueue = useTransferQueue as unknown as Mock;
 
 function makeFile(key: string, isDir = false): FileItem {
   return {
@@ -56,17 +56,17 @@ function setupShortcuts(overrides: Partial<KeyboardShortcutsParams> = {}) {
     visibleFiles: files,
     selectedKeys: [],
     focusedKey: null,
-    setSelectedKeys: jest.fn(),
-    setFocusedKey: jest.fn(),
-    moveFocused: jest.fn(),
-    jumpFocused: jest.fn(),
-    toggleSelect: jest.fn(),
-    selectAll: jest.fn(),
-    navigateFolder: jest.fn(),
-    onOpen: jest.fn(),
-    onRename: jest.fn(),
-    onDetails: jest.fn(),
-    onDelete: jest.fn(),
+    setSelectedKeys: vi.fn(),
+    setFocusedKey: vi.fn(),
+    moveFocused: vi.fn(),
+    jumpFocused: vi.fn(),
+    toggleSelect: vi.fn(),
+    selectAll: vi.fn(),
+    navigateFolder: vi.fn(),
+    onOpen: vi.fn(),
+    onRename: vi.fn(),
+    onDetails: vi.fn(),
+    onDelete: vi.fn(),
     ...overrides,
   };
   const utils = renderHook(() => useKeyboardShortcuts(params));
@@ -90,19 +90,19 @@ function withOverlay(body: () => void) {
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockCollect.mockResolvedValue([]);
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   mockUseUploadEnqueue.mockReturnValue(mockUploadEnqueueFn);
   mockUseTransferQueue.mockReturnValue([]);
 });
 
 describe("useKeyboardShortcuts", () => {
   test("方向键/Home/End/Space/Ctrl+A 基础派发", () => {
-    const moveFocused = jest.fn();
-    const jumpFocused = jest.fn();
-    const toggleSelect = jest.fn();
-    const selectAll = jest.fn();
+    const moveFocused = vi.fn();
+    const jumpFocused = vi.fn();
+    const toggleSelect = vi.fn();
+    const selectAll = vi.fn();
     const { update } = setupShortcuts({ moveFocused, jumpFocused, toggleSelect, selectAll });
 
     fireEvent.keyDown(window, { key: "ArrowDown", shiftKey: true });
@@ -128,7 +128,7 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("F2：焦点优先，其次唯一选中；无目标/文件缺失不动作", () => {
-    const onRename = jest.fn();
+    const onRename = vi.fn();
     const { update } = setupShortcuts({ onRename });
     fireEvent.keyDown(window, { key: "F2" });
     expect(onRename).not.toHaveBeenCalled();
@@ -147,14 +147,14 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("I 键打开详情（与 F2 同型分支）", () => {
-    const onDetails = jest.fn();
+    const onDetails = vi.fn();
     setupShortcuts({ onDetails, selectedKeys: ["c.md"] });
     fireEvent.keyDown(window, { key: "I" });
     expect(onDetails).toHaveBeenCalledWith(files[2]);
   });
 
   test("Delete：选中组优先，其次焦点，无目标不动作", () => {
-    const onDelete = jest.fn();
+    const onDelete = vi.fn();
     const { update } = setupShortcuts({ onDelete });
     fireEvent.keyDown(window, { key: "Delete" });
     expect(onDelete).not.toHaveBeenCalled();
@@ -169,8 +169,8 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("Enter：目录导航、文件打开、未命中不动作", () => {
-    const onOpen = jest.fn();
-    const navigateFolder = jest.fn();
+    const onOpen = vi.fn();
+    const navigateFolder = vi.fn();
     const { update } = setupShortcuts({ onOpen, navigateFolder, selectedKeys: ["docs"] });
     fireEvent.keyDown(window, { key: "Enter" });
     expect(navigateFolder).toHaveBeenCalledWith("docs");
@@ -186,7 +186,7 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("Backspace 仅在文件夹路由返回上级", () => {
-    const navigateFolder = jest.fn();
+    const navigateFolder = vi.fn();
     const { update } = setupShortcuts({ navigateFolder, route: { kind: "shares" } });
     fireEvent.keyDown(window, { key: "Backspace" });
     expect(navigateFolder).not.toHaveBeenCalled();
@@ -197,8 +197,8 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("Escape 清空选择与焦点；无选中时不动作", () => {
-    const setSelectedKeys = jest.fn();
-    const setFocusedKey = jest.fn();
+    const setSelectedKeys = vi.fn();
+    const setFocusedKey = vi.fn();
     const { update } = setupShortcuts({
       setSelectedKeys,
       setFocusedKey,
@@ -214,7 +214,7 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("输入框聚焦与输入法组合时忽略所有快捷键", () => {
-    const moveFocused = jest.fn();
+    const moveFocused = vi.fn();
     setupShortcuts({ moveFocused });
     const input = document.createElement("input");
     document.body.appendChild(input);
@@ -229,8 +229,8 @@ describe("useKeyboardShortcuts", () => {
   });
 
   test("存在打开的浮层时忽略快捷键", () => {
-    const moveFocused = jest.fn();
-    const setSelectedKeys = jest.fn();
+    const moveFocused = vi.fn();
+    const setSelectedKeys = vi.fn();
     setupShortcuts({ moveFocused, setSelectedKeys, selectedKeys: ["a.txt"] });
     withOverlay(() => {
       fireEvent.keyDown(window, { key: "ArrowDown" });
@@ -301,7 +301,7 @@ describe("useMultiSelect", () => {
   });
 
   test("moveFocused / jumpFocused 越界收敛并滚动定位", () => {
-    const focusSpy = jest.spyOn(HTMLElement.prototype, "focus");
+    const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
     render(<SelectionProbe />);
     fireEvent.click(screen.getByText("move-before"));
     // 焦点收敛到第一项
@@ -337,7 +337,7 @@ describe("useMultiSelect", () => {
 
 describe("useDragDropUpload", () => {
   type DropProps = { active: boolean; enqueueToCwd: (files: File[]) => void };
-  function setup(active = true, enqueue = jest.fn()) {
+  function setup(active = true, enqueue = vi.fn()) {
     const utils = renderHook(
       (props: DropProps) => useDragDropUpload(props),
       { initialProps: { active, enqueueToCwd: enqueue } }
@@ -378,7 +378,7 @@ describe("useDragDropUpload", () => {
   });
 
   test("drop 收集文件并入队", async () => {
-    const enqueue = jest.fn();
+    const enqueue = vi.fn();
     mockCollect.mockResolvedValueOnce([new File(["x"], "drop.txt")]);
     const utils = setup(true, enqueue);
     act(() => window.dispatchEvent(dragEvent("dragenter")));
@@ -391,7 +391,7 @@ describe("useDragDropUpload", () => {
   });
 
   test("drop 无文件不入队", async () => {
-    const enqueue = jest.fn();
+    const enqueue = vi.fn();
     setup(true, enqueue);
     await act(async () => {
       window.dispatchEvent(dragEvent("drop"));
@@ -403,10 +403,10 @@ describe("useDragDropUpload", () => {
     const utils = setup(true);
     act(() => window.dispatchEvent(dragEvent("dragenter")));
     expect(utils.result.current).toBe(true);
-    act(() => utils.rerender({ active: false, enqueueToCwd: jest.fn() }));
+    act(() => utils.rerender({ active: false, enqueueToCwd: vi.fn() }));
     expect(utils.result.current).toBe(false);
     // 重新激活后计数从 0 开始
-    act(() => utils.rerender({ active: true, enqueueToCwd: jest.fn() }));
+    act(() => utils.rerender({ active: true, enqueueToCwd: vi.fn() }));
     act(() => window.dispatchEvent(dragEvent("dragenter")));
     act(() => window.dispatchEvent(dragEvent("dragleave")));
     expect(utils.result.current).toBe(false);
@@ -423,7 +423,7 @@ describe("useDragDropUpload", () => {
 });
 
 describe("usePasteUpload", () => {
-  function setup(enqueue = jest.fn(), onNotify = jest.fn()) {
+  function setup(enqueue = vi.fn(), onNotify = vi.fn()) {
     renderHook(() =>
       usePasteUpload({ active: true, enqueueToCwd: enqueue, onNotify })
     );

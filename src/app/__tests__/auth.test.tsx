@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import React from "react";
 import { act, renderHook } from "@testing-library/react";
 
@@ -20,7 +21,7 @@ const originalFetch = global.fetch;
 beforeEach(() => {
   localStorage.clear();
   clearCredentials();
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 afterEach(() => {
@@ -60,7 +61,7 @@ describe("auth / credentials", () => {
 describe("auth / authFetch", () => {
   test("注入 Basic Authorization 头并请求", async () => {
     setCredentials({ username: "user", password: "pass" });
-    const fetchMock = jest.fn().mockResolvedValue({ status: 200 } as unknown as Response);
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200 } as unknown as Response);
     global.fetch = fetchMock as any;
 
     await authFetch("/api/keys");
@@ -74,7 +75,7 @@ describe("auth / authFetch", () => {
 
   test("401 清除凭据", async () => {
     setCredentials({ username: "user", password: "pass" });
-    const fetchMock = jest.fn().mockResolvedValue({ status: 401 } as unknown as Response);
+    const fetchMock = vi.fn().mockResolvedValue({ status: 401 } as unknown as Response);
     global.fetch = fetchMock as any;
 
     const res = await authFetch("/api/keys");
@@ -83,7 +84,7 @@ describe("auth / authFetch", () => {
   });
 
   test("无凭据时保留原 headers 且不新增 Authorization", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ status: 200 } as unknown as Response);
+    const fetchMock = vi.fn().mockResolvedValue({ status: 200 } as unknown as Response);
     global.fetch = fetchMock as any;
 
     await authFetch("/api/keys", { headers: { "X-Test": "1" } });

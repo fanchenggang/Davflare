@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -138,7 +138,7 @@ function SiteCard({
                 size="small"
                 checked={site.spa}
                 onChange={(event) => onToggleSpa(site, event.target.checked)}
-                inputProps={{ "aria-label": strings.siteSpaLabel }}
+                slotProps={{ input: { "aria-label": strings.siteSpaLabel } }}
               />
             </Stack>
           </Tooltip>
@@ -427,7 +427,7 @@ function SitesView({
                 size="small"
                 checked={deployClear}
                 onChange={(event) => setDeployClear(event.target.checked)}
-                inputProps={{ "aria-label": strings.deployZipClear }}
+                slotProps={{ input: { "aria-label": strings.deployZipClear } }}
               />
               <Typography variant="body2">{strings.deployZipClear}</Typography>
             </Stack>

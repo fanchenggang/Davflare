@@ -1,11 +1,9 @@
 /**
  * functions 覆盖率收集专用套件。
  *
- * CRA 的 jest roots 固定为 src/，collectCoverageFrom 里匹配到的 functions/
- * 文件如果从未被任何测试 import，就不会进入 istanbul 覆盖率统计（hasteFS
- * 不索引 src 以外的路径，无法通过 package.json 的 jest 字段扩展 roots）。
- * 这里把 functions/ 下全部模块显式加载一遍（只触发模块初始化，不执行
- * handler），让后续的「后端 functions 直测」从真实基线开始棘轮。
+ * 显式把 functions/ 下全部模块 import 一遍（只触发模块初始化，不执行
+ * handler）：v8 覆盖率对「从未被加载的模块」只能给 0% 占位报告，
+ * 这样能保证「后端 functions 直测」始终从真实基线开始棘轮。
  */
 
 import * as shareRoute from "../../../functions/share/[[token]]";

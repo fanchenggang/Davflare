@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { strings } from "./app/strings";
 import {
   Box,
@@ -104,7 +104,7 @@ function MoveDialog({
             <CircularProgress />
           </Box>
         ) : folders.length === 0 ? (
-          <Typography textAlign="center" color="text.secondary">
+          <Typography sx={{ textAlign: "center" }} color="text.secondary">
             {strings.noSubFolders}
           </Typography>
         ) : (

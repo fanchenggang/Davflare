@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 /**
  * functions/_middleware.ts + functions/_sites.ts 分支级直测：
  * SITES_HOST 接管（静态命中 / index 回退 / spa / 404.html / 纯 404）、
@@ -292,7 +293,7 @@ describe("sites host: image routes (/i/{id})", () => {
 describe("sites host host-matching", () => {
   test("non-matching Host falls through to product routing (next)", async () => {
     const bucket = new InMemoryBucket();
-    const next = jest.fn(async () => new Response("next-ok", { status: 200 }));
+    const next = vi.fn(async () => new Response("next-ok", { status: 200 }));
     const response = await siteRequest("/blog/app.js", defaultEnv(bucket), {
       host: "drive.example.com",
       next,
@@ -314,7 +315,7 @@ describe("sites host host-matching", () => {
 
   test("missing SITES_HOST config never takes over", async () => {
     const bucket = new InMemoryBucket();
-    const next = jest.fn(async () => new Response("next-ok", { status: 200 }));
+    const next = vi.fn(async () => new Response("next-ok", { status: 200 }));
     const response = await siteRequest("/blog/", makeEnv(bucket), { next });
     expect(next).toHaveBeenCalledTimes(1);
     expect(await response.text()).toBe("next-ok");
@@ -337,7 +338,7 @@ describe("drive product route gates (webdav/mcp)", () => {
     expect(blocked.status).toBe(404);
     expect(blocked.headers.get("X-Content-Type-Options")).toBe("nosniff");
 
-    const next = jest.fn(async () => new Response("next-ok", { status: 200 }));
+    const next = vi.fn(async () => new Response("next-ok", { status: 200 }));
     const allowed = await siteRequest("/webdav/", makeEnv(bucket), {
       host: "drive.example.com",
       headers: { "X-Davflare-UI": "1" },
@@ -377,7 +378,7 @@ describe("drive product route gates (webdav/mcp)", () => {
 
   test("enabled product routes and /api/* paths pass through to next", async () => {
     const bucket = new InMemoryBucket();
-    const next = jest.fn(async () => new Response("next-ok", { status: 200 }));
+    const next = vi.fn(async () => new Response("next-ok", { status: 200 }));
     for (const path of ["/webdav/", "/mcp", "/api/upload", "/share/tok"]) {
       next.mockClear();
       const response = await siteRequest(path, makeEnv(bucket), {

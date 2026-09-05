@@ -1,4 +1,4 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import ApiKeysPanel from "../../ApiKeysPanel";
@@ -6,25 +6,25 @@ import { createApiKey, listApiKeys, revokeApiKey } from "../apikeys";
 import { DEFAULT_FEATURE_FLAGS, useFeatures } from "../features";
 import { setLang, strings, translate } from "../strings";
 
-jest.mock("../features", () => {
-  const actual = jest.requireActual("../features");
-  return { ...actual, useFeatures: jest.fn() };
+vi.mock("../features", async () => {
+  const actual = await vi.importActual("../features");
+  return { ...actual, useFeatures: vi.fn() };
 });
 
-jest.mock("../apikeys", () => {
-  const actual = jest.requireActual("../apikeys");
+vi.mock("../apikeys", async () => {
+  const actual = await vi.importActual("../apikeys");
   return {
     ...actual,
-    listApiKeys: jest.fn(),
-    createApiKey: jest.fn(),
-    revokeApiKey: jest.fn(),
+    listApiKeys: vi.fn(),
+    createApiKey: vi.fn(),
+    revokeApiKey: vi.fn(),
   };
 });
 
-const mockUseFeatures = useFeatures as unknown as jest.Mock;
-const mockList = listApiKeys as unknown as jest.Mock;
-const mockCreate = createApiKey as unknown as jest.Mock;
-const mockRevoke = revokeApiKey as unknown as jest.Mock;
+const mockUseFeatures = useFeatures as unknown as Mock;
+const mockList = listApiKeys as unknown as Mock;
+const mockCreate = createApiKey as unknown as Mock;
+const mockRevoke = revokeApiKey as unknown as Mock;
 
 beforeEach(() => {
   setLang("zh");
@@ -35,25 +35,25 @@ beforeEach(() => {
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
     sitesHost: null,
-    updateFlags: jest.fn(),
+    updateFlags: vi.fn(),
   });
   mockList.mockResolvedValue([]);
   Object.defineProperty(navigator, "clipboard", {
-    value: { writeText: jest.fn().mockResolvedValue(undefined) },
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
     configurable: true,
   });
 });
 
 describe("ApiKeysPanel", () => {
   test("loads empty list", async () => {
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={jest.fn()} />);
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(strings.apiNoKeys)).toBeInTheDocument());
     expect(mockList).toHaveBeenCalled();
   });
 
   test("empty name does not create", async () => {
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.click(screen.getByRole("button", { name: strings.createApiKey }));
     expect(onNotify).toHaveBeenCalledWith(translate("fillKeyName"), "error");
@@ -69,8 +69,8 @@ describe("ApiKeysPanel", () => {
       expiresAt: null,
       key: "fd_secret",
     });
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.change(screen.getByLabelText(strings.apiKeyName), { target: { value: "k" } });
     fireEvent.click(screen.getByRole("button", { name: strings.createApiKey }));
@@ -82,14 +82,14 @@ describe("ApiKeysPanel", () => {
 
   test("list error notifies", async () => {
     mockList.mockRejectedValue(new Error("keys-fail"));
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("keys-fail", "error"));
   });
 
   test("custom expiry invalid hours rejects creation", async () => {
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.change(screen.getByLabelText(strings.apiKeyName), { target: { value: "k" } });
     fireEvent.mouseDown(screen.getByRole("combobox"));
@@ -109,8 +109,8 @@ describe("ApiKeysPanel", () => {
       expiresAt: null,
       key: "fd_secret2",
     });
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.change(screen.getByLabelText(strings.apiKeyName), { target: { value: "k" } });
     fireEvent.mouseDown(screen.getByRole("combobox"));
@@ -139,8 +139,8 @@ describe("ApiKeysPanel", () => {
       },
     ]);
     mockRevoke.mockResolvedValue(undefined);
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(/my-key/);
     fireEvent.click(screen.getByText(strings.revokeApiKey));
     await waitFor(() =>
@@ -150,8 +150,8 @@ describe("ApiKeysPanel", () => {
   });
 
   test("copy usage notifies", async () => {
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.click(screen.getAllByRole("button", { name: strings.copyUsage })[0]);
     await waitFor(() =>
@@ -173,20 +173,20 @@ describe("ApiKeysPanel", () => {
         expiresAt: "2000-01-01T00:00:00.000Z", lastUsedAt: "2000-01-01T00:00:00.000Z",
       },
     ]);
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={jest.fn()} />);
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={vi.fn()} />);
     expect(await screen.findByText(/bad/)).toBeInTheDocument();
     expect(screen.getAllByText(/尚未使用/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/已过期/).length).toBeGreaterThan(0);
   });
 
   test("copy failure notifies error", async () => {
-    const writeText = jest.fn().mockRejectedValue(new Error("clipboard"));
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard"));
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText },
       configurable: true,
     });
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.click(screen.getAllByRole("button", { name: strings.copyUsage })[0]);
     await waitFor(() =>
@@ -198,8 +198,8 @@ describe("ApiKeysPanel", () => {
     mockCreate.mockResolvedValue({
       id: "k4", name: "k", prefix: "fd_", createdAt: "", expiresAt: null, key: "fd_k4",
     });
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.change(screen.getByLabelText(strings.apiKeyName), { target: { value: "k" } });
     fireEvent.mouseDown(screen.getByRole("combobox"));
@@ -213,8 +213,8 @@ describe("ApiKeysPanel", () => {
 
   test("create failure notifies error", async () => {
     mockCreate.mockRejectedValue(new Error("create-fail"));
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.change(screen.getByLabelText(strings.apiKeyName), { target: { value: "k" } });
     fireEvent.click(screen.getByRole("button", { name: strings.createApiKey }));
@@ -226,8 +226,8 @@ describe("ApiKeysPanel", () => {
       { id: "k5", name: "key5", prefix: "fd_", createdAt: "", expiresAt: null },
     ]);
     mockRevoke.mockRejectedValue(new Error("revoke-fail"));
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(/key5/);
     fireEvent.click(screen.getByText(strings.revokeApiKey));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("revoke-fail", "error"));
@@ -235,8 +235,8 @@ describe("ApiKeysPanel", () => {
   });
 
   test("all curl copy buttons notify", async () => {
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     const buttonNames = [
       strings.copyCurl,
@@ -257,8 +257,8 @@ describe("ApiKeysPanel", () => {
     mockCreate.mockResolvedValue({
       id: "k6", name: "k", prefix: "fd_", createdAt: "", expiresAt: null, key: "fd_custom_secret",
     });
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     fireEvent.change(screen.getByLabelText(strings.apiKeyCustom), {
       target: { value: "my-prefix" },
@@ -276,8 +276,8 @@ describe("ApiKeysPanel", () => {
   });
 
   test("dialog action copy usage", async () => {
-    const onNotify = jest.fn();
-    render(<ApiKeysPanel open onClose={jest.fn()} onNotify={onNotify} />);
+    const onNotify = vi.fn();
+    render(<ApiKeysPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText(strings.apiNoKeys);
     const buttons = screen.getAllByRole("button", { name: strings.copyUsage });
     fireEvent.click(buttons[buttons.length - 1]);

@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 /**
  * Main.tsx 集成分支补充：搜索「加载更多」（IO/滚动/防重复/错误）、面包屑 goUp、
  * 上下文菜单动作、删除-撤销/重试闭环、多选工具栏、空目录上传入口、
@@ -25,67 +26,67 @@ import { moveToTrash, restoreTrash } from "../trash";
 import { setLang, strings, translate } from "../strings";
 import type { TransferTask } from "../types";
 
-jest.mock("../auth", () => ({
-  useAuth: jest.fn(),
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  useAuth: vi.fn(),
+  authFetch: vi.fn(),
 }));
 
-jest.mock("../features", () => {
-  const actual = jest.requireActual("../features");
-  return { ...actual, useFeatures: jest.fn() };
+vi.mock("../features", async () => {
+  const actual = await vi.importActual("../features");
+  return { ...actual, useFeatures: vi.fn() };
 });
 
 let mockQueueTasks: TransferTask[] = [];
-const mockEnqueue = jest.fn();
-jest.mock("../transferQueue", () => ({
+const mockEnqueue = vi.fn();
+vi.mock("../transferQueue", () => ({
   useTransferQueue: () => mockQueueTasks,
   useUploadEnqueue: () => mockEnqueue,
 }));
 
-jest.mock("../transfer", () => ({
-  collectFilesFromDataTransfer: jest.fn(),
-  copyPaste: jest.fn(),
-  createFolder: jest.fn(),
-  downloadArchive: jest.fn(),
-  downloadFile: jest.fn(),
-  fetchFolderCounts: jest.fn().mockResolvedValue({}),
-  fetchPath: jest.fn(),
-  openFile: jest.fn(),
-  searchFiles: jest.fn(),
-  selectDirectoryFiles: jest.fn(),
+vi.mock("../transfer", () => ({
+  collectFilesFromDataTransfer: vi.fn(),
+  copyPaste: vi.fn(),
+  createFolder: vi.fn(),
+  downloadArchive: vi.fn(),
+  downloadFile: vi.fn(),
+  fetchFolderCounts: vi.fn().mockResolvedValue({}),
+  fetchPath: vi.fn(),
+  openFile: vi.fn(),
+  searchFiles: vi.fn(),
+  selectDirectoryFiles: vi.fn(),
 }));
 
-jest.mock("../trash", () => ({
-  moveToTrash: jest.fn(),
-  restoreTrash: jest.fn(),
+vi.mock("../trash", () => ({
+  moveToTrash: vi.fn(),
+  restoreTrash: vi.fn(),
 }));
 
-jest.mock("../../PreviewDialog", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../ShareDialog", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
-jest.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
-jest.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
-jest.mock("../../SharesView", () => ({ __esModule: true, default: () => <div>shares-stub</div> }));
-jest.mock("../../SettingsView", () => ({ __esModule: true, default: () => <div>settings-stub</div> }));
-jest.mock("../../WebDavPanel", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../TextPadDrawer", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../MoveDialog", () => ({ __esModule: true, default: ({ open }: { open: boolean }) => (open ? <div>move-stub</div> : null) }));
-jest.mock("../../AuthThumbnail", () => ({ __esModule: true, default: () => <span /> }));
-jest.mock("../../MimeIcon", () => ({ __esModule: true, default: () => <span /> }));
+vi.mock("../../PreviewDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../ShareDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
+vi.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
+vi.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
+vi.mock("../../SharesView", () => ({ __esModule: true, default: () => <div>shares-stub</div> }));
+vi.mock("../../SettingsView", () => ({ __esModule: true, default: () => <div>settings-stub</div> }));
+vi.mock("../../WebDavPanel", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../TextPadDrawer", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../MoveDialog", () => ({ __esModule: true, default: ({ open }: { open: boolean }) => (open ? <div>move-stub</div> : null) }));
+vi.mock("../../AuthThumbnail", () => ({ __esModule: true, default: () => <span /> }));
+vi.mock("../../MimeIcon", () => ({ __esModule: true, default: () => <span /> }));
 
-const mockUseAuth = useAuth as unknown as jest.Mock;
-const mockUseFeatures = useFeatures as unknown as jest.Mock;
-const mockFetchPath = fetchPath as unknown as jest.Mock;
-const mockSearch = searchFiles as unknown as jest.Mock;
-const mockCopyPaste = copyPaste as unknown as jest.Mock;
-const mockCreateFolder = createFolder as unknown as jest.Mock;
-const mockMoveTrash = moveToTrash as unknown as jest.Mock;
-const mockRestore = restoreTrash as unknown as jest.Mock;
-const mockCollect = collectFilesFromDataTransfer as unknown as jest.Mock;
-const mockDownload = downloadFile as unknown as jest.Mock;
-const mockArchive = downloadArchive as unknown as jest.Mock;
-const mockOpen = openFile as unknown as jest.Mock;
-const mockCounts = fetchFolderCounts as unknown as jest.Mock;
+const mockUseAuth = useAuth as unknown as Mock;
+const mockUseFeatures = useFeatures as unknown as Mock;
+const mockFetchPath = fetchPath as unknown as Mock;
+const mockSearch = searchFiles as unknown as Mock;
+const mockCopyPaste = copyPaste as unknown as Mock;
+const mockCreateFolder = createFolder as unknown as Mock;
+const mockMoveTrash = moveToTrash as unknown as Mock;
+const mockRestore = restoreTrash as unknown as Mock;
+const mockCollect = collectFilesFromDataTransfer as unknown as Mock;
+const mockDownload = downloadFile as unknown as Mock;
+const mockArchive = downloadArchive as unknown as Mock;
+const mockOpen = openFile as unknown as Mock;
+const mockCounts = fetchFolderCounts as unknown as Mock;
 
 const file = {
   key: "a.txt",
@@ -108,16 +109,16 @@ const folder = {
 function renderMain(route: any = { kind: "folder", path: "" }, extra: Partial<React.ComponentProps<typeof Main>> = {}) {
   const props = {
     search: "",
-    onSearchChange: jest.fn(),
-    onNotify: jest.fn(),
+    onSearchChange: vi.fn(),
+    onNotify: vi.fn(),
     view: "list" as const,
-    onViewChange: jest.fn(),
+    onViewChange: vi.fn(),
     sort: { field: "name" as const, order: "asc" as const },
-    onSortChange: jest.fn(),
+    onSortChange: vi.fn(),
     route,
-    navigate: jest.fn(),
-    onOpenApi: jest.fn(),
-    onContentScroll: jest.fn(),
+    navigate: vi.fn(),
+    onOpenApi: vi.fn(),
+    onContentScroll: vi.fn(),
     ...extra,
   };
   const result = render(
@@ -137,9 +138,9 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   };
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   Object.assign(navigator, {
-    clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   });
 });
 
@@ -147,12 +148,12 @@ beforeEach(() => {
   setLang("zh");
   mockQueueTasks = [];
   mockEnqueue.mockReset();
-  mockUseAuth.mockReturnValue({ username: "alice", login: jest.fn(), logout: jest.fn() });
+  mockUseAuth.mockReturnValue({ username: "alice", login: vi.fn(), logout: vi.fn() });
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
     sitesHost: null,
-    updateFlags: jest.fn(),
-    refresh: jest.fn(),
+    updateFlags: vi.fn(),
+    refresh: vi.fn(),
     config: { username: "alice", publicRead: false, sitesHost: null, flags: DEFAULT_FEATURE_FLAGS },
   });
   mockFetchPath.mockReset();
@@ -186,17 +187,17 @@ function delay(ms = 80) {
 
 describe("Main 全盘搜索加载更多", () => {
   test("触底自动加载下一页并去重，加载完显示 allLoaded", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       mockSearch
         .mockResolvedValueOnce({ items: [file], hasMore: true, nextCursor: "c1" })
         .mockResolvedValueOnce({ items: [file2], hasMore: false });
       renderMain({ kind: "folder", path: "" }, { search: "hello" });
       await act(async () => {
-        jest.advanceTimersByTime(400);
+        vi.advanceTimersByTime(400);
       });
       await act(async () => {
-        jest.runOnlyPendingTimers();
+        vi.runOnlyPendingTimers();
       });
       expect(mockSearch).toHaveBeenCalledTimes(2);
       // 第二页带 cursor
@@ -213,35 +214,35 @@ describe("Main 全盘搜索加载更多", () => {
       });
       expect(mockSearch).toHaveBeenCalledTimes(2);
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
   test("加载更多失败时错误提示", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       mockSearch
         .mockResolvedValueOnce({ items: [file], hasMore: true, nextCursor: "c1" })
         .mockRejectedValueOnce(new Error("page-2-fail"));
-      const onNotify = jest.fn();
+      const onNotify = vi.fn();
       renderMain({ kind: "folder", path: "" }, { search: "hello", onNotify });
       await act(async () => {
-        jest.advanceTimersByTime(400);
+        vi.advanceTimersByTime(400);
       });
       await act(async () => {
-        jest.runOnlyPendingTimers();
+        vi.runOnlyPendingTimers();
       });
       await waitFor(() =>
         expect(onNotify).toHaveBeenCalledWith("page-2-fail", "error")
       );
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
   test("列表加载失败的重试 action 可再次触发 loadListing", async () => {
     mockFetchPath.mockRejectedValue(new Error("list-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     renderMain({ kind: "folder", path: "" }, { onNotify });
     await waitFor(() => expect(onNotify).toHaveBeenCalled());
     const retry = onNotify.mock.calls[0][2]?.action?.onClick;
@@ -314,7 +315,7 @@ describe("Main 上下文菜单动作", () => {
 });
 
 describe("Main 删除-撤销/重试闭环", () => {
-  async function openConfirmAndConfirm(onNotify: jest.Mock) {
+  async function openConfirmAndConfirm(onNotify: Mock) {
     renderMain({ kind: "folder", path: "" }, { onNotify });
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
     fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" })));
@@ -327,7 +328,7 @@ describe("Main 删除-撤销/重试闭环", () => {
   }
 
   test("删除成功 → undo 恢复成功并再次刷新", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     await openConfirmAndConfirm(onNotify);
     await waitFor(() => expect(mockMoveTrash).toHaveBeenCalled());
     await waitFor(() => expect(onNotify).toHaveBeenCalledTimes(1));
@@ -343,7 +344,7 @@ describe("Main 删除-撤销/重试闭环", () => {
   });
 
   test("删除成功 → undo 恢复失败 → 错误提示", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     mockRestore.mockRejectedValue(new Error("restore-fail"));
     await openConfirmAndConfirm(onNotify);
     await waitFor(() => expect(mockMoveTrash).toHaveBeenCalled());
@@ -358,11 +359,11 @@ describe("Main 删除-撤销/重试闭环", () => {
   });
 
   test("删除失败 → retry 重试成功", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     mockMoveTrash.mockRejectedValueOnce(new Error("trash-fail"));
     await openConfirmAndConfirm(onNotify);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("trash-fail", "error", expect.anything()));
-    const retry = onNotify.mock.calls.find((c) => c[0] === "trash-fail")[2].action.onClick;
+    const retry = onNotify.mock.calls.find((c) => c[0] === "trash-fail")![2].action.onClick;
     await act(async () => {
       retry();
     });
@@ -372,7 +373,7 @@ describe("Main 删除-撤销/重试闭环", () => {
 
 describe("Main 重命名失败重试", () => {
   test("rename 失败 → 错误提示带 retry，重试后成功", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     mockCopyPaste.mockRejectedValueOnce(new Error("rename-fail"));
     renderMain({ kind: "folder", path: "" }, { onNotify });
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
@@ -381,7 +382,7 @@ describe("Main 重命名失败重试", () => {
     fireEvent.change(screen.getByLabelText(strings.name), { target: { value: "renamed.txt" } });
     fireEvent.click(screen.getByText(strings.ok));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("rename-fail", "error", expect.anything()));
-    const retry = onNotify.mock.calls.find((c) => c[0] === "rename-fail")[2].action.onClick;
+    const retry = onNotify.mock.calls.find((c) => c[0] === "rename-fail")![2].action.onClick;
     await act(async () => {
       retry();
     });
@@ -427,7 +428,7 @@ describe("Main 多选工具栏", () => {
   });
 
   test("多选下载失败时错误提示", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     mockArchive.mockRejectedValue(new Error("zip-fail"));
     mockFetchPath.mockResolvedValue([file, file2, folder]);
     renderMain({ kind: "folder", path: "" }, { onNotify });
@@ -445,7 +446,7 @@ describe("Main 空目录入口", () => {
     mockFetchPath.mockResolvedValue([]);
     const orig = document.createElement.bind(document);
     let picked: HTMLInputElement | null = null;
-    const spy = jest.spyOn(document, "createElement").mockImplementation((tag: string) => {
+    const spy = vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
       const el = orig(tag) as HTMLInputElement;
       if (tag === "input") picked = el;
       return el;
@@ -472,19 +473,19 @@ describe("Main 空目录入口", () => {
   });
 
   test("搜索无结果时展示清除搜索按钮", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       mockSearch.mockResolvedValue({ items: [], hasMore: false });
-      const onSearchChange = jest.fn();
+      const onSearchChange = vi.fn();
       renderMain({ kind: "folder", path: "" }, { search: "nomatch", onSearchChange });
       await act(async () => {
-        jest.advanceTimersByTime(400);
+        vi.advanceTimersByTime(400);
       });
       await waitFor(() => expect(screen.getByText(strings.clearSearch)).toBeInTheDocument());
       fireEvent.click(screen.getByText(strings.clearSearch));
       expect(onSearchChange).toHaveBeenCalledWith("");
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 });
@@ -511,7 +512,7 @@ describe("Main 最近文件入口", () => {
   });
 
   test("最近条目缺失时提示", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     localStorage.setItem(
       "flaredrive.recent",
       JSON.stringify([{ key: "gone.txt", name: "gone.txt", isDir: false, at: 1 }])

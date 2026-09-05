@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Box, IconButton, Popover, Skeleton, Typography } from "@mui/material";
 import QrCode2Icon from "@mui/icons-material/QrCode2";

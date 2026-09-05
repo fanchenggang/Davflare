@@ -1,15 +1,15 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import MobileNav from "../../MobileNav";
 import { useTransferQueue } from "../transferQueue";
 import { setLang, strings } from "../strings";
 
-jest.mock("../transferQueue", () => ({
-  useTransferQueue: jest.fn(),
+vi.mock("../transferQueue", () => ({
+  useTransferQueue: vi.fn(),
 }));
 
-const mockUseTransferQueue = useTransferQueue as unknown as jest.Mock;
+const mockUseTransferQueue = useTransferQueue as unknown as Mock;
 
 beforeEach(() => {
   setLang("zh");
@@ -22,26 +22,26 @@ describe("MobileNav", () => {
     const { container } = render(
       <MobileNav
         visible={false}
-        onGoFiles={jest.fn()}
-        onUploadFile={jest.fn()}
-        onUploadFolder={jest.fn()}
-        onCreateFolder={jest.fn()}
-        onOpenTextPad={jest.fn()}
+        onGoFiles={vi.fn()}
+        onUploadFile={vi.fn()}
+        onUploadFolder={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onOpenTextPad={vi.fn()}
       />
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   test("导航按钮触发 onGoFiles", () => {
-    const onGoFiles = jest.fn();
+    const onGoFiles = vi.fn();
     render(
       <MobileNav
         visible
         onGoFiles={onGoFiles}
-        onUploadFile={jest.fn()}
-        onUploadFolder={jest.fn()}
-        onCreateFolder={jest.fn()}
-        onOpenTextPad={jest.fn()}
+        onUploadFile={vi.fn()}
+        onUploadFolder={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onOpenTextPad={vi.fn()}
       />
     );
     fireEvent.click(screen.getByLabelText(strings.files));
@@ -49,16 +49,16 @@ describe("MobileNav", () => {
   });
 
   test("上传菜单选择文件/文件夹", () => {
-    const onUploadFile = jest.fn();
-    const onUploadFolder = jest.fn();
+    const onUploadFile = vi.fn();
+    const onUploadFolder = vi.fn();
     render(
       <MobileNav
         visible
-        onGoFiles={jest.fn()}
+        onGoFiles={vi.fn()}
         onUploadFile={onUploadFile}
         onUploadFolder={onUploadFolder}
-        onCreateFolder={jest.fn()}
-        onOpenTextPad={jest.fn()}
+        onCreateFolder={vi.fn()}
+        onOpenTextPad={vi.fn()}
       />
     );
     fireEvent.click(screen.getByLabelText(strings.upload));
@@ -71,14 +71,14 @@ describe("MobileNav", () => {
   });
 
   test("创建菜单选择新建文件夹/记事本", () => {
-    const onCreateFolder = jest.fn();
-    const onOpenTextPad = jest.fn();
+    const onCreateFolder = vi.fn();
+    const onOpenTextPad = vi.fn();
     render(
       <MobileNav
         visible
-        onGoFiles={jest.fn()}
-        onUploadFile={jest.fn()}
-        onUploadFolder={jest.fn()}
+        onGoFiles={vi.fn()}
+        onUploadFile={vi.fn()}
+        onUploadFolder={vi.fn()}
         onCreateFolder={onCreateFolder}
         onOpenTextPad={onOpenTextPad}
       />
@@ -99,11 +99,11 @@ describe("MobileNav", () => {
     const { container } = render(
       <MobileNav
         visible
-        onGoFiles={jest.fn()}
-        onUploadFile={jest.fn()}
-        onUploadFolder={jest.fn()}
-        onCreateFolder={jest.fn()}
-        onOpenTextPad={jest.fn()}
+        onGoFiles={vi.fn()}
+        onUploadFile={vi.fn()}
+        onUploadFolder={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onOpenTextPad={vi.fn()}
       />
     );
     expect(container.querySelector(".MuiCircularProgress-root")).not.toBeNull();

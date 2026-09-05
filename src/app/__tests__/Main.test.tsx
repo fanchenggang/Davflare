@@ -1,3 +1,4 @@
+import { vi, type Mock } from "vitest";
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
@@ -20,67 +21,67 @@ import {
 import { moveToTrash, restoreTrash } from "../trash";
 import { setLang, strings, translate } from "../strings";
 
-jest.mock("../auth", () => ({
-  useAuth: jest.fn(),
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  useAuth: vi.fn(),
+  authFetch: vi.fn(),
 }));
 
-jest.mock("../features", () => {
-  const actual = jest.requireActual("../features");
-  return { ...actual, useFeatures: jest.fn() };
+vi.mock("../features", async () => {
+  const actual = await vi.importActual("../features");
+  return { ...actual, useFeatures: vi.fn() };
 });
 
-const mockEnqueue = jest.fn();
-jest.mock("../transferQueue", () => ({
+const mockEnqueue = vi.fn();
+vi.mock("../transferQueue", () => ({
   useTransferQueue: () => [],
   useUploadEnqueue: () => mockEnqueue,
 }));
 
-jest.mock("../transfer", () => ({
-  collectFilesFromDataTransfer: jest.fn(),
-  copyPaste: jest.fn(),
-  createFolder: jest.fn(),
-  downloadArchive: jest.fn(),
-  downloadFile: jest.fn(),
-  fetchFolderCounts: jest.fn().mockResolvedValue({}),
-  fetchPath: jest.fn(),
-  openFile: jest.fn(),
-  searchFiles: jest.fn(),
-  selectDirectoryFiles: jest.fn(),
+vi.mock("../transfer", () => ({
+  collectFilesFromDataTransfer: vi.fn(),
+  copyPaste: vi.fn(),
+  createFolder: vi.fn(),
+  downloadArchive: vi.fn(),
+  downloadFile: vi.fn(),
+  fetchFolderCounts: vi.fn().mockResolvedValue({}),
+  fetchPath: vi.fn(),
+  openFile: vi.fn(),
+  searchFiles: vi.fn(),
+  selectDirectoryFiles: vi.fn(),
 }));
 
-jest.mock("../trash", () => ({
-  moveToTrash: jest.fn(),
-  restoreTrash: jest.fn(),
+vi.mock("../trash", () => ({
+  moveToTrash: vi.fn(),
+  restoreTrash: vi.fn(),
 }));
 
-jest.mock("../../PreviewDialog", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../ShareDialog", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
-jest.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
-jest.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
-jest.mock("../../SharesView", () => ({ __esModule: true, default: () => <div>shares-stub</div> }));
-jest.mock("../../SettingsView", () => ({ __esModule: true, default: () => <div>settings-stub</div> }));
-jest.mock("../../WebDavPanel", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../TextPadDrawer", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../MoveDialog", () => ({ __esModule: true, default: () => null }));
-jest.mock("../../AuthThumbnail", () => ({ __esModule: true, default: () => <span /> }));
-jest.mock("../../MimeIcon", () => ({ __esModule: true, default: () => <span /> }));
+vi.mock("../../PreviewDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../ShareDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
+vi.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
+vi.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
+vi.mock("../../SharesView", () => ({ __esModule: true, default: () => <div>shares-stub</div> }));
+vi.mock("../../SettingsView", () => ({ __esModule: true, default: () => <div>settings-stub</div> }));
+vi.mock("../../WebDavPanel", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../TextPadDrawer", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../MoveDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../AuthThumbnail", () => ({ __esModule: true, default: () => <span /> }));
+vi.mock("../../MimeIcon", () => ({ __esModule: true, default: () => <span /> }));
 
-const mockUseAuth = useAuth as unknown as jest.Mock;
-const mockUseFeatures = useFeatures as unknown as jest.Mock;
-const mockFetchPath = fetchPath as unknown as jest.Mock;
-const mockSearch = searchFiles as unknown as jest.Mock;
-const mockCopyPaste = copyPaste as unknown as jest.Mock;
-const mockCreateFolder = createFolder as unknown as jest.Mock;
-const mockMoveTrash = moveToTrash as unknown as jest.Mock;
-const mockRestore = restoreTrash as unknown as jest.Mock;
-const mockCollect = collectFilesFromDataTransfer as unknown as jest.Mock;
-const mockSelectDir = selectDirectoryFiles as unknown as jest.Mock;
-const mockDownload = downloadFile as unknown as jest.Mock;
-const mockArchive = downloadArchive as unknown as jest.Mock;
-const mockOpen = openFile as unknown as jest.Mock;
-const mockCounts = fetchFolderCounts as unknown as jest.Mock;
+const mockUseAuth = useAuth as unknown as Mock;
+const mockUseFeatures = useFeatures as unknown as Mock;
+const mockFetchPath = fetchPath as unknown as Mock;
+const mockSearch = searchFiles as unknown as Mock;
+const mockCopyPaste = copyPaste as unknown as Mock;
+const mockCreateFolder = createFolder as unknown as Mock;
+const mockMoveTrash = moveToTrash as unknown as Mock;
+const mockRestore = restoreTrash as unknown as Mock;
+const mockCollect = collectFilesFromDataTransfer as unknown as Mock;
+const mockSelectDir = selectDirectoryFiles as unknown as Mock;
+const mockDownload = downloadFile as unknown as Mock;
+const mockArchive = downloadArchive as unknown as Mock;
+const mockOpen = openFile as unknown as Mock;
+const mockCounts = fetchFolderCounts as unknown as Mock;
 
 const file = {
   key: "a.txt",
@@ -112,16 +113,16 @@ const hidden = {
 function renderMain(route: any = { kind: "folder", path: "" }, extra: Partial<React.ComponentProps<typeof Main>> = {}) {
   const props = {
     search: "",
-    onSearchChange: jest.fn(),
-    onNotify: jest.fn(),
+    onSearchChange: vi.fn(),
+    onNotify: vi.fn(),
     view: "list" as const,
-    onViewChange: jest.fn(),
+    onViewChange: vi.fn(),
     sort: { field: "name" as const, order: "asc" as const },
-    onSortChange: jest.fn(),
+    onSortChange: vi.fn(),
     route,
-    navigate: jest.fn(),
-    onOpenApi: jest.fn(),
-    onContentScroll: jest.fn(),
+    navigate: vi.fn(),
+    onOpenApi: vi.fn(),
+    onContentScroll: vi.fn(),
     ...extra,
   };
   const result = render(
@@ -138,21 +139,21 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   };
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   Object.assign(navigator, {
-    clipboard: { writeText: jest.fn().mockResolvedValue(undefined) },
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
   });
 });
 
 beforeEach(() => {
   setLang("zh");
   mockEnqueue.mockReset();
-  mockUseAuth.mockReturnValue({ username: "alice", login: jest.fn(), logout: jest.fn() });
+  mockUseAuth.mockReturnValue({ username: "alice", login: vi.fn(), logout: vi.fn() });
   mockUseFeatures.mockReturnValue({
     flags: DEFAULT_FEATURE_FLAGS,
     sitesHost: null,
-    updateFlags: jest.fn(),
-    refresh: jest.fn(),
+    updateFlags: vi.fn(),
+    refresh: vi.fn(),
     config: { username: "alice", publicRead: false, sitesHost: null, flags: DEFAULT_FEATURE_FLAGS },
   });
   mockFetchPath.mockReset();
@@ -189,7 +190,7 @@ describe("Main", () => {
 
   test("listing error notifies", async () => {
     mockFetchPath.mockRejectedValue(new Error("list-fail"));
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     renderMain({ kind: "folder", path: "" }, { onNotify });
     await waitFor(() => expect(onNotify).toHaveBeenCalled());
     expect(onNotify.mock.calls[0][0]).toBe("list-fail");
@@ -225,8 +226,8 @@ describe("Main", () => {
     mockUseFeatures.mockReturnValue({
       flags: { ...DEFAULT_FEATURE_FLAGS, sites: false, imageHost: false },
       sitesHost: null,
-      updateFlags: jest.fn(),
-      refresh: jest.fn(),
+      updateFlags: vi.fn(),
+      refresh: vi.fn(),
       config: { username: "alice", publicRead: false, sitesHost: null, flags: DEFAULT_FEATURE_FLAGS },
     });
     const { props } = renderMain({ kind: "sites" });
@@ -236,7 +237,7 @@ describe("Main", () => {
   });
 
   test("copy path, search scope, create folder, keyboard select/delete", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     renderMain({ kind: "folder", path: "docs/" }, { onNotify });
     mockFetchPath.mockResolvedValue([file]);
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
@@ -268,7 +269,7 @@ describe("Main", () => {
   });
 
   test("context menu copy/cut/download and open folder", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     const { props } = renderMain({ kind: "folder", path: "" }, { onNotify, view: "list" });
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
     fireEvent.click(
@@ -294,7 +295,7 @@ describe("Main", () => {
   });
 
   test("rename via F2 and paste clipboard", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     renderMain({ kind: "folder", path: "" }, { onNotify });
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
     fireEvent.click(
@@ -336,7 +337,7 @@ describe("Main", () => {
   });
 
   test("window file paste and drag overlay", async () => {
-    const onNotify = jest.fn();
+    const onNotify = vi.fn();
     renderMain({ kind: "folder", path: "" }, { onNotify });
     await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
     const pasted = new File(["x"], "image.png", { type: "image/png" });
@@ -363,13 +364,13 @@ describe("Main", () => {
   });
 
   test("global search uses searchFiles", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     renderMain({ kind: "folder", path: "" }, { search: "hello" });
     await act(async () => {
-      jest.advanceTimersByTime(350);
+      vi.advanceTimersByTime(350);
     });
     await waitFor(() => expect(mockSearch).toHaveBeenCalled());
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   test("sort by size and date still lists files", async () => {
@@ -390,7 +391,7 @@ describe("Main", () => {
   });
 
   test("username null skips listing", async () => {
-    mockUseAuth.mockReturnValue({ username: null, login: jest.fn(), logout: jest.fn() });
+    mockUseAuth.mockReturnValue({ username: null, login: vi.fn(), logout: vi.fn() });
     renderMain();
     await waitFor(() => expect(mockFetchPath).not.toHaveBeenCalled());
   });

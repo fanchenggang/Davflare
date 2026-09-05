@@ -3,8 +3,16 @@ import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { fileURLToPath } from "url";
+import { createRequire } from "module";
 
-const repoRoot = path.join(__dirname, "../../..");
+// vitest 以 ESM 方式运行测试文件：这里用 createRequire 加载 CJS 的
+// extension/url.js，并用 import.meta 推导 __dirname 等价物。
+const nodeRequire = createRequire(import.meta.url);
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../.."
+);
 const extDir = path.join(repoRoot, "extension");
 const newtabOverlayDir = path.join(repoRoot, "extension-newtab");
 const packageScript = path.join(repoRoot, "scripts/package-extension.sh");
@@ -16,7 +24,7 @@ const {
   normalizeInstanceUrl,
   resolveNewTabTarget,
   resolveToolbarTarget,
-} = require("../../../extension/url.js") as {
+} = nodeRequire("../../../extension/url.js") as {
   DEFAULT_NTP: string;
   DEFAULT_SETTINGS: { instanceUrl: string };
   mergeSettings: (stored: unknown) => { instanceUrl: string };

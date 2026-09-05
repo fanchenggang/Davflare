@@ -1,36 +1,36 @@
-import React from "react";
+import { vi, type Mock } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import TextPadDrawer from "../../TextPadDrawer";
 import { useUploadEnqueue } from "../transferQueue";
 import { setLang, strings } from "../strings";
 
-jest.mock("../transferQueue", () => ({
-  useUploadEnqueue: jest.fn(),
+vi.mock("../transferQueue", () => ({
+  useUploadEnqueue: vi.fn(),
 }));
 
-const mockEnqueue = useUploadEnqueue as unknown as jest.Mock;
+const mockEnqueue = useUploadEnqueue as unknown as Mock;
 
 beforeEach(() => {
   setLang("zh");
   mockEnqueue.mockReset();
-  mockEnqueue.mockReturnValue(jest.fn());
+  mockEnqueue.mockReturnValue(vi.fn());
 });
 
 describe("TextPadDrawer", () => {
   test("空内容不能保存", () => {
-    const enqueue = jest.fn();
+    const enqueue = vi.fn();
     mockEnqueue.mockReturnValue(enqueue);
-    render(<TextPadDrawer open setOpen={jest.fn()} cwd="docs/" onUpload={jest.fn()} />);
+    render(<TextPadDrawer open setOpen={vi.fn()} cwd="docs/" onUpload={vi.fn()} />);
     fireEvent.click(screen.getByText(strings.saveAndUpload));
     expect(enqueue).not.toHaveBeenCalled();
   });
 
   test("输入内容保存并入队", () => {
-    const enqueue = jest.fn();
+    const enqueue = vi.fn();
     mockEnqueue.mockReturnValue(enqueue);
-    const setOpen = jest.fn();
-    render(<TextPadDrawer open setOpen={setOpen} cwd="docs/" onUpload={jest.fn()} />);
+    const setOpen = vi.fn();
+    render(<TextPadDrawer open setOpen={setOpen} cwd="docs/" onUpload={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText(strings.noteContent), {
       target: { value: "hello world" },

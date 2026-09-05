@@ -1,4 +1,4 @@
-import React from "react";
+import { vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import EmptyState from "../../EmptyState";
@@ -32,15 +32,15 @@ describe("EmptyState", () => {
 describe("MultiSelectToolbar", () => {
   const props = {
     selectedKeys: [] as string[],
-    onClose: jest.fn(),
-    onSelectAll: jest.fn(),
-    onDownload: jest.fn(),
-    onRename: jest.fn(),
-    onDelete: jest.fn(),
-    onShare: jest.fn(),
-    onCopy: jest.fn(),
-    onCut: jest.fn(),
-    onMove: jest.fn(),
+    onClose: vi.fn(),
+    onSelectAll: vi.fn(),
+    onDownload: vi.fn(),
+    onRename: vi.fn(),
+    onDelete: vi.fn(),
+    onShare: vi.fn(),
+    onCopy: vi.fn(),
+    onCut: vi.fn(),
+    onMove: vi.fn(),
   };
 
   test("多选时点击按钮触发回调", () => {
@@ -85,8 +85,8 @@ describe("FileActionSheet", () => {
   };
 
   test("桌面端点击菜单项触发 onAction", async () => {
-    const onAction = jest.fn();
-    const onClose = jest.fn();
+    const onAction = vi.fn();
+    const onClose = vi.fn();
     render(
       <FileActionSheet
         file={file}
@@ -105,8 +105,8 @@ describe("FileActionSheet", () => {
       <FileActionSheet
         file={{ ...file, isDir: true, key: "d/", name: "d" }}
         anchorPosition={{ top: 10, left: 20 }}
-        onClose={jest.fn()}
-        onAction={jest.fn()}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
       />
     );
     expect(screen.getByText(strings.download)).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("FileActionSheet", () => {
 
   test("file 为 null 时不渲染菜单项", () => {
     render(
-      <FileActionSheet file={null} anchorPosition={null} onClose={jest.fn()} onAction={jest.fn()} />
+      <FileActionSheet file={null} anchorPosition={null} onClose={vi.fn()} onAction={vi.fn()} />
     );
     expect(screen.queryByText(strings.download)).not.toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Box,
@@ -83,7 +83,7 @@ function SettingsView({ onNotify }: { onNotify: NotifyFn }) {
                   <Switch
                     checked={flags[item.key]}
                     onChange={(event) => toggle(item.key, event.target.checked)}
-                    inputProps={{ "aria-label": strings[item.label] }}
+                    slotProps={{ input: { "aria-label": strings[item.label] } }}
                   />
                 )
               }

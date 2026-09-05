@@ -150,7 +150,7 @@ export function FileGridSkeleton({
   return (
     <Grid container spacing={2} sx={{ padding: 1.5 }}>
       {Array.from({ length: 12 }).map((_, index) => (
-        <Grid item key={index} xs={compact ? 4 : 6} sm={compact ? 3 : 4} md={compact ? 2 : 3} lg={2}>
+        <Grid key={index} size={{ xs: compact ? 4 : 6, sm: compact ? 3 : 4, md: compact ? 2 : 3, lg: 2 }}>
           <Box
             sx={{
               height: compact ? 128 : 168,
@@ -742,13 +742,14 @@ function FileGrid({
     >
       {files.map((file, index) => (
         <Grid
-          item
           key={file.key}
           role="row"
-          xs={density === "compact" ? 4 : 6}
-          sm={density === "compact" ? 3 : 4}
-          md={density === "compact" ? 2 : 3}
-          lg={2}
+          size={{
+            xs: density === "compact" ? 4 : 6,
+            sm: density === "compact" ? 3 : 4,
+            md: density === "compact" ? 2 : 3,
+            lg: 2,
+          }}
           sx={{ display: "flex", overflow: "visible" }}
         >
           {itemTile(file, index)}

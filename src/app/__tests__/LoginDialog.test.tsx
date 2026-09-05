@@ -1,14 +1,14 @@
-import React from "react";
+import { vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import LoginDialog from "../../LoginDialog";
 import { setLang, strings, translate } from "../strings";
 
-const mockLogin = jest.fn();
-const mockAuthFetch = jest.fn();
+const mockLogin = vi.fn();
+const mockAuthFetch = vi.fn();
 
-jest.mock("../auth", () => ({
-  useAuth: () => ({ login: mockLogin, logout: jest.fn(), username: null }),
+vi.mock("../auth", () => ({
+  useAuth: () => ({ login: mockLogin, logout: vi.fn(), username: null }),
   authFetch: (...args: unknown[]) => mockAuthFetch(...args),
   utf8ToBase64: (value: string) => {
     const bytes = new TextEncoder().encode(value);

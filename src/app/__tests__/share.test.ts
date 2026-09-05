@@ -1,10 +1,11 @@
+import { vi } from "vitest";
 import { createShare, formatShareClipboard, formatShareCountdown, listShares, revokeShare, shareExpiryView } from "../share";
 import { authFetch } from "../auth";
 import { setLang } from "../strings";
 import { asAuthFetchMock } from "../testUtils";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);

@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { authFetch } from "../auth";
 import {
   DEFAULT_FEATURE_FLAGS,
@@ -7,8 +8,8 @@ import {
 } from "../features";
 import { asAuthFetchMock } from "../testUtils";
 
-jest.mock("../auth", () => ({
-  authFetch: jest.fn(),
+vi.mock("../auth", () => ({
+  authFetch: vi.fn(),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);
