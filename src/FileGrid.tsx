@@ -20,7 +20,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AuthThumbnail from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { Density, ViewMode } from "./app/prefs";
-import { Z_INDEX, warmShadow } from "./app/theme";
+import { MOTION, ORANGE, Z_INDEX, warmShadow } from "./app/theme";
 import { strings, translate } from "./app/strings";
 import { FileItem } from "./app/types";
 import {
@@ -37,7 +37,7 @@ const itemEnter = keyframes`
 `;
 
 const itemEnterSx = (index: number) => ({
-  animation: `${itemEnter} 0.22s ease both`,
+  animation: `${itemEnter} ${MOTION.enter}ms ease both`,
   animationDelay: `${Math.min(index, 24) * 14}ms`,
   "@media (prefers-reduced-motion: reduce)": {
     animation: "none",
@@ -46,8 +46,8 @@ const itemEnterSx = (index: number) => ({
 
 // 选中态呼吸光效：柔和的橙色外圈明暗脉动（减弱动态时禁用）
 const selectionGlow = keyframes`
-  0%, 100% { box-shadow: 0 0 0 0 rgba(243, 128, 32, 0.00), 0 1px 2px rgba(26, 23, 20, 0.04); }
-  50% { box-shadow: 0 0 0 4px rgba(243, 128, 32, 0.18), 0 1px 2px rgba(26, 23, 20, 0.04); }
+  0%, 100% { box-shadow: 0 0 0 0 ${alpha(ORANGE, 0)}, 0 1px 2px rgba(26, 23, 20, 0.04); }
+  50% { box-shadow: 0 0 0 4px ${alpha(ORANGE, 0.18)}, 0 1px 2px rgba(26, 23, 20, 0.04); }
 `;
 
 const selectionGlowSx = {
@@ -196,6 +196,11 @@ function FileGrid({
 }: FileGridProps) {
   const theme = useTheme();
   const isSelected = (file: FileItem) => selectedKeys.includes(file.key);
+  // roving tabindex：活动项（焦点项；无焦点时首项）可 Tab 到达，其余 -1
+  const rovingTabIndex = (file: FileItem, index: number) => {
+    if (focusedKey) return focusedKey === file.key ? 0 : -1;
+    return index === 0 ? 0 : -1;
+  };
   const folderMeta = (file: FileItem) => {
     const count = folderCounts?.[file.key];
     if (typeof count === "number") return `${count} ${strings.folderItems}`;
@@ -391,7 +396,7 @@ function FileGrid({
           alignItems: "center",
           zIndex: Z_INDEX.cardOverlay,
           backgroundColor: alpha(theme.palette.background.paper, 0.95),
-          borderRadius: 999,
+          borderRadius: "999px",
           padding: "1px 4px",
           boxShadow: (theme) =>
             warmShadow(theme.palette.mode === "dark", "0 2px 10px", 0.16),
@@ -401,7 +406,7 @@ function FileGrid({
             opacity: 1,
             pointerEvents: "auto",
           },
-          transition: "opacity 0.15s ease",
+          transition: `opacity ${MOTION.fast}ms ease`,
         }}
         onPointerDown={stop}
         onClick={stop}
@@ -417,6 +422,9 @@ function FileGrid({
     <ListItemButton
       component="div"
       className="file-card"
+      role="option"
+      aria-selected={isSelected(file)}
+      tabIndex={rovingTabIndex(file, index)}
       selected={isSelected(file)}
       data-file-key={file.key}
       onPointerDown={markPointer}
@@ -517,8 +525,9 @@ function FileGrid({
   const itemTile = (file: FileItem, index: number) => (
     <Box
       className="file-card"
-      role="button"
-      tabIndex={0}
+      role="gridcell"
+      aria-selected={isSelected(file)}
+      tabIndex={rovingTabIndex(file, index)}
       data-file-key={file.key}
       onPointerDown={markPointer}
       onClick={(event) => clickItem(file, event)}
@@ -561,7 +570,7 @@ function FileGrid({
         userSelect: "none",
         boxShadow: (theme) =>
           warmShadow(theme.palette.mode === "dark", "0 1px 2px", 0.04),
-        transition: "background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease",
+        transition: `background-color ${MOTION.fast}ms ease, box-shadow ${MOTION.fast}ms ease, border-color ${MOTION.fast}ms ease, transform ${MOTION.fast}ms ease`,
         "&:hover": {
           backgroundColor: "action.selected",
           boxShadow: (theme) =>
@@ -614,7 +623,7 @@ function FileGrid({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          transition: "transform 0.18s ease",
+          transition: `transform ${MOTION.base}ms ease`,
         }}
       >
         {thumbnail(file, density === "compact" ? 48 : 64)}
@@ -714,7 +723,7 @@ function FileGrid({
           </Typography>
           <Box sx={{ width: 44 }} />
         </Box>
-        <List disablePadding sx={{ pt: 0.5 }}>
+        <List disablePadding role="listbox" aria-label={strings.files} sx={{ pt: 0.5 }}>
           {files.map((file, index) => (
             <React.Fragment key={file.key}>{itemList(file, index)}</React.Fragment>
           ))}
@@ -726,6 +735,8 @@ function FileGrid({
   return (
     <Grid
       container
+      role="grid"
+      aria-label={strings.files}
       spacing={density === "compact" ? 1 : 2}
       sx={{ padding: density === "compact" ? 1 : 2, paddingBottom: { xs: "136px", sm: "72px" }, overflow: "visible" }}
     >
@@ -733,6 +744,7 @@ function FileGrid({
         <Grid
           item
           key={file.key}
+          role="row"
           xs={density === "compact" ? 4 : 6}
           sm={density === "compact" ? 3 : 4}
           md={density === "compact" ? 2 : 3}

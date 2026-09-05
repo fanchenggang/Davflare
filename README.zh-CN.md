@@ -28,7 +28,7 @@
 
 - 网页端分片上传大文件
 - 文件夹、搜索、拖放，以及图片 / 视频 / PDF 缩略图
-- 分享链接（限时或永久）、提取码、文件夹 zip 下载
+- 分享链接（限时或永久）、提取码、文件夹 zip 下载 —— 链接打开零脚本落地页（亮暗双套，含文件名/类型/大小/分享时间与在线预览）；`?download=1` 直链下载，`?raw=1` 内联内容
 - 回收站，由 `TRASH_RETENTION_DAYS` 控制（默认 30 天；`-1` 关闭；打开回收站时惰性清理最多 200 项）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端文件管理）
 - API Key，可用于脚本上传、下载与双向同步
@@ -161,6 +161,8 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 
 同一把密钥可做双向同步（本地优先，冲突时先备份远端）。详见 [开放接口文档](docs/API.zh-CN.md)。
 
+**分享链接**（`/share/<token>`）默认返回服务端渲染、零脚本的落地页：文件名、类型、大小、分享时间，图片/音视频/PDF/文本还带在线预览（`<img>` / `<video>` / `<audio>` / `<iframe>`）；语言跟随 `Accept-Language`。以前直接抓分享链接原始字节的脚本需要改用：**`?download=1` 返回附件下载直链**（文件夹仍为 zip 流），**`?raw=1` 返回内联内容**（图片/音视频/PDF/文本等可预览类型），安全响应头（`Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff`）与 Range 支持保持不变。过期返回 **410**、撤销返回 **404**，提取码门禁对落地页与两个参数同样生效。
+
 `GET /api/config`（网页会话）返回用户名、公开读取、`sitesHost` 以及五个功能开关。`PATCH /api/config` 更新开关，**仅允许网页会话（Basic）**，API Key 不能改开关。
 
 ## 功能开关
@@ -253,7 +255,7 @@ npm run test:e2e    # one-shot API regression: build → wrangler pages dev (loc
 SKIP_BUILD=1 npm run test:e2e   # reuse an existing build/ for faster iterations
 ```
 
-`test:e2e` 会在缺少时创建本地 `.dev.vars`（已 gitignore）写入开发凭据，在 8788 端口启动 `wrangler pages dev`（可用 `PORT` 覆盖），等待就绪后跑约 79 条断言，再关掉服务。数据在 `.wrangler/state/` —— 删除该目录即可重置本地 bucket。完整验证记录见 [TESTING.md](./TESTING.md)，手工 GUI 用例库见 [TEST_CASES.md](./TEST_CASES.md)。
+`test:e2e` 会在缺少时创建本地 `.dev.vars`（已 gitignore）写入开发凭据，在 8788 端口启动 `wrangler pages dev`（可用 `PORT` 覆盖），等待就绪后跑约 170 条断言，再关掉服务。数据在 `.wrangler/state/` —— 删除该目录即可重置本地 bucket。完整验证记录见 [TESTING.md](./TESTING.md)，手工 GUI 用例库见 [TEST_CASES.md](./TEST_CASES.md)。
 
 ## 致谢
 

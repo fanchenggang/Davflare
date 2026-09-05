@@ -1,3 +1,4 @@
+import { alpha } from "@mui/material/styles";
 import React, { useState } from "react";
 import {
   Box,
@@ -427,9 +428,9 @@ function ExplorerBar({
                 borderRadius: "999px",
                 height: 28,
                 fontWeight: 700,
-                boxShadow:
+                boxShadow: (t) =>
                   active && filtering
-                    ? "0 0 0 2px rgba(243, 128, 32, 0.45)"
+                    ? `0 0 0 2px ${alpha(t.palette.primary.main, 0.45)}`
                     : "none",
                 "& .MuiChip-label": { px: 1.25 },
               }}

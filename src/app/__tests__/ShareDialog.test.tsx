@@ -140,4 +140,33 @@ describe("ShareDialog", () => {
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("revoke-fail", "error"));
     await waitFor(() => expect(mockListShares.mock.calls.length).toBeGreaterThan(1));
   });
+
+  test("列表项展示倒计时/永久徽标", async () => {
+    mockListShares.mockResolvedValue([
+      share,
+      {
+        ...share,
+        token: "tok-urgent",
+        url: "https://x.example/s/tok-urgent",
+        expiresAt: new Date(Date.now() + 3.5 * 60 * 60 * 1000).toISOString(),
+      },
+    ]);
+    render(<ShareDialog open file={file} onClose={jest.fn()} onNotify={jest.fn()} />);
+    await screen.findByText(share.url);
+    expect(screen.getByText(strings.shareNeverExpires)).toBeInTheDocument();
+    const urgentChip = await screen.findByText(translate("shareExpiresIn", { time: "3 小时" }));
+    expect(urgentChip.closest(".MuiChip-root")).toHaveClass("MuiChip-colorWarning");
+  });
+
+  test("每个分享带二维码入口且弹层渲染 dataURL 图片", async () => {
+    render(<ShareDialog open file={file} onClose={jest.fn()} onNotify={jest.fn()} />);
+    await screen.findByText(share.url);
+    const qrButtons = screen.getAllByRole("button", { name: strings.shareQrTitle });
+    expect(qrButtons.length).toBeGreaterThan(0);
+    fireEvent.click(qrButtons[0]);
+    expect(await screen.findByRole("img", { name: strings.shareQrTitle })).toHaveAttribute(
+      "src",
+      expect.stringMatching(/^data:image\/png;base64,/)
+    );
+  });
 });

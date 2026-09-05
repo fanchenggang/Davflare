@@ -45,7 +45,7 @@ import {
   TEXT_PREVIEW_MAX_BYTES,
 } from "./app/preview";
 import { strings, translate } from "./app/strings";
-import { Z_INDEX, warmShadow } from "./app/theme";
+import { MOTION, Z_INDEX, warmShadow } from "./app/theme";
 import { FileItem } from "./app/types";
 import { downloadFile } from "./app/transfer";
 import { encodeKey, errorMessage, humanReadableSize } from "./app/utils";
@@ -514,7 +514,7 @@ function PreviewDialog({
       fullWidth
       fullScreen={isPhone}
       maxWidth="xl"
-      transitionDuration={0}
+      transitionDuration={MOTION.base}
       disableRestoreFocus
       PaperProps={{
         sx: {
@@ -527,7 +527,7 @@ function PreviewDialog({
           opacity: 1,
         },
       }}
-      BackdropProps={{ transitionDuration: 0 }}
+      BackdropProps={{ transitionDuration: MOTION.fast }}
     >
       <DialogTitle
         sx={{

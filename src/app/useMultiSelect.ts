@@ -8,11 +8,14 @@ export function useMultiSelect(visibleFiles: FileItem[]) {
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const selectionAnchor = useRef<string | null>(null);
 
+  // roving tabindex 的另一半：键盘移动逻辑焦点时同步把 DOM 焦点移到活动项，
+  // 屏幕阅读器才能跟随朗读（仅 scrollIntoView 时屏幕阅读器仍停留在旧位置）
   const scrollFocusedIntoView = useCallback((key: string) => {
     const nodes = document.querySelectorAll<HTMLElement>("[data-file-key]");
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       if (node.dataset.fileKey === key) {
+        node.focus({ preventScroll: true });
         node.scrollIntoView({ block: "nearest" });
         return;
       }

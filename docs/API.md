@@ -125,6 +125,13 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 `POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code and expiry apply as usual). Share management (`GET`/`POST`/`DELETE /api/shares`) accepts **both** the web session (Basic) and an API key, so scripts and MCP can create/list/revoke shares.
 
+`GET /share/<token>` (no auth) returns a **server-rendered, zero-JS landing page** (light/dark via `prefers-color-scheme`, language via `Accept-Language`): file name, type, size, shared time, plus inline preview (`<img>` / `<video>` / `<audio>` / `<iframe>`) for preview-safe types. The download button points at `?download=1`. Query params on the same URL:
+
+- `?download=1` — raw bytes with `Content-Disposition: attachment`. **Scripts that used to download from the plain share link must switch to this** (folders stream the zip either way).
+- `?raw=1` — raw bytes inline (`Content-Disposition: inline`) for preview-safe types (image / video / audio / PDF / text); other types still download as an attachment. The response keeps the existing hardening — `Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff` — and honors `Range` (video seeking / resumable downloads).
+
+Extract-code gating is unchanged and applies to the landing page and both params: the legacy `?code=` query keeps working, the form POST sets a Path-scoped `HttpOnly` cookie, and links rendered on the landing page inherit `?code=` so previews work from old-style links. Expired → **410**, revoked/missing → **404**, wrong code → **403** form.
+
 ### Copy, stat, search
 
 ```bash

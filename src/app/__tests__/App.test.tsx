@@ -19,6 +19,14 @@ jest.mock("../../Main", () => ({
   default: () => <div>main-stub</div>,
 }));
 
+// 真实 CommandPalette 会引 transfer.ts → p-limit（ESM-only），CRA 的 jest 不转换
+// node_modules，套件加载即崩。App 层测试只需验证 cmd/ctrl+K 能开关面板，桩化即可。
+jest.mock("../../CommandPalette", () => ({
+  __esModule: true,
+  default: ({ open }: { open: boolean }) =>
+    open ? <div>command-palette-stub</div> : null,
+}));
+
 jest.mock("../../LoginDialog", () => ({
   __esModule: true,
   default: () => <div>login-stub</div>,
@@ -63,5 +71,11 @@ describe("App", () => {
     const input = screen.getByLabelText(strings.searchShortcutHint) as HTMLInputElement;
     fireEvent.keyDown(window, { key: "/", target: document.body });
     expect(document.activeElement).toBe(input);
+  });
+
+  test("cmd/ctrl+K opens command palette", () => {
+    render(<App />);
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(screen.getByText("command-palette-stub")).toBeInTheDocument();
   });
 });

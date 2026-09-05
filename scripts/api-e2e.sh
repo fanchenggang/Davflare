@@ -162,16 +162,43 @@ assert_contains "search empty on no match" "$(cat /tmp/o.json)" '"items":[]'
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/api/search?q=x")
 assert_code "search no auth 401" "$code" "401"
 
-echo "== 分享（文件/目录/提取码/撤销）=="
-curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/apitest/" -H "$A" -H "X-File-Name: shareable.txt" --data-binary "share me 中文" -o /dev/null
+echo "== 分享（落地页/download=1/raw=1/提取码/过期/撤销）=="
+# 显式 text/plain：让 ?raw=1 走内联预览（application/octet-stream 会回退 attachment）
+curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/apitest/" -H "$A" -H "X-File-Name: shareable.txt" -H "Content-Type: text/plain" --data-binary "share me 中文" -o /dev/null
 SHARE_FILE=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.txt\"}")
 STOKEN=$(echo "$SHARE_FILE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
 [ -n "$STOKEN" ] && ok "share file created" || bad "share file created" "$SHARE_FILE" "token"
-assert_contains "file share GET content" "$(curl -s --noproxy '*' "$BASE/share/$STOKEN")" "share me 中文"
+LANDING=$(curl -s --noproxy '*' "$BASE/share/$STOKEN")
+assert_contains "landing page shows file name" "$LANDING" "shareable.txt"
+assert_contains "landing page links download=1" "$LANDING" "download=1"
+assert_contains "landing page en by default" "$LANDING" "Download"
+assert_contains "landing page zh via Accept-Language" "$(curl -s --noproxy '*' -H 'Accept-Language: zh-CN' "$BASE/share/$STOKEN")" "下载"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -I "$BASE/share/$STOKEN")
+assert_code "landing HEAD 200" "$code" "200"
+DLHEAD=$(curl -s --noproxy '*' -D - -o /tmp/suite-share-dl.txt "$BASE/share/$STOKEN?download=1")
+code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$BASE/share/$STOKEN?download=1")
+assert_code "download=1 200" "$code" "200"
+assert_contains "download=1 raw bytes intact" "$(cat /tmp/suite-share-dl.txt)" "share me 中文"
+assert_contains "download=1 attachment" "$DLHEAD" "attachment"
+RAWHEAD=$(curl -s --noproxy '*' -D - -o /tmp/suite-share-raw.txt "$BASE/share/$STOKEN?raw=1")
+code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$BASE/share/$STOKEN?raw=1")
+assert_code "raw=1 200" "$code" "200"
+assert_contains "raw=1 inline disposition" "$RAWHEAD" "inline"
+assert_contains "raw=1 keeps sandbox" "$RAWHEAD" "sandbox"
+assert_contains "raw=1 keeps nosniff" "$RAWHEAD" "nosniff"
+assert_contains "raw=1 bytes intact" "$(cat /tmp/suite-share-raw.txt)" "share me 中文"
+python3 -c "import base64;open('/tmp/suite-share.png','wb').write(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='))"
+code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST "$BASE/api/upload?path=$DIR/apitest/" -H "$A" -H "X-File-Name: shareable.png" -H "Content-Type: image/png" --data-binary @/tmp/suite-share.png)
+assert_code "png upload 201" "$code" "201"
+SHARE_PNG=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.png\"}")
+PTOKEN=$(echo "$SHARE_PNG" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+PLANDING=$(curl -s --noproxy '*' "$BASE/share/$PTOKEN")
+assert_contains "image landing has img preview" "$PLANDING" "<img"
+assert_contains "image landing links raw=1" "$PLANDING" "raw=1"
 SHARE_DIR=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/paged\"}")
 DTOKEN=$(echo "$SHARE_DIR" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
 [ -n "$DTOKEN" ] && ok "share dir created" || bad "share dir created" "$SHARE_DIR" "token"
-curl -s --noproxy '*' -o /tmp/suite-dir.zip "$BASE/share/$DTOKEN"
+curl -s --noproxy '*' -o /tmp/suite-dir.zip "$BASE/share/$DTOKEN?download=1"
 assert_contains "dir share zip contains children" "$(python3 -c "
 import zipfile
 try:
@@ -181,26 +208,39 @@ except Exception:
 ")" "ZIP-OK"
 DTHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN")
 assert_contains "dir share HEAD 200 zip" "$DTHEAD" "200|application/zip"
+assert_contains "dir landing folder badge" "$(curl -s --noproxy '*' "$BASE/share/$DTOKEN")" "Folder (zip download)"
+# 过期：expiresInHours 接受小数（0.00001h = 36ms），落地页与直链都应 410
+EXP_SHARE=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.txt\",\"expiresInHours\":0.00001}")
+ETOKEN=$(echo "$EXP_SHARE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+sleep 1
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$ETOKEN")
+assert_code "expired share landing 410" "$code" "410"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$ETOKEN?download=1")
+assert_code "expired share download 410" "$code" "410"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$STOKEN")
 assert_code "share GET before revoke 200" "$code" "200"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/shares?token=$STOKEN" -H "$BASIC")
 assert_code "share revoke 204" "$code" "204"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$STOKEN")
 assert_code "revoked share 404" "$code" "404"
+code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$STOKEN?download=1")
+assert_code "revoked share download 404" "$code" "404"
 SHARE_CODE=$(curl -s --noproxy '*' -X POST "$BASE/api/shares" -H "$BASIC" -H "Content-Type: application/json" -d "{\"key\":\"$DIR/apitest/shareable.txt\",\"extractCode\":\"fd42\"}")
 CTOKEN=$(echo "$SHARE_CODE" | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
 [ -n "$CTOKEN" ] && ok "share with extract code created" || bad "share with code" "$SHARE_CODE" "token"
-assert_contains "no code shows form" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN")" "提取码"
+assert_contains "no code shows form" "$(curl -s --noproxy '*' -H 'Accept-Language: zh-CN' "$BASE/share/$CTOKEN")" "提取码"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$CTOKEN?code=wrong")
 assert_code "wrong extract code 403" "$code" "403"
-assert_contains "correct code downloads" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN?code=fd42")" "share me 中文"
+assert_contains "correct code downloads" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN?code=fd42&download=1")" "share me 中文"
+assert_contains "correct code raw preview" "$(curl -s --noproxy '*' "$BASE/share/$CTOKEN?code=fd42&raw=1")" "share me 中文"
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/share/$CTOKEN" -d "code=wrong")
 assert_code "form POST wrong code 403" "$code" "403"
 JAR=$(mktemp)
 code=$(curl -s --noproxy '*' -c "$JAR" -o /tmp/o -w "%{http_code}" -X POST "$BASE/share/$CTOKEN" -d "code=fd42")
 assert_code "form POST correct code 303" "$code" "303"
-assert_contains "cookie unlocks clean share URL" "$(curl -s --noproxy '*' -b "$JAR" "$BASE/share/$CTOKEN")" "share me 中文"
-code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/share/$CTOKEN")
+assert_contains "cookie unlocks landing page" "$(curl -s --noproxy '*' -b "$JAR" "$BASE/share/$CTOKEN")" "shareable.txt"
+assert_contains "cookie unlocks raw preview" "$(curl -s --noproxy '*' -b "$JAR" "$BASE/share/$CTOKEN?raw=1")" "share me 中文"
+code=$(curl -s --noproxy '*' -H 'Accept-Language: zh-CN' -o /tmp/o -w "%{http_code}" "$BASE/share/$CTOKEN")
 assert_code "clean URL still gated without cookie" "$code" "200"
 grep -q "提取码" /tmp/o && ok "clean URL shows form" || bad "clean URL shows form" "$(cat /tmp/o)" "提取码"
 rm -f "$JAR"
@@ -420,7 +460,7 @@ curl -s --noproxy '*' -X DELETE "$BASE/webdav/$DIR/" -H "$BASIC" -o /dev/null
 curl -s --noproxy '*' -X DELETE "$BASE/api/trash" -H "$BASIC" -H "Content-Type: application/json" -d '{"all":true}' -o /dev/null
 KID=$(curl -s --noproxy '*' "$BASE/api/keys" -H "$BASIC" | python3 -c "import sys,json;print(' '.join(k['id'] for k in json.load(sys.stdin)))")
 for id in $KID; do curl -s --noproxy '*' -X DELETE "$BASE/api/keys?id=$id" -H "$BASIC" -o /dev/null; done
-rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-*.txt /tmp/suite-*.zip /tmp/suite-*.bin /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json /tmp/mcp-big.json /tmp/mcp-big.bin /tmp/mcp-big-dl.bin /tmp/mcp-part.json 2>/dev/null
+rm -f "$FIXTURE" "$P1BIN" "$P2BIN" /tmp/suite-*.json /tmp/suite-*.txt /tmp/suite-*.zip /tmp/suite-*.bin /tmp/suite-share*.png /tmp/s1.json /tmp/s2.json /tmp/s3.json /tmp/o /tmp/o.json /tmp/mcp-big.json /tmp/mcp-big.bin /tmp/mcp-big-dl.bin /tmp/mcp-part.json 2>/dev/null
 
 echo ""
 echo "=============================="

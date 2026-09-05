@@ -247,3 +247,14 @@ npx wrangler pages dev build       # http://localhost:8788，前端 + functions 
 - `formatRelativeDateTime` 非响应式：页面长开时「刚刚」不会自动变「N 分钟前」（重渲染后正确）。
 - 单测覆盖为首批基线（纯函数 + 上传队列状态机）；functions/ 端点继续由 e2e 覆盖，后续可考虑 vitest 直测 Workers 代码。
 - ~~`npm test`（CRA Jest）当前无任何测试用例~~ 第六批已落地 43 项单测与 `npm run test:e2e` 一键回归。
+
+## 分享管理升级 + 分享落地页（第四轮 B4/B5，2026-09-04）
+
+| 项 | 内容 | 验证 |
+|----|------|------|
+| C3 分享管理升级（前端） | SharesView 卡片与 ShareDialog 列表项新增二维码（qrcode 前端 toDataURL → dataURL，Popover 弹层「扫码访问/Scan to open」，新组件 `src/ShareQrButton.tsx`）；过期倒计时 Chip（纯函数 `shareExpiryView`/`formatShareCountdown`：>48h 天 / 2-48h 小时 / <2h 分钟，<24h warning 色，永久显示「永久有效」，已过期标「已过期」）；创建时间 Chip（相对时间 + tooltip 绝对时间，参考 FileGrid 写法；旧记录无 createdAt 不显示，`ShareInfo.createdAt` 改可选） | ✅ Jest 新增 14 用例：倒计时纯函数四象限（>=48h / 2-48h / <2h / 永久 + 过期/24h 分界/英文插值）、SharesView/ShareDialog 徽标与二维码弹层渲染断言；全量 53 套件 463 用例全绿 |
+| A1 分享落地页（后端） | `GET /share/<token>` 默认返回零脚本 SSR 落地页（文件名/类型/大小/分享时间 + 下载按钮，暖纸色调 + `prefers-color-scheme` 暗色双套，`Accept-Language` 含 zh → 中文否则英文，全插值 escapeHtml）；提取码表单复用同套视觉（校验逻辑/参数不动）；`?download=1` 固定 attachment 直链下载（目录仍 zip 流）；`?raw=1` 内联返回（可预览类型 inline，其余回退 attachment），`CSP sandbox`/`nosniff`/no-store/Range 全保留；落地页预览 src 指向 `?raw=1` 并继承 `?code=`，cookie 门禁对 img/iframe 子请求天然生效；HEAD 与 GET 语义对齐（默认 text/html，?download/?raw 返回对象元数据） | ✅ e2e 分享 section 18 → 39 项断言全过：落地页中英文/文件名/下载链接/HEAD、download=1 字节与 attachment、raw=1 200+inline+sandbox+nosniff、图片分享 `<img>` 预览、目录 zip（改走 ?download=1）与 HEAD、**410 过期（expiresInHours 小数 0.00001 制造）**、撤销 404（落地页+download 双路）、提取码 200/403/303/cookie 解锁/raw 预览 |
+| 分享记录 createdAt | 复查 `functions/api/shares.ts` 创建时已写入 createdAt（ISO），本批仅把 `ShareInfo.createdAt` 类型改可选以兼容旧记录 | ✅ tsc 0 错误 |
+| 文档 | README(.zh-CN).md 功能列表与分享链接行为说明（默认落地页 / ?download=1 直链 / ?raw=1 内联）、docs/API(.zh-CN).md Shares 端点行为重写、e2e 断言计数更新（79 → ~170） | ✅ 与实现逐条核对 |
+
+**本批验证汇总**：`npx tsc --noEmit` 0 错误；`CI=true npx react-scripts test --watchAll=false` **53 套件 463 用例全绿**（基线 449 + 14）；`npm run build` 成功；`SKIP_BUILD=1 bash scripts/run-e2e.sh` **171 项断言全过（0 FAIL）**。取舍说明：`?raw=1` 对非可预览类型（octet-stream 等）回退 attachment 而非强行 inline；过期分享的 Chip 显示「已过期」并用 warning 色；落地页不展示有效期信息（规格未要求，避免泄露多余元数据）。

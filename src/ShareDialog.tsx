@@ -4,6 +4,7 @@ import { strings, translate } from "./app/strings";
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -17,14 +18,22 @@ import {
   Select,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
-import { createShare, formatShareClipboard, listShares, revokeShare } from "./app/share";
+import ShareQrButton from "./ShareQrButton";
+import {
+  createShare,
+  formatShareClipboard,
+  listShares,
+  revokeShare,
+  shareExpiryView,
+} from "./app/share";
 import { NotifyFn } from "./app/notify";
 import { FileItem, ShareInfo } from "./app/types";
-import { errorMessage } from "./app/utils";
+import { errorMessage, formatDateTime, formatRelativeDateTime } from "./app/utils";
 
 function ShareDialog({
   open,
@@ -132,7 +141,9 @@ function ShareDialog({
             <Box>
               <Typography variant="subtitle2">{strings.existingShare}</Typography>
               <List>
-                {shares.map((share) => (
+                {shares.map((share) => {
+                  const expiry = shareExpiryView(share.expiresAt);
+                  return (
                   <ListItem
                     key={share.token}
                     alignItems="flex-start"
@@ -146,16 +157,34 @@ function ShareDialog({
                   >
                     <ListItemText
                       primary={
-                        [
-                          share.expiresAt
-                            ? translate("expiresAtLabel", { time: new Date(share.expiresAt).toLocaleString() })
-                            : strings.validForever,
-                          share.extractCode
-                            ? `${strings.extractCode} ${share.extractCode}`
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          sx={{ flexWrap: "wrap", rowGap: 0.5, alignItems: "center" }}
+                        >
+                          <Chip
+                            size="small"
+                            color={expiry?.urgent ? "warning" : "default"}
+                            label={expiry ? expiry.label : strings.shareNeverExpires}
+                          />
+                          {share.createdAt && (
+                            <Tooltip title={formatDateTime(share.createdAt)} enterDelay={400}>
+                              <Chip
+                                size="small"
+                                label={translate("shareCreatedAt", {
+                                  time: formatRelativeDateTime(share.createdAt),
+                                })}
+                              />
+                            </Tooltip>
+                          )}
+                          {share.extractCode && (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={`${strings.extractCode} ${share.extractCode}`}
+                            />
+                          )}
+                        </Stack>
                       }
                       secondary={share.url}
                       secondaryTypographyProps={{
@@ -163,6 +192,7 @@ function ShareDialog({
                       }}
                     />
                     <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      <ShareQrButton url={share.url} />
                       <Button
                         type="button"
                         size="small"
@@ -197,7 +227,8 @@ function ShareDialog({
                       </Button>
                     </Stack>
                   </ListItem>
-                ))}
+                  );
+                })}
               </List>
             </Box>
           )}

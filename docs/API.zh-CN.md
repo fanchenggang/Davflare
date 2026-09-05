@@ -125,6 +125,13 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 `POST /api/shares` 也接受文件夹 key —— 打开分享链接会把整棵子树以 zip 流式下载（提取码和过期时间照常生效）。分享管理（GET/POST/DELETE /api/shares）同时接受网页会话（Basic）和 API key。
 
+`GET /share/<token>`（无需鉴权）默认返回**服务端渲染、零脚本的落地页**（`prefers-color-scheme` 亮暗双套，语言跟随 `Accept-Language`）：文件名、类型、大小、分享时间，可预览类型还带在线预览（`<img>` / `<video>` / `<audio>` / `<iframe>`）；页面里的下载按钮指向 `?download=1`。同一 URL 上的查询参数：
+
+- `?download=1` —— 原始字节 + `Content-Disposition: attachment`。**以前直接从分享链接下载的脚本必须改用这个参数**（文件夹两种方式都是 zip 流）。
+- `?raw=1` —— 原始字节内联返回（`Content-Disposition: inline`），仅对可预览类型（图片/音视频/PDF/文本）；其他类型仍是附件下载。响应保留既有安全加固 —— `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` —— 并支持 `Range`（视频拖动/断点续传）。
+
+提取码门禁不变，对落地页与两个参数同样生效：旧式 `?code=` 查询参数继续可用，表单 POST 成功后种下 Path 限定的 `HttpOnly` cookie，落地页上渲染的链接会继承 `?code=`，旧式链接的预览同样能过门禁。过期 → **410**，撤销/不存在 → **404**，提取码错误 → **403** 表单。
+
 ### 复制、stat、搜索
 
 `POST /api/copy` 复制文件（to 已存在则 409，除非 overwrite=1；不支持目录）。`GET /api/stat?path=` 返回 kind / size / etag / uploaded / contentType。`GET /api/search?q=` 按文件名子串搜索（cursor 分页）。`GET /api/download` 会发 Accept-Ranges: bytes，并响应单个 Range 为 206。

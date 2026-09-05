@@ -30,7 +30,7 @@ Share (expiry + extract code):
 
 - Chunked web uploads for large files
 - Folders, search, drag-and-drop, image/video/PDF thumbnails
-- Share links with expiry or forever, extract code, and folder zip download
+- Share links with expiry or forever, extract code, and folder zip download — the link opens a zero-JS landing page (light/dark) with name, type, size, shared time, and inline preview; `?download=1` for direct download, `?raw=1` for inline bytes
 - Recycle bin with `TRASH_RETENTION_DAYS` (default 30; `-1` disables; lazy purge up to 200 items when trash is opened)
 - WebDAV Class 1/2 at `/webdav` (can be switched off without affecting the web file manager)
 - API keys for scripted upload, download, and bidirectional sync
@@ -163,6 +163,8 @@ Create keys in the web UI (「API」 / 「开放接口」). Auth: `Authorization
 
 Same keys work for a bidirectional sync client (local wins; backup remote on conflict). Details in the [API docs](docs/API.md).
 
+**Share links** (`/share/<token>`) return a server-rendered, zero-JS landing page: file name, type, size, shared time, plus inline preview (`<img>` / `<video>` / `<audio>` / `<iframe>`) for preview-safe types; the language follows `Accept-Language`. Scripts that used to download from the plain share link must switch: **`?download=1` returns the raw bytes as an attachment download** (folders stream the zip), and **`?raw=1` returns the body inline** for preview-safe types (image / video / audio / PDF / text), keeping the same security headers (`Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff`) and Range support. Expired shares return **410**, revoked **404**, and extract-code gating applies to the page and both params alike.
+
 `GET /api/config` (session) returns username, public-read, `sitesHost`, and the five feature flags. `PATCH /api/config` updates flags and is **web session (Basic) only** — API keys cannot change switches.
 
 ## Feature switches
@@ -255,7 +257,7 @@ npm run test:e2e    # one-shot API regression: build → wrangler pages dev (loc
 SKIP_BUILD=1 npm run test:e2e   # reuse an existing build/ for faster iterations
 ```
 
-`test:e2e` creates a local `.dev.vars` (gitignored) with dev credentials if absent, boots `wrangler pages dev` on port 8788 (override with `PORT`), waits for readiness, runs the ~79-assertion suite against it, and tears the server down. Data lives in `.wrangler/state/` — delete that directory to reset the local bucket. See [TESTING.md](./TESTING.md) for the full verification history and [TEST_CASES.md](./TEST_CASES.md) for the manual GUI case library.
+`test:e2e` creates a local `.dev.vars` (gitignored) with dev credentials if absent, boots `wrangler pages dev` on port 8788 (override with `PORT`), waits for readiness, runs the ~170-assertion suite against it, and tears the server down. Data lives in `.wrangler/state/` — delete that directory to reset the local bucket. See [TESTING.md](./TESTING.md) for the full verification history and [TEST_CASES.md](./TEST_CASES.md) for the manual GUI case library.
 
 ## Acknowledgments
 

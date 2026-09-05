@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 import FileGrid from "../../FileGrid";
@@ -97,5 +97,40 @@ describe("FileGrid list row", () => {
     fireEvent.keyDown(more, { key: "Enter" });
     expect(props.onOpen).not.toHaveBeenCalled();
     expect(props.onNavigate).not.toHaveBeenCalled();
+  });
+});
+
+describe("FileGrid ARIA", () => {
+  test("grid: role=grid > row > gridcell，卡片带 aria-selected 与 roving tabindex", () => {
+    renderList({ view: "grid", selectedKeys: [file.key], focusedKey: folder.key });
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+
+    const cells = screen.getAllByRole("gridcell");
+    expect(cells).toHaveLength(2);
+    expect(cells[0]).toHaveAttribute("aria-selected", "true");
+    expect(cells[1]).toHaveAttribute("aria-selected", "false");
+    // 焦点在 folder（活动项）上：它 tabIndex=0，其余 -1
+    expect(cells[1]).toHaveAttribute("tabindex", "0");
+    expect(cells[0]).toHaveAttribute("tabindex", "-1");
+  });
+
+  test("grid: 无焦点项时首卡片持有 tabIndex=0", () => {
+    renderList({ view: "grid" });
+    const cells = screen.getAllByRole("gridcell");
+    expect(cells[0]).toHaveAttribute("tabindex", "0");
+    expect(cells[1]).toHaveAttribute("tabindex", "-1");
+  });
+
+  test("list: role=listbox > option，行带 aria-selected", () => {
+    renderList({ view: "list", selectedKeys: [file.key] });
+    const listbox = screen.getByRole("listbox");
+    const options = within(listbox).getAllByRole("option");
+    expect(options).toHaveLength(2);
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    expect(options[1]).toHaveAttribute("aria-selected", "false");
+    // 无焦点项时首行持有 tabIndex=0（roving）
+    expect(options[0]).toHaveAttribute("tabindex", "0");
+    expect(options[1]).toHaveAttribute("tabindex", "-1");
   });
 });
