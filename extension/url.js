@@ -34,8 +34,6 @@ function sanitizeBookmarkPath(raw) {
   return segs.length ? segs.join("/") : DEFAULT_BOOKMARK_PATH;
 }
 
-var DEFAULT_NTP = "chrome://new-tab-page/";
-
 function mergeSettings(stored) {
   var src = stored && typeof stored === "object" ? stored : {};
   return {
@@ -79,30 +77,23 @@ function normalizeInstanceUrl(raw) {
 /**
  * Toolbar routing. Both modes land on the extension shell page
  * (bookmarks.html) — the mode only picks the view it opens with:
- * drive = embedded instance, bookmarks = bookmark library.
+ * drive = embedded instance, bookmarks = bookmark library. An empty or
+ * invalid URL opens the in-shell settings view instead of guessing a host.
  */
 function resolveToolbarTarget(settings) {
   var merged = mergeSettings(settings);
   if (merged.toolbarMode === "bookmarks") return { action: "bookmarks" };
   if (normalizeInstanceUrl(merged.instanceUrl)) return { action: "drive" };
-  return { action: "options" };
-}
-
-function resolveNewTabTarget(settings) {
-  var url = normalizeInstanceUrl(mergeSettings(settings).instanceUrl);
-  if (url) return { action: "open", url: url };
-  return { action: "default-ntp", url: DEFAULT_NTP };
+  return { action: "settings" };
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     DEFAULT_BOOKMARK_PATH: DEFAULT_BOOKMARK_PATH,
-    DEFAULT_NTP: DEFAULT_NTP,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     TOOLBAR_MODES: TOOLBAR_MODES,
     mergeSettings: mergeSettings,
     normalizeInstanceUrl: normalizeInstanceUrl,
-    resolveNewTabTarget: resolveNewTabTarget,
     resolveToolbarTarget: resolveToolbarTarget,
     sanitizeBookmarkPath: sanitizeBookmarkPath,
   };

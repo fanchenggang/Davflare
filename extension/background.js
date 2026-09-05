@@ -36,8 +36,8 @@ var ERROR_COPY = {
     zh: "服务端未配置 WebDAV 凭据。",
   },
   unauthorized: {
-    en: "Wrong WebDAV username or password. Check options.",
-    zh: "WebDAV 用户名或密码错误，请在选项中检查。",
+    en: "Wrong WebDAV username or password. Check the settings view in the library page.",
+    zh: "WebDAV 用户名或密码错误，请在书签库的设置里检查。",
   },
   network: { en: "Cannot reach the instance.", zh: "无法连接实例。" },
   conflict: {
@@ -121,7 +121,8 @@ async function handleToolbarClick() {
     await openLibraryPage("drive");
     return;
   }
-  chrome.runtime.openOptionsPage();
+  // 未配置实例：打开书签库页的设置视图
+  await openLibraryPage("settings");
 }
 
 async function toggleDefaultMode() {

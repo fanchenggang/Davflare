@@ -41,6 +41,7 @@ var COPY = {
     drive: "Drive",
     driveReload: "Reload",
     driveOpenExternal: "Open in new tab",
+    driveNeedsBuild: "Drive view needs a one-time build: run “npm run build:extension” in the repo, then reload the extension.",
     settings: "Settings",
     addDialogTitle: "Add bookmark",
     urlLabel: "URL",
@@ -52,7 +53,43 @@ var COPY = {
     tagInputLabel: "Tags (comma separated)",
     noteInputLabel: "Note",
     needConfig: "Configure your instance URL and WebDAV credentials in options first.",
-    openOptions: "Open options",
+    openSettings: "Open settings",
+    viewSettings: "Settings",
+    setupHint: "First time here? Configure your instance below, then save.",
+    settingsUrlLabel: "Instance URL",
+    urlHint: "Paste the Pages or custom-domain URL of your own Davflare instance.",
+    pathLabel: "Bookmark directory",
+    pathHint:
+      "Relative to /webdav/. Default is \"bookmarks\"; e.g. \"qa/bookmarks\" isolates test data.",
+    modeLabel: "Default toolbar view",
+    modeDrive: "Drive",
+    modeBookmarks: "Bookmark library",
+    modeHint: "Both open this page; right-click the toolbar icon to switch anytime.",
+    davLabel: "WebDAV credentials",
+    userLabel: "Username",
+    passLabel: "Password",
+    davHint:
+      "Stored only on this device. Same values as your deployment's WEBDAV_USERNAME / WEBDAV_PASSWORD.",
+    testConn: "Test connection",
+    testing: "Testing…",
+    settingsSaved: "Saved.",
+    savedNoGrant:
+      "Saved, but access to this site was not granted — bookmark features will not work.",
+    settingsCleared: "Saved. With no URL set, the toolbar opens this settings view.",
+    probeOk: "Connected. WebDAV is enabled.",
+    probeOther: "The instance returned an unexpected response.",
+    moreLabel: "More",
+    emptyTitle: "Your library is empty",
+    emptyDesc: "Save your go-to pages, or import from your browser or HamHome.",
+    emptyImportBrowser: "Import browser bookmarks",
+    emptyImportHamHome: "Import from HamHome",
+    clearFilter: "Clear filters",
+    emptyFolderTitle: "No bookmarks in this folder yet",
+    emptyTagTitle: "No bookmarks with this tag yet",
+    emptyWsTitle: "No workspaces yet",
+    emptyRulesTitle: "No rules yet",
+    cardEdit: "Edit",
+    cardSnap: "Snapshot",
     errDisabled: "WebDAV is disabled on this instance (feature switch off).",
     errNotConfigured: "The server has no WebDAV credentials configured.",
     errUnauthorized: "Wrong WebDAV username or password. Update them in options.",
@@ -145,6 +182,7 @@ var COPY = {
     drive: "网盘",
     driveReload: "刷新",
     driveOpenExternal: "新标签页打开",
+    driveNeedsBuild: "网盘视图需要先构建一次：在仓库根目录运行「npm run build:extension」，然后重新加载扩展。",
     settings: "设置",
     addDialogTitle: "添加书签",
     urlLabel: "地址",
@@ -156,7 +194,40 @@ var COPY = {
     tagInputLabel: "标签（逗号分隔）",
     noteInputLabel: "备注",
     needConfig: "请先在选项中配置实例地址与 WebDAV 凭据。",
-    openOptions: "打开设置",
+    openSettings: "打开设置",
+    viewSettings: "设置",
+    setupHint: "首次使用：先在下方配置实例地址与 WebDAV 凭据，保存后即可使用。",
+    settingsUrlLabel: "实例地址",
+    urlHint: "粘贴你自己的 Pages 或自定义域名。",
+    pathLabel: "书签目录",
+    pathHint: "相对 /webdav/ 的路径。默认为 bookmarks；可填如 qa/bookmarks 隔离测试数据。",
+    modeLabel: "工具栏默认视图",
+    modeDrive: "网盘",
+    modeBookmarks: "书签库",
+    modeHint: "两种模式都打开本页；随时右键工具栏图标切换。",
+    davLabel: "WebDAV 凭据",
+    userLabel: "用户名",
+    passLabel: "密码",
+    davHint: "仅保存在本设备。与你部署时配置的 WEBDAV_USERNAME / WEBDAV_PASSWORD 一致。",
+    testConn: "测试连接",
+    testing: "测试中…",
+    settingsSaved: "已保存。",
+    savedNoGrant: "已保存，但未授权访问该站点，书签功能将不可用。",
+    settingsCleared: "已保存。未填写地址时，点击工具栏会打开本设置视图。",
+    probeOk: "连接成功，WebDAV 已开启。",
+    probeOther: "实例返回了未预期的响应。",
+    moreLabel: "更多",
+    emptyTitle: "书签库还是空的",
+    emptyDesc: "把常用页面存进来，或从浏览器 / HamHome 导入。",
+    emptyImportBrowser: "导入浏览器书签",
+    emptyImportHamHome: "从 HamHome 迁入",
+    clearFilter: "清除筛选",
+    emptyFolderTitle: "该分类下还没有书签",
+    emptyTagTitle: "该标签下还没有书签",
+    emptyWsTitle: "还没有工作区",
+    emptyRulesTitle: "还没有规则",
+    cardEdit: "编辑",
+    cardSnap: "快照",
     errDisabled: "该实例已关闭 WebDAV（功能开关）。",
     errNotConfigured: "服务端未配置 WebDAV 凭据。",
     errUnauthorized: "WebDAV 用户名或密码错误，请在设置中更新。",
@@ -371,13 +442,13 @@ async function refresh() {
   try {
     var made = await makeClient();
     if (!made.cfg.instanceUrl) {
-      showBanner(t.needConfig, t.openOptions, openOptions);
+      showBanner(t.needConfig, t.openSettings, openSettings);
       renderAll();
       return;
     }
     var res = await made.client.getBookmarks();
     if (!res.ok) {
-      showBanner(errorText(res.kind), t.openOptions, openOptions);
+      showBanner(errorText(res.kind), t.openSettings, openSettings);
       renderAll();
       return;
     }
@@ -401,7 +472,7 @@ async function refresh() {
 async function persist() {
   var made = await makeClient();
   if (!made.cfg.instanceUrl) {
-    showBanner(t.needConfig, t.openOptions, openOptions);
+    showBanner(t.needConfig, t.openSettings, openSettings);
     return false;
   }
   var put = await made.client.putBookmarks({
@@ -422,7 +493,7 @@ async function persist() {
     await refresh();
     return false;
   }
-  showBanner(errorText(put.kind), t.openOptions, openOptions);
+  showBanner(errorText(put.kind), t.openSettings, openSettings);
   return false;
 }
 
@@ -459,13 +530,13 @@ function hideBanner() {
   $("banner").classList.add("hidden");
 }
 
-function openOptions() {
-  chrome.runtime.openOptionsPage();
+function openSettings() {
+  switchView("settings");
 }
 
 /* ---------- view switching ---------- */
 
-var VALID_VIEWS = ["bookmarks", "drive", "workspaces", "tabRules"];
+var VALID_VIEWS = ["bookmarks", "drive", "workspaces", "tabRules", "settings"];
 
 function switchView(view) {
   if (VALID_VIEWS.indexOf(view) === -1) view = "bookmarks";
@@ -474,34 +545,154 @@ function switchView(view) {
   $("viewDrive").classList.toggle("hidden", view !== "drive");
   $("viewWorkspaces").classList.toggle("hidden", view !== "workspaces");
   $("viewTabRules").classList.toggle("hidden", view !== "tabRules");
+  $("viewSettings").classList.toggle("hidden", view !== "settings");
   $("switchBookmarks").classList.toggle("active", view === "bookmarks");
   $("switchDrive").classList.toggle("active", view === "drive");
   $("switchWorkspaces").classList.toggle("active", view === "workspaces");
   $("switchTabRules").classList.toggle("active", view === "tabRules");
+  $("switchSettings").classList.toggle("active", view === "settings");
   $("bookmarksNav").classList.toggle("hidden", view !== "bookmarks");
   if (view === "drive") loadDriveView();
   if (view === "workspaces") loadWorkspaces();
   if (view === "tabRules") loadTabRules();
+  if (view === "settings") loadSettings();
 }
 
-/* ---------- drive view (embedded instance) ---------- */
+/* ---------- drive view (embedded React app) ---------- */
+
+var driveMountedUrl = null;
 
 async function loadDriveView() {
   var made = await makeClient();
-  var frame = $("driveFrame");
   if (!made.cfg.instanceUrl) {
     $("driveUrl").textContent = "";
-    frame.src = "about:blank";
-    showIn("bannerDrive", t.needConfig, t.openOptions, openOptions);
+    driveMountedUrl = null;
+    showIn("bannerDrive", t.needConfig, t.openSettings, openSettings);
+    return;
+  }
+  $("driveUrl").textContent = made.cfg.instanceUrl;
+  if (!window.DavflareDrive) {
+    // drive/drive.js 未构建(load unpacked 直接指向源码目录时)
+    showIn("bannerDrive", t.driveNeedsBuild);
     return;
   }
   $("bannerDrive").classList.add("hidden");
-  $("driveUrl").textContent = made.cfg.instanceUrl;
-  var target = made.cfg.instanceUrl;
-  if (frame.dataset.loadedUrl !== target) {
-    frame.dataset.loadedUrl = target;
-    frame.src = target;
+  if (driveMountedUrl !== made.cfg.instanceUrl) {
+    driveMountedUrl = made.cfg.instanceUrl;
+    window.DavflareDrive.mount($("driveRoot"), made.cfg.instanceUrl);
   }
+}
+
+/* ---------- settings view (in-shell options) ---------- */
+
+var PROBE_KEY = {
+  disabled: "errDisabled",
+  notConfigured: "errNotConfigured",
+  unauthorized: "errUnauthorized",
+  network: "errNetwork",
+};
+
+function setSettingsStatus(message, kind) {
+  var el = $("settingsStatus");
+  el.textContent = message || "";
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+function setProbeStatus(message, kind) {
+  var el = $("probeStatus");
+  el.textContent = message || "";
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+async function loadSettings() {
+  var sync = await chrome.storage.sync.get(["instanceUrl", "toolbarMode", "bookmarkPath"]);
+  var merged = mergeSettings(sync);
+  $("instanceUrl").value = merged.instanceUrl;
+  $("bookmarkPath").value = merged.bookmarkPath;
+  (merged.toolbarMode === "bookmarks" ? $("modeBookmarks") : $("modeDrive")).checked = true;
+  var local = await chrome.storage.local.get(["davUsername", "davPassword"]);
+  $("davUser").value = typeof local.davUsername === "string" ? local.davUsername : "";
+  $("davPass").value = typeof local.davPassword === "string" ? local.davPassword : "";
+}
+
+async function ensureOriginPermission(instanceUrl) {
+  if (!instanceUrl) return { granted: true, skipped: true };
+  var origin;
+  try {
+    origin = new URL(instanceUrl).origin + "/*";
+  } catch (err) {
+    return { granted: true, skipped: true };
+  }
+  try {
+    if (await chrome.permissions.contains({ origins: [origin] })) {
+      return { granted: true };
+    }
+    var granted = await chrome.permissions.request({ origins: [origin] });
+    return { granted: Boolean(granted) };
+  } catch (err) {
+    return { granted: false };
+  }
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  var raw = $("instanceUrl").value;
+  var normalized = normalizeInstanceUrl(raw);
+  if (raw.trim() && !normalized) {
+    setSettingsStatus(t.invalidUrl, "err");
+    $("instanceUrl").focus();
+    return;
+  }
+  var bookmarkPath = sanitizeBookmarkPath($("bookmarkPath").value);
+  var toolbarMode = $("modeBookmarks").checked ? "bookmarks" : "drive";
+  await chrome.storage.sync.set({
+    instanceUrl: normalized,
+    toolbarMode: toolbarMode,
+    bookmarkPath: bookmarkPath,
+  });
+  await chrome.storage.local.set({
+    davUsername: $("davUser").value.trim(),
+    davPassword: $("davPass").value,
+  });
+  $("instanceUrl").value = normalized;
+  $("bookmarkPath").value = bookmarkPath;
+  var perm = await ensureOriginPermission(normalized);
+  if (!normalized) {
+    setSettingsStatus(t.settingsCleared, "ok");
+    return;
+  }
+  if (!perm.granted) {
+    setSettingsStatus(t.savedNoGrant, "err");
+    return;
+  }
+  setSettingsStatus(t.settingsSaved, "ok");
+  $("bannerSettings").classList.add("hidden");
+  $("setupHint").textContent = "";
+  // 配置完成（HamHome 式：先配置后使用），进入工具栏默认视图
+  switchView(toolbarMode === "bookmarks" ? "bookmarks" : "drive");
+  refresh();
+}
+
+async function testConnection() {
+  var url = normalizeInstanceUrl($("instanceUrl").value);
+  if (!url) {
+    setSettingsStatus(t.invalidUrl, "err");
+    $("instanceUrl").focus();
+    return;
+  }
+  setProbeStatus(t.testing);
+  var client = DavflareDav.createDavClient({
+    instanceUrl: url,
+    username: $("davUser").value.trim(),
+    password: $("davPass").value,
+  });
+  var res = await client.probe();
+  if (res.ok) {
+    setProbeStatus(t.probeOk, "ok");
+    return;
+  }
+  var key = PROBE_KEY[res.kind];
+  setProbeStatus(key ? t[key] : t.probeOther, "err");
 }
 
 /* ---------- bookmarks render ---------- */
@@ -573,6 +764,54 @@ function emptyHint() {
   return p;
 }
 
+/* ---------- structured empty states（书签库/工作区/Tab 分组共用） ---------- */
+
+// 静态插画常量（无用户输入），颜色走主题变量
+var EMPTY_ART_SVG =
+  '<svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<rect x="14" y="10" width="68" height="76" rx="10" fill="var(--orange-soft)"/>' +
+  '<path d="M34 22h28v52l-14-10-14 10V22z" fill="var(--orange)" opacity="0.85"/>' +
+  '<circle cx="64" cy="64" r="15" fill="var(--paper)" stroke="var(--orange)" stroke-width="3"/>' +
+  '<path d="M64 57v14M57 64h14" stroke="var(--orange)" stroke-width="3" stroke-linecap="round"/>' +
+  "</svg>";
+
+function renderEmptyState(container, opts) {
+  container.textContent = "";
+  var art = document.createElement("div");
+  art.innerHTML = EMPTY_ART_SVG;
+  container.appendChild(art);
+  var title = document.createElement("h3");
+  title.textContent = opts.title;
+  container.appendChild(title);
+  if (opts.desc) {
+    var p = document.createElement("p");
+    p.textContent = opts.desc;
+    container.appendChild(p);
+  }
+  if (opts.actions && opts.actions.length) {
+    var row = document.createElement("div");
+    row.className = "emptyActions";
+    for (var i = 0; i < opts.actions.length; i++) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = opts.actions[i].kind;
+      btn.textContent = opts.actions[i].label;
+      btn.addEventListener("click", opts.actions[i].onClick);
+      row.appendChild(btn);
+    }
+    container.appendChild(row);
+  }
+  container.classList.remove("hidden");
+}
+
+function resetFilters() {
+  state.query = "";
+  $("search").value = "";
+  state.since = "all";
+  $("sinceSelect").value = "all";
+  setFilterAll();
+}
+
 function renderFolderSelect() {
   var select = $("folderSelect");
   select.textContent = "";
@@ -620,7 +859,7 @@ function faviconNode(item) {
   img.height = 20;
   img.loading = "lazy";
   img.src =
-    chrome.runtime.getURL("_favicon/?pageUrl=") + encodeURIComponent(item.url) + "&size=32";
+    chrome.runtime.getURL("_favicon/?pageUrl=") + encodeURIComponent(item.url) + "&size=64";
   img.addEventListener("load", function () {
     wrap.classList.add("hasIcon");
   });
@@ -644,6 +883,79 @@ function iconButton(label, text, onClick) {
     onClick();
   });
   return btn;
+}
+
+/* ---------- pop menus（侧栏「更多」与卡片 ⋯ 共用） ---------- */
+
+function closePopMenus() {
+  var open = document.querySelectorAll(".popMenu.open");
+  for (var i = 0; i < open.length; i++) {
+    open[i].classList.remove("open");
+    var toggle = open[i].parentElement.querySelector(".menuToggle");
+    if (toggle) toggle.setAttribute("aria-expanded", "false");
+  }
+}
+
+function wirePopMenus() {
+  document.addEventListener("click", function (event) {
+    var target = event.target instanceof Element ? event.target : null;
+    if (!target || !target.closest) return;
+    var toggle = target.closest(".menuToggle");
+    if (toggle) {
+      var menu = toggle.parentElement.querySelector(".popMenu");
+      if (!menu) return;
+      var wasOpen = menu.classList.contains("open");
+      closePopMenus();
+      if (!wasOpen) {
+        menu.classList.add("open");
+        toggle.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+    if (!target.closest(".popMenu")) closePopMenus();
+  });
+}
+
+function cardMenuNode(item) {
+  var wrap = document.createElement("div");
+  wrap.className = "cardMenuWrap";
+  // 不能用 iconButton：其 stopPropagation 会挡住 document 上的菜单开关委托
+  var more = document.createElement("button");
+  more.className = "cardMore menuToggle";
+  more.type = "button";
+  more.setAttribute("aria-haspopup", "true");
+  more.setAttribute("aria-expanded", "false");
+  more.textContent = "⋯";
+  var menu = document.createElement("div");
+  menu.className = "popMenu";
+  menu.appendChild(
+    iconButton("menuItem", t.cardEdit, function () {
+      closePopMenus();
+      openTagDialog(item);
+    })
+  );
+  menu.appendChild(
+    iconButton("menuItem", t.cardSnap, function () {
+      closePopMenus();
+      openTagDialog(item);
+      var snap = $("snapSection");
+      if (snap && snap.scrollIntoView) snap.scrollIntoView({ block: "nearest" });
+    })
+  );
+  menu.appendChild(
+    iconButton("menuItem", t.deleteLabel, function () {
+      closePopMenus();
+      confirmThen(t.confirmDelete, function () {
+        state.model = Bookmarks.removeBookmark(state.model, item.id);
+        persist().then(function (ok) {
+          if (ok) flashStatus(t.deleted);
+        });
+      });
+    })
+  );
+  wrap.appendChild(more);
+  wrap.appendChild(menu);
+  return wrap;
 }
 
 function cardNode(item) {
@@ -690,21 +1002,7 @@ function cardNode(item) {
   var time = document.createElement("time");
   time.textContent = BookmarksView.formatDate(item.added, lang);
   meta.appendChild(time);
-  meta.appendChild(
-    iconButton("edit", "✎", function () {
-      openTagDialog(item);
-    })
-  );
-  meta.appendChild(
-    iconButton("del", "✕", function () {
-      confirmThen(t.confirmDelete, function () {
-        state.model = Bookmarks.removeBookmark(state.model, item.id);
-        persist().then(function (ok) {
-          if (ok) flashStatus(t.deleted);
-        });
-      });
-    })
-  );
+  meta.appendChild(cardMenuNode(item));
 
   card.appendChild(link);
   card.appendChild(meta);
@@ -718,20 +1016,33 @@ function rowNode(item) {
   row.target = "_blank";
   row.rel = "noreferrer noopener";
   row.appendChild(faviconNode(item));
+  var main = document.createElement("span");
+  main.className = "rowMain";
   var title = document.createElement("span");
   title.className = "rowTitle";
   title.textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
   var domain = document.createElement("span");
   domain.className = "rowDomain";
   domain.textContent = BookmarksView.domainOf(item.url);
+  main.appendChild(title);
+  main.appendChild(domain);
+  row.appendChild(main);
+  var chips = document.createElement("span");
+  chips.className = "rowChips";
   var chip = document.createElement("span");
   chip.className = "chip";
   chip.textContent = folderLabel(item.folder);
+  chips.appendChild(chip);
+  var tags = Array.isArray(item.tags) ? item.tags : [];
+  for (var i = 0; i < tags.length; i++) {
+    var tag = document.createElement("span");
+    tag.className = "chip tag";
+    tag.textContent = tags[i];
+    chips.appendChild(tag);
+  }
+  row.appendChild(chips);
   var time = document.createElement("time");
   time.textContent = BookmarksView.formatDate(item.added, lang);
-  row.appendChild(title);
-  row.appendChild(domain);
-  row.appendChild(chip);
   row.appendChild(time);
   row.appendChild(
     iconButton("edit", "✎", function () {
@@ -776,8 +1087,34 @@ function renderItems() {
 
   var empty = $("emptyState");
   if (!items.length) {
-    empty.textContent = state.model.bookmarks.length === 0 ? t.empty : t.emptyFilter;
-    empty.classList.remove("hidden");
+    if (state.model.bookmarks.length === 0) {
+      renderEmptyState(empty, {
+        title: t.emptyTitle,
+        desc: t.emptyDesc,
+        actions: [
+          { label: t.add, kind: "primary", onClick: openAddDialog },
+          { label: t.emptyImportBrowser, kind: "ghost", onClick: importChromeBookmarks },
+          { label: t.emptyImportHamHome, kind: "ghost", onClick: importHamHome },
+        ],
+      });
+    } else if (state.filter.kind === "folder") {
+      renderEmptyState(empty, {
+        title: t.emptyFolderTitle,
+        desc: t.emptyFilter,
+        actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
+      });
+    } else if (state.filter.kind === "tag") {
+      renderEmptyState(empty, {
+        title: t.emptyTagTitle,
+        desc: t.emptyFilter,
+        actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
+      });
+    } else {
+      renderEmptyState(empty, {
+        title: t.emptyFilter,
+        actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
+      });
+    }
   } else {
     empty.classList.add("hidden");
   }
@@ -813,13 +1150,13 @@ async function loadWorkspaces() {
   $("bannerWs").classList.add("hidden");
   var made = await makeClient();
   if (!made.cfg.instanceUrl) {
-    showWsBanner(t.needConfig, t.openOptions, openOptions);
+    showWsBanner(t.needConfig, t.openSettings, openSettings);
     renderWorkspaces();
     return;
   }
   var res = await made.client.getFile(WS_FILE);
   if (!res.ok) {
-    showWsBanner(errorText(res.kind), t.openOptions, openOptions);
+    showWsBanner(errorText(res.kind), t.openSettings, openSettings);
     renderWorkspaces();
     return;
   }
@@ -840,7 +1177,7 @@ async function loadWorkspaces() {
 async function persistWorkspaces() {
   var made = await makeClient();
   if (!made.cfg.instanceUrl) {
-    showWsBanner(t.needConfig, t.openOptions, openOptions);
+    showWsBanner(t.needConfig, t.openSettings, openSettings);
     return false;
   }
   var put = await made.client.putFile(
@@ -855,7 +1192,7 @@ async function persistWorkspaces() {
     await loadWorkspaces();
     return false;
   }
-  showWsBanner(errorText(put.kind), t.openOptions, openOptions);
+  showWsBanner(errorText(put.kind), t.openSettings, openSettings);
   return false;
 }
 
@@ -879,8 +1216,11 @@ function renderWorkspaces() {
 
   var empty = $("wsEmpty");
   if (!list.length) {
-    empty.textContent = t.wsEmpty;
-    empty.classList.remove("hidden");
+    renderEmptyState(empty, {
+      title: t.emptyWsTitle,
+      desc: t.wsEmpty,
+      actions: [{ label: t.saveWindow, kind: "primary", onClick: saveCurrentWindow }],
+    });
     return;
   }
   empty.classList.add("hidden");
@@ -1058,13 +1398,13 @@ async function loadTabRules() {
   $("bannerRules").classList.add("hidden");
   var made = await makeClient();
   if (!made.cfg.instanceUrl) {
-    showRulesBanner(t.needConfig, t.openOptions, openOptions);
+    showRulesBanner(t.needConfig, t.openSettings, openSettings);
     renderTabRules();
     return;
   }
   var res = await made.client.getFile(RULES_FILE);
   if (!res.ok) {
-    showRulesBanner(errorText(res.kind), t.openOptions, openOptions);
+    showRulesBanner(errorText(res.kind), t.openSettings, openSettings);
     renderTabRules();
     return;
   }
@@ -1084,7 +1424,7 @@ async function loadTabRules() {
 async function persistTabRules() {
   var made = await makeClient();
   if (!made.cfg.instanceUrl) {
-    showRulesBanner(t.needConfig, t.openOptions, openOptions);
+    showRulesBanner(t.needConfig, t.openSettings, openSettings);
     return false;
   }
   var put = await made.client.putFile(
@@ -1099,7 +1439,7 @@ async function persistTabRules() {
     await loadTabRules();
     return false;
   }
-  showRulesBanner(errorText(put.kind), t.openOptions, openOptions);
+  showRulesBanner(errorText(put.kind), t.openSettings, openSettings);
   return false;
 }
 
@@ -1112,8 +1452,13 @@ function renderTabRules() {
 
   var empty = $("rulesEmpty");
   if (!rules.length) {
-    empty.textContent = t.rulesEmpty;
-    empty.classList.remove("hidden");
+    renderEmptyState(empty, {
+      title: t.emptyRulesTitle,
+      desc: t.rulesEmpty,
+      actions: [
+        { label: t.groupCurrentWindow, kind: "primary", onClick: applyGroupsToCurrentWindow },
+      ],
+    });
     return;
   }
   empty.classList.add("hidden");
@@ -1500,6 +1845,12 @@ async function deleteSnapshot(entry) {
 
 /* ---------- tag / note editing ---------- */
 
+function openAddDialog() {
+  $("addError").textContent = "";
+  $("addDialog").showModal();
+  $("addUrl").focus();
+}
+
 function openTagDialog(item) {
   editingBookmarkId = item.id;
   tagDialogBookmark = item;
@@ -1611,7 +1962,7 @@ async function importChromeBookmarks() {
 async function importHamHome() {
   var made = await makeClient();
   if (!made.cfg.instanceUrl) {
-    showBanner(t.needConfig, t.openOptions, openOptions);
+    showBanner(t.needConfig, t.openSettings, openSettings);
     return;
   }
   var hh = DavflareDav.createDavClient({
@@ -1622,7 +1973,7 @@ async function importHamHome() {
   });
   var meta = await hh.getFile("bookmarks/meta.json");
   if (!meta.ok) {
-    showBanner(errorText(meta.kind), t.openOptions, openOptions);
+    showBanner(errorText(meta.kind), t.openSettings, openSettings);
     return;
   }
   if (meta.missing) {
@@ -1742,6 +2093,7 @@ function applyCopy() {
   $("driveExternal").textContent = t.driveOpenExternal;
   $("switchWorkspaces").textContent = t.viewWorkspaces;
   $("switchTabRules").textContent = t.viewTabRules;
+  $("switchSettings").textContent = t.viewSettings;
   $("navAllText").textContent = t.navAll;
   $("folderTitle").textContent = t.folders;
   $("tagTitle").textContent = t.tags;
@@ -1753,6 +2105,7 @@ function applyCopy() {
   $("exportBtn").textContent = t.export;
   $("driveBtn").textContent = t.drive;
   $("settingsBtn").textContent = t.settings;
+  $("moreText").textContent = t.moreLabel;
   $("addDialogTitle").textContent = t.addDialogTitle;
   $("addUrlLabel").textContent = t.urlLabel;
   $("addTitleLabel").textContent = t.titleLabel;
@@ -1787,6 +2140,20 @@ function applyCopy() {
   $("snapView").textContent = t.snapView;
   $("snapDownload").textContent = t.snapDownload;
   $("snapDelete").textContent = t.snapDelete;
+  $("urlLabel").textContent = t.settingsUrlLabel;
+  $("urlHint").textContent = t.settingsUrlHint;
+  $("pathLabel").textContent = t.pathLabel;
+  $("pathHint").textContent = t.pathHint;
+  $("modeLabel").textContent = t.modeLabel;
+  $("modeDriveText").textContent = t.modeDrive;
+  $("modeBookmarksText").textContent = t.modeBookmarks;
+  $("modeHint").textContent = t.modeHint;
+  $("davLabel").textContent = t.davLabel;
+  $("userLabel").textContent = t.userLabel;
+  $("passLabel").textContent = t.passLabel;
+  $("davHint").textContent = t.davHint;
+  $("settingsSave").textContent = t.save;
+  $("testConn").textContent = t.testConn;
 }
 
 function setView(view) {
@@ -1809,13 +2176,12 @@ function wireEvents() {
     switchView("drive");
   });
   $("driveRefresh").addEventListener("click", function () {
-    var frame = $("driveFrame");
-    if (frame.dataset.loadedUrl) frame.src = frame.dataset.loadedUrl;
+    if (window.DavflareDrive && driveMountedUrl) window.DavflareDrive.reload();
   });
   $("driveExternal").addEventListener("click", async function () {
     var cfg = await loadConfig();
     if (cfg.instanceUrl) chrome.tabs.create({ url: cfg.instanceUrl });
-    else openOptions();
+    else openSettings();
   });
   $("switchWorkspaces").addEventListener("click", function () {
     switchView("workspaces");
@@ -1823,6 +2189,17 @@ function wireEvents() {
   $("switchTabRules").addEventListener("click", function () {
     switchView("tabRules");
   });
+  $("switchSettings").addEventListener("click", function () {
+    switchView("settings");
+  });
+  $("settingsForm").addEventListener("submit", saveSettings);
+  $("testConn").addEventListener("click", testConnection);
+  wirePopMenus();
+  // 侧栏「更多」菜单项执行后收起菜单
+  var footMenuItems = document.querySelectorAll("#moreMenu button");
+  for (var mi = 0; mi < footMenuItems.length; mi++) {
+    footMenuItems[mi].addEventListener("click", closePopMenus);
+  }
   $("navAll").addEventListener("click", setFilterAll);
   $("search").addEventListener("input", function (event) {
     state.query = event.target.value;
@@ -1844,11 +2221,7 @@ function wireEvents() {
     setView("list");
   });
   $("themeToggle").addEventListener("click", toggleTheme);
-  $("addBtn").addEventListener("click", function () {
-    $("addError").textContent = "";
-    $("addDialog").showModal();
-    $("addUrl").focus();
-  });
+  $("addBtn").addEventListener("click", openAddDialog);
   $("addCancel").addEventListener("click", function () {
     $("addDialog").close();
   });
@@ -1914,7 +2287,7 @@ function wireEvents() {
   $("importBtn").addEventListener("click", importChromeBookmarks);
   $("hhImportBtn").addEventListener("click", importHamHome);
   $("exportBtn").addEventListener("click", exportHtml);
-  $("settingsBtn").addEventListener("click", openOptions);
+  $("settingsBtn").addEventListener("click", openSettings);
   $("saveWindowBtn").addEventListener("click", saveCurrentWindow);
   $("driveBtn").addEventListener("click", function () {
     switchView("drive");
@@ -1949,3 +2322,9 @@ switchView((function () {
   return "bookmarks";
 })());
 refresh();
+// 首次使用：未配置实例时强制进入设置视图（HamHome 式：先配置后使用）
+void loadConfig().then(function (cfg) {
+  if (cfg.instanceUrl || appState.view === "settings") return;
+  switchView("settings");
+  showIn("bannerSettings", t.setupHint);
+});

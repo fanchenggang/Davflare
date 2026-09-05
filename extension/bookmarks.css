@@ -17,12 +17,12 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #17140f;
-  --paper: #211d17;
+  --bg: #14110c;
+  --paper: #221e17;
   --paper-soft: #191611;
   --text: #f0ece4;
   --muted: rgba(240, 236, 228, 0.6);
-  --line: rgba(240, 236, 228, 0.1);
+  --line: rgba(240, 236, 228, 0.13);
   --orange: #f79b45;
   --orange-dark: #ffb066;
   --orange-soft: rgba(247, 155, 69, 0.16);
@@ -170,8 +170,10 @@ button.danger {
 }
 
 .navItem.active {
-  background: var(--orange);
-  color: #fff;
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 0 var(--orange);
 }
 
 .navItem .count {
@@ -186,9 +188,9 @@ button.danger {
 }
 
 .navItem.active .count {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.2);
-  border-color: transparent;
+  color: var(--orange-dark);
+  background: var(--paper);
+  border-color: var(--line);
 }
 
 .navEmpty {
@@ -227,16 +229,84 @@ button.danger {
   font-weight: 600;
 }
 
-.footBtns {
+.addMain {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 0.875rem;
+}
+
+.footRow {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
 }
 
-.footBtns button {
-  flex: 1 1 auto;
+.moreWrap {
+  position: relative;
+  flex: 1;
+}
+
+#moreBtn {
+  width: 100%;
   font-size: 0.8125rem;
   padding: 6px 10px;
+}
+
+.quietRow {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.quietRow .quiet {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.quietRow .quiet:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.popMenu {
+  display: none;
+  position: absolute;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  z-index: 60;
+}
+
+.popMenu.open {
+  display: flex;
+}
+
+#moreMenu {
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+}
+
+.popMenu .menuItem {
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.popMenu .menuItem:hover {
+  background: var(--orange-soft);
 }
 
 /* ---------- main ---------- */
@@ -272,6 +342,20 @@ button.danger {
   background: var(--paper);
   color: var(--text);
   max-width: 220px;
+}
+
+.topbar input[type="search"],
+.topbar select,
+.topbar .viewToggle,
+.topbar #themeToggle {
+  height: 36px;
+  font-size: 0.875rem;
+}
+
+.topbar .viewToggle button {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 0.875rem;
 }
 
 .spacer {
@@ -329,11 +413,42 @@ button.danger {
   font-size: 0.8125rem;
 }
 
-.empty {
-  color: var(--muted);
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   text-align: center;
-  margin-top: 80px;
-  font-size: 0.9375rem;
+  margin: 64px auto 0;
+  max-width: 480px;
+  color: var(--muted);
+  padding: 0 16px;
+}
+
+.emptyState svg {
+  width: 88px;
+  height: 88px;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.emptyState h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.emptyState .emptyActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 14px;
 }
 
 /* ---------- cards ---------- */
@@ -406,6 +521,19 @@ button.danger {
   overflow: hidden;
 }
 
+.cardMain .favicon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 1.0625rem;
+  margin-bottom: 10px;
+}
+
+.cardMain .favicon img {
+  width: 24px;
+  height: 24px;
+}
+
 .cardMain .domain {
   margin: 0;
   color: var(--muted);
@@ -438,7 +566,7 @@ button.danger {
   background: var(--orange-soft);
   color: var(--orange-dark);
   border-radius: 999px;
-  padding: 1px 9px;
+  padding: 1px 7px;
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -453,6 +581,32 @@ button.danger {
 
 .cardMeta time {
   margin-left: auto;
+}
+
+.cardMenuWrap {
+  position: relative;
+  flex: none;
+  margin-left: 4px;
+}
+
+.cardMore {
+  background: transparent;
+  color: var(--muted);
+  padding: 2px 8px;
+  font-size: 0.9375rem;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+.cardMore:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.cardMenuWrap .popMenu {
+  right: 0;
+  bottom: calc(100% + 6px);
+  min-width: 128px;
 }
 
 .cardMeta .del,
@@ -514,6 +668,14 @@ button.danger {
   min-width: 0;
 }
 
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 34%;
+  min-width: 0;
+}
+
 .rowDomain {
   color: var(--muted);
   font-size: 0.78125rem;
@@ -521,6 +683,15 @@ button.danger {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.rowChips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  max-width: 32%;
+  overflow: hidden;
 }
 
 .row .chip {
@@ -610,8 +781,9 @@ dialog menu {
 }
 
 .viewSwitch .navItem.active {
-  background: var(--orange);
-  color: #fff;
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+  font-weight: 600;
 }
 
 .checkLabel {
@@ -707,6 +879,8 @@ dialog textarea {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--paper);
+  /* 承载 React 挂载点(#driveRoot),内容裁进圆角,与原 iframe 行为一致 */
+  overflow: hidden;
 }
 
 /* ---------- workspaces ---------- */
@@ -847,4 +1021,84 @@ dialog textarea {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
+}
+
+/* ---------- settings (in-shell options) ---------- */
+
+#viewSettings .settingsCard {
+  max-width: 560px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px 24px 20px;
+  box-shadow: var(--shadow);
+}
+
+#viewSettings label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin: 16px 0 6px;
+}
+
+#viewSettings input[type="url"],
+#viewSettings input[type="text"],
+#viewSettings input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--paper-soft);
+}
+
+#viewSettings input:focus {
+  outline: none;
+  border-color: var(--orange);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+#viewSettings .settingsSection {
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+#viewSettings .settingsSection legend {
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0;
+}
+
+#viewSettings .radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  font-size: 0.875rem;
+  margin: 10px 0 0;
+  cursor: pointer;
+}
+
+#viewSettings .radio input {
+  accent-color: var(--orange);
+}
+
+#viewSettings .hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+#viewSettings .settingsActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+#viewSettings #settingsStatus {
+  margin: 0;
 }

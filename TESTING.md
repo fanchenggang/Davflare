@@ -1,8 +1,80 @@
 # FlareDrive 回归测试清单
 
-> 最近一轮：2026-08-30 第三轮四批（Sites 管理面板 + MCP 深化 + davflare-cli，另含第 0 批缺陷修复）
-> 前几轮：2026-08-29 第六批（缺陷修复 + B5/B9/C9 收尾 + i18n 第二阶段收编 + 界面美化 + 单测/e2e 落地）、第五批（A9 i18n 第一阶段 + scripts/api-e2e.sh 回归套件沉淀）、第四批（多选拖拽/面包屑下拉/图标扩展）、第三批（目录分享/回收站清理/搜索高亮/动效 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
+> 最近一轮：2026-09-06 0a-9/0a-10（扩展设置并入主页 + 首次使用强制配置 + 删除 newtab 变体；书签库 UI 打磨 #57）
+> 前几轮：2026-09-05 0a-8（扩展网盘视图去 iframe，原生挂载 Web 端 React App）、2026-08-30 第三轮四批（Sites 管理面板 + MCP 深化 + davflare-cli）、2026-08-29 第六批（缺陷修复 + B5/B9/C9 收尾 + i18n 第二阶段收编 + 界面美化 + 单测/e2e 落地）、第五批（A9 i18n 第一阶段 + scripts/api-e2e.sh 回归套件沉淀）、第四批（多选拖拽/面包屑下拉/图标扩展）、第三批（目录分享/回收站清理/搜索高亮/动效 11 项）、第二批（目录级 API 等）、首批（暗色模式等）
 > 约束：所有测试数据操作仅在自己创建的目录内进行，测试后清理。
+
+## 0a-10. 扩展书签库 UI 打磨（issue #57，借鉴 HamHome 观感；2026-09-06）
+
+只动 UI/交互呈现，不动 WebDAV 同步协议。
+
+### 改动
+| 项 | 内容 |
+|----|------|
+| 空态（P0） | 结构化空态组件 `renderEmptyState`：内联 SVG 插画 + 标题/描述 + 按钮组。书签库空态带「添加 / 导入浏览器书签 / 从 HamHome 迁入」三按钮；筛选无结果带「清除筛选」（同时清空搜索词与时间范围）；工作区空态带「保存当前窗口」、Tab 分组空态带「按规则分组当前窗口」 |
+| 侧栏主次（P0） | 底部重排：主按钮「添加」独占一行 → 「⋯ 更多」菜单收纳导入/HamHome/导出 → 分隔线下「网盘 / 设置」弱化行（透明底灰字，hover 浅橙） |
+| 卡片（P0） | favicon 块 34→40px（_favicon 改请求 size=64 保 retina 清晰）、note 两行截断、标签芯片收窄（padding 1px 7px）；✎/✕ 换成右下角 ⋯ 菜单（编辑/快照/删除，快照项打开编辑弹窗并滚动到快照区） |
+| 导航选中态（P0） | 侧栏与顶部切换的 active 从整块实心橙改为浅橙底 + 深橙字，侧栏另加左侧 3px 指示条；count 徽标改纸底 |
+| 顶栏对齐（P0） | 搜索/两个 select/视图切换/主题按钮统一 36px 高、0.875rem 字号、10px 圆角 |
+| 列表密度（P1） | 行改为 favicon | 标题+域名（两行堆叠）| 分类+标签芯片 | 时间 | 操作，并补上标签列 |
+| 空占位（P1） | 空分类/空标签有专属标题 + 清除筛选引导 |
+| 暗色对比（P1） | 暗色 --bg 加深（#14110c）、--line 提亮（0.13），减少灰橙糊 |
+| 菜单基建 | `popMenu`/`menuToggle` 委托：document 级开合、点外关闭、aria-expanded；卡片 ⋯ 不经 iconButton（其 stopPropagation 会挡委托） |
+
+### 待手动回归（Chrome 加载扩展）
+1. 空库 → 空态插画 + 三个入口都能完成对应动作；筛选空态「清除筛选」复位搜索/分类/标签/时间。
+2. 侧栏：「添加」主按钮、「⋯ 更多」展开收纳项且点外收起、网盘/设置弱化行可切换视图。
+3. 卡片：大 favicon、有 note 的书签两行截断、⋯ 菜单三动作（编辑/快照/删除）正确；列表视图为列式布局且 hover 显示 ✎/✕。
+4. 导航选中态为浅橙+指示条；顶栏控件等高对齐；暗色模式下背景/卡片层次分明。
+
+## 0a-9. 扩展设置并入主页 + 删除 newtab 变体（2026-09-06）
+
+### 改动
+| 项 | 内容 | 验证 |
+|----|------|------|
+| 设置视图 | 主页第 5 视图：options 表单（实例地址/书签目录/工具栏默认视图/凭据/测试连接）整体移植进 `#viewSettings`，样式作用域化适配明暗主题；`openOptions()`→`openSettings()`=`switchView("settings")`，全部 banner「打开设置」与 settingsBtn 统一入口 | ✅ extension.test 断言 shell 含 viewSettings/switchSettings/settingsForm 且无 openOptionsPage |
+| 首次配置 | boot 时无 instanceUrl → 强制 `switchView("settings")` + bannerSettings 引导；保存并授权后自动切到工具栏默认视图并 refresh | ✅ 全量 vitest 通过；待 GUI 手测 |
+| 删选项页 | manifest 删 `options_ui`；删 options.html/css/js | ✅ 测试断言文件不存在 + manifest 无 options_ui |
+| 删 newtab | 删 `extension-newtab/`、url.js 的 `resolveNewTabTarget`/`DEFAULT_NTP`；打包脚本单 zip（并断言 manifest 无 chrome_url_overrides/options_ui）；CI 只附一个 zip | ✅ zip 列表无 options/newtab 文件、含 drive/drive.js |
+| 路由 | `resolveToolbarTarget` 未配置 → `{action:"settings"}`；background 未配置 → `openLibraryPage("settings")`；ERROR_COPY.unauthorized 文案改指书签库设置 | ✅ toolbar helper 测试 options→settings |
+
+### 待手动回归（需要 Chrome 加载扩展）
+1. 全新配置（清空 storage）：打开扩展页直接落设置视图 → 填地址/凭据 → 保存 → 授权弹窗 → 自动进入网盘视图并正常列目录。
+2. 侧栏「设置」随时进入，改地址/凭据/默认视图，保存后行为立即生效；测试连接四种结果（ok/disabled/401/网络）文案正确。
+3. 未配置时点工具栏 → 打开书签库页设置视图（复用已开标签页逻辑）；各视图 banner「打开设置」跳转正常。
+4. 书签保存：右键「收藏此页」在配置完成后正常工作；412 冲突提示文案指向设置。
+5. newtab 变体移除后：Chrome 新标签页保持 Chrome 默认；旧的 newtab zip 用户需改装单包。
+
+### 已知影响
+- `chrome://extensions` 详情页的「扩展选项」入口消失（设置并入主页侧栏，属预期）。
+- 曾安装 newtab 变体的用户升级后新标签页覆盖自然消失（需重新加载单包）。
+
+## 0a-8. 扩展网盘视图：去 iframe，直接复用 Web 端 React 组件（2026-09-05）
+
+### 背景与方案
+实例 `_headers` 对全站下发 `X-Frame-Options: DENY`，扩展网盘视图的 iframe 被 Chrome 拒绝渲染（「拒绝了我们的连接请求」）。方案：不再嵌网页，把 Web 端 `<App/>` 整棵 React 树打进扩展，挂载到 `bookmarks.html` 的 `#driveRoot`（用户选定「改动最小」路线：整 App 挂载，不新写组合层）。
+
+### 改动
+| 项 | 内容 | 验证 |
+|----|------|------|
+| authFetch apiBase | `src/app/auth.tsx` 新增 `setApiBase()`（默认空串=现状），`authFetch` 对 `/` 开头字符串拼接 base；全站 API 与 AuthThumbnail 都走它，一处改动全通 | ✅ 新增 authApiBase.test 3 用例（拼接/绝对 URL/空 base 不变） |
+| 凭据镜像 | `src/extensionDrive/credentials.ts` 纯函数 + main.tsx 订阅：chrome.storage.local（davUsername/davPassword）↔ auth 模块 localStorage 双向镜像，挂载时 chrome.storage 权威覆盖（含清空） | ✅ credentials.test 4 用例；main.test 播种用例 |
+| 权限门 | `DriveGate`：`chrome.permissions.contains` 检查实例 origin，未授权显示授权卡片（`request` 需用户手势，放在按钮里）；授权后渲染 `<App/>`。原因：`/api/*` 无 CORS，必须 host 权限 | ✅ main.test 权限门 2 用例 |
+| 挂载桥 | `src/extensionDrive/main.tsx` 暴露 `window.DavflareDrive = { mount, reload }`；换实例强制重挂（清残留路由/列表）；reload=整树重挂 | ✅ main.test 4 用例（jsdom + chrome mock） |
+| 扩展壳 | `bookmarks.html` iframe→`#driveRoot` + `<script type="module" src="drive/drive.js">`；`bookmarksApp.js` loadDriveView 改调 mount，`DavflareDrive` 缺失时显示构建提示（保留「新标签页打开」兜底）；切走视图 React 保活；`.driveFrame` 加 overflow:hidden | ✅ 既有 9 个 extension vitest 全过 |
+| 构建管线 | `vite.extension.config.ts`（显式 TS 入口 + `publicDir:false` + inlineDynamicImports 单文件 `drive.js` ≈719KB/gzip 229KB）；`npm run build:extension`；`extension/drive/` 入 .gitignore；`package-extension.sh` zip 前构建；release workflow 加 `npm ci`；devDeps + `@types/chrome` | ✅ build:extension 产物仅 drive.js；打包脚本端到端跑通，zip 含 drive/drive.js |
+| 不改动项 | pdf.js CDN 动态 import：`processTransferTask` 调用点已有 try/catch，MV3 CSP 拦截时静默跳过缩略图不阻塞上传；`_headers` 的 DENY 保留（不再需要 iframe，且是合理安全默认） | ✅ 全量测试无回归 |
+
+### 待手动回归（需要 Chrome 加载扩展）
+1. `npm run build:extension` → 加载 `extension/` → 配置实例 → 网盘视图出现授权卡片 → 授权后 App 渲染、目录列出。
+2. 上传/下载/预览/重命名/删除/回收站/分享/全局搜索/传输管理在扩展内正常；`openFile` 的 `window.open(blob:)` 行为需实测（失败则降级下载）。
+3. 未构建状态加载源码目录：网盘视图显示构建提示，书签/工作区/Tab 分组不受影响。
+4. 扩展内登录/登出 → background 右键「收藏此页」仍能用同一份凭据（镜像生效）。
+5. 换实例地址后进网盘视图：旧实例目录状态不残留（强制重挂）。
+
+### 已知取舍
+- 扩展 zip 从 ~100KB 增至 ~830KB（React+MUI 打入）；网盘视图内自带 Web 顶栏与扩展侧栏并存。
+- 非 Davflare 纯 WebDAV 实例：网盘视图按 Davflare API 工作（与 iframe 时代一致），「新标签页打开」兜底。
 
 ## 0a-7. 第三轮四批（2026-08-30）
 

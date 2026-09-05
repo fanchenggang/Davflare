@@ -40,7 +40,7 @@ Share (expiry + extract code):
 - Image host on the same sites hostname at `/i/{id}` (stored under `_$flaredrive$/img/`, not `sites/` or share links)
 - Owner Settings (`#/settings`) with five persistent feature switches (default all on)
 - `davflare-cli` for login / ls / mkdir / rm / mv / cp / sync ([cli/README.md](cli/README.md))
-- Optional Chrome MV3 extension in `extension/` (toolbar opens **your** instance; default zip does not change new tab)
+- Optional Chrome MV3 extension in `extension/` (toolbar opens **your** instance; does not change the new tab)
 - Agent layouts on R2: `agents/{global|agent|agent/project}/{skills|rules|mcp}/` (`pull` / `push` tools; see [docs/agents.md](docs/agents.md)); reproducible demo in [`agents/examples/hello-site/`](agents/examples/hello-site/)
 - Chinese / English UI (globe icon in the header; defaults to browser language, persisted locally)
 
@@ -218,28 +218,23 @@ In the drive UI, **Sites** (`#/sites`) lists each slug with stats, one-click zip
 
 A Chrome Manifest V3 helper with two toolbar modes — open **your** Davflare drive, or a full bookmark library backed by your instance’s WebDAV. It is not on the Chrome Web Store.
 
-- Options: paste the URL of the Pages / custom-domain host you deployed. The field starts empty — there is no built-in site.
-- **Toolbar modes:** both click-actions open the extension's own page — *drive* (default) embeds your instance inside it, *bookmarks* opens the bookmark library view. Pick the default in Options; right-click the toolbar icon to switch anytime. If a deployment ever refuses to be framed, the drive view keeps an "Open in new tab" button.
+- **Settings live in the main page** — there is no standalone options page. The first launch of the extension page opens the settings view directly: paste your instance URL (Pages / custom domain, starts empty — no built-in site), bookmark directory, and WebDAV credentials; after saving and granting access you land in the drive/bookmarks view (HamHome-style: configure first, then use). The sidebar "Settings" view is always available for changes.
+- **Toolbar modes:** both click-actions open the extension's own page — *drive* (default) **mounts the same React components as the web UI** to render the file manager natively (no iframe involved, so the instance's `X-Frame-Options: DENY` no longer matters), *bookmarks* opens the bookmark library view. Pick the default in Settings; right-click the toolbar icon to switch anytime. With no instance configured, a toolbar click opens the settings view directly. The first visit to the drive view asks for host permission on the instance origin (the `/api/*` endpoints send no CORS headers, so search/trash/etc. need the grant; `/webdav` is CORS-open already); an "Open in new tab" button stays as a fallback.
 - **Save this page** appears in the page context menu — it merges the current tab’s title + URL into your WebDAV bookmark file.
 - WebDAV credentials (same values as your deployment’s `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`) are stored **only** in `chrome.storage.local`; they never sync to a Google account. Saving an instance URL asks for per-site host permission (optional permissions — nothing is pre-granted).
-- The **default** package does **not** change Chrome’s new tab. Chrome treats a new-tab override as permanent for as long as `chrome_url_overrides` is in the loaded manifest — an in-extension toggle cannot undo that.
+- **Does not change Chrome's new tab.** An older release shipped a second zip with a new-tab override; because Chrome's `chrome_url_overrides` can only be declared statically in the manifest (it takes over permanently once loaded, with no runtime toggle), that variant has been removed — a single package ships now.
 
-Two zips on the same GitHub Release:
+One zip on the GitHub Release: `davflare-extension.zip` (toolbar + in-shell settings + bookmark library + drive view).
 
-| Zip | What it does |
-| --- | --- |
-| `davflare-extension.zip` | Toolbar + options + bookmark library. Load this unless you want Davflare as the new tab. |
-| `davflare-extension-newtab.zip` | Same as default, plus a New Tab override that opens your instance. Separate download; do not expect this behavior from the default zip. |
+**Load unpacked:** Chrome → `chrome://extensions` → Developer mode → Load unpacked → select the `extension/` folder in this repo. Note: the drive view is a vite build product — run `npm ci && npm run build:extension` once before loading the source folder (without it, bookmarks and everything else work while the drive view shows a build hint; the release zip already contains the bundle).
 
-**Load unpacked (default, no new tab):** Chrome → `chrome://extensions` → Developer mode → Load unpacked → select the `extension/` folder in this repo.
-
-**Release zips:** download from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked. A tag (`v*` / `extension-*`) or **Actions → Release extension** attaches both zips.
+**Release zip:** download from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked. A tag (`v*` / `extension-*`) or **Actions → Release extension** attaches the zip.
 
 ## Bookmarks (thin bookmarks P2)
 
 The extension’s bookmark library keeps your bookmarks **on your own WebDAV** — no third-party service, no AI. Requires the WebDAV feature switch to be on for your instance.
 
-- **Storage layout** (under your instance’s `/webdav/`, directory configurable in Options — default `bookmarks/`; e.g. set `qa/bookmarks` to isolate test data): `bookmarks.html` is the authoritative Netscape bookmark file that Chrome/Edge can import directly; `bookmarks.json` is a sidecar carrying tags and notes that the HTML format cannot hold; `workspaces.json`, `tabGroups.json`, and `snapshots.json` hold the features below. Writes go through with `If-Match` (a 412 conflict is surfaced, never silently overwritten).
+- **Storage layout** (under your instance’s `/webdav/`, directory configurable in the in-shell Settings view — default `bookmarks/`; e.g. set `qa/bookmarks` to isolate test data): `bookmarks.html` is the authoritative Netscape bookmark file that Chrome/Edge can import directly; `bookmarks.json` is a sidecar carrying tags and notes that the HTML format cannot hold; `workspaces.json`, `tabGroups.json`, and `snapshots.json` hold the features below. Writes go through with `If-Match` (a 412 conflict is surfaced, never silently overwritten).
 - **Library page:** sidebar with folder/tag counts, keyword search over title/URL/tags/notes with **pinyin support** (full spelling and initials, thanks to a bundled compact dictionary), time-range filter, grid/list views, light/dark theme, import from Chrome bookmarks (optional `bookmarks` permission, merge by URL) and export to `bookmarks.html`.
 - **HamHome migration (read-only):** the library page imports from a [HamHome](https://github.com/bingoYB/ham_home) sync directory on the same instance — reads `/HamHomeSync/bookmarks/meta.json` + `categories.json` and merges by URL. Descriptions become notes, tags and category folders survive, deleted rows are skipped. Boundary: our own writes stay in our format; HamHome snapshots/workspaces/tab rules (stored in its IndexedDB or app-internal JSON) are not migrated.
 - **Workspaces:** save the current window — page order, pinned state, native tab-group metadata — and restore all or selected pages into a new window (duplicate URLs skipped, pinned/group state restored).

@@ -14,22 +14,18 @@ const repoRoot = path.resolve(
   "../../.."
 );
 const extDir = path.join(repoRoot, "extension");
-const newtabOverlayDir = path.join(repoRoot, "extension-newtab");
 const packageScript = path.join(repoRoot, "scripts/package-extension.sh");
 
 const {
   DEFAULT_BOOKMARK_PATH,
-  DEFAULT_NTP,
   DEFAULT_SETTINGS,
   TOOLBAR_MODES,
   mergeSettings,
   normalizeInstanceUrl,
-  resolveNewTabTarget,
   resolveToolbarTarget,
   sanitizeBookmarkPath,
 } = nodeRequire("../../../extension/url.js") as {
   DEFAULT_BOOKMARK_PATH: string;
-  DEFAULT_NTP: string;
   DEFAULT_SETTINGS: { instanceUrl: string; toolbarMode: string; bookmarkPath: string };
   TOOLBAR_MODES: string[];
   mergeSettings: (stored: unknown) => {
@@ -38,7 +34,6 @@ const {
     bookmarkPath: string;
   };
   normalizeInstanceUrl: (raw: unknown) => string;
-  resolveNewTabTarget: (settings: unknown) => { action: string; url?: string };
   resolveToolbarTarget: (settings: unknown) => { action: string; url?: string };
   sanitizeBookmarkPath: (raw: unknown) => string;
 };
@@ -69,10 +64,11 @@ describe("Davflare Chrome extension / default package", () => {
     fs.readFileSync(path.join(extDir, "manifest.json"), "utf8")
   ) as Record<string, unknown>;
 
-  test("is Manifest V3 with action, options, and bookmarks permissions — no NTP override", () => {
+  test("is Manifest V3 with action and bookmarks permissions — no NTP override, no options page", () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.action).toBeTruthy();
-    expect((manifest.options_ui as { page: string }).page).toBe("options.html");
+    expect(manifest.options_ui).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(manifest, "options_ui")).toBe(false);
     expect(manifest.permissions).toEqual([
       "storage",
       "activeTab",
@@ -95,19 +91,21 @@ describe("Davflare Chrome extension / default package", () => {
     expect(fs.existsSync(path.join(extDir, "newtab.js"))).toBe(false);
   });
 
-  test("options do not offer a new-tab toggle", () => {
-    const html = fs.readFileSync(path.join(extDir, "options.html"), "utf8");
-    const js = fs.readFileSync(path.join(extDir, "options.js"), "utf8");
-    expect(html).not.toMatch(/id=["']newTab["']/);
-    expect(html).not.toMatch(/Use Davflare as new tab/i);
-    expect(html).not.toMatch(/用 Davflare 作为新标签页/);
-    expect(js).not.toMatch(/newTabLabel/);
-    expect(js).not.toMatch(/newTabHint/);
+  test("standalone options page is gone; settings live in the shell page", () => {
+    expect(fs.existsSync(path.join(extDir, "options.html"))).toBe(false);
+    expect(fs.existsSync(path.join(extDir, "options.js"))).toBe(false);
+    expect(fs.existsSync(path.join(extDir, "options.css"))).toBe(false);
+    const shell = fs.readFileSync(path.join(extDir, "bookmarks.html"), "utf8");
+    expect(shell).toContain('id="viewSettings"');
+    expect(shell).toContain('id="switchSettings"');
+    expect(shell).toContain('id="settingsForm"');
+    const app = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+    expect(app).not.toContain("openOptionsPage");
   });
 
   test("does not embed a forced default host", () => {
     const banned = ["sites.freedrg.com", "flaredrive-bgb.pages.dev"];
-    const dirs = [extDir, newtabOverlayDir];
+    const dirs = [extDir];
     for (const dir of dirs) {
       const textFiles = walkFiles(dir).filter((file) =>
         /\.(js|html|css|json)$/.test(file)
@@ -176,14 +174,14 @@ describe("Davflare Chrome extension / settings defaults", () => {
 });
 
 describe("Davflare Chrome extension / toolbar URL helper", () => {
-  test("empty or invalid URL opens options instead of guessing a host", () => {
-    expect(resolveToolbarTarget({})).toEqual({ action: "options" });
-    expect(resolveToolbarTarget({ instanceUrl: "   " })).toEqual({ action: "options" });
+  test("empty or invalid URL opens the in-shell settings view instead of guessing a host", () => {
+    expect(resolveToolbarTarget({})).toEqual({ action: "settings" });
+    expect(resolveToolbarTarget({ instanceUrl: "   " })).toEqual({ action: "settings" });
     expect(resolveToolbarTarget({ instanceUrl: "javascript:alert(1)" })).toEqual({
-      action: "options",
+      action: "settings",
     });
     expect(resolveToolbarTarget({ instanceUrl: "chrome://settings" })).toEqual({
-      action: "options",
+      action: "settings",
     });
     expect(normalizeInstanceUrl("")).toBe("");
     expect(normalizeInstanceUrl(null)).toBe("");
@@ -206,32 +204,13 @@ describe("Davflare Chrome extension / toolbar URL helper", () => {
     expect(
       resolveToolbarTarget({ instanceUrl: "https://drive.example", toolbarMode: "bookmarks" })
     ).toEqual({ action: "bookmarks" });
-    expect(resolveToolbarTarget({ toolbarMode: "drive" })).toEqual({ action: "options" });
+    expect(resolveToolbarTarget({ toolbarMode: "drive" })).toEqual({ action: "settings" });
   });
 });
 
-describe("Davflare Chrome extension / new tab helper (newtab zip only)", () => {
-  test("opens the saved instance; without a URL keeps Chrome NTP as fallback", () => {
-    expect(resolveNewTabTarget({ instanceUrl: "https://drive.example" })).toEqual({
-      action: "open",
-      url: "https://drive.example",
-    });
-    expect(resolveNewTabTarget({ instanceUrl: "" })).toEqual({
-      action: "default-ntp",
-      url: DEFAULT_NTP,
-    });
-    expect(resolveNewTabTarget({})).toEqual({
-      action: "default-ntp",
-      url: DEFAULT_NTP,
-    });
-    expect(DEFAULT_NTP).toBe("chrome://new-tab-page/");
-  });
-});
-
-describe("Davflare Chrome extension / release zips", () => {
+describe("Davflare Chrome extension / release zip", () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-ext-"));
   const defaultZip = path.join(tmp, "davflare-extension.zip");
-  const newtabZip = path.join(tmp, "davflare-extension-newtab.zip");
 
   beforeAll(() => {
     execFileSync("bash", [packageScript, tmp], { cwd: repoRoot, stdio: "pipe" });
@@ -241,17 +220,19 @@ describe("Davflare Chrome extension / release zips", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  test("default zip has no chrome_url_overrides and ships the bookmark library", () => {
+  test("single zip ships the shell, drive bundle, and no overrides", () => {
     const manifest = unzipManifest(defaultZip);
     const names = unzipList(defaultZip);
     expect(manifest.chrome_url_overrides).toBeUndefined();
     expect(Object.prototype.hasOwnProperty.call(manifest, "chrome_url_overrides")).toBe(
       false
     );
+    expect(manifest.options_ui).toBeUndefined();
     expect(names).not.toContain("newtab.html");
     expect(names).not.toContain("newtab.js");
+    expect(names).not.toContain("options.html");
+    expect(names).not.toContain("options.js");
     expect(names).toContain("manifest.json");
-    expect(names).toContain("options.html");
     expect(names).toContain("background.js");
     expect(names).toContain("bookmarks.html");
     expect(names).toContain("bookmarks.css");
@@ -265,16 +246,6 @@ describe("Davflare Chrome extension / release zips", () => {
     expect(names).toContain("pinyinDict.js");
     expect(names).toContain("snapshots.js");
     expect(names).toContain("hamhome.js");
-  });
-
-  test("newtab zip includes chrome_url_overrides and newtab files", () => {
-    const manifest = unzipManifest(newtabZip);
-    const names = unzipList(newtabZip);
-    expect(manifest.chrome_url_overrides).toEqual({ newtab: "newtab.html" });
-    expect(names).toContain("newtab.html");
-    expect(names).toContain("newtab.js");
-    expect(names).toContain("manifest.json");
-    expect(names).toContain("options.html");
-    expect(names).toContain("url.js");
+    expect(names).toContain("drive/drive.js");
   });
 });
