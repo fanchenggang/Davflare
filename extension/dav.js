@@ -89,12 +89,28 @@ var DavflareDav = (function () {
       return { ok: false, kind: res.kind || "network" };
     }
 
+    /**
+     * MKCOL the bookmark basePath segment-by-segment (issue #60).
+     * Nested paths like a/b/c need parents created first; a single MKCOL
+     * of the leaf returns 409 when an intermediate collection is missing.
+     * 405 = collection already exists (treated as success).
+     */
     async function ensureDir() {
-      var res = await request("MKCOL", dir);
-      if (res.status === 0) return { ok: false, kind: "network" };
-      if (res.ok || res.status === 405) return { ok: true };
-      if (res.status === 404) return { ok: false, kind: "disabled" };
-      return { ok: false, kind: mapStatusKind(res.status) };
+      var parts = basePath.split("/");
+      var prefix = "";
+      for (var i = 0; i < parts.length; i++) {
+        var seg = parts[i];
+        if (!seg || seg === "." || seg === "..") {
+          return { ok: false, kind: "http400" };
+        }
+        prefix += seg + "/";
+        var res = await request("MKCOL", root + "/" + prefix);
+        if (res.status === 0) return { ok: false, kind: "network" };
+        if (res.ok || res.status === 405) continue;
+        if (res.status === 404) return { ok: false, kind: "disabled" };
+        return { ok: false, kind: mapStatusKind(res.status) };
+      }
+      return { ok: true };
     }
 
     /**
