@@ -60,7 +60,7 @@ var BookmarksView = (function () {
       });
   }
 
-  function matchesQuery(item, query) {
+  function matchesQuery(item, query, pinyinTools) {
     var q = String(query || "").trim().toLowerCase();
     if (!q) return true;
     var haystacks = [
@@ -74,11 +74,20 @@ var BookmarksView = (function () {
     for (var i = 0; i < haystacks.length; i++) {
       if (String(haystacks[i] || "").toLowerCase().indexOf(q) !== -1) return true;
     }
+    if (pinyinTools && /^[a-z0-9]+$/.test(q)) {
+      var texts = [item.title, item.note, (item.tags || []).join(" ")];
+      for (var j = 0; j < texts.length; j++) {
+        if (pinyinTools.matchText(texts[j], q)) return true;
+      }
+    }
     return false;
   }
 
-  /** opts: {query, folder, tag} — null/undefined filter means "any". */
-  function filterBookmarks(model, opts) {
+  /**
+   * opts: {query, folder, tag, since} — null/undefined filter means "any";
+   * since is an epoch-ms lower bound on the bookmark's added time.
+   */
+  function filterBookmarks(model, opts, pinyinTools) {
     var options = opts || {};
     var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
     var out = [];
@@ -88,7 +97,8 @@ var BookmarksView = (function () {
         continue;
       }
       if (options.tag && (item.tags || []).indexOf(options.tag) === -1) continue;
-      if (!matchesQuery(item, options.query)) continue;
+      if (options.since && !(item.added >= options.since)) continue;
+      if (!matchesQuery(item, options.query, pinyinTools)) continue;
       out.push(item);
     }
     return out;

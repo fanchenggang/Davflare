@@ -591,6 +591,204 @@ dialog menu {
   color: var(--err);
 }
 
+/* ---------- view switch & shared bits ---------- */
+
+.viewSwitch {
+  display: flex;
+  gap: 4px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.viewSwitch .navItem {
+  justify-content: center;
+  padding: 6px 8px;
+  font-size: 0.8125rem;
+  border-radius: 8px;
+}
+
+.viewSwitch .navItem.active {
+  background: var(--orange);
+  color: #fff;
+}
+
+.checkLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.checkLabel input {
+  accent-color: var(--orange);
+}
+
+.topHint {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.dialogSubtitle {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+dialog textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+
+.ruleGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 80px;
+  gap: 10px;
+}
+
+.ruleGrid label {
+  margin-top: 10px;
+}
+
+/* ---------- workspaces ---------- */
+
+.wsList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wsCard {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+
+.wsHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wsHead h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.wsMeta {
+  color: var(--muted);
+  font-size: 0.78125rem;
+}
+
+.wsHead .del {
+  margin-left: auto;
+  background: transparent;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.wsHead .del:hover {
+  background: rgba(196, 71, 44, 0.12);
+  color: var(--err);
+}
+
+.wsActions {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.wsActions button {
+  font-size: 0.8125rem;
+  padding: 5px 12px;
+}
+
+.wsPages {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.pageRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.84375rem;
+  cursor: pointer;
+}
+
+.pageRow:last-child {
+  border-bottom: 0;
+}
+
+.pageRow input {
+  accent-color: var(--orange);
+  flex: none;
+}
+
+.pageRowTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ---------- tab rules ---------- */
+
+.ruleRow .del,
+.ruleRow .edit,
+.cardMeta .edit,
+.row .edit {
+  background: transparent;
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+.ruleRow .edit:hover,
+.cardMeta .edit:hover,
+.row .edit:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.colorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+}
+
+.colorDot.grey { background: #9aa0a6; }
+.colorDot.blue { background: #4c8bf5; }
+.colorDot.red { background: #e2543e; }
+.colorDot.yellow { background: #f0b429; }
+.colorDot.green { background: #34a853; }
+.colorDot.pink { background: #ef6c9e; }
+.colorDot.purple { background: #9a5ff0; }
+.colorDot.cyan { background: #26b8c2; }
+.colorDot.orange { background: #f38020; }
+
 @media (max-width: 760px) {
   .app {
     grid-template-columns: 1fr;
