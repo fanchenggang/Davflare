@@ -5,21 +5,13 @@ import {
   parseAppConfig,
   patchFeatureFlags,
 } from "../features";
+import { asAuthFetchMock } from "../testUtils";
 
 jest.mock("../auth", () => ({
   authFetch: jest.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
-
-function jsonResponse(body: unknown, ok = true, status = 200) {
-  return {
-    ok,
-    status,
-    json: async () => body,
-    text: async () => (ok ? JSON.stringify(body) : ""),
-  } as unknown as Response;
-}
+const mockAuthFetch = asAuthFetchMock(authFetch);
 
 beforeEach(() => {
   mockAuthFetch.mockReset();
@@ -68,33 +60,24 @@ describe("parseAppConfig", () => {
 
 describe("config client", () => {
   test("fetchAppConfig GETs /api/config", async () => {
-    mockAuthFetch.mockResolvedValue(
-      jsonResponse({ username: "a", publicRead: false, webdav: true })
-    );
+    mockAuthFetch.mockOk({ username: "a", publicRead: false, webdav: true });
     const config = await fetchAppConfig();
     expect(mockAuthFetch).toHaveBeenCalledWith("/api/config");
     expect(config.flags.webdav).toBe(true);
   });
 
   test("fetchAppConfig throws on empty error body", async () => {
-    mockAuthFetch.mockResolvedValue(jsonResponse({}, false, 500));
+    mockAuthFetch.mockError(500);
     await expect(fetchAppConfig()).rejects.toThrow();
   });
 
   test("fetchAppConfig uses response text when present", async () => {
-    mockAuthFetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: async () => ({}),
-      text: async () => "config-down",
-    } as unknown as Response);
+    mockAuthFetch.mockError(500, "config-down");
     await expect(fetchAppConfig()).rejects.toThrow("config-down");
   });
 
   test("patchFeatureFlags PATCHes flags", async () => {
-    mockAuthFetch.mockResolvedValue(
-      jsonResponse({ username: "a", publicRead: false, webdav: false })
-    );
+    mockAuthFetch.mockOk({ username: "a", publicRead: false, webdav: false });
     await patchFeatureFlags({ webdav: false });
     const [url, init] = mockAuthFetch.mock.calls[0];
     expect(url).toBe("/api/config");
@@ -103,12 +86,7 @@ describe("config client", () => {
   });
 
   test("patchFeatureFlags throws on failure", async () => {
-    mockAuthFetch.mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({}),
-      text: async () => "save-fail",
-    } as unknown as Response);
+    mockAuthFetch.mockError(400, "save-fail");
     await expect(patchFeatureFlags({ mcp: false })).rejects.toThrow("save-fail");
   });
 });

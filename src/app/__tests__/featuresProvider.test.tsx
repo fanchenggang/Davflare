@@ -3,13 +3,14 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 
 import { authFetch, useAuth } from "../auth";
 import { FeaturesProvider, useFeatures } from "../features";
+import { asAuthFetchMock } from "../testUtils";
 
 jest.mock("../auth", () => ({
   authFetch: jest.fn(),
   useAuth: jest.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
+const mockAuthFetch = asAuthFetchMock(authFetch);
 const mockUseAuth = useAuth as unknown as jest.Mock;
 
 function Probe() {
@@ -32,15 +33,6 @@ function Probe() {
   );
 }
 
-function jsonResponse(body: unknown, ok = true) {
-  return {
-    ok,
-    status: ok ? 200 : 500,
-    json: async () => body,
-    text: async () => (ok ? JSON.stringify(body) : "fail"),
-  } as unknown as Response;
-}
-
 beforeEach(() => {
   mockAuthFetch.mockReset();
   mockUseAuth.mockReset();
@@ -61,23 +53,19 @@ describe("FeaturesProvider", () => {
   test("loads config, swallows refresh errors, and patches flags", async () => {
     mockUseAuth.mockReturnValue({ username: "alice" });
     mockAuthFetch
-      .mockResolvedValueOnce(
-        jsonResponse({
-          username: "alice",
-          publicRead: true,
-          sitesHost: "sites.example.com",
-          webdav: true,
-        })
-      )
-      .mockResolvedValueOnce(jsonResponse({}, false))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          username: "alice",
-          publicRead: false,
-          sitesHost: "",
-          webdav: false,
-        })
-      );
+      .mockOkOnce({
+        username: "alice",
+        publicRead: true,
+        sitesHost: "sites.example.com",
+        webdav: true,
+      })
+      .mockErrorOnce(500)
+      .mockOkOnce({
+        username: "alice",
+        publicRead: false,
+        sitesHost: "",
+        webdav: false,
+      });
 
     render(
       <FeaturesProvider>

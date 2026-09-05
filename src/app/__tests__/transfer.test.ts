@@ -11,6 +11,12 @@ import {
 } from "../transfer";
 import { authFetch } from "../auth";
 import { setLang } from "../strings";
+import {
+  asAuthFetchMock,
+  jsonResponse,
+  propfindResponse,
+  type PropfindEntry,
+} from "../testUtils";
 
 jest.mock("p-limit", () => ({
   __esModule: true,
@@ -22,50 +28,18 @@ jest.mock("../auth", () => ({
   basicAuthHeader: jest.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
+const mockAuthFetch = asAuthFetchMock(authFetch);
 
-function jsonResponse(body: unknown, ok = true, status = 200) {
-  return {
-    ok,
-    status,
-    headers: { get: () => null },
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as unknown as Response;
-}
-
-function xmlResponse(body: string, ok = true) {
-  return {
-    ok,
-    status: ok ? 207 : 500,
-    headers: { get: (n: string) => (n.toLowerCase() === "content-type" ? "application/xml; charset=utf-8" : null) },
-    text: async () => body,
-  } as unknown as Response;
-}
-
-const XML_ONE_FILE = `<?xml version="1.0" encoding="utf-8"?>
-<multistatus>
-  <response>
-    <href>/webdav/</href>
-    <propstat>
-      <prop>
-        <resourcetype><collection/></resourcetype>
-        <getcontenttype>application/x-directory</getcontenttype>
-      </prop>
-    </propstat>
-  </response>
-  <response>
-    <href>/webdav/a.txt</href>
-    <propstat>
-      <prop>
-        <resourcetype/>
-        <getcontenttype>text/plain</getcontenttype>
-        <getcontentlength>12</getcontentlength>
-        <getlastmodified>Mon, 01 Jan 2026 00:00:00 GMT</getlastmodified>
-      </prop>
-    </propstat>
-  </response>
-</multistatus>`;
+// 根目录 + 单文件（等价于原手写 XML_ONE_FILE）
+const PROPFIND_ROOT_ONE_FILE: PropfindEntry[] = [
+  { href: "/webdav/", isDir: true, contentType: "application/x-directory" },
+  {
+    href: "/webdav/a.txt",
+    contentType: "text/plain",
+    size: 12,
+    lastModified: "Mon, 01 Jan 2026 00:00:00 GMT",
+  },
+];
 
 beforeEach(() => {
   mockAuthFetch.mockReset();
@@ -92,7 +66,7 @@ describe("transfer / davHrefToKey", () => {
 
 describe("transfer / fetchPath", () => {
   test("解析 PROPFIND XML 并过滤当前目录", async () => {
-    mockAuthFetch.mockResolvedValue(xmlResponse(XML_ONE_FILE));
+    mockAuthFetch.mockResolvedValue(propfindResponse(PROPFIND_ROOT_ONE_FILE));
     const items = await fetchPath("");
     expect(mockAuthFetch).toHaveBeenCalledWith("/webdav/", {
       method: "PROPFIND",
@@ -110,21 +84,21 @@ describe("transfer / fetchPath", () => {
   });
 
   test("非 XML 响应抛错", async () => {
-    mockAuthFetch.mockResolvedValue(jsonResponse({}, true));
+    mockAuthFetch.mockResolvedValue(jsonResponse({}));
     await expect(fetchPath("")).rejects.toThrow("Invalid response");
   });
 });
 
 describe("transfer / searchFiles", () => {
   test("映射搜索结果字段", async () => {
-    mockAuthFetch.mockResolvedValue(jsonResponse({
+    mockAuthFetch.mockOk({
       items: [
         { key: "docs/a.txt", size: 3, uploaded: "2026-01-01", contentType: "text/plain", thumbnail: null },
         { key: "docs/", size: 0, uploaded: null, contentType: "application/x-directory" },
       ],
       hasMore: true,
       nextCursor: "c1",
-    }));
+    });
     const res = await searchFiles("a", "c0", 50);
     expect(mockAuthFetch.mock.calls[0][0]).toBe("/api/search?q=a&limit=50&cursor=c0");
     expect(res.items[0]).toMatchObject({ key: "docs/a.txt", name: "a.txt", isDir: false });
@@ -133,7 +107,7 @@ describe("transfer / searchFiles", () => {
   });
 
   test("失败抛错", async () => {
-    mockAuthFetch.mockResolvedValue(jsonResponse({}, false, 500));
+    mockAuthFetch.mockError(500);
     await expect(searchFiles("a")).rejects.toThrow("Search failed");
   });
 });
@@ -145,14 +119,14 @@ describe("transfer / fetchFolderCounts", () => {
       expect(init?.method).toBe("POST");
       const body = JSON.parse(String(init?.body)) as { paths: string[] };
       expect(body.paths).toEqual(["a", "bad"]);
-      return jsonResponse({ counts: { a: 3, "bad-x": 0 } }, true, 200);
+      return jsonResponse({ counts: { a: 3, "bad-x": 0 } });
     });
     const counts = await fetchFolderCounts(["a", "bad"]);
     expect(counts).toEqual({ a: 3, "bad-x": 0 });
   });
 
   test("端点失败时返回空对象", async () => {
-    mockAuthFetch.mockImplementation(async () => jsonResponse({}, false, 500));
+    mockAuthFetch.mockError(500);
     const counts = await fetchFolderCounts(["a"]);
     expect(counts).toEqual({});
   });
@@ -174,13 +148,13 @@ describe("transfer / createFolder", () => {
   });
 
   test("成功 MKCOL", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: true, status: 201 } as unknown as Response);
+    mockAuthFetch.mockOk({}, 201);
     await createFolder("docs/", "notes");
     expect(mockAuthFetch).toHaveBeenCalledWith("/webdav/docs/notes", { method: "MKCOL" });
   });
 
   test("MKCOL 失败抛错", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: false, status: 405, text: async () => "no" } as unknown as Response);
+    mockAuthFetch.mockError(405, "no");
     await expect(createFolder("", "notes")).rejects.toThrow("新建文件夹失败");
   });
 });
@@ -189,7 +163,7 @@ describe("transfer / copyPaste", () => {
   beforeEach(() => setLang("zh"));
 
   test("COPY 与 MOVE 使用不同方法并设置 Destination", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: true, status: 200 } as unknown as Response);
+    mockAuthFetch.mockOk({});
 
     await copyPaste("a.txt", "b.txt");
     let [url, init] = mockAuthFetch.mock.calls[0];
@@ -198,21 +172,21 @@ describe("transfer / copyPaste", () => {
     expect(String(init.headers.Destination)).toContain("/webdav/b.txt");
 
     mockAuthFetch.mockReset();
-    mockAuthFetch.mockResolvedValue({ ok: true, status: 200 } as unknown as Response);
+    mockAuthFetch.mockOk({});
     await copyPaste("a.txt", "b.txt", true);
     [url, init] = mockAuthFetch.mock.calls[0];
     expect(init.method).toBe("MOVE");
   });
 
   test("失败抛错", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: false, status: 409, text: async () => "x" } as unknown as Response);
+    mockAuthFetch.mockError(409, "x");
     await expect(copyPaste("a", "b")).rejects.toThrow("复制失败");
   });
 });
 
 describe("transfer / ensureParentDirs", () => {
   test("逐级 MKCOL，重复目录跳过", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: true, status: 201 } as unknown as Response);
+    mockAuthFetch.mockOk({}, 201);
     await ensureParentDirs("a/b/c/file.txt");
     expect(mockAuthFetch).toHaveBeenCalledTimes(3);
     expect(mockAuthFetch.mock.calls[0][0]).toBe("/webdav/a");

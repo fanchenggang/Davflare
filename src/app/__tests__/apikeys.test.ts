@@ -14,21 +14,13 @@ import {
 } from "../apikeys";
 import { authFetch } from "../auth";
 import { getLang, setLang } from "../strings";
+import { asAuthFetchMock } from "../testUtils";
 
 jest.mock("../auth", () => ({
   authFetch: jest.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
-
-function jsonResponse(body: unknown, ok = true, status = 200) {
-  return {
-    ok,
-    status,
-    json: async () => body,
-    text: async () => JSON.stringify(body),
-  } as unknown as Response;
-}
+const mockAuthFetch = asAuthFetchMock(authFetch);
 
 beforeEach(() => {
   mockAuthFetch.mockReset();
@@ -37,13 +29,13 @@ beforeEach(() => {
 describe("apikeys / listApiKeys", () => {
   test("成功返回 JSON", async () => {
     const keys = [{ id: "1", name: "k", prefix: "fd_", createdAt: "", expiresAt: null }];
-    mockAuthFetch.mockResolvedValue(jsonResponse(keys));
+    mockAuthFetch.mockOk(keys);
     await expect(listApiKeys()).resolves.toEqual(keys);
     expect(mockAuthFetch).toHaveBeenCalledWith("/api/keys");
   });
 
   test("失败抛出响应文本", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: false, status: 500, text: async () => "boom" } as unknown as Response);
+    mockAuthFetch.mockError(500, "boom");
     await expect(listApiKeys()).rejects.toThrow("boom");
   });
 });
@@ -51,7 +43,7 @@ describe("apikeys / listApiKeys", () => {
 describe("apikeys / createApiKey", () => {
   test("携带可选参数与自定义 key", async () => {
     const created = { id: "1", name: "k", prefix: "fd_", createdAt: "", expiresAt: null, key: "fd_xxx" };
-    mockAuthFetch.mockResolvedValue(jsonResponse(created));
+    mockAuthFetch.mockOk(created);
     await createApiKey({ name: "k", expiresInHours: 24, key: "  custom  " });
     const [, init] = mockAuthFetch.mock.calls[0];
     expect(init.method).toBe("POST");
@@ -59,27 +51,27 @@ describe("apikeys / createApiKey", () => {
   });
 
   test("空可选参数不进 body", async () => {
-    mockAuthFetch.mockResolvedValue(jsonResponse({}));
+    mockAuthFetch.mockOk({});
     await createApiKey({ name: "k", expiresInHours: 0, key: "   " });
     const [, init] = mockAuthFetch.mock.calls[0];
     expect(JSON.parse(init.body)).toEqual({ name: "k" });
   });
 
   test("失败抛出响应文本", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: false, status: 400, text: async () => "bad key" } as unknown as Response);
+    mockAuthFetch.mockError(400, "bad key");
     await expect(createApiKey({ name: "k" })).rejects.toThrow("bad key");
   });
 });
 
 describe("apikeys / revokeApiKey", () => {
   test("成功 DELETE", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: true, status: 200 } as unknown as Response);
+    mockAuthFetch.mockOk({});
     await revokeApiKey("abc");
     expect(mockAuthFetch).toHaveBeenCalledWith("/api/keys?id=abc", { method: "DELETE" });
   });
 
   test("失败抛出响应文本", async () => {
-    mockAuthFetch.mockResolvedValue({ ok: false, status: 500, text: async () => "no" } as unknown as Response);
+    mockAuthFetch.mockError(500, "no");
     await expect(revokeApiKey("abc")).rejects.toThrow("no");
   });
 });
