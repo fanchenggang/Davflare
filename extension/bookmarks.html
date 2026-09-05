@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Davflare Bookmarks</title>
+    <link rel="stylesheet" href="bookmarks.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <header class="brand">
+          <img src="icons/icon48.png" width="36" height="36" alt="" />
+          <div>
+            <h1>Davflare</h1>
+            <p id="brandSub">Bookmarks</p>
+          </div>
+        </header>
+
+        <nav class="nav">
+          <button class="navItem" id="navAll" data-filter="all" type="button">
+            <span id="navAllText">All bookmarks</span>
+            <span class="count" id="navAllCount">0</span>
+          </button>
+          <p class="navTitle" id="folderTitle">Folders</p>
+          <div id="folderNav"></div>
+          <p class="navTitle" id="tagTitle">Tags</p>
+          <div id="tagNav"></div>
+        </nav>
+
+        <footer class="sideFoot">
+          <div class="syncRow">
+            <span class="syncLabel" id="syncLabel">WebDAV</span>
+            <span class="syncInfo" id="syncInfo">…</span>
+          </div>
+          <div class="footBtns">
+            <button id="addBtn" class="primary" type="button">Add</button>
+            <button id="importBtn" class="ghost" type="button">Import</button>
+            <button id="exportBtn" class="ghost" type="button">Export</button>
+            <button id="driveBtn" class="ghost" type="button">Drive</button>
+            <button id="settingsBtn" class="ghost" type="button">Settings</button>
+          </div>
+        </footer>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <input id="search" type="search" spellcheck="false" placeholder="Search bookmarks…" />
+          <select id="folderSelect"></select>
+          <div class="spacer"></div>
+          <div class="viewToggle" role="group" aria-label="View">
+            <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
+            <button id="viewList" type="button" title="List">☰</button>
+          </div>
+          <button id="themeToggle" type="button" title="Theme">☾</button>
+        </header>
+
+        <div id="banner" class="banner hidden"></div>
+        <p id="loading" class="loading hidden">Loading…</p>
+        <section id="cards" class="cards"></section>
+        <section id="rows" class="rows hidden"></section>
+        <p id="emptyState" class="empty hidden"></p>
+      </main>
+    </div>
+
+    <dialog id="addDialog">
+      <form id="addForm" novalidate>
+        <h2 id="addDialogTitle">Add bookmark</h2>
+        <label for="addUrl" id="addUrlLabel">URL</label>
+        <input id="addUrl" type="url" spellcheck="false" placeholder="https://…" />
+        <label for="addTitleInput" id="addTitleLabel">Title</label>
+        <input id="addTitleInput" type="text" spellcheck="false" />
+        <p id="addError" class="status err"></p>
+        <menu>
+          <button id="addCancel" class="ghost" type="button">Cancel</button>
+          <button id="addSave" class="primary" type="submit">Add</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="confirmDialog">
+      <p id="confirmText"></p>
+      <menu>
+        <button id="confirmCancel" class="ghost" type="button">Cancel</button>
+        <button id="confirmOk" class="danger" type="button">Delete</button>
+      </menu>
+    </dialog>
+
+    <script src="url.js"></script>
+    <script src="bookmarks.js"></script>
+    <script src="dav.js"></script>
+    <script src="bookmarksView.js"></script>
+    <script src="bookmarksApp.js"></script>
+  </body>
+</html>
