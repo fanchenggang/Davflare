@@ -219,7 +219,7 @@ In the drive UI, **Sites** (`#/sites`) lists each slug with stats, one-click zip
 A Chrome Manifest V3 helper with two toolbar modes — open **your** Davflare drive, or a full bookmark library backed by your instance’s WebDAV. It is not on the Chrome Web Store.
 
 - Options: paste the URL of the Pages / custom-domain host you deployed. The field starts empty — there is no built-in site.
-- **Toolbar modes:** *drive* (default, click opens your instance) or *bookmarks* (click opens the bookmark library page). Pick the default in Options; right-click the toolbar icon to switch anytime.
+- **Toolbar modes:** both click-actions open the extension's own page — *drive* (default) embeds your instance inside it, *bookmarks* opens the bookmark library view. Pick the default in Options; right-click the toolbar icon to switch anytime. If a deployment ever refuses to be framed, the drive view keeps an "Open in new tab" button.
 - **Save this page** appears in the page context menu — it merges the current tab’s title + URL into your WebDAV bookmark file.
 - WebDAV credentials (same values as your deployment’s `WEBDAV_USERNAME` / `WEBDAV_PASSWORD`) are stored **only** in `chrome.storage.local`; they never sync to a Google account. Saving an instance URL asks for per-site host permission (optional permissions — nothing is pre-granted).
 - The **default** package does **not** change Chrome’s new tab. Chrome treats a new-tab override as permanent for as long as `chrome_url_overrides` is in the loaded manifest — an in-extension toggle cannot undo that.
