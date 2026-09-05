@@ -22,6 +22,11 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
   parseHtml: (text: string) => BookmarkModel;
   removeBookmark: (model: unknown, id: string) => BookmarkModel;
   serializeHtml: (model: unknown) => string;
+  updateBookmark: (
+    model: unknown,
+    id: string,
+    patch: { title?: string; note?: string; folder?: string; tags?: string[] }
+  ) => BookmarkModel;
   urlKey: (url: unknown) => string;
 };
 
@@ -185,6 +190,27 @@ describe("extension/bookmarks.js addBookmark / merge / remove", () => {
     });
     const next = Bookmarks.removeBookmark(model, "b1");
     expect(next.bookmarks.map((b) => b.id)).toEqual(["b2"]);
+  });
+
+  test("updateBookmark patches tags/note/title/folder but never id or url", () => {
+    const model = Bookmarks.normalizeModel({
+      bookmarks: [{ id: "b1", url: "https://a.com", title: "A", tags: ["x"] }],
+    });
+    const next = Bookmarks.updateBookmark(model, "b1", {
+      tags: ["dev", "docs", "dev", ""],
+      note: "readme",
+      title: "A2",
+      folder: "Dev",
+    });
+    expect(next.bookmarks[0]).toMatchObject({
+      id: "b1",
+      url: "https://a.com",
+      title: "A2",
+      note: "readme",
+      folder: "Dev",
+      tags: ["dev", "docs"],
+    });
+    expect(Bookmarks.updateBookmark(model, "missing", { title: "nope" })).toEqual(model);
   });
 });
 

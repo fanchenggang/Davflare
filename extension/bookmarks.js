@@ -289,6 +289,22 @@ var Bookmarks = (function () {
     return next;
   }
 
+  /** Patch title/note/tags/folder on one bookmark by id; url and id stay put. */
+  function updateBookmark(model, id, patch) {
+    var next = normalizeModel(model);
+    var src = patch && typeof patch === "object" ? patch : {};
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var item = next.bookmarks[i];
+      if (item.id !== id) continue;
+      if (typeof src.title === "string") item.title = src.title;
+      if (typeof src.note === "string") item.note = src.note;
+      if (typeof src.folder === "string") item.folder = src.folder;
+      if (src.tags !== undefined) item.tags = sanitizeTags(src.tags);
+      return next;
+    }
+    return next;
+  }
+
   /**
    * html parse wins for membership/title/folder; the json sidecar donates
    * tags/note/id for the same URL so rewrites never drop rich fields.
@@ -345,6 +361,7 @@ var Bookmarks = (function () {
     parseHtml: parseHtml,
     removeBookmark: removeBookmark,
     serializeHtml: serializeHtml,
+    updateBookmark: updateBookmark,
     urlKey: urlKey,
   };
 })();

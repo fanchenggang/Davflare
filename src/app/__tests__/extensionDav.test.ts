@@ -6,9 +6,11 @@ const DavflareDav = nodeRequire("../../../extension/dav.js") as {
   createDavClient: (options: Record<string, unknown>) => {
     ensureDir: () => Promise<Resolved>;
     getBookmarks: () => Promise<Resolved>;
+    getFile: (fileName: string) => Promise<Resolved>;
     paths: { root: string; dir: string; html: string; json: string };
     probe: () => Promise<Resolved>;
     putBookmarks: (payload: Record<string, unknown>) => Promise<Resolved>;
+    putFile: (fileName: string, body: string, contentType: string, etag?: string) => Promise<Resolved>;
   };
 };
 
@@ -238,5 +240,58 @@ describe("extension/dav.js putBookmarks", () => {
       kind: "disabled",
     });
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("extension/dav.js generic getFile / putFile", () => {
+  test("getFile returns json sidecars and disambiguates a 404 via probe", async () => {
+    const firstRun = clientWith({}, (_url, init) => {
+      if ((init.method as string) === "PROPFIND") return { status: 207 };
+      return { status: 404, body: "Not Found" };
+    });
+    expect(await firstRun.client.getFile("workspaces.json")).toEqual({
+      ok: true,
+      missing: true,
+      text: null,
+      etag: null,
+    });
+
+    const present = clientWith({}, (url) =>
+      url.endsWith("workspaces.json")
+        ? { status: 200, body: "{}", etag: '"w1"' }
+        : { status: 404, body: "Not Found" }
+    );
+    expect(await present.client.getFile("workspaces.json")).toEqual({
+      ok: true,
+      missing: false,
+      text: "{}",
+      etag: '"w1"',
+    });
+  });
+
+  test("putFile sends If-Match with the etag and maps 412 to conflict", async () => {
+    const { client, calls } = clientWith({}, (url, init) => {
+      if ((init.method as string) === "MKCOL") return { status: 201 };
+      if (url.endsWith("tabGroups.json") && (init.headers as Record<string, string>)["If-Match"]) {
+        return { status: 412 };
+      }
+      return { status: 204 };
+    });
+    expect(
+      await client.putFile("tabGroups.json", "{}", "application/json; charset=utf-8", '"t1"')
+    ).toEqual({ ok: false, kind: "conflict" });
+
+    const headers = calls[1].init.headers as Record<string, string>;
+    expect(headers["If-Match"]).toBe('"t1"');
+    expect(headers["Content-Type"]).toContain("application/json");
+    expect(calls[1].init.body).toBe("{}");
+  });
+
+  test("putFile succeeds without an etag and without sending If-Match", async () => {
+    const { client, calls } = clientWith({}, () => ({ status: 204 }));
+    expect(await client.putFile("workspaces.json", "[]", "application/json")).toEqual({
+      ok: true,
+    });
+    expect((calls[1].init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
   });
 });

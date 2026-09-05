@@ -71,6 +71,8 @@ describe("Davflare Chrome extension / default package", () => {
       "contextMenus",
       "favicon",
       "notifications",
+      "tabs",
+      "tabGroups",
     ]);
     expect(manifest.optional_permissions).toEqual(["bookmarks"]);
     expect(manifest.host_permissions).toBeUndefined();
@@ -223,6 +225,10 @@ describe("Davflare Chrome extension / release zips", () => {
     expect(names).toContain("bookmarksView.js");
     expect(names).toContain("bookmarks.js");
     expect(names).toContain("dav.js");
+    expect(names).toContain("workspaces.js");
+    expect(names).toContain("tabRules.js");
+    expect(names).toContain("pinyin.js");
+    expect(names).toContain("pinyinDict.js");
   });
 
   test("newtab zip includes chrome_url_overrides and newtab files", () => {
