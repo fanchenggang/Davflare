@@ -11,7 +11,7 @@ import {
 
 import { useTransferQueue } from "./app/transferQueue";
 import { strings } from "./app/strings";
-import { Z_INDEX } from "./app/theme";
+import { MOTION, Z_INDEX } from "./app/theme";
 
 function NavButton({
   icon,
@@ -55,7 +55,7 @@ function NavButton({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          transition: "transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          transition: `transform ${MOTION.base}ms ${MOTION.spring}`,
         },
         "@media (prefers-reduced-motion: reduce)": {
           "&:active .nav-icon": { transform: "none" },

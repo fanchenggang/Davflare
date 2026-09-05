@@ -42,7 +42,7 @@ const KIND_COLOR: Record<string, string> = {
   other: "#6b7280",
 };
 
-// 暗色背景下过暗的几类图标换用提亮色
+// 暗色背景下过暗的几类图标换用提亮色（覆盖全部分类，避免暗底低对比）
 const KIND_COLOR_DARK: Record<string, string> = {
   zip: "#c99b6a",
   css: "#7aa5d8",
@@ -50,6 +50,16 @@ const KIND_COLOR_DARK: Record<string, string> = {
   text: "#8fa0b0",
   shell: "#9fb0bd",
   csv: "#66b884",
+  js: "#d4a017",
+  json: "#e09a3a",
+  html: "#e8763f",
+  slides: "#e07a5f",
+  video: "#e06a4f",
+  pdf: "#e06a4f",
+  audio: "#a98fd0",
+  font: "#b39ddb",
+  ebook: "#66b884",
+  image: "#4db884",
 };
 
 function MimeIcon({

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Box from "@mui/material/Box";
 import { alpha, useTheme } from "@mui/material/styles";
 
 import MimeIcon from "./MimeIcon";
@@ -42,11 +43,13 @@ export default function AuthThumbnail({
   size,
 }: AuthThumbnailProps) {
   const [url, setUrl] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const mode = useTheme().palette.mode;
 
   useEffect(() => {
     let active = true;
     setUrl(null);
+    setLoaded(false);
     loadThumbnailUrl(digest).then((objectUrl) => {
       if (active) setUrl(objectUrl);
     });
@@ -55,27 +58,44 @@ export default function AuthThumbnail({
     };
   }, [digest]);
 
-  if (!url) {
-    return <MimeIcon contentType={contentType} name={name} />;
-  }
-
   return (
-    <img
-      src={url}
-      alt={name}
-      loading="lazy"
-      style={{
+    <Box
+      sx={{
+        position: "relative",
         width: size,
         height: size,
-        objectFit: "cover",
-        borderRadius: size >= 48 ? 8 : 4,
-        // 透明 PNG 缩略图的棋盘格衬底，与预览大图一致（暗色用亮格）
-        backgroundImage:
-          mode === "dark"
-            ? "conic-gradient(rgba(255,255,255,0.14) 25%, transparent 0 50%, rgba(255,255,255,0.14) 0 75%, transparent 0)"
-            : `conic-gradient(${alpha("#1c1610", 0.12)} 25%, transparent 0 50%, ${alpha("#1c1610", 0.12)} 0 75%, transparent 0)`,
-        backgroundSize: "12px 12px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
       }}
-    />
+    >
+      {!loaded && <MimeIcon contentType={contentType} name={name} />}
+      {url && (
+        <img
+          src={url}
+          alt={name}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: size,
+            height: size,
+            objectFit: "cover",
+            borderRadius: size >= 48 ? 8 : 4,
+            // 透明 PNG 缩略图的棋盘格衬底，与预览大图一致（暗色用亮格）
+            backgroundImage:
+              mode === "dark"
+                ? "conic-gradient(rgba(255,255,255,0.14) 25%, transparent 0 50%, rgba(255,255,255,0.14) 0 75%, transparent 0)"
+                : `conic-gradient(${alpha("#1c1610", 0.12)} 25%, transparent 0 50%, ${alpha("#1c1610", 0.12)} 0 75%, transparent 0)`,
+            backgroundSize: "12px 12px",
+            // blur-up：blob 就绪后从类型图标占位淡入
+            opacity: loaded ? 1 : 0,
+            transition: "opacity 180ms ease",
+          }}
+        />
+      )}
+    </Box>
   );
 }

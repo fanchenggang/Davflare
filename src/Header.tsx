@@ -76,6 +76,7 @@ function Header({
 
   return (
     <Toolbar
+      component="header"
       disableGutters
       sx={{
         px: 1.5,

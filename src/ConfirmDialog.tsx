@@ -32,7 +32,10 @@ function ConfirmDialog({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{strings.cancel}</Button>
+        {/* 打开时焦点落在「取消」——破坏性确认场景下回车不误触 */}
+        <Button autoFocus onClick={onClose}>
+          {strings.cancel}
+        </Button>
         <Button color="error" variant="contained" onClick={onConfirm}>
           {confirmText}
         </Button>

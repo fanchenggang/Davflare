@@ -12,6 +12,16 @@ export const Z_INDEX = {
   previewPager: 2,
 } as const;
 
+// 动效 token：时长 ms / 缓动曲线统一管理，替代散落各组件的字面量。
+// prefers-reduced-motion 下由 CssBaseline 的全局兜底统一禁用。
+export const MOTION = {
+  fast: 150,
+  base: 180,
+  enter: 220,
+  /** 弹性缓动（底部导航、气泡等「弹出」感） */
+  spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+} as const;
+
 export type ThemeMode = "light" | "dark";
 
 /**
@@ -184,6 +194,35 @@ export function createAppTheme(mode: ThemeMode = "light"): Theme {
           },
           "::selection": {
             backgroundColor: "rgba(243, 128, 32, 0.28)",
+          },
+          // 细滚动条（亮暗双套），Firefox 走 scrollbar-width/-color
+          "*": {
+            scrollbarWidth: "thin",
+            scrollbarColor: `${mode === "dark" ? "rgba(255, 255, 255, 0.16)" : "rgba(28, 22, 16, 0.18)"} transparent`,
+          },
+          "::-webkit-scrollbar": { width: 8, height: 8 },
+          "::-webkit-scrollbar-track": { background: "transparent" },
+          "::-webkit-scrollbar-thumb": {
+            borderRadius: 8,
+            backgroundColor:
+              mode === "dark"
+                ? "rgba(255, 255, 255, 0.16)"
+                : "rgba(28, 22, 16, 0.18)",
+          },
+          "::-webkit-scrollbar-thumb:hover": {
+            backgroundColor:
+              mode === "dark"
+                ? "rgba(255, 255, 255, 0.26)"
+                : "rgba(28, 22, 16, 0.28)",
+          },
+          // 全局减弱动态兜底：逐组件的 @media 覆盖之外的动画/过渡统一禁用
+          "@media (prefers-reduced-motion: reduce)": {
+            "*, *::before, *::after": {
+              animationDuration: "0.01ms !important",
+              animationIterationCount: "1 !important",
+              transitionDuration: "0.01ms !important",
+              scrollBehavior: "auto !important",
+            },
           },
         },
       },

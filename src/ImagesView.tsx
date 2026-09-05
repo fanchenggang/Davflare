@@ -272,7 +272,7 @@ function ImagesView({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(243, 128, 32, 0.12)",
+            backgroundColor: "action.selected",
             border: "2px dashed",
             borderColor: "primary.main",
             zIndex: 2,

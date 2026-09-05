@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   CssBaseline,
   Snackbar,
@@ -10,6 +11,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ApiKeysPanel from "./ApiKeysPanel";
+import CommandPalette from "./CommandPalette";
 import Header from "./Header";
 import LoginDialog from "./LoginDialog";
 import Main from "./Main";
@@ -18,7 +20,7 @@ import { AuthProvider, useAuth } from "./app/auth";
 import { FeaturesProvider, useFeatures } from "./app/features";
 import { ClipboardProvider } from "./app/clipboard";
 import { NoticeAction, NoticeOptions, NoticeSeverity, NotifyFn } from "./app/notify";
-import { translate, useLang } from "./app/strings";
+import { strings, translate, useLang } from "./app/strings";
 import {
   SortPref,
   ThemeModePreference,
@@ -26,7 +28,7 @@ import {
   ViewMode,
 } from "./app/prefs";
 import { useHashRoute } from "./app/route";
-import { createAppTheme } from "./app/theme";
+import { MOTION, Z_INDEX, createAppTheme } from "./app/theme";
 import { TransferQueueProvider, useTransferQueue } from "./app/transferQueue";
 
 export interface SnackbarMessage {
@@ -84,6 +86,7 @@ function AppContent({
   const [search, setSearch] = useState("");
   const [showTransfers, setShowTransfers] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
   const [contentScrolled, setContentScrolled] = useState(false);
   const [snackQueue, setSnackQueue] = useState<SnackbarMessage[]>([]);
   const [snackOpen, setSnackOpen] = useState(false);
@@ -147,14 +150,20 @@ function AppContent({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.key === "Process") return;
-      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
-        return;
-      }
       const cmdK =
         (event.key === "k" || event.key === "K") &&
         (event.metaKey || event.ctrlKey);
+      if (cmdK) {
+        // 命令面板快捷键即使在输入框聚焦时也要生效，故先于 isTypingTarget 判断
+        event.preventDefault();
+        setShowPalette(true);
+        return;
+      }
+      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
+        return;
+      }
       const slash = event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
-      if (cmdK || slash) {
+      if (slash) {
         event.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -166,6 +175,19 @@ function AppContent({
 
   return (
     <Stack sx={{ height: "100%", minHeight: 0, overflow: "hidden", backgroundColor: "background.default" }}>
+      <Button
+        href="#main-content"
+        sx={{
+          position: "absolute",
+          left: 16,
+          top: -48,
+          zIndex: Z_INDEX.dragOverlay,
+          transition: `top ${MOTION.fast}ms ease`,
+          "&:focus-visible": { top: 8 },
+        }}
+      >
+        {strings.skipToContent}
+      </Button>
       <Header
         search={search}
         onSearchChange={setSearch}
@@ -179,8 +201,18 @@ function AppContent({
         onThemeModeChange={onThemeModeChange}
         elevated={contentScrolled}
       />
-      <Main
-        search={search}
+      <Box
+        component="main"
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
+        <Main
+          search={search}
         onSearchChange={setSearch}
         onNotify={onNotify}
         view={view}
@@ -190,8 +222,9 @@ function AppContent({
         route={route}
         navigate={navigate}
         onOpenApi={() => flags.apiKey && setShowApiKeys(true)}
-        onContentScroll={setContentScrolled}
-      />
+          onContentScroll={setContentScrolled}
+        />
+      </Box>
       {username === null && <LoginDialog />}
       <Snackbar
         key={currentSnack?.key}
@@ -226,6 +259,16 @@ function AppContent({
         </Alert>
       </Snackbar>
       <TransferManager open={showTransfers} onClose={() => setShowTransfers(false)} />
+      <CommandPalette
+        open={showPalette}
+        onClose={() => setShowPalette(false)}
+        onNavigate={navigate}
+        onNotify={onNotify}
+        onOpenTransfers={() => setShowTransfers(true)}
+        onThemeToggle={() =>
+          onThemeModeChange(themeMode === "dark" ? "light" : "dark")
+        }
+      />
       {flags.apiKey && (
         <ApiKeysPanel
           open={showApiKeys}

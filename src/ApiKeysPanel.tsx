@@ -1,3 +1,4 @@
+import { alpha } from "@mui/material/styles";
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -245,7 +246,7 @@ function ApiKeysPanel({
                   backgroundColor: "background.default",
                   color: "text.primary",
                   border: "1px solid",
-                  borderColor: "rgba(243, 128, 32, 0.28)",
+                  borderColor: (t) => alpha(t.palette.primary.main, 0.28),
                 }}
               >
                 <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
