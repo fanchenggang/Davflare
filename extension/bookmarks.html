@@ -121,6 +121,18 @@
         <input id="tagInput" type="text" spellcheck="false" placeholder="dev, docs" />
         <label for="noteInput" id="noteInputLabel">Note</label>
         <textarea id="noteInput" rows="3" spellcheck="false"></textarea>
+
+        <fieldset class="section" id="snapSection">
+          <legend id="snapLegend">Snapshot</legend>
+          <p id="snapInfo" class="status"></p>
+          <div class="snapActions">
+            <button id="snapCapture" class="primary" type="button">Capture</button>
+            <button id="snapView" class="ghost" type="button" disabled>View</button>
+            <button id="snapDownload" class="ghost" type="button" disabled>Download</button>
+            <button id="snapDelete" class="ghost" type="button" disabled>Delete</button>
+          </div>
+        </fieldset>
+
         <menu>
           <button id="tagCancel" class="ghost" type="button">Cancel</button>
           <button id="tagSave" class="primary" type="submit">Save</button>
@@ -193,6 +205,7 @@
     <script src="bookmarksView.js"></script>
     <script src="workspaces.js"></script>
     <script src="tabRules.js"></script>
+    <script src="snapshots.js"></script>
     <script src="bookmarksApp.js"></script>
   </body>
 </html>

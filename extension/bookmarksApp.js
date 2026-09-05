@@ -91,6 +91,20 @@ var COPY = {
     groupCurrentWindow: "Group current window",
     fallbackText: "Group the rest by domain",
     invalidName: "Enter a name.",
+    snapLegend: "Snapshot",
+    snapCapture: "Capture",
+    snapUpdate: "Re-capture",
+    snapView: "View",
+    snapDownload: "Download",
+    snapDelete: "Delete",
+    snapNone: "No snapshot yet. Captures the page as a single HTML file onto your WebDAV.",
+    snapCapturing: "Capturing…",
+    snapSaved: "Snapshot saved.",
+    snapCaptureFail: "Could not capture this page (restricted or failed to load).",
+    snapTooLarge: "Snapshot exceeds 8 MB and was not saved.",
+    snapMissing: "Snapshot file is missing on the server.",
+    snapConfirmDelete: "Delete this snapshot from WebDAV?",
+    snapDeleted: "Snapshot deleted.",
   },
   zh: {
     title: "Davflare 书签",
@@ -174,6 +188,20 @@ var COPY = {
     groupCurrentWindow: "按规则分组当前窗口",
     fallbackText: "未命中的按域名分组",
     invalidName: "请填写名称。",
+    snapLegend: "快照",
+    snapCapture: "生成快照",
+    snapUpdate: "更新快照",
+    snapView: "查看",
+    snapDownload: "下载",
+    snapDelete: "删除",
+    snapNone: "还没有快照。会把页面捕获为单文件 HTML 存到你的 WebDAV。",
+    snapCapturing: "捕获中…",
+    snapSaved: "快照已保存。",
+    snapCaptureFail: "无法捕获该页面（受限页面或加载失败）。",
+    snapTooLarge: "快照超过 8 MB，未保存。",
+    snapMissing: "服务器上的快照文件已缺失。",
+    snapConfirmDelete: "确定从 WebDAV 删除这个快照？",
+    snapDeleted: "快照已删除。",
   },
 };
 
@@ -208,11 +236,14 @@ var appState = {
   tabRules: { version: 1, fallbackDomain: true, rules: [] },
   rulesEtag: null,
   wsSelected: {},
+  snapshots: { version: 1, snapshots: [] },
+  snapshotsEtag: null,
 };
 
 var editingBookmarkId = null;
 var editingRuleId = null;
 var editingWsId = null;
+var tagDialogBookmark = null;
 var pendingConfirm = null;
 
 var lang =
@@ -1176,15 +1207,262 @@ async function submitRule(event) {
   if (await persistTabRules()) renderTabRules();
 }
 
+/* ---------- snapshots ---------- */
+
+var SNAP_FILE = "snapshots.json";
+var SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Runs inside the captured page (MAIN world): best-effort inlines CORS-readable
+ * images as data URLs, strips scripts/iframes, returns the serialized HTML.
+ * Must stay fully self-contained — it is serialized, not closure-called.
+ */
+var PAGE_CAPTURE_FUNC = function () {
+  return (async function () {
+    var imgs = Array.prototype.slice.call(document.images || []).slice(0, 50);
+    await Promise.all(
+      imgs.map(function (img) {
+        if (!img || !img.src || img.src.indexOf("data:") === 0) return Promise.resolve();
+        return fetch(img.src, { mode: "cors", credentials: "omit" })
+          .then(function (res) {
+            return res.ok ? res.blob() : null;
+          })
+          .then(function (blob) {
+            if (!blob || blob.size > 2 * 1024 * 1024) return;
+            return new Promise(function (resolve) {
+              var reader = new FileReader();
+              reader.onload = function () {
+                img.src = String(reader.result);
+                resolve();
+              };
+              reader.onerror = function () {
+                resolve();
+              };
+              reader.readAsDataURL(blob);
+            });
+          })
+          .catch(function () {});
+      })
+    );
+    var root = document.documentElement ? document.documentElement.cloneNode(true) : null;
+    if (!root) return "";
+    var junk = root.querySelectorAll("script, iframe, noscript");
+    for (var i = 0; i < junk.length; i++) {
+      if (junk[i].parentNode) junk[i].parentNode.removeChild(junk[i]);
+    }
+    return "<!DOCTYPE html>" + root.outerHTML;
+  })();
+};
+
+function waitForTabComplete(tabId, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    var settled = false;
+    var listener = function (id, info) {
+      if (id === tabId && info && info.status === "complete") {
+        cleanup();
+        resolve();
+      }
+    };
+    function cleanup() {
+      if (settled) return;
+      settled = true;
+      try {
+        chrome.tabs.onUpdated.removeListener(listener);
+      } catch (err) {
+        /* listener already gone */
+      }
+    }
+    chrome.tabs.onUpdated.addListener(listener);
+    setTimeout(function () {
+      cleanup();
+      reject(new Error("snapshot tab timeout"));
+    }, timeoutMs);
+    chrome.tabs
+      .get(tabId)
+      .then(function (tab) {
+        if (tab && tab.status === "complete") {
+          cleanup();
+          resolve();
+        }
+      })
+      .catch(function () {});
+  });
+}
+
+function setSnapStatus(message) {
+  $("snapInfo").textContent = message || "";
+}
+
+async function loadSnapshots() {
+  var made = await makeClient();
+  if (!made.cfg.instanceUrl) return;
+  var res = await made.client.getFile(SNAP_FILE);
+  if (!res.ok) return;
+  appState.snapshotsEtag = res.etag;
+  var parsed = null;
+  if (res.text) {
+    try {
+      parsed = JSON.parse(res.text);
+    } catch (err) {
+      parsed = null;
+    }
+  }
+  appState.snapshots = Snapshots.normalize(parsed);
+}
+
+async function persistSnapshots() {
+  var made = await makeClient();
+  var put = await made.client.putFile(
+    SNAP_FILE,
+    JSON.stringify(appState.snapshots, null, 2),
+    "application/json; charset=utf-8",
+    appState.snapshotsEtag
+  );
+  if (put.ok) return true;
+  if (put.kind === "conflict") await loadSnapshots();
+  return false;
+}
+
+function renderSnapSection() {
+  var bookmark = tagDialogBookmark;
+  if (!bookmark) return;
+  var entry = Snapshots.findByBookmarkId(appState.snapshots, bookmark.id);
+  $("snapCapture").textContent = entry ? t.snapUpdate : t.snapCapture;
+  $("snapView").disabled = !entry;
+  $("snapDownload").disabled = !entry;
+  $("snapDelete").disabled = !entry;
+  if (entry) {
+    setSnapStatus(
+      BookmarksView.formatRelative(entry.capturedAt, Date.now(), lang) +
+        " · " +
+        BookmarksView.formatBytes(entry.size)
+    );
+  } else {
+    setSnapStatus(t.snapNone);
+  }
+}
+
+async function captureSnapshotFor(bookmark) {
+  if (!bookmark || !chrome.scripting) {
+    setSnapStatus(t.snapCaptureFail);
+    return;
+  }
+  setSnapStatus(t.snapCapturing);
+  await loadSnapshots();
+
+  var tab = await chrome.tabs.create({ url: bookmark.url, active: false });
+  var html = "";
+  try {
+    await waitForTabComplete(tab.id, 25000);
+    var results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: "MAIN",
+      func: PAGE_CAPTURE_FUNC,
+    });
+    html =
+      results && results[0] && typeof results[0].result === "string"
+        ? results[0].result
+        : "";
+  } catch (err) {
+    setSnapStatus(t.snapCaptureFail);
+    return;
+  } finally {
+    chrome.tabs.remove(tab.id);
+  }
+  if (!html) {
+    setSnapStatus(t.snapCaptureFail);
+    return;
+  }
+  if (html.length > SNAPSHOT_MAX_BYTES) {
+    setSnapStatus(t.snapTooLarge);
+    return;
+  }
+
+  var made = await makeClient();
+  var id = Snapshots.makeId();
+  var put = await made.client.putFile(Snapshots.fileName(id), html, "text/html; charset=utf-8");
+  if (!put.ok) {
+    setSnapStatus(errorText(put.kind));
+    return;
+  }
+  appState.snapshots = Snapshots.upsert(appState.snapshots, {
+    id: id,
+    bookmarkId: bookmark.id,
+    url: bookmark.url,
+    title: bookmark.title,
+    capturedAt: Date.now(),
+    size: html.length,
+  });
+  var ok = await persistSnapshots();
+  setSnapStatus(ok ? t.snapSaved : t.errConflict);
+  renderSnapSection();
+}
+
+async function fetchSnapshotHtml(entry) {
+  var made = await makeClient();
+  var file = await made.client.getFile(Snapshots.fileName(entry.id));
+  if (!file.ok) {
+    setSnapStatus(errorText(file.kind));
+    return null;
+  }
+  if (file.missing) {
+    setSnapStatus(t.snapMissing);
+    return null;
+  }
+  return String(file.text || "");
+}
+
+async function viewSnapshot(entry) {
+  var html = await fetchSnapshotHtml(entry);
+  if (html === null) return;
+  var blob = new Blob([html], { type: "text/html" });
+  var url = URL.createObjectURL(blob);
+  chrome.tabs.create({ url: url });
+  setTimeout(function () {
+    URL.revokeObjectURL(url);
+  }, 5 * 60 * 1000);
+}
+
+async function downloadSnapshot(entry) {
+  var html = await fetchSnapshotHtml(entry);
+  if (html === null) return;
+  var blob = new Blob([html], { type: "text/html" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = entry.id + ".html";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () {
+    URL.revokeObjectURL(url);
+  }, 5000);
+}
+
+async function deleteSnapshot(entry) {
+  var made = await makeClient();
+  var del = await made.client.deleteFile(Snapshots.fileName(entry.id));
+  if (!del.ok) {
+    setSnapStatus(errorText(del.kind));
+    return;
+  }
+  appState.snapshots = Snapshots.remove(appState.snapshots, entry.id);
+  var ok = await persistSnapshots();
+  if (ok) setSnapStatus(t.snapDeleted);
+  renderSnapSection();
+}
+
 /* ---------- tag / note editing ---------- */
 
 function openTagDialog(item) {
   editingBookmarkId = item.id;
+  tagDialogBookmark = item;
   $("tagTarget").textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
   $("tagInput").value = (Array.isArray(item.tags) ? item.tags : []).join(", ");
   $("noteInput").value = item.note || "";
   $("tagDialog").showModal();
   $("tagInput").focus();
+  loadSnapshots().then(renderSnapSection);
 }
 
 async function submitTagForm(event) {
@@ -1413,6 +1691,10 @@ function applyCopy() {
   $("applyGroupsBtn").textContent = t.groupCurrentWindow;
   $("ruleAddBtn").textContent = t.ruleAdd;
   $("fallbackText").textContent = t.fallbackText;
+  $("snapLegend").textContent = t.snapLegend;
+  $("snapView").textContent = t.snapView;
+  $("snapDownload").textContent = t.snapDownload;
+  $("snapDelete").textContent = t.snapDelete;
 }
 
 function setView(view) {
@@ -1471,6 +1753,30 @@ function wireEvents() {
     $("tagDialog").close();
   });
   $("tagForm").addEventListener("submit", submitTagForm);
+  $("snapCapture").addEventListener("click", function () {
+    captureSnapshotFor(tagDialogBookmark);
+  });
+  $("snapView").addEventListener("click", function () {
+    var entry =
+      tagDialogBookmark &&
+      Snapshots.findByBookmarkId(appState.snapshots, tagDialogBookmark.id);
+    if (entry) viewSnapshot(entry);
+  });
+  $("snapDownload").addEventListener("click", function () {
+    var entry =
+      tagDialogBookmark &&
+      Snapshots.findByBookmarkId(appState.snapshots, tagDialogBookmark.id);
+    if (entry) downloadSnapshot(entry);
+  });
+  $("snapDelete").addEventListener("click", function () {
+    var entry =
+      tagDialogBookmark &&
+      Snapshots.findByBookmarkId(appState.snapshots, tagDialogBookmark.id);
+    if (!entry) return;
+    confirmThen(t.snapConfirmDelete, function () {
+      deleteSnapshot(entry);
+    });
+  });
   $("wsNameCancel").addEventListener("click", function () {
     openWsNameDialog.pendingPages = null;
     $("wsNameDialog").close();

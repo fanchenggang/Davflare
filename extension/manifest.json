@@ -32,7 +32,8 @@
     "favicon",
     "notifications",
     "tabs",
-    "tabGroups"
+    "tabGroups",
+    "scripting"
   ],
   "optional_permissions": ["bookmarks"],
   "optional_host_permissions": ["http://*/*", "https://*/*"]

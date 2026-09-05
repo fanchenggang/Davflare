@@ -4,6 +4,7 @@ const nodeRequire = createRequire(import.meta.url);
 
 const DavflareDav = nodeRequire("../../../extension/dav.js") as {
   createDavClient: (options: Record<string, unknown>) => {
+    deleteFile: (fileName: string) => Promise<Resolved>;
     ensureDir: () => Promise<Resolved>;
     getBookmarks: () => Promise<Resolved>;
     getFile: (fileName: string) => Promise<Resolved>;
@@ -293,5 +294,27 @@ describe("extension/dav.js generic getFile / putFile", () => {
       ok: true,
     });
     expect((calls[1].init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
+  });
+});
+
+describe("extension/dav.js deleteFile", () => {
+  test("maps 204/404 to ok and other statuses to kinds", async () => {
+    const gone = clientWith({}, () => ({ status: 204 }));
+    expect(await gone.client.deleteFile("snapshots/snap-1.html")).toEqual({ ok: true });
+
+    const missing = clientWith({}, () => ({ status: 404 }));
+    expect(await missing.client.deleteFile("snapshots/snap-1.html")).toEqual({ ok: true });
+
+    const denied = clientWith({}, () => ({ status: 401 }));
+    expect(await denied.client.deleteFile("snapshots/snap-1.html")).toEqual({
+      ok: false,
+      kind: "unauthorized",
+    });
+
+    const offline = clientWith({}, () => ({ status: 0 }));
+    expect(await offline.client.deleteFile("snapshots/snap-1.html")).toEqual({
+      ok: false,
+      kind: "network",
+    });
   });
 });
