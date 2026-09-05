@@ -206,7 +206,7 @@ try:
 except Exception:
     print('ZIP-BAD')
 ")" "ZIP-OK"
-DTHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN")
+DTHEAD=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}|%{content_type}" -I "$BASE/share/$DTOKEN?download=1")
 assert_contains "dir share HEAD 200 zip" "$DTHEAD" "200|application/zip"
 assert_contains "dir landing folder badge" "$(curl -s --noproxy '*' "$BASE/share/$DTOKEN")" "Folder (zip download)"
 # 过期：expiresInHours 接受小数（0.00001h = 36ms），落地页与直链都应 410

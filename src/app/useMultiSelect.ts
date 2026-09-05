@@ -51,10 +51,13 @@ export function useMultiSelect(visibleFiles: FileItem[]) {
 
   const toggleSelect = useCallback(
     (key: string, event?: { shiftKey?: boolean }) => {
+      // updater 是延迟求值的，anchor 必须在进入 updater 前捕获，
+      // 否则第 78 行的覆写先生效，shift 范围选择退化为「原选中 + 目标」
+      const anchor = selectionAnchor.current;
       setSelectedKeys((prev) => {
-        if (event?.shiftKey && selectionAnchor.current) {
+        if (event?.shiftKey && anchor) {
           const anchorIndex = visibleFiles.findIndex(
-            (file) => file.key === selectionAnchor.current
+            (file) => file.key === anchor
           );
           const targetIndex = visibleFiles.findIndex(
             (file) => file.key === key

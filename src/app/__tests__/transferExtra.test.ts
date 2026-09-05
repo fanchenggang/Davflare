@@ -10,6 +10,7 @@ import {
 } from "../transfer";
 import { authFetch } from "../auth";
 import { setLang } from "../strings";
+import { asAuthFetchMock } from "../testUtils";
 
 jest.mock("p-limit", () => ({
   __esModule: true,
@@ -21,7 +22,7 @@ jest.mock("../auth", () => ({
   basicAuthHeader: jest.fn(),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
+const mockAuthFetch = asAuthFetchMock(authFetch);
 
 function blobResponse(ok = true) {
   return {

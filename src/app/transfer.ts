@@ -285,7 +285,7 @@ export async function generateThumbnail(file: File) {
 }
 
 export async function blobDigest(blob: Blob) {
-  const digest = await crypto.subtle.digest("SHA-1", await blob.arrayBuffer());
+  const digest = await crypto.subtle.digest("SHA-1", new Uint8Array(await blob.arrayBuffer()));
   const digestArray = Array.from(new Uint8Array(digest));
   const digestHex = digestArray
     .map((b) => b.toString(16).padStart(2, "0"))

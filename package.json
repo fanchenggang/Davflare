@@ -37,6 +37,37 @@
       "react-app/jest"
     ]
   },
+  "jest": {
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx,ts,tsx}",
+      "functions/**/*.ts",
+      "!src/index.js",
+      "!src/app/testUtils.ts",
+      "!src/app/testInMemoryBucket.ts",
+      "!**/__tests__/**",
+      "!**/*.d.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 50.22,
+        "branches": 42.67,
+        "functions": 60.87,
+        "lines": 50.97
+      },
+      "./src": {
+        "statements": 91.6,
+        "branches": 84.5,
+        "functions": 85.9,
+        "lines": 93.5
+      },
+      "./functions": {
+        "statements": 58.67,
+        "branches": 53.23,
+        "functions": 66.69,
+        "lines": 60.92
+      }
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",

@@ -18,57 +18,39 @@ import {
   dispatchMcpRequest,
   mcpJsonHasRawSecrets,
   parseJsonRpcBody,
-  type JsonRpcRequest,
   type ToolCallApis,
 } from "../../../functions/_mcp";
-
-function rpc(partial: Partial<JsonRpcRequest> & { method: string }): JsonRpcRequest {
-  const hasId = partial.hasId !== undefined ? partial.hasId : true;
-  return {
-    jsonrpc: "2.0",
-    id: hasId ? (partial.id ?? 1) : undefined,
-    method: partial.method,
-    params: partial.params,
-    hasId,
-  };
-}
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-  });
-}
+import { httpJsonResponse, rpc } from "../testUtils";
 
 function mockApis(overrides: Partial<ToolCallApis> = {}): ToolCallApis {
   return {
-    list: async () => jsonResponse({ items: [] }),
-    upload: async () => jsonResponse({ key: "notes.txt", overwritten: false }, 201),
+    list: async () => httpJsonResponse({ items: [] }),
+    upload: async () => httpJsonResponse({ key: "notes.txt", overwritten: false }, 201),
     download: async () => new Response("hello", { status: 200, headers: { "Content-Type": "text/plain" } }),
-    mkdir: async () => jsonResponse({ key: "folder/", created: true }, 201),
-    delete: async () => jsonResponse({ key: "notes.txt", deleted: true, soft: true }),
-    search: async () => jsonResponse({ matches: [], nextCursor: null }),
-    move: async () => jsonResponse({ from: "a", to: "b", kind: "file" }),
-    copy: async () => jsonResponse({ from: "a", to: "b", copied: true }),
-    stat: async () => jsonResponse({ key: "a.txt", kind: "file", size: 5 }),
+    mkdir: async () => httpJsonResponse({ key: "folder/", created: true }, 201),
+    delete: async () => httpJsonResponse({ key: "notes.txt", deleted: true, soft: true }),
+    search: async () => httpJsonResponse({ matches: [], nextCursor: null }),
+    move: async () => httpJsonResponse({ from: "a", to: "b", kind: "file" }),
+    copy: async () => httpJsonResponse({ from: "a", to: "b", copied: true }),
+    stat: async () => httpJsonResponse({ key: "a.txt", kind: "file", size: 5 }),
     downloadRange: async () => new Response("hello", {
       status: 206,
       headers: { "Content-Type": "application/octet-stream" },
     }),
-    uploadStart: async () => jsonResponse({ key: "big.bin", uploadId: "uid-1" }, 201),
-    uploadPart: async () => jsonResponse({ partNumber: 1, etag: "etag-1" }),
-    uploadComplete: async () => jsonResponse({ key: "big.bin", size: 10 }),
+    uploadStart: async () => httpJsonResponse({ key: "big.bin", uploadId: "uid-1" }, 201),
+    uploadPart: async () => httpJsonResponse({ partNumber: 1, etag: "etag-1" }),
+    uploadComplete: async () => httpJsonResponse({ key: "big.bin", size: 10 }),
     uploadAbort: async () => new Response(null, { status: 204 }),
-    shareCreate: async () => jsonResponse({ token: "tok-1", url: "http://x/share/tok-1" }, 201),
-    shareList: async () => jsonResponse([]),
+    shareCreate: async () => httpJsonResponse({ token: "tok-1", url: "http://x/share/tok-1" }, 201),
+    shareList: async () => httpJsonResponse([]),
     shareRevoke: async () => new Response(null, { status: 204 }),
-    sitesList: async () => jsonResponse({ sitesHost: "sites.example.com", sites: [] }),
-    sitesConfig: async () => jsonResponse({ slug: "demo", spa: true }),
-    sitesDelete: async () => jsonResponse({ slug: "demo", deleted: 2 }),
+    sitesList: async () => httpJsonResponse({ sitesHost: "sites.example.com", sites: [] }),
+    sitesConfig: async () => httpJsonResponse({ slug: "demo", spa: true }),
+    sitesDelete: async () => httpJsonResponse({ slug: "demo", deleted: 2 }),
     sitesEnabled: async () => true,
-    imageList: async () => jsonResponse({ sitesHost: "sites.example.com", images: [] }),
+    imageList: async () => httpJsonResponse({ sitesHost: "sites.example.com", images: [] }),
     imageUpload: async () =>
-      jsonResponse(
+      httpJsonResponse(
         {
           id: "a".repeat(32),
           name: "shot.png",
@@ -80,7 +62,7 @@ function mockApis(overrides: Partial<ToolCallApis> = {}): ToolCallApis {
         },
         201
       ),
-    imageDelete: async () => jsonResponse({ id: "a".repeat(32), deleted: true }),
+    imageDelete: async () => httpJsonResponse({ id: "a".repeat(32), deleted: true }),
     imageHostEnabled: async () => true,
     ...overrides,
   };
@@ -192,15 +174,15 @@ describe("mcp protocol", () => {
         upload: async () => {
           throw new Error("inline upload should not be used for >1MiB");
         },
-        uploadStart: async ({ key }) => jsonResponse({ key, uploadId: "uid-42" }, 201),
+        uploadStart: async ({ key }) => httpJsonResponse({ key, uploadId: "uid-42" }, 201),
         uploadPart: async ({ partNumber, body }) => {
           parts.push({ partNumber, body });
-          return jsonResponse({ partNumber, etag: `etag-${partNumber}` });
+          return httpJsonResponse({ partNumber, etag: `etag-${partNumber}` });
         },
         uploadComplete: async ({ uploadId, parts: completed }) => {
           expect(uploadId).toBe("uid-42");
           expect(completed).toHaveLength(2);
-          return jsonResponse({ key: "docs/big.bin", size: content.length });
+          return httpJsonResponse({ key: "docs/big.bin", size: content.length });
         },
         uploadAbort: async () => {
           throw new Error("abort should not fire on the happy path");
@@ -261,7 +243,7 @@ describe("mcp protocol", () => {
         { path: "big.bin", part: 1, partSize: 100 },
         {
           stat: async () =>
-            jsonResponse({ key: "big.bin", kind: "file", size: big.length }),
+            httpJsonResponse({ key: "big.bin", kind: "file", size: big.length }),
           downloadRange,
         }
       );
@@ -285,7 +267,7 @@ describe("mcp protocol", () => {
 
   test("list tool wraps API json", async () => {
     const result = await callTool("list", { path: "" }, {
-      list: async () => jsonResponse({ items: [{ key: "a.txt", isDir: false }] }),
+      list: async () => httpJsonResponse({ items: [{ key: "a.txt", isDir: false }] }),
     });
     const body = toolPayload(result);
     expect(body.isError).toBeFalsy();
@@ -293,26 +275,26 @@ describe("mcp protocol", () => {
   });
 
   test("search/move/copy/stat forward arguments", async () => {
-    const search = jest.fn(async () => jsonResponse({ matches: [{ key: "a.txt" }] }));
+    const search = jest.fn(async () => httpJsonResponse({ matches: [{ key: "a.txt" }] }));
     const searchResult = await callTool("search", { query: "a.txt", limit: 10 }, { search });
     expect(search).toHaveBeenCalledWith({ query: "a.txt", limit: 10, cursor: undefined });
     expect(JSON.parse(toolPayload(searchResult).content[0].text).matches).toHaveLength(1);
 
-    const move = jest.fn(async () => jsonResponse({ from: "a", to: "b" }));
+    const move = jest.fn(async () => httpJsonResponse({ from: "a", to: "b" }));
     await callTool("move", { from: "a", to: "b", overwrite: true }, { move });
     expect(move).toHaveBeenCalledWith({ from: "a", to: "b", overwrite: true });
 
-    const copy = jest.fn(async () => jsonResponse({ copied: true }));
+    const copy = jest.fn(async () => httpJsonResponse({ copied: true }));
     await callTool("copy", { from: "a", to: "b" }, { copy });
     expect(copy).toHaveBeenCalledWith({ from: "a", to: "b", overwrite: undefined });
 
-    const stat = jest.fn(async () => jsonResponse({ kind: "file", size: 3 }));
+    const stat = jest.fn(async () => httpJsonResponse({ kind: "file", size: 3 }));
     await callTool("stat", { path: "a.txt" }, { stat });
     expect(stat).toHaveBeenCalledWith({ path: "a.txt" });
   });
 
   test("share tools create, list, revoke", async () => {
-    const shareCreate = jest.fn(async () => jsonResponse({ token: "tok-1" }, 201));
+    const shareCreate = jest.fn(async () => httpJsonResponse({ token: "tok-1" }, 201));
     const created = await callTool(
       "share_create",
       { path: "docs/report.pdf", extractCode: "abcd", expiresInHours: 24 },
@@ -325,7 +307,7 @@ describe("mcp protocol", () => {
     });
     expect(JSON.parse(toolPayload(created).content[0].text).token).toBe("tok-1");
 
-    const shareList = jest.fn(async () => jsonResponse([{ token: "tok-1" }]));
+    const shareList = jest.fn(async () => httpJsonResponse([{ token: "tok-1" }]));
     const listed = await callTool("share_list", {}, { shareList });
     expect(shareList).toHaveBeenCalledTimes(1);
     expect(JSON.parse(toolPayload(listed).content[0].text)).toHaveLength(1);
@@ -336,7 +318,7 @@ describe("mcp protocol", () => {
   });
 
   test("share_create rejects missing path and short codes are left to the API", async () => {
-    const shareCreate = jest.fn(async () => jsonResponse({ token: "t" }, 201));
+    const shareCreate = jest.fn(async () => httpJsonResponse({ token: "t" }, 201));
     const missing = await callTool("share_create", {}, { shareCreate });
     expect(toolPayload(missing).isError).toBe(true);
     expect(shareCreate).not.toHaveBeenCalled();
@@ -344,23 +326,23 @@ describe("mcp protocol", () => {
 
   test("sites tools list/config/delete", async () => {
     const sitesList = jest.fn(async () =>
-      jsonResponse({ sitesHost: "sites.example.com", sites: [{ slug: "demo", spa: false }] })
+      httpJsonResponse({ sitesHost: "sites.example.com", sites: [{ slug: "demo", spa: false }] })
     );
     const listed = await callTool("sites_list", {}, { sitesList });
     expect(sitesList).toHaveBeenCalledWith({ withStats: true });
     expect(JSON.parse(toolPayload(listed).content[0].text).sites[0].slug).toBe("demo");
 
-    const sitesConfig = jest.fn(async () => jsonResponse({ slug: "demo", spa: true }));
+    const sitesConfig = jest.fn(async () => httpJsonResponse({ slug: "demo", spa: true }));
     await callTool("sites_config", { slug: "demo", spa: true }, { sitesConfig });
     expect(sitesConfig).toHaveBeenCalledWith({ slug: "demo", spa: true });
 
-    const sitesDelete = jest.fn(async () => jsonResponse({ slug: "demo", deleted: 3 }));
+    const sitesDelete = jest.fn(async () => httpJsonResponse({ slug: "demo", deleted: 3 }));
     await callTool("sites_delete", { slug: "demo", purge: true }, { sitesDelete });
     expect(sitesDelete).toHaveBeenCalledWith({ slug: "demo", purge: true });
   });
 
   test("sites_config requires slug and spa", async () => {
-    const sitesConfig = jest.fn(async () => jsonResponse({ slug: "demo", spa: true }));
+    const sitesConfig = jest.fn(async () => httpJsonResponse({ slug: "demo", spa: true }));
     const missing = await callTool("sites_config", { slug: "demo" }, { sitesConfig });
     expect(toolPayload(missing).isError).toBe(true);
     expect(sitesConfig).not.toHaveBeenCalled();
@@ -395,7 +377,7 @@ describe("mcp protocol", () => {
       const folder = path.replace(/\/+$/, "");
       const items = trees[folder];
       if (!items) return new Response("目录不存在", { status: 404 });
-      return jsonResponse({ items });
+      return httpJsonResponse({ items });
     });
     const download = jest.fn(async ({ path }: { path: string }) => {
       const text = contents[path];
@@ -456,7 +438,7 @@ describe("mcp protocol", () => {
   });
 
   test("push rejects raw keys in mcp.json", async () => {
-    const upload = jest.fn(async () => jsonResponse({ key: "agents/cursor/mcp/mcp.json" }, 201));
+    const upload = jest.fn(async () => httpJsonResponse({ key: "agents/cursor/mcp/mcp.json" }, 201));
     const rejected = await callTool(
       "push",
       {
@@ -523,9 +505,9 @@ describe("mcp protocol", () => {
     const list = jest.fn(async ({ path }: { path: string }) => {
       const items = trees[path.replace(/\/+$/, "")];
       if (!items) return new Response("目录不存在", { status: 404 });
-      return jsonResponse({ items });
+      return httpJsonResponse({ items });
     });
-    const copy = jest.fn(async () => jsonResponse({ copied: true }));
+    const copy = jest.fn(async () => httpJsonResponse({ copied: true }));
     const copied = await callTool(
       "publish_site",
       { slug: "hello", source: "draft/hello" },
@@ -562,7 +544,7 @@ describe("mcp protocol", () => {
     const imageUpload = jest.fn(async (query: { name: string; body: Uint8Array }) => {
       expect(query.name).toBe("dot.png");
       expect(query.body.byteLength).toBeGreaterThan(0);
-      return jsonResponse(
+      return httpJsonResponse(
         {
           id,
           name: query.name,
@@ -584,7 +566,7 @@ describe("mcp protocol", () => {
     expect(imageUpload).toHaveBeenCalled();
 
     const listed = await callTool("image_list", {}, {
-      imageList: async () => jsonResponse({ images: [{ id, url: payload.url, markdown: payload.markdown }] }),
+      imageList: async () => httpJsonResponse({ images: [{ id, url: payload.url, markdown: payload.markdown }] }),
       imageHostEnabled: async () => true,
     });
     expect(toolPayload(listed).content[0].text).toContain(id);
@@ -592,7 +574,7 @@ describe("mcp protocol", () => {
     const deleted = await callTool("image_delete", { id }, {
       imageDelete: async (query) => {
         expect(query.id).toBe(id);
-        return jsonResponse({ id, deleted: true });
+        return httpJsonResponse({ id, deleted: true });
       },
       imageHostEnabled: async () => true,
     });

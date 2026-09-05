@@ -1,9 +1,10 @@
 import { act, renderHook } from "@testing-library/react";
 
 import { loadRecent, pushRecent, useRecent } from "../recent";
+import { clearStorage } from "../testUtils";
 
 beforeEach(() => {
-  localStorage.clear();
+  clearStorage();
 });
 
 describe("recent / loadRecent", () => {

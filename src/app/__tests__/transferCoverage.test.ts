@@ -12,6 +12,11 @@ import {
 } from "../transfer";
 import { authFetch, basicAuthHeader } from "../auth";
 import { setLang } from "../strings";
+import {
+  asAuthFetchMock,
+  propfindResponse,
+  type PropfindEntry,
+} from "../testUtils";
 
 jest.mock("p-limit", () => ({
   __esModule: true,
@@ -23,20 +28,20 @@ jest.mock("../auth", () => ({
   basicAuthHeader: jest.fn(() => "Basic abc"),
 }));
 
-const mockAuthFetch = authFetch as unknown as jest.Mock;
+const mockAuthFetch = asAuthFetchMock(authFetch);
 const mockBasic = basicAuthHeader as unknown as jest.Mock;
 
-function xmlResponse(body: string) {
-  return {
-    ok: true,
-    status: 207,
-    headers: {
-      get: (n: string) =>
-        n.toLowerCase() === "content-type" ? "application/xml; charset=utf-8" : null,
-    },
-    text: async () => body,
-  } as unknown as Response;
-}
+// 空 href 跳过 / 纯 collection 目录 / 带缩略图的图片（等价于原手写 XML）
+const PROPFIND_LEFTOVERS: PropfindEntry[] = [
+  { href: "" },
+  { href: "/webdav/docs/", isDir: true },
+  {
+    href: "/webdav/pic.png",
+    contentType: "image/png",
+    size: 9,
+    thumbnail: "abc",
+  },
+];
 
 beforeEach(() => {
   mockAuthFetch.mockReset();
@@ -58,26 +63,7 @@ describe("davHrefToKey leftovers", () => {
 
 describe("fetchPath leftovers", () => {
   test("parses collection dirs, thumbnails, and skips empty href", async () => {
-    const xml = `<?xml version="1.0"?>
-<multistatus>
-  <response><href></href><propstat><prop/></propstat></response>
-  <response>
-    <href>/webdav/docs/</href>
-    <propstat><prop>
-      <resourcetype><collection/></resourcetype>
-    </prop></propstat>
-  </response>
-  <response>
-    <href>/webdav/pic.png</href>
-    <propstat><prop>
-      <getcontenttype>image/png</getcontenttype>
-      <getcontentlength>9</getcontentlength>
-      <getlastmodified></getlastmodified>
-      <thumbnail xmlns="flaredrive">abc</thumbnail>
-    </prop></propstat>
-  </response>
-</multistatus>`;
-    mockAuthFetch.mockResolvedValue(xmlResponse(xml));
+    mockAuthFetch.mockResolvedValue(propfindResponse(PROPFIND_LEFTOVERS));
     const items = await fetchPath("");
     const dir = items.find((i) => i.key === "docs");
     const pic = items.find((i) => i.key === "pic.png");
