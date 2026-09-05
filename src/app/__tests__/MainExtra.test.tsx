@@ -314,18 +314,16 @@ describe("Main 上下文菜单动作", () => {
 });
 
 describe("Main 删除-撤销/重试闭环", () => {
-  function openConfirmAndConfirm(onNotify: jest.Mock) {
+  async function openConfirmAndConfirm(onNotify: jest.Mock) {
     renderMain({ kind: "folder", path: "" }, { onNotify });
-    return waitFor(() => screen.getByText("a.txt")).then(() => {
-      fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" })));
-      fireEvent.click(screen.getByRole("menuitem", { name: strings.delete }));
-      // 菜单动作经 50ms setTimeout 打开确认框，用 waitFor 消化时序抖动
-      return waitFor(() =>
-        expect(screen.getByRole("button", { name: strings.confirmAction })).toBeInTheDocument()
-      ).then(() => {
-        fireEvent.click(screen.getByRole("button", { name: strings.confirmAction }));
-      });
-    });
+    await waitFor(() => expect(screen.getByText("a.txt")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" })));
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.delete }));
+    // FileActionSheet setTimeout(0) + Main 50ms；与上下文菜单用例一致，先等确认文案。
+    await waitFor(() =>
+      expect(screen.getByText(translate("confirmDeleteMsg", { count: 1 }))).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.confirmAction }));
   }
 
   test("删除成功 → undo 恢复成功并再次刷新", async () => {
