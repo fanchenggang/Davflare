@@ -31,3 +31,4 @@ yarn-error.log*
 # davflare-cli
 cli/node_modules
 cli/dist
+dist-extension/

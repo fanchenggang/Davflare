@@ -19,6 +19,7 @@
 
         <div class="viewSwitch" role="tablist">
           <button id="switchBookmarks" class="navItem active" type="button">Bookmarks</button>
+          <button id="switchDrive" class="navItem" type="button">Drive</button>
           <button id="switchWorkspaces" class="navItem" type="button">Workspaces</button>
           <button id="switchTabRules" class="navItem" type="button">Tab groups</button>
         </div>
@@ -68,6 +69,17 @@
           <section id="cards" class="cards"></section>
           <section id="rows" class="rows hidden"></section>
           <p id="emptyState" class="empty hidden"></p>
+        </div>
+
+        <div id="viewDrive" class="hidden">
+          <header class="topbar">
+            <span id="driveUrl" class="topHint"></span>
+            <div class="spacer"></div>
+            <button id="driveRefresh" class="ghost" type="button">Reload</button>
+            <button id="driveExternal" class="ghost" type="button">Open in new tab</button>
+          </header>
+          <div id="bannerDrive" class="banner hidden"></div>
+          <iframe id="driveFrame" class="driveFrame" title="Davflare drive"></iframe>
         </div>
 
         <div id="viewWorkspaces" class="hidden">

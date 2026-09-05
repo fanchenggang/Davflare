@@ -34,6 +34,8 @@ var COPY = {
     import: "Import",
     export: "Export",
     drive: "Drive",
+    driveReload: "Reload",
+    driveOpenExternal: "Open in new tab",
     settings: "Settings",
     addDialogTitle: "Add bookmark",
     urlLabel: "URL",
@@ -131,6 +133,8 @@ var COPY = {
     import: "导入",
     export: "导出",
     drive: "网盘",
+    driveReload: "刷新",
+    driveOpenExternal: "新标签页打开",
     settings: "设置",
     addDialogTitle: "添加书签",
     urlLabel: "地址",
@@ -449,17 +453,43 @@ function openOptions() {
 
 /* ---------- view switching ---------- */
 
+var VALID_VIEWS = ["bookmarks", "drive", "workspaces", "tabRules"];
+
 function switchView(view) {
+  if (VALID_VIEWS.indexOf(view) === -1) view = "bookmarks";
   appState.view = view;
   $("viewBookmarks").classList.toggle("hidden", view !== "bookmarks");
+  $("viewDrive").classList.toggle("hidden", view !== "drive");
   $("viewWorkspaces").classList.toggle("hidden", view !== "workspaces");
   $("viewTabRules").classList.toggle("hidden", view !== "tabRules");
   $("switchBookmarks").classList.toggle("active", view === "bookmarks");
+  $("switchDrive").classList.toggle("active", view === "drive");
   $("switchWorkspaces").classList.toggle("active", view === "workspaces");
   $("switchTabRules").classList.toggle("active", view === "tabRules");
   $("bookmarksNav").classList.toggle("hidden", view !== "bookmarks");
+  if (view === "drive") loadDriveView();
   if (view === "workspaces") loadWorkspaces();
   if (view === "tabRules") loadTabRules();
+}
+
+/* ---------- drive view (embedded instance) ---------- */
+
+async function loadDriveView() {
+  var made = await makeClient();
+  var frame = $("driveFrame");
+  if (!made.cfg.instanceUrl) {
+    $("driveUrl").textContent = "";
+    frame.src = "about:blank";
+    showIn("bannerDrive", t.needConfig, t.openOptions, openOptions);
+    return;
+  }
+  $("bannerDrive").classList.add("hidden");
+  $("driveUrl").textContent = made.cfg.instanceUrl;
+  var target = made.cfg.instanceUrl;
+  if (frame.dataset.loadedUrl !== target) {
+    frame.dataset.loadedUrl = target;
+    frame.src = target;
+  }
 }
 
 /* ---------- bookmarks render ---------- */
@@ -1653,6 +1683,9 @@ function applyCopy() {
   document.title = t.title;
   $("brandSub").textContent = t.brandSub;
   $("switchBookmarks").textContent = t.viewBookmarks;
+  $("switchDrive").textContent = t.drive;
+  $("driveRefresh").textContent = t.driveReload;
+  $("driveExternal").textContent = t.driveOpenExternal;
   $("switchWorkspaces").textContent = t.viewWorkspaces;
   $("switchTabRules").textContent = t.viewTabRules;
   $("navAllText").textContent = t.navAll;
@@ -1716,6 +1749,18 @@ function setFilterAll() {
 function wireEvents() {
   $("switchBookmarks").addEventListener("click", function () {
     switchView("bookmarks");
+  });
+  $("switchDrive").addEventListener("click", function () {
+    switchView("drive");
+  });
+  $("driveRefresh").addEventListener("click", function () {
+    var frame = $("driveFrame");
+    if (frame.dataset.loadedUrl) frame.src = frame.dataset.loadedUrl;
+  });
+  $("driveExternal").addEventListener("click", async function () {
+    var cfg = await loadConfig();
+    if (cfg.instanceUrl) chrome.tabs.create({ url: cfg.instanceUrl });
+    else openOptions();
   });
   $("switchWorkspaces").addEventListener("click", function () {
     switchView("workspaces");
@@ -1815,10 +1860,8 @@ function wireEvents() {
   $("exportBtn").addEventListener("click", exportHtml);
   $("settingsBtn").addEventListener("click", openOptions);
   $("saveWindowBtn").addEventListener("click", saveCurrentWindow);
-  $("driveBtn").addEventListener("click", async function () {
-    var cfg = await loadConfig();
-    if (cfg.instanceUrl) chrome.tabs.create({ url: cfg.instanceUrl });
-    else openOptions();
+  $("driveBtn").addEventListener("click", function () {
+    switchView("drive");
   });
   document.addEventListener("keydown", function (event) {
     var target = event.target;
@@ -1840,5 +1883,13 @@ fillColorSelect();
 initTheme();
 wireEvents();
 renderFromCache();
-switchView("bookmarks");
+switchView((function () {
+  try {
+    var requested = new URLSearchParams(location.search).get("view");
+    if (requested && VALID_VIEWS.indexOf(requested) !== -1) return requested;
+  } catch (err) {
+    /* keep the default view */
+  }
+  return "bookmarks";
+})());
 refresh();

@@ -156,12 +156,10 @@ describe("Davflare Chrome extension / toolbar URL helper", () => {
 
   test("accepts a user-supplied http(s) instance and adds https when needed", () => {
     expect(resolveToolbarTarget({ instanceUrl: "https://drive.example/app/" })).toEqual({
-      action: "open",
-      url: "https://drive.example/app",
+      action: "drive",
     });
     expect(resolveToolbarTarget({ instanceUrl: "http://localhost:8788" })).toEqual({
-      action: "open",
-      url: "http://localhost:8788",
+      action: "drive",
     });
     expect(normalizeInstanceUrl("drive.example")).toBe("https://drive.example");
   });
