@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Davflare",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "description": "Save any page to your own WebDAV bookmark library from the toolbar popup.",
   "icons": {
     "16": "icons/icon16.png",

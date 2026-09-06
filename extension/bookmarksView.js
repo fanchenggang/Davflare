@@ -205,6 +205,22 @@ var BookmarksView = (function () {
     return out;
   }
 
+  /**
+   * Issue #84 / #82: which stored preset matches the active tag+since filter.
+   * Returns the preset object or null. Drives dropdown selection + ✕ visibility —
+   * callers must re-run this after applyPreset / any filter or since change.
+   */
+  function findActivePreset(presets, filterKind, filterValue, since) {
+    if (filterKind !== "tag" || !Array.isArray(presets)) return null;
+    var tag = typeof filterValue === "string" ? filterValue : "";
+    var sinceKind = typeof since === "string" ? since : "all";
+    for (var i = 0; i < presets.length; i++) {
+      var p = presets[i];
+      if (p && p.tag === tag && p.since === sinceKind) return p;
+    }
+    return null;
+  }
+
   return {
     domainOf: domainOf,
     fallbackLetter: function (item) {
@@ -212,6 +228,7 @@ var BookmarksView = (function () {
       return t ? t.charAt(0).toUpperCase() : "?";
     },
     filterBookmarks: filterBookmarks,
+    findActivePreset: findActivePreset,
     formatDate: formatDate,
     formatBytes: formatBytes,
     formatRelative: formatRelative,

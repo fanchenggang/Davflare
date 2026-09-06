@@ -28,6 +28,12 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
     raw: unknown,
     limit?: number
   ) => Array<{ name: string; tag: string; since: string }>;
+  findActivePreset: (
+    presets: unknown,
+    filterKind: unknown,
+    filterValue: unknown,
+    since: unknown
+  ) => { name: string; tag: string; since: string } | null;
 };
 
 function modelWith(bookmarks: Array<Record<string, unknown>>) {
@@ -243,5 +249,34 @@ describe("extension/bookmarksView.js normalizePresets (#63 P2)", () => {
     }));
     expect(BookmarksView.normalizePresets(many)).toHaveLength(12);
     expect(BookmarksView.normalizePresets(many, 3)).toHaveLength(3);
+  });
+});
+
+describe("extension/bookmarksView.js findActivePreset (#84 select→✕)", () => {
+  const presets = [
+    { name: "_pm_qa_137_preset", tag: "docs", since: "week" },
+    { name: "dev 长期", tag: "dev", since: "year" },
+  ];
+
+  test("after applying a preset (tag+since), match returns it — drives ✕ visible", () => {
+    // Mirrors applyPreset → state.filter/since → renderPresetSelect / activePreset.
+    const active = BookmarksView.findActivePreset(presets, "tag", "docs", "week");
+    expect(active).toEqual(presets[0]);
+    expect(!!active).toBe(true); // $("presetDelete").hidden = !active
+  });
+
+  test("cleared filters (kind all) yield null — ✕ stays hidden until a match", () => {
+    expect(BookmarksView.findActivePreset(presets, "all", "", "all")).toBeNull();
+    expect(BookmarksView.findActivePreset(presets, "folder", "Work", "week")).toBeNull();
+    expect(BookmarksView.findActivePreset(presets, "tag", "docs", "all")).toBeNull();
+    expect(BookmarksView.findActivePreset(presets, "tag", "docs", "month")).toBeNull();
+  });
+
+  test("select→apply path: empty name / junk presets / wrong since do not match", () => {
+    expect(BookmarksView.findActivePreset([], "tag", "docs", "week")).toBeNull();
+    expect(BookmarksView.findActivePreset(null, "tag", "docs", "week")).toBeNull();
+    expect(BookmarksView.findActivePreset(presets, "tag", "dev", "year")?.name).toBe(
+      "dev 长期"
+    );
   });
 });

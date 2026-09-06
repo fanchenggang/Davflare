@@ -908,6 +908,8 @@ function renderAll() {
   renderFolderSelect();
   renderItems();
   renderSyncInfo();
+  // Keep preset dropdown + ✕ in sync whenever filters re-render (#84).
+  renderPresetSelect();
 }
 
 function navButton(label, count, active, onClick) {
@@ -2594,12 +2596,12 @@ async function savePresets() {
 
 /** The preset matching the active tag+since filter, if any. */
 function activePreset() {
-  if (state.filter.kind !== "tag") return null;
-  for (var i = 0; i < appState.presets.length; i++) {
-    var p = appState.presets[i];
-    if (p.tag === state.filter.value && p.since === state.since) return p;
-  }
-  return null;
+  return BookmarksView.findActivePreset(
+    appState.presets,
+    state.filter.kind,
+    state.filter.value,
+    state.since
+  );
 }
 
 function renderPresetSelect() {
@@ -2636,6 +2638,7 @@ function applyPreset(name) {
   state.filter = { kind: "tag", value: preset.tag };
   state.since = preset.since;
   $("sinceSelect").value = preset.since;
+  // renderAll → renderPresetSelect so ✕ / selected option update immediately (#84).
   renderAll();
 }
 
@@ -3233,6 +3236,8 @@ function wireEvents() {
   $("sinceSelect").addEventListener("change", function (event) {
     state.since = event.target.value;
     renderItems();
+    // since alone can make/break an active preset match (#84 / #82).
+    renderPresetSelect();
   });
   $("presetSelect").addEventListener("change", function (event) {
     applyPreset(event.target.value);
