@@ -14,7 +14,7 @@ var Bookmarks = (function () {
   var idCounter = 0;
 
   function emptyModel() {
-    return { version: MODEL_VERSION, bookmarks: [] };
+    return { version: MODEL_VERSION, bookmarks: [], folders: [] };
   }
 
   function makeId() {
@@ -50,7 +50,45 @@ var Bookmarks = (function () {
       tags: sanitizeTags(src.tags),
       note: asString(src.note),
       added: added,
+      // Issue #63: pinned bookmarks lead the library; pinnedAt orders the
+      // pinned section (newest pin on top). Survives via the JSON sidecar.
+      pinned: src.pinned === true,
+      pinnedAt:
+        typeof src.pinnedAt === "number" && isFinite(src.pinnedAt) && src.pinnedAt > 0
+          ? src.pinnedAt
+          : 0,
     };
+  }
+
+  /**
+   * Declared folder paths (issue #63): lets empty folders exist — folders
+   * are otherwise implied by bookmark paths only. Kept sorted and unique;
+   * path segments must be non-empty and free of "." / "..".
+   */
+  function sanitizeFolderList(value) {
+    if (!Array.isArray(value)) return [];
+    var seen = Object.create(null);
+    var out = [];
+    for (var i = 0; i < value.length; i++) {
+      var path =
+        typeof value[i] === "string" ? value[i].trim().replace(/^\/+|\/+$/g, "") : "";
+      if (!path || seen[path]) continue;
+      var segs = path.split("/");
+      var bad = false;
+      for (var j = 0; j < segs.length; j++) {
+        if (!segs[j] || segs[j] === "." || segs[j] === "..") {
+          bad = true;
+          break;
+        }
+      }
+      if (bad) continue;
+      seen[path] = true;
+      out.push(path);
+    }
+    out.sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    return out;
   }
 
   function normalizeModel(raw) {
@@ -66,7 +104,11 @@ var Bookmarks = (function () {
       seenIds[item.id] = true;
       out.push(item);
     }
-    return { version: MODEL_VERSION, bookmarks: out };
+    return {
+      version: MODEL_VERSION,
+      bookmarks: out,
+      folders: sanitizeFolderList(raw.folders),
+    };
   }
 
   function isValidModel(value) {
@@ -145,13 +187,15 @@ var Bookmarks = (function () {
     );
   }
 
-  function walkLevel(node, path, out, state) {
+  function walkLevel(node, path, out, folders, state) {
     var children = node.children;
     for (var i = 0; i < children.length; i++) {
       var el = children[i];
       var tag = el.tagName;
       if (tag === "DL") {
-        collectLevel(el, joinFolder(path, state.heading), out);
+        var childPath = joinFolder(path, state.heading);
+        if (childPath) folders.push(childPath);
+        collectLevel(el, childPath, out, folders);
         state.heading = null;
       } else if (tag === "A") {
         pushAnchor(el, joinFolder(path, state.heading), out);
@@ -159,13 +203,13 @@ var Bookmarks = (function () {
         var heading = (el.textContent || "").trim();
         if (heading) state.heading = heading;
       } else if (el.children && el.children.length) {
-        walkLevel(el, path, out, state);
+        walkLevel(el, path, out, folders, state);
       }
     }
   }
 
-  function collectLevel(dl, path, out) {
-    walkLevel(dl, path, out, { heading: null });
+  function collectLevel(dl, path, out, folders) {
+    walkLevel(dl, path, out, folders, { heading: null });
   }
 
   function decodeBasicEntities(value) {
@@ -191,6 +235,7 @@ var Bookmarks = (function () {
   function parseHtmlFallback(text) {
     var src = String(text || "");
     var out = [];
+    var folders = [];
     var stack = [];
     var pendingHeading = null;
     var i = 0;
@@ -208,7 +253,9 @@ var Bookmarks = (function () {
       var slice = src.slice(i);
       var mDlOpen = /^<DL\b[^>]*>/i.exec(slice);
       if (mDlOpen) {
-        stack.push(joinFolder(currentPath(), pendingHeading));
+        var dlPath = joinFolder(currentPath(), pendingHeading);
+        if (dlPath) folders.push(dlPath);
+        stack.push(dlPath);
         pendingHeading = null;
         i += mDlOpen[0].length;
         continue;
@@ -256,7 +303,7 @@ var Bookmarks = (function () {
       }
       i += 1;
     }
-    return { version: MODEL_VERSION, bookmarks: out };
+    return { version: MODEL_VERSION, bookmarks: out, folders: sanitizeFolderList(folders) };
   }
 
   function parseHtml(text) {
@@ -264,8 +311,13 @@ var Bookmarks = (function () {
       var doc = new DOMParser().parseFromString(String(text || ""), "text/html");
       var rootDl = doc.querySelector("dl");
       var out = [];
-      if (rootDl) collectLevel(rootDl, "", out);
-      return { version: MODEL_VERSION, bookmarks: out };
+      var folders = [];
+      if (rootDl) collectLevel(rootDl, "", out, folders);
+      return {
+        version: MODEL_VERSION,
+        bookmarks: out,
+        folders: sanitizeFolderList(folders),
+      };
     }
     return parseHtmlFallback(text);
   }
@@ -295,24 +347,35 @@ var Bookmarks = (function () {
 
   function buildTree(model) {
     var root = { folders: Object.create(null), links: [], name: "" };
-    var items = normalizeModel(model).bookmarks;
+    var norm = normalizeModel(model);
+    var items = norm.bookmarks;
+    // Seed declared folders first so empty ones survive serialization (#63).
+    for (var s = 0; s < norm.folders.length; s++) {
+      ensureFolderNode(root, norm.folders[s]);
+    }
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var node = root;
       var folder = item.folder.replace(/^\/+|\/+$/g, "");
       if (folder) {
-        var segs = folder.split("/");
-        for (var j = 0; j < segs.length; j++) {
-          var seg = segs[j] || "";
-          if (!node.folders[seg]) {
-            node.folders[seg] = { folders: Object.create(null), links: [], name: seg };
-          }
-          node = node.folders[seg];
-        }
+        node = ensureFolderNode(root, folder);
       }
       node.links.push(item);
     }
     return root;
+  }
+
+  function ensureFolderNode(root, folder) {
+    var node = root;
+    var segs = folder.split("/");
+    for (var j = 0; j < segs.length; j++) {
+      var seg = segs[j] || "";
+      if (!node.folders[seg]) {
+        node.folders[seg] = { folders: Object.create(null), links: [], name: seg };
+      }
+      node = node.folders[seg];
+    }
+    return node;
   }
 
   /**
@@ -321,19 +384,26 @@ var Bookmarks = (function () {
    */
   function folderPaths(model) {
     var seen = Object.create(null);
-    var items = normalizeModel(model).bookmarks;
+    var norm = normalizeModel(model);
+    var items = norm.bookmarks;
     for (var i = 0; i < items.length; i++) {
       var folder = String(items[i].folder || "").trim().replace(/^\/+|\/+$/g, "");
       if (!folder) continue;
-      var segs = folder.split("/");
-      for (var j = 0; j < segs.length; j++) {
-        var path = segs.slice(0, j + 1).join("/");
-        if (path) seen[path] = true;
-      }
+      markFolderPaths(seen, folder);
     }
+    // Declared (possibly empty) folders join with their ancestor prefixes.
+    for (var d = 0; d < norm.folders.length; d++) markFolderPaths(seen, norm.folders[d]);
     return Object.keys(seen).sort(function (a, b) {
       return a.localeCompare(b);
     });
+  }
+
+  function markFolderPaths(seen, folder) {
+    var segs = folder.split("/");
+    for (var j = 0; j < segs.length; j++) {
+      var path = segs.slice(0, j + 1).join("/");
+      if (path) seen[path] = true;
+    }
   }
 
   function renderNode(node, depth, lines) {
@@ -413,13 +483,139 @@ var Bookmarks = (function () {
       if (!item.url || indexOfUrl(out, urlKey(item.url)) !== -1) continue;
       out.bookmarks.push(item);
     }
+    if (add.folders.length) {
+      out.folders = sanitizeFolderList(out.folders.concat(add.folders));
+    }
     return out;
   }
 
   function removeBookmark(model, id) {
+    return removeBookmarks(model, [id]);
+  }
+
+  /** Batch remove by ids (issue #63); unknown ids are ignored. */
+  function removeBookmarks(model, ids) {
     var next = normalizeModel(model);
-    next.bookmarks = next.bookmarks.filter(function (b) {
-      return b.id !== id;
+    var drop = idSet(ids);
+    if (!drop) return next;
+    var kept = [];
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      if (!drop[next.bookmarks[i].id]) kept.push(next.bookmarks[i]);
+    }
+    next.bookmarks = kept;
+    return next;
+  }
+
+  function idSet(ids) {
+    if (!Array.isArray(ids) || !ids.length) return null;
+    var set = Object.create(null);
+    for (var i = 0; i < ids.length; i++) {
+      if (typeof ids[i] === "string" && ids[i]) set[ids[i]] = true;
+    }
+    return set;
+  }
+
+  /** Batch move to one folder path; empty string files under the root. */
+  function moveBookmarks(model, ids, folder) {
+    var next = normalizeModel(model);
+    var drop = idSet(ids);
+    if (!drop) return next;
+    var target = String(folder == null ? "" : folder).trim().replace(/^\/+|\/+$/g, "");
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      if (drop[next.bookmarks[i].id]) next.bookmarks[i].folder = target;
+    }
+    return next;
+  }
+
+  /** Batch tag adjust: `add` merged in, `remove` filtered out (issue #63). */
+  function adjustTags(model, ids, add, remove) {
+    var next = normalizeModel(model);
+    var drop = idSet(ids);
+    if (!drop) return next;
+    var toAdd = sanitizeTags(add);
+    var toRemove = sanitizeTags(remove);
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var item = next.bookmarks[i];
+      if (!drop[item.id]) continue;
+      var tags = item.tags.slice();
+      for (var a = 0; a < toAdd.length; a++) {
+        if (tags.indexOf(toAdd[a]) === -1) tags.push(toAdd[a]);
+      }
+      var kept = [];
+      for (var b = 0; b < tags.length; b++) {
+        if (toRemove.indexOf(tags[b]) === -1) kept.push(tags[b]);
+      }
+      item.tags = kept;
+    }
+    return next;
+  }
+
+  /** Batch pin / unpin. Pinning stamps pinnedAt (kept if already pinned). */
+  function setPinned(model, ids, pinned) {
+    var next = normalizeModel(model);
+    var drop = idSet(ids);
+    if (!drop) return next;
+    var stamp = Date.now();
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var item = next.bookmarks[i];
+      if (!drop[item.id]) continue;
+      if (pinned) {
+        if (!item.pinned) {
+          item.pinned = true;
+          item.pinnedAt = item.pinnedAt || stamp;
+        }
+      } else {
+        item.pinned = false;
+        item.pinnedAt = 0;
+      }
+    }
+    return next;
+  }
+
+  /**
+   * Rename a folder prefix: exact path and every descendant path are
+   * rewritten on bookmarks and declared folders (issue #63). Returns the
+   * model unchanged when either path is empty or they are equal.
+   */
+  function renameFolder(model, fromPath, toPath) {
+    var next = normalizeModel(model);
+    var from = String(fromPath == null ? "" : fromPath).trim().replace(/^\/+|\/+$/g, "");
+    var to = String(toPath == null ? "" : toPath).trim().replace(/^\/+|\/+$/g, "");
+    if (!from || !to || from === to) return next;
+    function mapPath(path) {
+      if (path === from) return to;
+      if (path.indexOf(from + "/") === 0) return to + path.slice(from.length);
+      return null;
+    }
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var mapped = mapPath(next.bookmarks[i].folder.replace(/^\/+|\/+$/g, ""));
+      if (mapped !== null) next.bookmarks[i].folder = mapped;
+    }
+    var folders = [];
+    for (var j = 0; j < next.folders.length; j++) {
+      mapped = mapPath(next.folders[j]);
+      folders.push(mapped !== null ? mapped : next.folders[j]);
+    }
+    next.folders = sanitizeFolderList(folders);
+    return next;
+  }
+
+  /** Declare an empty folder path; no-op when it already exists. */
+  function addFolder(model, path) {
+    var next = normalizeModel(model);
+    var clean = String(path == null ? "" : path).trim().replace(/^\/+|\/+$/g, "");
+    if (!clean) return next;
+    next.folders = sanitizeFolderList(next.folders.concat(clean));
+    return next;
+  }
+
+  /** Drop a declared folder entry (folder paths implied by bookmarks stay). */
+  function removeFolder(model, path) {
+    var next = normalizeModel(model);
+    var clean = String(path == null ? "" : path).trim().replace(/^\/+|\/+$/g, "");
+    if (!clean) return next;
+    next.folders = next.folders.filter(function (p) {
+      return p !== clean;
     });
     return next;
   }
@@ -442,7 +638,8 @@ var Bookmarks = (function () {
 
   /**
    * html parse wins for membership/title/folder; the json sidecar donates
-   * tags/note/id for the same URL so rewrites never drop rich fields.
+   * tags/note/id (and pin state, issue #63) for the same URL so rewrites
+   * never drop rich fields. Declared folders are the union of both inputs.
    */
   function adoptRichFields(htmlModel, jsonModel) {
     var out = normalizeModel(htmlModel);
@@ -460,8 +657,45 @@ var Bookmarks = (function () {
       if (donor.id) item.id = donor.id;
       if (donor.tags && donor.tags.length) item.tags = donor.tags.slice();
       if (donor.note) item.note = donor.note;
+      if (donor.pinned) {
+        item.pinned = true;
+        if (donor.pinnedAt) item.pinnedAt = donor.pinnedAt;
+      }
+    }
+    if (Array.isArray(jsonModel.folders) && jsonModel.folders.length) {
+      out.folders = sanitizeFolderList(out.folders.concat(jsonModel.folders));
     }
     return out;
+  }
+
+  /**
+   * Issue #64: ordered creation plan for writing the library back into the
+   * Chrome bookmarks tree. Nested {title, url?, children} nodes; folders
+   * (including declared empty ones) keep their structure, links optionally
+   * skip URLs already present under the target folder.
+   */
+  function buildChromeWritePlan(model, existingUrlKeys, opts) {
+    var options = opts || {};
+    var skip = options.skipDuplicates !== false;
+    var known = Object.create(null);
+    if (Array.isArray(existingUrlKeys)) {
+      for (var i = 0; i < existingUrlKeys.length; i++) known[existingUrlKeys[i]] = true;
+    }
+    function walk(node) {
+      var out = [];
+      var links = node.links || [];
+      for (var i = 0; i < links.length; i++) {
+        var b = links[i];
+        if (skip && known[urlKey(b.url)]) continue;
+        out.push({ title: b.title || b.url, url: b.url });
+      }
+      var names = Object.keys(node.folders || {});
+      for (var j = 0; j < names.length; j++) {
+        out.push({ title: names[j], children: walk(node.folders[names[j]]) });
+      }
+      return out;
+    }
+    return walk(buildTree(model));
   }
 
   /**
@@ -580,7 +814,10 @@ var Bookmarks = (function () {
   return {
     MODEL_VERSION: MODEL_VERSION,
     addBookmark: addBookmark,
+    addFolder: addFolder,
     adoptRichFields: adoptRichFields,
+    adjustTags: adjustTags,
+    buildChromeWritePlan: buildChromeWritePlan,
     emptyModel: emptyModel,
     folderPaths: folderPaths,
     importBackup: importBackup,
@@ -590,12 +827,17 @@ var Bookmarks = (function () {
     mergeModels: mergeModels,
     modelFromJson: modelFromJson,
     modelToJsonText: modelToJsonText,
+    moveBookmarks: moveBookmarks,
     normalizeModel: normalizeModel,
     parseHtml: parseHtml,
     parseRemoteLibrary: parseRemoteLibrary,
     removeBookmark: removeBookmark,
+    removeBookmarks: removeBookmarks,
+    removeFolder: removeFolder,
+    renameFolder: renameFolder,
     searchBookmarks: searchBookmarks,
     serializeHtml: serializeHtml,
+    setPinned: setPinned,
     sniffJsonImport: sniffJsonImport,
     updateBookmark: updateBookmark,
     urlKey: urlKey,

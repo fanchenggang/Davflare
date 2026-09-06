@@ -105,10 +105,11 @@ describe("extension/bookmarks.js parseHtml", () => {
   });
 
   test("empty or garbage input yields an empty model instead of throwing", () => {
-    expect(Bookmarks.parseHtml("")).toEqual({ version: 1, bookmarks: [] });
+    expect(Bookmarks.parseHtml("")).toEqual({ version: 1, bookmarks: [], folders: [] });
     expect(Bookmarks.parseHtml("<p>not a bookmark file</p>")).toEqual({
       version: 1,
       bookmarks: [],
+      folders: [],
     });
   });
 

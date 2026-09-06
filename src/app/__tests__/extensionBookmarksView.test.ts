@@ -12,6 +12,7 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
       folder?: string | null;
       tag?: string | null;
       since?: number;
+      pinned?: boolean | null;
     },
     pinyinTools?: { matchText: (text: unknown, query: string) => boolean } | null
   ) => Array<Record<string, unknown>>;
@@ -20,6 +21,9 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
   formatRelative: (ms: number, now: number, lang?: string) => string;
   folderList: (model: unknown) => Array<{ name: string; count: number }>;
   tagList: (model: unknown) => Array<{ name: string; count: number }>;
+  orderPinnedFirst: (
+    items: Array<Record<string, unknown>>
+  ) => Array<Record<string, unknown>>;
 };
 
 function modelWith(bookmarks: Array<Record<string, unknown>>) {
@@ -165,5 +169,46 @@ describe("extension/bookmarksView.js filterBookmarks", () => {
     expect(
       BookmarksView.filterBookmarks(model, { query: "txy" }).map((b) => b.id)
     ).toEqual([]);
+  });
+});
+
+describe("extension/bookmarksView.js pinned & declared folders (#63)", () => {
+  test("folderList includes declared empty folders with count 0", () => {
+    const model = {
+      version: 1,
+      bookmarks: [
+        { folder: "Dev", tags: [] },
+        { folder: "", tags: [] },
+      ],
+      folders: ["Empty/Nested", "Dev"],
+    };
+    expect(BookmarksView.folderList(model)).toEqual([
+      { name: "", count: 1 },
+      { name: "Dev", count: 1 },
+      { name: "Empty/Nested", count: 0 },
+    ]);
+  });
+
+  test("filterBookmarks honors the pinned filter", () => {
+    const model = modelWith([
+      { url: "https://a.example", pinned: true },
+      { url: "https://b.example" },
+    ]);
+    expect(
+      BookmarksView.filterBookmarks(model, { pinned: true }).map((b) => b.url)
+    ).toEqual(["https://a.example"]);
+    expect(BookmarksView.filterBookmarks(model, {}).length).toBe(2);
+  });
+
+  test("orderPinnedFirst leads with pins (newest first) and keeps the rest", () => {
+    const ordered = BookmarksView.orderPinnedFirst([
+      { id: "a" },
+      { id: "b", pinned: true, pinnedAt: 100 },
+      { id: "c", pinned: true, pinnedAt: 300 },
+      { id: "d", pinned: true, pinnedAt: 200 },
+      { id: "e" },
+    ]);
+    expect(ordered.map((b) => b.id)).toEqual(["c", "d", "b", "a", "e"]);
+    expect(BookmarksView.orderPinnedFirst([])).toEqual([]);
   });
 });

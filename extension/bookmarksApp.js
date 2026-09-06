@@ -164,6 +164,51 @@ var COPY = {
     snapMissing: "Snapshot file is missing on the server.",
     snapConfirmDelete: "Delete this snapshot from WebDAV?",
     snapDeleted: "Snapshot deleted.",
+    navPinned: "Pinned",
+    pinAdd: "Pin",
+    pinRemove: "Unpin",
+    emptyPinnedTitle: "No pinned bookmarks yet",
+    selAll: "Select all",
+    selNone: "Deselect all",
+    batchSelected: "{n} selected",
+    batchMove: "Move",
+    batchTags: "Tags",
+    batchPin: "Pin",
+    batchUnpin: "Unpin",
+    batchDelete: "Delete",
+    batchMoveTitle: "Move bookmarks",
+    batchMoveLabel: "Target folder",
+    batchMoveHint:
+      "Pick an existing folder or type a new path (a/b for nesting). Leave empty for Unfiled.",
+    batchMoveBtn: "Move",
+    batchTagsTitle: "Edit tags on selected bookmarks",
+    batchTagsAdd: "Add tags (comma separated)",
+    batchTagsRemove: "Remove tags (comma separated)",
+    batchDeleteConfirm: "Delete the {n} selected bookmark(s)?",
+    folderAdd: "New folder",
+    folderAddTitle: "New folder",
+    folderRename: "Rename folder",
+    folderRenameTitle: "Rename folder",
+    folderDelete: "Delete folder",
+    folderDeleteConfirm: "Delete the empty folder “{p}”?",
+    folderNameLabel: "Folder path",
+    folderNameHint: "Use / for nesting, e.g. Dev/Rust.",
+    folderExists: "This folder already exists.",
+    exportChromeLegend: "Browser",
+    exportChromeFolderLabel: "Target folder",
+    exportChromeSkip: "Skip duplicates (same URL)",
+    exportChromeClear: "Clear the target folder first",
+    exportChromeBtn: "Write back to browser",
+    exportChromeClearConfirm:
+      "Remove the {n} item(s) currently inside the target folder first?",
+    exportChromeDone: "Wrote {n} bookmark(s) into browser bookmarks.",
+    exportChromeDenied:
+      "Write-back needs the “Read and change your bookmarks” permission.",
+    exportHhLegend: "HamHome round-trip",
+    exportHhHint:
+      "Merges this library into /HamHomeSync/ (meta.json + categories.json); existing HamHome entries are kept.",
+    exportHhBtn: "Write back to HamHomeSync",
+    exportedHamHome: "Wrote meta.json + categories.json under /HamHomeSync/.",
   },
   zh: {
     title: "Davflare 书签",
@@ -315,6 +360,48 @@ var COPY = {
     snapMissing: "服务器上的快照文件已缺失。",
     snapConfirmDelete: "确定从 WebDAV 删除这个快照？",
     snapDeleted: "快照已删除。",
+    navPinned: "置顶",
+    pinAdd: "置顶",
+    pinRemove: "取消置顶",
+    emptyPinnedTitle: "还没有置顶书签",
+    selAll: "全选",
+    selNone: "取消全选",
+    batchSelected: "已选 {n} 项",
+    batchMove: "移动",
+    batchTags: "标签",
+    batchPin: "置顶",
+    batchUnpin: "取消置顶",
+    batchDelete: "删除",
+    batchMoveTitle: "批量移动书签",
+    batchMoveLabel: "目标分类",
+    batchMoveHint: "选择现有分类或输入新路径（用 / 表示层级）；留空表示「未分类」。",
+    batchMoveBtn: "移动",
+    batchTagsTitle: "批量编辑选中书签的标签",
+    batchTagsAdd: "添加标签（逗号分隔）",
+    batchTagsRemove: "移除标签（逗号分隔）",
+    batchDeleteConfirm: "确定删除选中的 {n} 个书签？",
+    folderAdd: "新建文件夹",
+    folderAddTitle: "新建文件夹",
+    folderRename: "重命名文件夹",
+    folderRenameTitle: "重命名文件夹",
+    folderDelete: "删除文件夹",
+    folderDeleteConfirm: "确定删除空文件夹「{p}」？",
+    folderNameLabel: "文件夹路径",
+    folderNameHint: "用 / 表示层级，如 Dev/Rust。",
+    folderExists: "该文件夹已存在。",
+    exportChromeLegend: "浏览器",
+    exportChromeFolderLabel: "目标文件夹",
+    exportChromeSkip: "跳过重复（同一 URL）",
+    exportChromeClear: "先清空目标文件夹",
+    exportChromeBtn: "写回浏览器书签",
+    exportChromeClearConfirm: "将先从目标文件夹删除现有 {n} 项，确定继续？",
+    exportChromeDone: "已写回 {n} 个书签到浏览器书签。",
+    exportChromeDenied: "写回需要授权「读取和更改您的书签」权限。",
+    exportHhLegend: "HamHome 往返",
+    exportHhHint:
+      "把当前书签库合并写入 /HamHomeSync/（meta.json + categories.json）；HamHome 已有条目会保留。",
+    exportHhBtn: "写回 HamHomeSync",
+    exportedHamHome: "已写入 meta.json + categories.json 到 /HamHomeSync/。",
   },
 };
 
@@ -341,6 +428,9 @@ var state = {
   view: "grid",
   syncedAt: 0,
   bytes: 0,
+  // Issue #63 multi-select: bookmark ids -> true; anchor for shift-range picks.
+  sel: {},
+  selAnchor: null,
 };
 
 // refresh()/persist() 进行中时暂缓应用外部缓存（#77）：外部写入先落
@@ -822,18 +912,20 @@ function renderNav() {
   $("navAllCount").textContent = String(all);
   $("navAll").classList.toggle("active", state.filter.kind === "all");
 
+  var pinnedCount = 0;
+  for (var p = 0; p < state.model.bookmarks.length; p++) {
+    if (state.model.bookmarks[p].pinned) pinnedCount += 1;
+  }
+  $("navPinnedCount").textContent = String(pinnedCount);
+  $("navPinned").classList.toggle("active", state.filter.kind === "pinned");
+
   var folderNav = $("folderNav");
   folderNav.textContent = "";
   var folders = BookmarksView.folderList(state.model);
   for (var i = 0; i < folders.length; i++) {
     (function (entry) {
       var active = state.filter.kind === "folder" && state.filter.value === entry.name;
-      folderNav.appendChild(
-        navButton(folderLabel(entry.name), entry.count, active, function () {
-          state.filter = { kind: "folder", value: entry.name };
-          renderAll();
-        })
-      );
+      folderNav.appendChild(folderNavItem(entry, active));
     })(folders[i]);
   }
   if (!folders.length) folderNav.appendChild(emptyHint());
@@ -853,6 +945,56 @@ function renderNav() {
     })(tags[j]);
   }
   if (!tags.length) tagNav.appendChild(emptyHint());
+}
+
+/**
+ * One folder row: the filter button plus a hover ⋯ menu (rename; delete for
+ * declared empty folders). The unfiled entry ("" path) has no menu.
+ */
+function folderNavItem(entry, active) {
+  var wrap = document.createElement("div");
+  wrap.className = "navItemWrap";
+  wrap.appendChild(
+    navButton(folderLabel(entry.name), entry.count, active, function () {
+      state.filter = { kind: "folder", value: entry.name };
+      renderAll();
+    })
+  );
+  if (entry.name !== "") {
+    var more = document.createElement("button");
+    more.className = "navFolderMore menuToggle";
+    more.type = "button";
+    more.setAttribute("aria-haspopup", "true");
+    more.setAttribute("aria-expanded", "false");
+    more.setAttribute("aria-label", t.moreLabel);
+    more.textContent = "⋯";
+    var menu = document.createElement("div");
+    menu.className = "popMenu";
+    menu.appendChild(
+      iconButton("menuItem", t.folderRename, function () {
+        closePopMenus();
+        openFolderDialog("rename", entry.name);
+      })
+    );
+    if (entry.count === 0) {
+      menu.appendChild(
+        iconButton("menuItem", t.folderDelete, function () {
+          closePopMenus();
+          confirmThen(fmt(t.folderDeleteConfirm, { p: entry.name }), function () {
+            state.model = Bookmarks.removeFolder(state.model, entry.name);
+            if (state.filter.kind === "folder" && state.filter.value === entry.name) {
+              state.filter = { kind: "all", value: "" };
+            }
+            renderAll();
+            persist();
+          });
+        })
+      );
+    }
+    wrap.appendChild(more);
+    wrap.appendChild(menu);
+  }
+  return wrap;
 }
 
 function emptyHint() {
@@ -1014,6 +1156,75 @@ function wirePopMenus() {
   });
 }
 
+/* ---------- selection (#63) ---------- */
+
+function filteredItemsOrdered() {
+  var filter = {
+    query: state.query,
+    folder: state.filter.kind === "folder" ? state.filter.value : null,
+    tag: state.filter.kind === "tag" ? state.filter.value : null,
+    pinned: state.filter.kind === "pinned" ? true : null,
+    since: sinceMs(state.since, Date.now()),
+  };
+  return BookmarksView.orderPinnedFirst(
+    BookmarksView.filterBookmarks(state.model, filter, PINYIN)
+  );
+}
+
+function selectedExistingIds() {
+  var ids = [];
+  for (var i = 0; i < state.model.bookmarks.length; i++) {
+    if (state.sel[state.model.bookmarks[i].id]) ids.push(state.model.bookmarks[i].id);
+  }
+  return ids;
+}
+
+function clearSelection() {
+  state.sel = {};
+  state.selAnchor = null;
+}
+
+/** One checkbox driving multi-select; shift-click selects a filtered range. */
+function pickBox(item) {
+  var box = document.createElement("input");
+  box.type = "checkbox";
+  box.className = "pick";
+  box.checked = Boolean(state.sel[item.id]);
+  box.setAttribute("aria-label", item.title || item.url);
+  box.addEventListener("click", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    var items = filteredItemsOrdered();
+    if (event.shiftKey && state.selAnchor) {
+      var ai = -1;
+      var bi = -1;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].id === state.selAnchor) ai = i;
+        if (items[i].id === item.id) bi = i;
+      }
+      if (ai !== -1 && bi !== -1) {
+        for (var k = Math.min(ai, bi); k <= Math.max(ai, bi); k++) {
+          state.sel[items[k].id] = true;
+        }
+      }
+    } else if (state.sel[item.id]) {
+      delete state.sel[item.id];
+    } else {
+      state.sel[item.id] = true;
+      state.selAnchor = item.id;
+    }
+    renderItems();
+  });
+  return box;
+}
+
+function togglePinBookmark(item) {
+  state.model = Bookmarks.setPinned(state.model, [item.id], !item.pinned);
+  persist().then(function (ok) {
+    if (ok) flashStatus(item.pinned ? t.pinAdd : t.pinRemove);
+  });
+}
+
 function cardMenuNode(item) {
   var wrap = document.createElement("div");
   wrap.className = "cardMenuWrap";
@@ -1030,6 +1241,12 @@ function cardMenuNode(item) {
     iconButton("menuItem", t.cardEdit, function () {
       closePopMenus();
       openTagDialog(item);
+    })
+  );
+  menu.appendChild(
+    iconButton("menuItem", item.pinned ? t.pinRemove : t.pinAdd, function () {
+      closePopMenus();
+      togglePinBookmark(item);
     })
   );
   menu.appendChild(
@@ -1058,7 +1275,7 @@ function cardMenuNode(item) {
 
 function cardNode(item) {
   var card = document.createElement("article");
-  card.className = "card";
+  card.className = "card" + (state.sel[item.id] ? " sel" : "");
 
   var link = document.createElement("a");
   link.className = "cardMain";
@@ -1086,6 +1303,14 @@ function cardNode(item) {
 
   var meta = document.createElement("footer");
   meta.className = "cardMeta";
+  meta.appendChild(pickBox(item));
+  if (item.pinned) {
+    var pin = document.createElement("span");
+    pin.className = "chip pin";
+    pin.textContent = "📌";
+    pin.title = t.pinMark;
+    meta.appendChild(pin);
+  }
   var chip = document.createElement("span");
   chip.className = "chip";
   chip.textContent = folderLabel(item.folder);
@@ -1108,12 +1333,15 @@ function cardNode(item) {
 }
 
 function rowNode(item) {
-  var row = document.createElement("a");
-  row.className = "row";
-  row.href = item.url;
-  row.target = "_blank";
-  row.rel = "noreferrer noopener";
-  row.appendChild(faviconNode(item));
+  var row = document.createElement("div");
+  row.className = "row" + (state.sel[item.id] ? " sel" : "");
+  row.appendChild(pickBox(item));
+  var link = document.createElement("a");
+  link.className = "rowLink";
+  link.href = item.url;
+  link.target = "_blank";
+  link.rel = "noreferrer noopener";
+  link.appendChild(faviconNode(item));
   var main = document.createElement("span");
   main.className = "rowMain";
   var title = document.createElement("span");
@@ -1124,9 +1352,17 @@ function rowNode(item) {
   domain.textContent = BookmarksView.domainOf(item.url);
   main.appendChild(title);
   main.appendChild(domain);
-  row.appendChild(main);
+  link.appendChild(main);
+  row.appendChild(link);
   var chips = document.createElement("span");
   chips.className = "rowChips";
+  if (item.pinned) {
+    var pin = document.createElement("span");
+    pin.className = "chip pin";
+    pin.textContent = "📌";
+    pin.title = t.pinMark;
+    chips.appendChild(pin);
+  }
   var chip = document.createElement("span");
   chip.className = "chip";
   chip.textContent = folderLabel(item.folder);
@@ -1142,6 +1378,20 @@ function rowNode(item) {
   var time = document.createElement("time");
   time.textContent = BookmarksView.formatDate(item.added, lang);
   row.appendChild(time);
+  // 不用 iconButton：需要随置顶状态变化的 title/aria-pressed
+  var pinBtn = document.createElement("button");
+  pinBtn.className = "pin";
+  pinBtn.type = "button";
+  pinBtn.title = item.pinned ? t.pinRemove : t.pinAdd;
+  pinBtn.setAttribute("aria-label", pinBtn.title);
+  pinBtn.setAttribute("aria-pressed", String(Boolean(item.pinned)));
+  pinBtn.textContent = item.pinned ? "📍" : "📌";
+  pinBtn.addEventListener("click", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    togglePinBookmark(item);
+  });
+  row.appendChild(pinBtn);
   row.appendChild(
     iconButton("edit", "✎", function () {
       openTagDialog(item);
@@ -1161,13 +1411,7 @@ function rowNode(item) {
 }
 
 function renderItems() {
-  var filter = {
-    query: state.query,
-    folder: state.filter.kind === "folder" ? state.filter.value : null,
-    tag: state.filter.kind === "tag" ? state.filter.value : null,
-    since: sinceMs(state.since, Date.now()),
-  };
-  var items = BookmarksView.filterBookmarks(state.model, filter, PINYIN);
+  var items = filteredItemsOrdered();
 
   var cards = $("cards");
   var rows = $("rows");
@@ -1182,6 +1426,10 @@ function renderItems() {
     if (isGrid) cards.appendChild(cardNode(items[i]));
     else rows.appendChild(rowNode(items[i]));
   }
+
+  var selecting = selectedExistingIds().length > 0;
+  cards.classList.toggle("selecting", selecting);
+  rows.classList.toggle("selecting", selecting);
 
   var empty = $("emptyState");
   if (!items.length) {
@@ -1206,6 +1454,12 @@ function renderItems() {
         desc: t.emptyFilter,
         actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
       });
+    } else if (state.filter.kind === "pinned") {
+      renderEmptyState(empty, {
+        title: t.emptyPinnedTitle,
+        desc: t.emptyFilter,
+        actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
+      });
     } else {
       renderEmptyState(empty, {
         title: t.emptyFilter,
@@ -1215,6 +1469,118 @@ function renderItems() {
   } else {
     empty.classList.add("hidden");
   }
+  updateBatchBar();
+}
+
+/* ---------- batch bar (#63) ---------- */
+
+function allSelectedPinned(ids) {
+  var byId = Object.create(null);
+  for (var i = 0; i < state.model.bookmarks.length; i++) {
+    byId[state.model.bookmarks[i].id] = state.model.bookmarks[i];
+  }
+  for (var j = 0; j < ids.length; j++) {
+    if (!byId[ids[j]] || !byId[ids[j]].pinned) return false;
+  }
+  return ids.length > 0;
+}
+
+function updateBatchBar() {
+  var ids = selectedExistingIds();
+  var bar = $("batchBar");
+  bar.classList.toggle("hidden", ids.length === 0);
+  $("batchCount").textContent = fmt(t.batchSelected, { n: ids.length });
+  $("selAllBtn").textContent = t.selAll;
+  $("batchPin").textContent = allSelectedPinned(ids) ? t.batchUnpin : t.batchPin;
+}
+
+function toggleSelAll() {
+  var items = filteredItemsOrdered();
+  if (!items.length) return;
+  var all = true;
+  for (var i = 0; i < items.length; i++) {
+    if (!state.sel[items[i].id]) {
+      all = false;
+      break;
+    }
+  }
+  for (var j = 0; j < items.length; j++) {
+    if (all) delete state.sel[items[j].id];
+    else state.sel[items[j].id] = true;
+  }
+  state.selAnchor = null;
+  renderItems();
+}
+
+function openBatchMoveDialog() {
+  $("batchMoveError").textContent = "";
+  $("batchMoveInput").value = "";
+  var datalist = $("batchMoveOptions");
+  datalist.textContent = "";
+  var paths = Bookmarks.folderPaths(state.model);
+  for (var i = 0; i < paths.length; i++) {
+    var opt = document.createElement("option");
+    opt.value = paths[i];
+    datalist.appendChild(opt);
+  }
+  $("batchMoveDialog").showModal();
+  $("batchMoveInput").focus();
+}
+
+async function submitBatchMove(event) {
+  event.preventDefault();
+  var ids = selectedExistingIds();
+  if (!ids.length) {
+    $("batchMoveDialog").close();
+    return;
+  }
+  var folder = $("batchMoveInput").value.trim().replace(/^\/+|\/+$/g, "");
+  state.model = Bookmarks.moveBookmarks(state.model, ids, folder);
+  $("batchMoveDialog").close();
+  clearSelection();
+  if (await persist()) flashStatus(t.added);
+}
+
+function openBatchTagsDialog() {
+  $("batchTagsError").textContent = "";
+  $("batchTagsAdd").value = "";
+  $("batchTagsRemove").value = "";
+  $("batchTagsDialog").showModal();
+  $("batchTagsAdd").focus();
+}
+
+async function submitBatchTags(event) {
+  event.preventDefault();
+  var ids = selectedExistingIds();
+  if (!ids.length) {
+    $("batchTagsDialog").close();
+    return;
+  }
+  var add = $("batchTagsAdd").value.split(",");
+  var remove = $("batchTagsRemove").value.split(",");
+  state.model = Bookmarks.adjustTags(state.model, ids, add, remove);
+  $("batchTagsDialog").close();
+  clearSelection();
+  if (await persist()) flashStatus(t.added);
+}
+
+async function submitBatchPin() {
+  var ids = selectedExistingIds();
+  if (!ids.length) return;
+  var allPinned = allSelectedPinned(ids);
+  state.model = Bookmarks.setPinned(state.model, ids, !allPinned);
+  clearSelection();
+  if (await persist()) flashStatus(allPinned ? t.pinRemove : t.pinAdd);
+}
+
+function submitBatchDelete() {
+  var ids = selectedExistingIds();
+  if (!ids.length) return;
+  confirmThen(fmt(t.batchDeleteConfirm, { n: ids.length }), async function () {
+    state.model = Bookmarks.removeBookmarks(state.model, ids);
+    clearSelection();
+    if (await persist()) flashStatus(t.deleted);
+  });
 }
 
 function renderSyncInfo() {
@@ -2107,6 +2473,68 @@ function downloadText(filename, mime, text) {
   }, 5000);
 }
 
+/* ---------- folder create / rename (#63) ---------- */
+
+var folderDialogMode = "new";
+var folderDialogTarget = "";
+
+function fillFolderDatalist() {
+  var datalist = $("folderOptionsList");
+  datalist.textContent = "";
+  var paths = Bookmarks.folderPaths(state.model);
+  for (var i = 0; i < paths.length; i++) {
+    var opt = document.createElement("option");
+    opt.value = paths[i];
+    datalist.appendChild(opt);
+  }
+}
+
+function openFolderDialog(mode, path) {
+  folderDialogMode = mode === "rename" ? "rename" : "new";
+  folderDialogTarget = typeof path === "string" ? path : "";
+  $("folderError").textContent = "";
+  $("folderDialogTitle").textContent =
+    folderDialogMode === "rename" ? t.folderRenameTitle : t.folderAddTitle;
+  $("folderInput").value = folderDialogMode === "rename" ? folderDialogTarget : "";
+  fillFolderDatalist();
+  $("folderDialog").showModal();
+  $("folderInput").focus();
+}
+
+async function submitFolderDialog(event) {
+  event.preventDefault();
+  var value = $("folderInput").value.trim().replace(/^\/+|\/+$/g, "");
+  if (!value) {
+    $("folderError").textContent = t.invalidName;
+    return;
+  }
+  if (folderDialogMode === "rename") {
+    if (value === folderDialogTarget) {
+      $("folderDialog").close();
+      return;
+    }
+    state.model = Bookmarks.renameFolder(state.model, folderDialogTarget, value);
+    // Keep the active folder filter pointing at the renamed path.
+    if (state.filter.kind === "folder") {
+      if (state.filter.value === folderDialogTarget) {
+        state.filter.value = value;
+      } else if (state.filter.value.indexOf(folderDialogTarget + "/") === 0) {
+        state.filter.value = value + state.filter.value.slice(folderDialogTarget.length);
+      }
+    }
+  } else {
+    if (Bookmarks.folderPaths(state.model).indexOf(value) !== -1) {
+      $("folderError").textContent = t.folderExists;
+      return;
+    }
+    state.model = Bookmarks.addFolder(state.model, value);
+    state.filter = { kind: "folder", value: value };
+  }
+  $("folderDialog").close();
+  renderAll();
+  await persist();
+}
+
 function exportHtml() {
   downloadText("bookmarks.html", "text/html", Bookmarks.serializeHtml(state.model));
   flashStatus(t.exported);
@@ -2121,6 +2549,190 @@ function exportJson() {
   flashStatus(t.exportedJson);
 }
 
+/* ---------- write back to the browser bookmarks bar (#64) ---------- */
+
+function chromeBookmarksAvailable() {
+  return typeof chrome !== "undefined" && chrome.permissions && chrome.bookmarks;
+}
+
+/** Fill the target-folder select from the browser's bookmark tree. */
+async function populateChromeFolderSelect() {
+  var select = $("exportChromeFolder");
+  select.textContent = "";
+  var tree = await chrome.bookmarks.getTree();
+  var root = tree && tree[0];
+  var defaultId = null;
+  function walk(node, prefix) {
+    if (!Array.isArray(node.children)) return;
+    for (var i = 0; i < node.children.length; i++) {
+      var child = node.children[i];
+      if (child.url) continue;
+      var label = prefix ? prefix + " / " + child.title : child.title;
+      var opt = document.createElement("option");
+      opt.value = child.id;
+      opt.textContent = label;
+      select.appendChild(opt);
+      if (defaultId === null) defaultId = child.id;
+      walk(child, label);
+    }
+  }
+  walk(root || {}, "");
+  if (!defaultId) {
+    var fallback = document.createElement("option");
+    fallback.value = root ? root.id : "";
+    fallback.textContent = root ? root.title || "Bookmarks" : "Bookmarks";
+    select.appendChild(fallback);
+    defaultId = fallback.value;
+  }
+  select.value = defaultId;
+}
+
+async function ensureBookmarksPermission() {
+  if (!chromeBookmarksAvailable()) return false;
+  try {
+    if (await chrome.permissions.contains({ permissions: ["bookmarks"] })) return true;
+    return Boolean(await chrome.permissions.request({ permissions: ["bookmarks"] }));
+  } catch (err) {
+    return false;
+  }
+}
+
+function collectSubtreeUrls(node, out) {
+  if (!node) return;
+  if (node.url) {
+    var key = Bookmarks.urlKey(node.url);
+    if (key) out.push(key);
+  }
+  if (Array.isArray(node.children)) {
+    for (var i = 0; i < node.children.length; i++) collectSubtreeUrls(node.children[i], out);
+  }
+}
+
+function countSubtree(node) {
+  if (!node || !Array.isArray(node.children)) return 0;
+  return node.children.length;
+}
+
+async function createChromePlan(nodes, parentId) {
+  var created = 0;
+  for (var i = 0; i < nodes.length; i++) {
+    var node = nodes[i];
+    var made = await chrome.bookmarks.create({
+      parentId: parentId,
+      title: node.title || "",
+      url: node.url || undefined,
+    });
+    if (node.url) {
+      created += 1;
+    } else if (node.children && node.children.length && made) {
+      created += await createChromePlan(node.children, made.id);
+    }
+  }
+  return created;
+}
+
+async function exportChromeWrite() {
+  $("exportChromeStatus").textContent = "";
+  if (!chromeBookmarksAvailable()) {
+    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    return;
+  }
+  if (!(await ensureBookmarksPermission())) {
+    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    return;
+  }
+  if (!$("exportChromeFolder").value) await populateChromeFolderSelect();
+  var folderId = $("exportChromeFolder").value;
+  if (!folderId) {
+    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    return;
+  }
+  var skip = $("exportChromeSkip").checked;
+  var clear = $("exportChromeClear").checked;
+  var subtree = await chrome.bookmarks.getSubTree(folderId);
+  var target = subtree && subtree[0];
+  if (!target) {
+    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    return;
+  }
+  if (clear && countSubtree(target) > 0) {
+    var doomed = countSubtree(target);
+    await new Promise(function (resolve) {
+      confirmThen(fmt(t.exportChromeClearConfirm, { n: doomed }), resolve);
+    });
+    for (var i = 0; i < target.children.length; i++) {
+      await chrome.bookmarks.removeTree(target.children[i].id);
+    }
+  }
+  var existingUrls = [];
+  if (skip) {
+    var fresh = await chrome.bookmarks.getSubTree(folderId);
+    var current = fresh && fresh[0];
+    collectSubtreeUrls(current, existingUrls);
+  }
+  var plan = Bookmarks.buildChromeWritePlan(state.model, existingUrls, {
+    skipDuplicates: skip,
+  });
+  var created = await createChromePlan(plan, folderId);
+  $("exportDialog").close();
+  flashStatus(fmt(t.exportChromeDone, { n: created }));
+}
+
+/* ---------- HamHome round-trip write (#64) ---------- */
+
+async function exportHamHomeWrite() {
+  var made = await makeClient();
+  if (!made.cfg.instanceUrl) {
+    showBanner(t.needConfig, t.openSettings, openSettings);
+    return;
+  }
+  var hh = DavflareDav.createDavClient({
+    instanceUrl: made.cfg.instanceUrl,
+    username: made.cfg.username,
+    password: made.cfg.password,
+    basePath: "HamHomeSync",
+  });
+  // Read the current remote tree first: our entries merge into it so
+  // HamHome's own sync never loses data (#64).
+  var meta = await hh.getFile("bookmarks/meta.json");
+  if (!meta.ok) {
+    showBanner(errorText(meta.kind), t.openSettings, openSettings);
+    return;
+  }
+  var cats = await hh.getFile("categories.json");
+  var res = HamHome.exportTo(
+    state.model,
+    meta.missing ? null : meta.text,
+    cats.ok && !cats.missing ? cats.text : null,
+    Date.now()
+  );
+  if (!res.ok) {
+    showBanner(t.hhInvalid);
+    return;
+  }
+  var putCats = await hh.putFile(
+    "categories.json",
+    res.categories,
+    "application/json; charset=utf-8"
+  );
+  if (!putCats.ok) {
+    showBanner(errorText(putCats.kind), t.openSettings, openSettings);
+    return;
+  }
+  // meta.json last, mirroring HamHome's own safe write order.
+  var putMeta = await hh.putFile(
+    "bookmarks/meta.json",
+    res.meta,
+    "application/json; charset=utf-8"
+  );
+  if (!putMeta.ok) {
+    showBanner(errorText(putMeta.kind), t.openSettings, openSettings);
+    return;
+  }
+  $("exportDialog").close();
+  flashStatus(t.exportedHamHome);
+}
+
 /* ---------- import dialog (issue #65) ---------- */
 
 function openImportDialog() {
@@ -2130,7 +2742,18 @@ function openImportDialog() {
 }
 
 function openExportDialog() {
+  $("exportChromeStatus").textContent = "";
   $("exportDialog").showModal();
+  // Pre-fill the Chrome folder list when permission is already granted;
+  // otherwise exportChromeWrite asks for it on demand.
+  if (chromeBookmarksAvailable()) {
+    chrome.permissions
+      .contains({ permissions: ["bookmarks"] })
+      .then(function (granted) {
+        if (granted && !$("exportChromeFolder").value) populateChromeFolderSelect();
+      })
+      .catch(function () {});
+  }
 }
 
 /**
@@ -2248,10 +2871,33 @@ function applyCopy() {
   $("switchTabRules").textContent = t.viewTabRules;
   $("switchSettings").textContent = t.viewSettings;
   $("navAllText").textContent = t.navAll;
+  $("navPinnedText").textContent = t.navPinned;
   $("folderTitle").textContent = t.folders;
+  $("folderAddBtn").title = t.folderAdd;
   $("tagTitle").textContent = t.tags;
   $("search").placeholder = t.searchPlaceholder;
   $("loading").textContent = t.loading;
+  $("selAllBtn").textContent = t.selAll;
+  $("batchMove").textContent = t.batchMove;
+  $("batchTags").textContent = t.batchTags;
+  $("batchDelete").textContent = t.batchDelete;
+  $("batchMoveTitle").textContent = t.batchMoveTitle;
+  $("batchMoveLabel").textContent = t.batchMoveLabel;
+  $("batchMoveHint").textContent = t.batchMoveHint;
+  $("batchMoveSave").textContent = t.batchMoveBtn;
+  $("batchTagsTitle").textContent = t.batchTagsTitle;
+  $("batchTagsAddLabel").textContent = t.batchTagsAdd;
+  $("batchTagsRemoveLabel").textContent = t.batchTagsRemove;
+  $("folderNameLabel").textContent = t.folderNameLabel;
+  $("folderNameHint").textContent = t.folderNameHint;
+  $("exportChromeLegend").textContent = t.exportChromeLegend;
+  $("exportChromeFolderLabel").textContent = t.exportChromeFolderLabel;
+  $("exportChromeSkipText").textContent = t.exportChromeSkip;
+  $("exportChromeClearText").textContent = t.exportChromeClear;
+  $("exportChromeBtn").textContent = t.exportChromeBtn;
+  $("exportHhLegend").textContent = t.exportHhLegend;
+  $("exportHhHint").textContent = t.exportHhHint;
+  $("exportHamHomeBtn").textContent = t.exportHhBtn;
   $("addBtn").textContent = t.add;
   $("importBtn").textContent = t.import;
   $("exportBtn").textContent = t.export;
@@ -2305,7 +2951,7 @@ function applyCopy() {
   $("snapDownload").textContent = t.snapDownload;
   $("snapDelete").textContent = t.snapDelete;
   $("urlLabel").textContent = t.settingsUrlLabel;
-  $("urlHint").textContent = t.settingsUrlHint;
+  $("urlHint").textContent = t.urlHint;
   $("pathLabel").textContent = t.pathLabel;
   $("pathHint").textContent = t.pathHint;
   $("modeLabel").textContent = t.modeLabel;
@@ -2370,6 +3016,36 @@ function wireEvents() {
     footMenuItems[mi].addEventListener("click", closePopMenus);
   }
   $("navAll").addEventListener("click", setFilterAll);
+  $("navPinned").addEventListener("click", function () {
+    state.filter = { kind: "pinned", value: "" };
+    renderAll();
+  });
+  $("folderAddBtn").addEventListener("click", function () {
+    openFolderDialog("new", "");
+  });
+  $("folderCancel").addEventListener("click", function () {
+    $("folderDialog").close();
+  });
+  $("folderForm").addEventListener("submit", submitFolderDialog);
+  $("selAllBtn").addEventListener("click", toggleSelAll);
+  $("batchCancel").addEventListener("click", function () {
+    clearSelection();
+    renderItems();
+  });
+  $("batchMove").addEventListener("click", openBatchMoveDialog);
+  $("batchMoveCancel").addEventListener("click", function () {
+    $("batchMoveDialog").close();
+  });
+  $("batchMoveForm").addEventListener("submit", submitBatchMove);
+  $("batchTags").addEventListener("click", openBatchTagsDialog);
+  $("batchTagsCancel").addEventListener("click", function () {
+    $("batchTagsDialog").close();
+  });
+  $("batchTagsForm").addEventListener("submit", submitBatchTags);
+  $("batchPin").addEventListener("click", function () {
+    submitBatchPin();
+  });
+  $("batchDelete").addEventListener("click", submitBatchDelete);
   $("search").addEventListener("input", function (event) {
     state.query = event.target.value;
     renderItems();
@@ -2478,6 +3154,8 @@ function wireEvents() {
     $("exportDialog").close();
     exportJson();
   });
+  $("exportChromeBtn").addEventListener("click", exportChromeWrite);
+  $("exportHamHomeBtn").addEventListener("click", exportHamHomeWrite);
   $("exportCancel").addEventListener("click", function () {
     $("exportDialog").close();
   });

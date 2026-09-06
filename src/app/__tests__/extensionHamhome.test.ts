@@ -10,6 +10,12 @@ const HamHome = nodeRequire("../../../extension/hamhome.js") as {
   ) => { ok: boolean; model: { version: number; bookmarks: Array<Record<string, unknown>> } | null };
   normalizeCategories: (raw: unknown) => Record<string, { name: string; parentId: string }>;
   normalizeMeta: (raw: unknown) => Array<Record<string, unknown>>;
+  exportTo: (
+    model: unknown,
+    remoteMetaText: string | null,
+    remoteCatsText: string | null,
+    now: number
+  ) => { ok: boolean; meta?: string; categories?: string; categoriesChanged?: boolean };
 };
 
 const META = JSON.stringify({
@@ -99,5 +105,96 @@ describe("extension/hamhome.js importFrom", () => {
     expect(HamHome.importFrom(bare, null).model!.bookmarks).toEqual([
       { title: "D", url: "https://d.dev", folder: "", tags: [], note: "", added: 5 },
     ]);
+  });
+});
+
+describe("extension/hamhome.js exportTo round-trip (#64)", () => {
+  const NOW = 1700000000000;
+
+  test("exported meta+categories re-import into the same folders and notes", () => {
+    const model = {
+      version: 1,
+      bookmarks: [
+        { id: "a", url: "https://a.dev", title: "A2", folder: "Work/Console", tags: ["dev"], note: "rewritten", added: 1690000100000 },
+        { id: "b", url: "https://fresh.example", title: "Fresh", folder: "", tags: [], note: "", added: 0 },
+      ],
+      folders: [],
+    };
+    const res = HamHome.exportTo(model, META, CATEGORIES, NOW);
+    expect(res.ok).toBe(true);
+
+    const metaFile = JSON.parse(res.meta!);
+    expect(metaFile.bookmarks).toHaveLength(5); // 4 remote rows (incl. deleted/junk) + 1 fresh
+    const fresh = metaFile.bookmarks.find((b: Record<string, unknown>) => b.url === "https://fresh.example");
+    expect(fresh).toMatchObject({
+      title: "Fresh",
+      description: "",
+      categoryId: null,
+      hasSnapshot: false,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(String(fresh.id)).toMatch(/^dav-/);
+
+    const updated = metaFile.bookmarks.find((b: Record<string, unknown>) => b.id === "h1");
+    expect(updated).toMatchObject({
+      title: "A2",
+      description: "rewritten",
+      categoryId: "c2",
+      tags: ["dev"],
+      updatedAt: NOW,
+      createdAt: 1690000100000,
+    });
+    // deleted + non-http remote rows survive untouched
+    expect(metaFile.bookmarks.some((b: Record<string, unknown>) => b.id === "h3")).toBe(true);
+    expect(metaFile.bookmarks.some((b: Record<string, unknown>) => b.id === "h4")).toBe(true);
+
+    // categories: ours merge by signature; fresh declares no category
+    const cats = JSON.parse(res.categories!);
+    expect(cats.some((c: Record<string, unknown>) => c.id === "c1")).toBe(true);
+    expect(cats.some((c: Record<string, unknown>) => c.id === "c2")).toBe(true);
+
+    // full round trip: import the exported files back
+    const imported = HamHome.importFrom(res.meta!, res.categories ?? null);
+    expect(imported.ok).toBe(true);
+    const a = imported.model!.bookmarks.find((b) => b.url === "https://a.dev");
+    expect(a).toMatchObject({ title: "A2", folder: "Work/Console", note: "rewritten", tags: ["dev"] });
+  });
+
+  test("new folder paths become categories with path ids and parent links", () => {
+    const model = {
+      version: 1,
+      bookmarks: [
+        { id: "a", url: "https://x.example", title: "X", folder: "Dev/Rust", tags: [], note: "", added: 1 },
+      ],
+      folders: [],
+    };
+    const res = HamHome.exportTo(model, null, null, NOW);
+    const cats = JSON.parse(res.categories!);
+    const byId = Object.fromEntries(cats.map((c: Record<string, unknown>) => [c.id, c]));
+    expect(byId["Dev/Rust"]).toMatchObject({ name: "Rust", parentId: "Dev" });
+    expect(byId["Dev"]).toMatchObject({ name: "Dev", parentId: null });
+    const meta = JSON.parse(res.meta!);
+    expect(meta.bookmarks[0].categoryId).toBe("Dev/Rust");
+  });
+
+  test("isDeleted remote rows never absorb our URL updates", () => {
+    const remote = JSON.stringify({
+      bookmarks: [{ id: "gone", url: "https://a.dev", title: "t", description: "", categoryId: null, tags: [], hasSnapshot: false, createdAt: 1, updatedAt: 1, isDeleted: true }],
+    });
+    const model = { version: 1, bookmarks: [{ id: "a", url: "https://a.dev", title: "Back", folder: "", tags: [], note: "", added: 2 }], folders: [] };
+    const res = HamHome.exportTo(model, remote, null, NOW);
+    const rows = JSON.parse(res.meta!).bookmarks;
+    expect(rows.find((b: Record<string, unknown>) => b.id === "gone").isDeleted).toBe(true);
+    expect(rows.find((b: Record<string, unknown>) => String(b.id).startsWith("dav-")).title).toBe("Back");
+  });
+
+  test("rejects non-model input; urlKey treats hash URLs as the same page", () => {
+    expect(HamHome.exportTo(null, null, null, NOW).ok).toBe(false);
+    const model = { version: 1, bookmarks: [{ id: "a", url: "https://h.example/#top", title: "H", folder: "", tags: [], note: "", added: 1 }], folders: [] };
+    const remote = JSON.stringify({ bookmarks: [{ id: "r", url: "https://h.example/", title: "old", description: "", categoryId: null, tags: [], hasSnapshot: false, createdAt: 1, updatedAt: 1 }] });
+    const res = HamHome.exportTo(model, remote, null, NOW);
+    const rows = JSON.parse(res.meta!).bookmarks;
+    expect(rows.find((b: Record<string, unknown>) => b.id === "r").title).toBe("H");
   });
 });

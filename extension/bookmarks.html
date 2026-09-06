@@ -30,7 +30,14 @@
             <span id="navAllText">All bookmarks</span>
             <span class="count" id="navAllCount">0</span>
           </button>
-          <p class="navTitle" id="folderTitle">Folders</p>
+          <button class="navItem" id="navPinned" type="button">
+            <span id="navPinnedText">Pinned</span>
+            <span class="count" id="navPinnedCount">0</span>
+          </button>
+          <p class="navTitle navTitleRow">
+            <span id="folderTitle">Folders</span>
+            <button id="folderAddBtn" class="navAdd" type="button" title="New folder">＋</button>
+          </p>
           <div id="folderNav"></div>
           <p class="navTitle" id="tagTitle">Tags</p>
           <div id="tagNav"></div>
@@ -65,6 +72,7 @@
             <select id="folderSelect"></select>
             <select id="sinceSelect"></select>
             <div class="spacer"></div>
+            <button id="selAllBtn" class="ghost" type="button">Select all</button>
             <button id="libRefresh" type="button" title="Reload">Reload</button>
             <div class="viewToggle" role="group" aria-label="View">
               <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
@@ -72,6 +80,16 @@
             </div>
             <button id="themeToggle" type="button" title="Theme">☾</button>
           </header>
+
+          <div id="batchBar" class="batchBar hidden">
+            <span id="batchCount" class="batchCount"></span>
+            <button id="batchMove" class="ghost" type="button">Move</button>
+            <button id="batchTags" class="ghost" type="button">Tags</button>
+            <button id="batchPin" class="ghost" type="button">Pin</button>
+            <button id="batchDelete" class="danger" type="button">Delete</button>
+            <span class="spacer"></span>
+            <button id="batchCancel" class="ghost" type="button" title="Clear selection">✕</button>
+          </div>
 
           <div id="banner" class="banner hidden"></div>
           <p id="loading" class="loading hidden">Loading…</p>
@@ -245,6 +263,30 @@
           <button id="exportHtmlBtn" class="primary" type="button"></button>
           <button id="exportJsonBtn" class="primary" type="button"></button>
         </div>
+        <fieldset class="dlgSection">
+          <legend id="exportChromeLegend">Browser</legend>
+          <label for="exportChromeFolder" id="exportChromeFolderLabel">Target folder</label>
+          <select id="exportChromeFolder"></select>
+          <label class="checkLabel" id="exportChromeSkipLabel">
+            <input type="checkbox" id="exportChromeSkip" checked />
+            <span id="exportChromeSkipText">Skip duplicates (same URL)</span>
+          </label>
+          <label class="checkLabel" id="exportChromeClearLabel">
+            <input type="checkbox" id="exportChromeClear" />
+            <span id="exportChromeClearText">Clear the target folder first</span>
+          </label>
+          <div class="snapActions">
+            <button id="exportChromeBtn" class="primary" type="button"></button>
+          </div>
+          <p id="exportChromeStatus" class="status err"></p>
+        </fieldset>
+        <fieldset class="dlgSection">
+          <legend id="exportHhLegend">HamHome round-trip</legend>
+          <p id="exportHhHint" class="hint"></p>
+          <div class="snapActions">
+            <button id="exportHamHomeBtn" class="primary" type="button"></button>
+          </div>
+        </fieldset>
         <menu>
           <button id="exportCancel" class="ghost" type="button">Cancel</button>
         </menu>
@@ -323,6 +365,51 @@
         <menu>
           <button id="ruleCancel" class="ghost" type="button">Cancel</button>
           <button id="ruleSave" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="batchMoveDialog">
+      <form id="batchMoveForm" novalidate>
+        <h2 id="batchMoveTitle">Move bookmarks</h2>
+        <label for="batchMoveInput" id="batchMoveLabel">Target folder</label>
+        <input id="batchMoveInput" type="text" spellcheck="false" list="batchMoveOptions" />
+        <datalist id="batchMoveOptions"></datalist>
+        <p class="hint" id="batchMoveHint"></p>
+        <p id="batchMoveError" class="status err"></p>
+        <menu>
+          <button id="batchMoveCancel" class="ghost" type="button">Cancel</button>
+          <button id="batchMoveSave" class="primary" type="submit">Move</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="batchTagsDialog">
+      <form id="batchTagsForm" novalidate>
+        <h2 id="batchTagsTitle">Edit tags</h2>
+        <label for="batchTagsAdd" id="batchTagsAddLabel">Add tags (comma separated)</label>
+        <input id="batchTagsAdd" type="text" spellcheck="false" placeholder="dev, docs" />
+        <label for="batchTagsRemove" id="batchTagsRemoveLabel">Remove tags (comma separated)</label>
+        <input id="batchTagsRemove" type="text" spellcheck="false" />
+        <p id="batchTagsError" class="status err"></p>
+        <menu>
+          <button id="batchTagsCancel" class="ghost" type="button">Cancel</button>
+          <button id="batchTagsSave" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="folderDialog">
+      <form id="folderForm" novalidate>
+        <h2 id="folderDialogTitle">New folder</h2>
+        <label for="folderInput" id="folderNameLabel">Folder path</label>
+        <input id="folderInput" type="text" spellcheck="false" list="folderOptionsList" />
+        <datalist id="folderOptionsList"></datalist>
+        <p class="hint" id="folderNameHint"></p>
+        <p id="folderError" class="status err"></p>
+        <menu>
+          <button id="folderCancel" class="ghost" type="button">Cancel</button>
+          <button id="folderSave" class="primary" type="submit">Save</button>
         </menu>
       </form>
     </dialog>

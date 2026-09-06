@@ -29,6 +29,14 @@ var BookmarksView = (function () {
       }
       counts[name] += 1;
     }
+    // Declared empty folders (issue #63) join the list with count 0.
+    var declared = model && Array.isArray(model.folders) ? model.folders : [];
+    for (var d = 0; d < declared.length; d++) {
+      var path = String(declared[d] || "");
+      if (!path || counts[path]) continue;
+      counts[path] = 0;
+      order.push(path);
+    }
     order.sort(function (a, b) {
       if (a === "" && b !== "") return -1;
       if (b === "" && a !== "") return 1;
@@ -84,8 +92,9 @@ var BookmarksView = (function () {
   }
 
   /**
-   * opts: {query, folder, tag, since} — null/undefined filter means "any";
-   * since is an epoch-ms lower bound on the bookmark's added time.
+   * opts: {query, folder, tag, since, pinned} — null/undefined filter means
+   * "any"; since is an epoch-ms lower bound on the bookmark's added time;
+   * pinned: true keeps only pinned bookmarks (issue #63 sidebar entry).
    */
   function filterBookmarks(model, opts, pinyinTools) {
     var options = opts || {};
@@ -98,10 +107,32 @@ var BookmarksView = (function () {
       }
       if (options.tag && (item.tags || []).indexOf(options.tag) === -1) continue;
       if (options.since && !(item.added >= options.since)) continue;
+      if (options.pinned && !item.pinned) continue;
       if (!matchesQuery(item, options.query, pinyinTools)) continue;
       out.push(item);
     }
     return out;
+  }
+
+  /**
+   * Issue #63: pinned bookmarks lead the list (newest pin first, by
+   * pinnedAt), the rest keep their relative order.
+   */
+  function orderPinnedFirst(items) {
+    var list = Array.isArray(items) ? items.slice() : [];
+    var pinned = [];
+    var rest = [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].pinned) pinned.push(list[i]);
+      else rest.push(list[i]);
+    }
+    pinned.sort(function (a, b) {
+      var at = a.pinnedAt || 0;
+      var bt = b.pinnedAt || 0;
+      if (bt !== at) return bt - at;
+      return 0;
+    });
+    return pinned.concat(rest);
   }
 
   function formatBytes(n) {
@@ -161,6 +192,7 @@ var BookmarksView = (function () {
     formatRelative: formatRelative,
     folderList: folderList,
     matchesQuery: matchesQuery,
+    orderPinnedFirst: orderPinnedFirst,
     tagList: tagList,
   };
 })();
