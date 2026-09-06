@@ -273,6 +273,7 @@ SKIP_BUILD=1 npm run test:e2e   # reuse an existing build/ for faster iterations
 
 - [longern/FlareDrive](https://github.com/longern/FlareDrive) by [longern](https://github.com/longern) — original fork; this project has been fully rewritten since. Internal object prefix is still `_$flaredrive$/`.
 - [r2-webdav](https://github.com/abersheeran/r2-webdav) by [abersheeran](https://github.com/abersheeran) — WebDAV implementation.
+- [HamHome](https://github.com/bingoYB/ham_home) by [bingoYB](https://github.com/bingoYB) — bookmark library UX was inspired by this open-source reference.
 
 ## License
 
