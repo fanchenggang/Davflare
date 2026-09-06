@@ -580,12 +580,14 @@ describe("webdav PUT", () => {
 
   test("overwrite existing file is 204 and preserves custom metadata", async () => {
     const bucket = new InMemoryBucket();
-    bucket.seed([{ key: "a.txt", body: "old", customMetadata: { thumbnail: "t" } }]);
+    bucket.seed([{ key: "a.txt", body: "old", customMetadata: { thumbnail: "1".repeat(40) } }]);
+    // 真实客户端总是先上传缩略图本体，再带 fd-thumbnail 传文件
+    bucket.seed([{ key: `_$flaredrive$/thumbnails/${"2".repeat(40)}.png`, body: "png" }]);
     const response = await call(
       req(
         "/webdav/a.txt",
         "PUT",
-        { Authorization: AUTH, "Content-Type": "text/plain", "fd-thumbnail": "new-t" },
+        { Authorization: AUTH, "Content-Type": "text/plain", "fd-thumbnail": "2".repeat(40) },
         "new"
       ),
       makeEnv(bucket)
@@ -593,7 +595,7 @@ describe("webdav PUT", () => {
     expect(response.status).toBe(204);
     expect(bucket.rawText("a.txt")).toBe("new");
     const head = await bucket.asBucket().head("a.txt");
-    expect(head?.customMetadata?.thumbnail).toBe("new-t");
+    expect(head?.customMetadata?.thumbnail).toBe("2".repeat(40));
     expect(head?.httpMetadata?.contentType).toBe("text/plain");
   });
 

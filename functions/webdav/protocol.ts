@@ -15,6 +15,9 @@ const DAV_ENDPOINT = "/webdav";
 const DAV_ENDPOINT_WITH_SLASH = "/webdav/";
 const INTERNAL_PREFIX = "_$flaredrive$/";
 const THUMBNAIL_PREFIX = "_$flaredrive$/thumbnails/";
+const THUMBNAIL_REFS_PREFIX = `${THUMBNAIL_PREFIX}refs/`;
+// 缩略图摘要由客户端生成（hex 编码哈希），写入 R2 key 前先校验格式。
+const THUMBNAIL_DIGEST_RE = /^[a-f0-9]{16,128}$/;
 const DAV_CLASS = "1, 2";
 const SUPPORT_METHODS = [
   "OPTIONS",
@@ -114,6 +117,57 @@ function escapeXml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
+}
+
+// —— 缩略图引用计数 ————————————————————————————————
+// 缩略图按内容摘要寻址（_$flaredrive$/thumbnails/<digest>.png）并被内容相同的
+// 文件共享，删除单个文件时不能直接删图。每个引用文件在
+// _$flaredrive$/thumbnails/refs/<digest>/<path> 保留一个不可变 marker 对象，
+// 引用清零才回收缩略图。marker 是单次 PUT/DELETE 的独立对象，无读改写竞争：
+// 并发删除最坏只会“多留”（无害泄漏），不会误删仍在使用的缩略图。
+
+function isValidThumbnailDigest(digest: unknown): digest is string {
+  return typeof digest === "string" && THUMBNAIL_DIGEST_RE.test(digest);
+}
+
+function thumbnailObjectKey(digest: string): string {
+  return `${THUMBNAIL_PREFIX}${digest}.png`;
+}
+
+function thumbnailRefKey(digest: string, path: string): string {
+  return `${THUMBNAIL_REFS_PREFIX}${digest}/${path}`;
+}
+
+async function addThumbnailRef(
+  bucket: R2Bucket,
+  digest: unknown,
+  path: string,
+): Promise<void> {
+  if (!isValidThumbnailDigest(digest)) return;
+  await bucket.put(thumbnailRefKey(digest, path), "");
+}
+
+/** 引用清零时回收缩略图。 */
+async function gcThumbnail(bucket: R2Bucket, digest: unknown): Promise<void> {
+  if (!isValidThumbnailDigest(digest)) return;
+  const refs = await bucket.list({
+    prefix: thumbnailRefKey(digest, ""),
+    limit: 1,
+  });
+  if (refs.objects.length === 0) {
+    await bucket.delete(thumbnailObjectKey(digest));
+  }
+}
+
+/** 移除单个引用 marker，随后尝试回收缩略图。 */
+async function releaseThumbnailRef(
+  bucket: R2Bucket,
+  digest: unknown,
+  path: string,
+): Promise<void> {
+  if (!isValidThumbnailDigest(digest)) return;
+  await bucket.delete(thumbnailRefKey(digest, path));
+  await gcThumbnail(bucket, digest);
 }
 
 function decodePathSegment(segment: string): string {
@@ -956,16 +1010,34 @@ async function deleteAll(
   excludeInternal: boolean = true,
 ): Promise<void> {
   let cursor: string | undefined = undefined;
+  const releasedDigests = new Set<string>();
   do {
-    const objects = await bucket.list({ prefix, cursor });
+    const objects = await bucket.list({
+      prefix,
+      cursor,
+      include: ["customMetadata"],
+    });
     const keys = objects.objects
       .map((object) => object.key)
       .filter((key) => !excludeInternal || !key.startsWith(INTERNAL_PREFIX));
     if (keys.length > 0) {
       await bucket.delete(keys);
     }
+    // 先逐个移除引用 marker（internal 子树本身不含 marker，无需处理），
+    // 全部分页结束后再按 digest 去重回收一次缩略图。
+    for (const object of objects.objects) {
+      if (excludeInternal && object.key.startsWith(INTERNAL_PREFIX)) continue;
+      const { thumbnail } = object.customMetadata ?? {};
+      if (isValidThumbnailDigest(thumbnail)) {
+        releasedDigests.add(thumbnail);
+        await bucket.delete(thumbnailRefKey(thumbnail, object.key));
+      }
+    }
     cursor = objects.truncated ? objects.cursor : undefined;
   } while (cursor);
+  for (const digest of releasedDigests) {
+    await gcThumbnail(bucket, digest);
+  }
 }
 
 function calcContentRange(object: R2ObjectBody) {
@@ -1200,10 +1272,22 @@ async function handlePut({
 
   const existing = await bucket.head(path);
   const body = await request.arrayBuffer();
-  const thumbnail = request.headers.get("fd-thumbnail");
+  const rawThumbnail = request.headers.get("fd-thumbnail");
+  const thumbnail = isValidThumbnailDigest(rawThumbnail) ? rawThumbnail : undefined;
+  // 覆盖写入会整体替换 customMetadata；previousThumbnail 是即将被替换掉/保留的旧引用。
+  const previousThumbnail = existing?.customMetadata?.thumbnail;
   const preservedMetadata = getPreservedCustomMetadata(existing?.customMetadata);
   if (thumbnail) {
     preservedMetadata.thumbnail = thumbnail;
+    // 引用先行：并发删除最后一个同缩略图文件时不会把图收走。
+    await addThumbnailRef(bucket, thumbnail, path);
+    // 客户端先传缩略图本体再传文件；若图在间隙中被并发回收，让客户端整体重试。
+    if ((await bucket.head(thumbnailObjectKey(thumbnail))) === null) {
+      if (thumbnail !== previousThumbnail) {
+        await bucket.delete(thumbnailRefKey(thumbnail, path));
+      }
+      return new Response("Thumbnail is missing", { status: 409 });
+    }
   }
 
   const result = await bucket.put(path, body, {
@@ -1212,7 +1296,14 @@ async function handlePut({
     customMetadata: preservedMetadata,
   });
   if (!result) {
+    if (thumbnail && thumbnail !== previousThumbnail) {
+      await bucket.delete(thumbnailRefKey(thumbnail, path));
+    }
     return new Response("Preconditions failed", { status: 412 });
+  }
+
+  if (thumbnail && previousThumbnail !== thumbnail) {
+    await releaseThumbnailRef(bucket, previousThumbnail, path);
   }
 
   return existing === null
@@ -1276,6 +1367,8 @@ async function handleDelete({
 
   if (path === "") {
     await deleteAll(bucket);
+    // deleteAll 会跳过 internal 子树；全删时把共享缩略图和 marker 一并清掉。
+    await deleteAll(bucket, THUMBNAIL_PREFIX, false);
     return new Response(null, { status: 204 });
   }
 
@@ -1291,7 +1384,9 @@ async function handleDelete({
       await bucket.delete(path);
     }
   } else {
+    const digest = resource?.customMetadata?.thumbnail;
     await bucket.delete(path);
+    await releaseThumbnailRef(bucket, digest, path);
   }
   return new Response(null, { status: 204 });
 }
@@ -1637,10 +1732,19 @@ async function handleCopy({
       });
       return;
     }
+    // 覆盖同名文件时目标旧缩略图引用需要释放（目录目标已由 deleteDestination 清理，
+    // 这里兜底处理文件对文件的直接覆盖）。
+    const previous = await bucket.head(targetKey);
+    const previousThumbnail = previous?.customMetadata?.thumbnail;
+    const digest = source.customMetadata?.thumbnail;
+    await addThumbnailRef(bucket, digest, targetKey);
     await bucket.put(targetKey, source.body, {
       httpMetadata: source.httpMetadata,
       customMetadata: stripLockMetadata(source.customMetadata),
     });
+    if (previousThumbnail !== digest) {
+      await releaseThumbnailRef(bucket, previousThumbnail, targetKey);
+    }
   };
 
   if (isDirectory) {
@@ -1785,12 +1889,16 @@ async function handleMove({
         });
       }
     } else {
+      const digest = source.customMetadata?.thumbnail;
+      // 先给目标补引用，再释放源引用，缩略图在移动全程都有引用覆盖。
+      await addThumbnailRef(bucket, digest, target);
       await bucket.put(target, source.body, {
         httpMetadata: source.httpMetadata,
         customMetadata: getPreservedCustomMetadata(source.customMetadata),
       });
+      await bucket.delete(object.key);
+      await releaseThumbnailRef(bucket, digest, object.key);
     }
-    await bucket.delete(object.key);
   };
 
   if (isDirectory) {
@@ -2016,8 +2124,13 @@ async function handlePostCreateMultipart({
   path: string;
   request: Request;
 }): Promise<Response> {
-  const thumbnail = request.headers.get("fd-thumbnail");
+  const rawThumbnail = request.headers.get("fd-thumbnail");
+  const thumbnail = isValidThumbnailDigest(rawThumbnail) ? rawThumbnail : undefined;
   const customMetadata = thumbnail ? { thumbnail } : undefined;
+  // 引用先行：分片未完成期间，并发删除最后一个同缩略图文件不会把图收走。
+  if (thumbnail) {
+    await addThumbnailRef(bucket, thumbnail, path);
+  }
   const multipartUpload = await bucket.createMultipartUpload(path, {
     httpMetadata: request.headers,
     customMetadata,
