@@ -71,6 +71,11 @@
             <input id="search" type="search" spellcheck="false" placeholder="Search bookmarks…" />
             <select id="folderSelect"></select>
             <select id="sinceSelect"></select>
+            <div class="presetWrap">
+              <select id="presetSelect"></select>
+              <button id="presetSave" class="ghost" type="button" title="Save current filter as preset">＋</button>
+              <button id="presetDelete" class="ghost" type="button" title="Delete preset" hidden>✕</button>
+            </div>
             <div class="spacer"></div>
             <button id="selAllBtn" class="ghost" type="button">Select all</button>
             <button id="libRefresh" type="button" title="Reload">Reload</button>
@@ -410,6 +415,20 @@
         <menu>
           <button id="folderCancel" class="ghost" type="button">Cancel</button>
           <button id="folderSave" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="presetDialog">
+      <form id="presetForm" novalidate>
+        <h2 id="presetDialogTitle">Save filter preset</h2>
+        <p id="presetSummary" class="dialogSubtitle"></p>
+        <label for="presetName" id="presetNameLabel">Name</label>
+        <input id="presetName" type="text" spellcheck="false" />
+        <p id="presetError" class="status err"></p>
+        <menu>
+          <button id="presetCancel" class="ghost" type="button">Cancel</button>
+          <button id="presetSaveBtn" class="primary" type="submit">Save</button>
         </menu>
       </form>
     </dialog>

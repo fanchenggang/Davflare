@@ -209,6 +209,14 @@ var COPY = {
       "Merges this library into /HamHomeSync/ (meta.json + categories.json); existing HamHome entries are kept.",
     exportHhBtn: "Write back to HamHomeSync",
     exportedHamHome: "Wrote meta.json + categories.json under /HamHomeSync/.",
+    presetPlaceholder: "Filter presets",
+    presetSaveTitle: "Save the current tag+time filter as a preset",
+    presetDeleteTitle: "Delete this preset",
+    presetDialogTitle: "Save filter preset",
+    presetNameLabel: "Name",
+    presetNeedTag: "Pick a tag filter first, then save it as a preset.",
+    presetSaved: "Preset saved.",
+    presetDeleteConfirm: "Delete the preset “{p}”?",
   },
   zh: {
     title: "Davflare 书签",
@@ -402,6 +410,14 @@ var COPY = {
       "把当前书签库合并写入 /HamHomeSync/（meta.json + categories.json）；HamHome 已有条目会保留。",
     exportHhBtn: "写回 HamHomeSync",
     exportedHamHome: "已写入 meta.json + categories.json 到 /HamHomeSync/。",
+    presetPlaceholder: "筛选预设",
+    presetSaveTitle: "把当前「标签+时间」筛选存为预设",
+    presetDeleteTitle: "删除该预设",
+    presetDialogTitle: "保存筛选预设",
+    presetNameLabel: "名称",
+    presetNeedTag: "请先选择一个标签筛选，再保存为预设。",
+    presetSaved: "预设已保存。",
+    presetDeleteConfirm: "确定删除预设「{p}」？",
   },
 };
 
@@ -440,6 +456,7 @@ var inflightSync = 0;
 
 var appState = {
   view: "bookmarks",
+  presets: [],
   workspaces: { version: 1, workspaces: [] },
   workspacesEtag: null,
   tabRules: { version: 1, fallbackDomain: true, rules: [] },
@@ -2535,6 +2552,127 @@ async function submitFolderDialog(event) {
   await persist();
 }
 
+/* ---------- filter presets (#63 P2) ---------- */
+
+var PRESETS_KEY = "bookmarkPresets";
+
+function sinceLabel(kind) {
+  var labels = {
+    all: t.sinceAll,
+    today: t.sinceToday,
+    week: t.sinceWeek,
+    month: t.sinceMonth,
+    year: t.sinceYear,
+  };
+  return labels[kind] || t.sinceAll;
+}
+
+async function loadPresets() {
+  try {
+    var stored = await chrome.storage.sync.get([PRESETS_KEY]);
+    appState.presets = BookmarksView.normalizePresets(stored && stored[PRESETS_KEY]);
+  } catch (err) {
+    appState.presets = [];
+  }
+  renderPresetSelect();
+}
+
+async function savePresets() {
+  var payload = {};
+  payload[PRESETS_KEY] = appState.presets;
+  await chrome.storage.sync.set(payload);
+}
+
+/** The preset matching the active tag+since filter, if any. */
+function activePreset() {
+  if (state.filter.kind !== "tag") return null;
+  for (var i = 0; i < appState.presets.length; i++) {
+    var p = appState.presets[i];
+    if (p.tag === state.filter.value && p.since === state.since) return p;
+  }
+  return null;
+}
+
+function renderPresetSelect() {
+  var select = $("presetSelect");
+  select.textContent = "";
+  var placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = t.presetPlaceholder;
+  select.appendChild(placeholder);
+  for (var i = 0; i < appState.presets.length; i++) {
+    var p = appState.presets[i];
+    var opt = document.createElement("option");
+    opt.value = p.name;
+    opt.textContent = p.name + "（" + p.tag + " · " + sinceLabel(p.since) + "）";
+    select.appendChild(opt);
+  }
+  var active = activePreset();
+  select.value = active ? active.name : "";
+  $("presetDelete").hidden = !active;
+}
+
+function applyPreset(name) {
+  var preset = null;
+  for (var i = 0; i < appState.presets.length; i++) {
+    if (appState.presets[i].name === name) {
+      preset = appState.presets[i];
+      break;
+    }
+  }
+  if (!preset) {
+    renderPresetSelect();
+    return;
+  }
+  state.filter = { kind: "tag", value: preset.tag };
+  state.since = preset.since;
+  $("sinceSelect").value = preset.since;
+  renderAll();
+}
+
+function openPresetDialog() {
+  if (state.filter.kind !== "tag") {
+    showBanner(t.presetNeedTag);
+    return;
+  }
+  $("presetError").textContent = "";
+  $("presetName").value = "";
+  $("presetSummary").textContent =
+    folderLabel(state.filter.value) + " · " + sinceLabel(state.since);
+  $("presetDialog").showModal();
+  $("presetName").focus();
+}
+
+async function submitPreset(event) {
+  event.preventDefault();
+  var name = $("presetName").value.trim().slice(0, 40);
+  if (!name) {
+    $("presetError").textContent = t.invalidName;
+    return;
+  }
+  var kept = appState.presets.filter(function (p) {
+    return p.name !== name;
+  });
+  kept.push({ name: name, tag: state.filter.value, since: state.since });
+  appState.presets = BookmarksView.normalizePresets(kept);
+  await savePresets();
+  $("presetDialog").close();
+  renderPresetSelect();
+  flashStatus(t.presetSaved);
+}
+
+function deleteActivePreset() {
+  var preset = activePreset();
+  if (!preset) return;
+  confirmThen(fmt(t.presetDeleteConfirm, { p: preset.name }), async function () {
+    appState.presets = appState.presets.filter(function (p) {
+      return p.name !== preset.name;
+    });
+    await savePresets();
+    renderPresetSelect();
+  });
+}
+
 function exportHtml() {
   downloadText("bookmarks.html", "text/html", Bookmarks.serializeHtml(state.model));
   flashStatus(t.exported);
@@ -2898,6 +3036,11 @@ function applyCopy() {
   $("exportHhLegend").textContent = t.exportHhLegend;
   $("exportHhHint").textContent = t.exportHhHint;
   $("exportHamHomeBtn").textContent = t.exportHhBtn;
+  $("presetSave").title = t.presetSaveTitle;
+  $("presetDelete").title = t.presetDeleteTitle;
+  $("presetDialogTitle").textContent = t.presetDialogTitle;
+  $("presetNameLabel").textContent = t.presetNameLabel;
+  $("presetSaveBtn").textContent = t.save;
   $("addBtn").textContent = t.add;
   $("importBtn").textContent = t.import;
   $("exportBtn").textContent = t.export;
@@ -3059,6 +3202,15 @@ function wireEvents() {
     state.since = event.target.value;
     renderItems();
   });
+  $("presetSelect").addEventListener("change", function (event) {
+    applyPreset(event.target.value);
+  });
+  $("presetSave").addEventListener("click", openPresetDialog);
+  $("presetDelete").addEventListener("click", deleteActivePreset);
+  $("presetCancel").addEventListener("click", function () {
+    $("presetDialog").close();
+  });
+  $("presetForm").addEventListener("submit", submitPreset);
   $("viewGrid").addEventListener("click", function () {
     setView("grid");
   });
@@ -3181,6 +3333,7 @@ function wireEvents() {
 applyCopy();
 fillSinceSelect();
 fillColorSelect();
+loadPresets();
 initTheme();
 wireEvents();
 renderFromCache();

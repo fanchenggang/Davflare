@@ -1272,3 +1272,21 @@ dialog textarea {
   bottom: auto;
   min-width: 140px;
 }
+
+/* ---------- filter presets (issue #63 P2) ---------- */
+
+.presetWrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.presetWrap select {
+  max-width: 170px;
+}
+
+.presetWrap .ghost {
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  line-height: 1;
+}

@@ -24,6 +24,10 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
   orderPinnedFirst: (
     items: Array<Record<string, unknown>>
   ) => Array<Record<string, unknown>>;
+  normalizePresets: (
+    raw: unknown,
+    limit?: number
+  ) => Array<{ name: string; tag: string; since: string }>;
 };
 
 function modelWith(bookmarks: Array<Record<string, unknown>>) {
@@ -210,5 +214,34 @@ describe("extension/bookmarksView.js pinned & declared folders (#63)", () => {
     ]);
     expect(ordered.map((b) => b.id)).toEqual(["c", "d", "b", "a", "e"]);
     expect(BookmarksView.orderPinnedFirst([])).toEqual([]);
+  });
+});
+
+describe("extension/bookmarksView.js normalizePresets (#63 P2)", () => {
+  test("keeps named tag+since rows, defaults since, drops junk and dup names", () => {
+    const presets = BookmarksView.normalizePresets([
+      { name: "docs 长期", tag: "docs", since: "year" },
+      { name: "dev 周", tag: "dev", since: "nonsense" },
+      { name: "dev 周", tag: "dev", since: "week" },
+      { name: "", tag: "x" },
+      { name: "no-tag" },
+      null,
+      "junk",
+    ]);
+    expect(presets).toEqual([
+      { name: "docs 长期", tag: "docs", since: "year" },
+      { name: "dev 周", tag: "dev", since: "all" },
+    ]);
+    expect(BookmarksView.normalizePresets(null)).toEqual([]);
+  });
+
+  test("caps the list at 12 by default or the given limit", () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({
+      name: "p" + i,
+      tag: "t" + i,
+      since: "week",
+    }));
+    expect(BookmarksView.normalizePresets(many)).toHaveLength(12);
+    expect(BookmarksView.normalizePresets(many, 3)).toHaveLength(3);
   });
 });

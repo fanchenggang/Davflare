@@ -180,6 +180,31 @@ var BookmarksView = (function () {
     );
   }
 
+  /**
+   * Issue #63 P2: sanitize stored filter presets ({name, tag, since}) —
+   * drop junk rows, require name+tag, cap the list so sync storage stays
+   * small. `since` must be one of the sinceSelect values.
+   */
+  var SINCE_KINDS = ["all", "today", "week", "month", "year"];
+
+  function normalizePresets(raw, limit) {
+    if (!Array.isArray(raw)) return [];
+    var cap = typeof limit === "number" && isFinite(limit) && limit > 0 ? limit : 12;
+    var out = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < raw.length && out.length < cap; i++) {
+      var p = raw[i];
+      if (!p || typeof p !== "object") continue;
+      var name = typeof p.name === "string" ? p.name.trim().slice(0, 40) : "";
+      var tag = typeof p.tag === "string" ? p.tag.trim().slice(0, 64) : "";
+      var since = SINCE_KINDS.indexOf(p.since) !== -1 ? p.since : "all";
+      if (!name || !tag || seen[name]) continue;
+      seen[name] = true;
+      out.push({ name: name, tag: tag, since: since });
+    }
+    return out;
+  }
+
   return {
     domainOf: domainOf,
     fallbackLetter: function (item) {
@@ -192,6 +217,7 @@ var BookmarksView = (function () {
     formatRelative: formatRelative,
     folderList: folderList,
     matchesQuery: matchesQuery,
+    normalizePresets: normalizePresets,
     orderPinnedFirst: orderPinnedFirst,
     tagList: tagList,
   };
