@@ -46,7 +46,7 @@ var Bookmarks = (function () {
       id: asString(src.id) || makeId(),
       title: asString(src.title),
       url: asString(src.url),
-      folder: asString(src.folder),
+      folder: sanitizeFolderPath(asString(src.folder)),
       tags: sanitizeTags(src.tags),
       note: asString(src.note),
       added: added,
@@ -65,23 +65,25 @@ var Bookmarks = (function () {
    * are otherwise implied by bookmark paths only. Kept sorted and unique;
    * path segments must be non-empty and free of "." / "..".
    */
+  /** One folder path: trim, drop empties / "." / ".."; "" means unfiled. */
+  function sanitizeFolderPath(value) {
+    var path =
+      typeof value === "string" ? value.trim().replace(/^\/+|\/+$/g, "") : "";
+    if (!path) return "";
+    var segs = path.split("/");
+    for (var j = 0; j < segs.length; j++) {
+      if (!segs[j] || segs[j] === "." || segs[j] === "..") return "";
+    }
+    return path;
+  }
+
   function sanitizeFolderList(value) {
     if (!Array.isArray(value)) return [];
     var seen = Object.create(null);
     var out = [];
     for (var i = 0; i < value.length; i++) {
-      var path =
-        typeof value[i] === "string" ? value[i].trim().replace(/^\/+|\/+$/g, "") : "";
+      var path = sanitizeFolderPath(value[i]);
       if (!path || seen[path]) continue;
-      var segs = path.split("/");
-      var bad = false;
-      for (var j = 0; j < segs.length; j++) {
-        if (!segs[j] || segs[j] === "." || segs[j] === "..") {
-          bad = true;
-          break;
-        }
-      }
-      if (bad) continue;
       seen[path] = true;
       out.push(path);
     }
@@ -520,7 +522,10 @@ var Bookmarks = (function () {
     var next = normalizeModel(model);
     var drop = idSet(ids);
     if (!drop) return next;
-    var target = String(folder == null ? "" : folder).trim().replace(/^\/+|\/+$/g, "");
+    var raw = String(folder == null ? "" : folder).trim().replace(/^\/+|\/+$/g, "");
+    var target = sanitizeFolderPath(raw);
+    // Reject junk paths (e.g. "../x") instead of silently unfiling.
+    if (raw && !target) return next;
     for (var i = 0; i < next.bookmarks.length; i++) {
       if (drop[next.bookmarks[i].id]) next.bookmarks[i].folder = target;
     }
@@ -579,8 +584,8 @@ var Bookmarks = (function () {
    */
   function renameFolder(model, fromPath, toPath) {
     var next = normalizeModel(model);
-    var from = String(fromPath == null ? "" : fromPath).trim().replace(/^\/+|\/+$/g, "");
-    var to = String(toPath == null ? "" : toPath).trim().replace(/^\/+|\/+$/g, "");
+    var from = sanitizeFolderPath(fromPath);
+    var to = sanitizeFolderPath(toPath);
     if (!from || !to || from === to) return next;
     function mapPath(path) {
       if (path === from) return to;
@@ -603,7 +608,7 @@ var Bookmarks = (function () {
   /** Declare an empty folder path; no-op when it already exists. */
   function addFolder(model, path) {
     var next = normalizeModel(model);
-    var clean = String(path == null ? "" : path).trim().replace(/^\/+|\/+$/g, "");
+    var clean = sanitizeFolderPath(path);
     if (!clean) return next;
     next.folders = sanitizeFolderList(next.folders.concat(clean));
     return next;

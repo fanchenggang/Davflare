@@ -97,6 +97,13 @@ describe("extension/bookmarks.js batch ops (#63)", () => {
     expect(unfiled.bookmarks[2].folder).toBe("");
   });
 
+  test("moveBookmarks / renameFolder reject . and .. path segments", () => {
+    const rejected = Bookmarks.moveBookmarks(base, ["a"], "../Escape");
+    expect(rejected.bookmarks[0].folder).toBe("Dev");
+    const renamed = Bookmarks.renameFolder(base, "Dev", "Dev/../Other");
+    expect(renamed.bookmarks[0].folder).toBe("Dev");
+  });
+
   test("adjustTags adds and removes without dupes", () => {
     const adjusted = Bookmarks.adjustTags(base, ["a", "b"], ["x", "z "], ["y"]);
     expect(adjusted.bookmarks[0].tags).toEqual(["x", "z"]);

@@ -454,6 +454,7 @@ var editingRuleId = null;
 var editingWsId = null;
 var tagDialogBookmark = null;
 var pendingConfirm = null;
+var pendingConfirmCancel = null;
 
 var lang =
   (navigator.language || "en").toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
@@ -1219,9 +1220,10 @@ function pickBox(item) {
 }
 
 function togglePinBookmark(item) {
-  state.model = Bookmarks.setPinned(state.model, [item.id], !item.pinned);
+  var nextPinned = !item.pinned;
+  state.model = Bookmarks.setPinned(state.model, [item.id], nextPinned);
   persist().then(function (ok) {
-    if (ok) flashStatus(item.pinned ? t.pinAdd : t.pinRemove);
+    if (ok) flashStatus(nextPinned ? t.pinAdd : t.pinRemove);
   });
 }
 
@@ -2508,6 +2510,13 @@ async function submitFolderDialog(event) {
     $("folderError").textContent = t.invalidName;
     return;
   }
+  var segs = value.split("/");
+  for (var s = 0; s < segs.length; s++) {
+    if (!segs[s] || segs[s] === "." || segs[s] === "..") {
+      $("folderError").textContent = t.invalidName;
+      return;
+    }
+  }
   if (folderDialogMode === "rename") {
     if (value === folderDialogTarget) {
       $("folderDialog").close();
@@ -2657,9 +2666,18 @@ async function exportChromeWrite() {
   }
   if (clear && countSubtree(target) > 0) {
     var doomed = countSubtree(target);
-    await new Promise(function (resolve) {
-      confirmThen(fmt(t.exportChromeClearConfirm, { n: doomed }), resolve);
+    var confirmed = await new Promise(function (resolve) {
+      confirmThen(
+        fmt(t.exportChromeClearConfirm, { n: doomed }),
+        function () {
+          resolve(true);
+        },
+        function () {
+          resolve(false);
+        }
+      );
     });
+    if (!confirmed) return;
     for (var i = 0; i < target.children.length; i++) {
       await chrome.bookmarks.removeTree(target.children[i].id);
     }
@@ -2700,10 +2718,16 @@ async function exportHamHomeWrite() {
     return;
   }
   var cats = await hh.getFile("categories.json");
+  // Abort on read failure — never treat a network/auth error as "empty remote"
+  // or we would overwrite HamHome categories.json with a rebuilt tree (#80 review).
+  if (!cats.ok) {
+    showBanner(errorText(cats.kind), t.openSettings, openSettings);
+    return;
+  }
   var res = HamHome.exportTo(
     state.model,
     meta.missing ? null : meta.text,
-    cats.ok && !cats.missing ? cats.text : null,
+    cats.missing ? null : cats.text,
     Date.now()
   );
   if (!res.ok) {
@@ -2788,10 +2812,18 @@ async function onImportFilePicked(event) {
 
 /* ---------- dialogs ---------- */
 
-function confirmThen(message, fn) {
+function confirmThen(message, fn, onCancel) {
   pendingConfirm = fn;
+  pendingConfirmCancel = typeof onCancel === "function" ? onCancel : null;
   $("confirmText").textContent = message;
   $("confirmDialog").showModal();
+}
+
+function clearPendingConfirm() {
+  var cancel = pendingConfirmCancel;
+  pendingConfirm = null;
+  pendingConfirmCancel = null;
+  return cancel;
 }
 
 function openWsNameDialog(workspace, pendingPages) {
@@ -3120,11 +3152,18 @@ function wireEvents() {
     if (await persistTabRules()) renderTabRules();
   });
   $("confirmCancel").addEventListener("click", function () {
-    pendingConfirm = null;
+    var cancel = clearPendingConfirm();
     $("confirmDialog").close();
+    if (cancel) cancel();
+  });
+  $("confirmDialog").addEventListener("cancel", function () {
+    // Escape closes the dialog; treat as cancel so awaiters do not hang.
+    var cancel = clearPendingConfirm();
+    if (cancel) cancel();
   });
   $("confirmOk").addEventListener("click", function () {
     var fn = pendingConfirm;
+    pendingConfirmCancel = null;
     pendingConfirm = null;
     $("confirmDialog").close();
     if (fn) fn();
