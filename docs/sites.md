@@ -40,3 +40,9 @@ Then open `https://sites.<your-domain>/blog/` (or `/blog/style.css`). Missing fi
 - Different origin from the file manager: site JS cannot read drive credentials.
 - All slugs share the sites origin (`sites.domain/a/` and `/b/`). Fine for one owner; do not host untrusted third-party HTML on the same sites host.
 - Do not put API keys in the uploaded HTML.
+
+## Image host UI
+
+Upload images in the drive UI (`#/images`): drag/drop, copy the public URL or Markdown `![](url)`, list and delete. Blobs live at `_$flaredrive$/img/{id}` with an unguessable id (not the original filename). Public URL is only `https://<SITES_HOST>/i/{id}` (no scheme in `SITES_HOST`). SVG is served as a download (`Content-Disposition: attachment` + `nosniff`), never as a navigable document.
+
+On the sites host, `/i/{id}` is matched **before** slug static sites. The image-host switch is independent of the sites switch: sites off + image host on → slugs 404 but `/i/{id}` works; image host off → `/i/*` 404 even if sites is on. If `SITES_HOST` is unset, the switch can still exist but the UI tells you to bind the host first.

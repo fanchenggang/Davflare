@@ -218,6 +218,19 @@ Cursor (`mcp.json`):
 }
 ```
 
+### Expiring share from chat
+
+1. Ask the agent to call `share_create` on a file or folder path, with `expiresInHours=24` (optional `extractCode`).
+2. Forward the returned share `url` (path `/share/{token}`).
+3. Manage with `share_list` / `share_revoke` (pass the `token`).
+
+### Try MCP from Cursor
+
+1. Leave **API Key** + **MCP** + **Sites** on in `#/settings`. Create a key.
+2. Paste into Cursor `mcp.json` (replace host + key) — same JSON as above.
+3. Open this repo's [`agents/examples/hello-site/`](../agents/examples/hello-site/) and tell Cursor to follow `SKILL.md` (uses only `publish_site` / optional `image_upload`).
+4. When it finishes you get `https://sites.<your-domain>/hello/` (your real `SITES_HOST`). No public shared demo.
+
 ### Agent layouts
 
 Skills / rules / MCP snippets: `agents/{global|{agent}|{agent}/{project}}/{skills|rules|mcp}/`. v2 `pull` / `push` walk this tree (or use the web UI). Merge: project > agent > global. Do not store raw keys in `mcp.json`. Full convention: [agents.md](./agents.md).

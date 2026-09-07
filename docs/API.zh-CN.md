@@ -206,6 +206,19 @@ Cursor（`mcp.json`）：
 }
 ```
 
+### 对话里发限时分享
+
+1. 让助手对某个文件/目录调用 `share_create`，并设 `expiresInHours=24`（可选 `extractCode`）。
+2. 把返回的分享 `url`（路径 `/share/{token}`）转发出去即可。
+3. 用 `share_list` / `share_revoke`（传入 `token`）查看与撤销。
+
+### 用 Cursor 试 MCP
+
+1. `#/settings` 保持 **API Key**、**MCP**、**静态站点** 打开，创建一把密钥。
+2. 粘贴到 Cursor 的 `mcp.json`（换成你的域名和密钥）——与上方 JSON 相同。
+3. 打开本仓库 [`agents/examples/hello-site/`](../agents/examples/hello-site/)，让 Cursor 按 `SKILL.md` 做（只用现有 `publish_site`，可选 `image_upload`）。
+4. 跑完得到 `https://sites.<你的域>/hello/`（你真实的 `SITES_HOST`）。没有别人能打开的公共演示站。
+
 ### Agent 目录
 
 skills / rules / MCP 片段：`agents/{global|{agent}|{agent}/{project}}/{skills|rules|mcp}/`。v2 的 `pull` / `push` 会走这棵树（也可用网页端）。合并：project 覆盖 agent 覆盖 global。`mcp.json` 不要明文密钥。完整约定：[agents.zh-CN.md](./agents.zh-CN.md)。
