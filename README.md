@@ -187,6 +187,12 @@ Same-origin Model Context Protocol (Streamable HTTP) at `/mcp`. Auth is the same
 
 Tools (21): `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`, `image_upload`, `image_list`, `image_delete`.
 
+### Expiring share from chat
+
+1. Ask the agent to call `share_create` on a file or folder path, with `expiresInHours=24` (optional `extractCode`).
+2. Forward the returned share `url` (path `/share/{token}`).
+3. Manage with `share_list` / `share_revoke` (pass the `token`).
+
 Uploads up to 1 MiB go inline; larger content is auto-chunked (cap **25 MB**). Bigger files: web UI or `davflare-cli`. Downloads over 1 MiB page with `part` / `partSize`. Default `delete` is trash; `hard=true` permanently deletes. Publish a static site by uploading into `sites/{slug}/` (or `publish_site` from a drive folder), then `sites_config` if you need SPA fallback. `pull` / `push` walk `agents/…` (merge: project > agent > global). Details: [docs/API.md](docs/API.md).
 
 Cursor (`mcp.json`):

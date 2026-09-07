@@ -303,7 +303,7 @@ export const MCP_TOOLS = [
   {
     name: "share_create",
     description:
-      "Create a public share link for a file or folder. Optional extract code (4-32 chars) and expiry in hours.",
+      "Create a public share link for a file or folder. Returns JSON including a forwardable `url` and `token`. Optional extract code (4-32 chars) and expiry in hours.",
     inputSchema: {
       type: "object",
       properties: {

@@ -185,6 +185,12 @@ Cloudflare Workers 单次 PUT 上限为 **128 MB**。超限会返回 **HTTP 413*
 
 工具（21 个）：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`sites_list`、`sites_config`、`sites_delete`、`pull`、`push`、`publish_site`、`image_upload`、`image_list`、`image_delete`。
 
+### 对话里发限时分享
+
+1. 让助手对某个文件/目录调用 `share_create`，并设 `expiresInHours=24`（可选 `extractCode`）。
+2. 把返回的分享 `url`（路径 `/share/{token}`）转发出去即可。
+3. 用 `share_list` / `share_revoke`（传入 `token`）查看与撤销。
+
 不超过 1 MiB 的上传走内联；更大内容自动分块（上限 **25 MB**）。再大请用网页端或 `davflare-cli`。下载超过 1 MiB 用 `part` / `partSize` 分页。`delete` 默认进回收站，`hard=true` 永久删除。把文件上传到 `sites/{slug}/`（或用 `publish_site` 从网盘目录同步）即发布静态站，需要 SPA 回退再调 `sites_config`。`pull` / `push` 走 `agents/…`（合并：project 覆盖 agent 覆盖 global）。详见 [docs/API.zh-CN.md](docs/API.zh-CN.md)。
 
 Cursor（`mcp.json`）：
