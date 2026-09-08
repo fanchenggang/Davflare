@@ -1,8 +1,8 @@
 import {
   ensureFolderMarkers,
   isInternalKey,
+  isSessionOrKeyAuthorized,
   textResponse,
-  verifyBasicAuth,
 } from "./_apikey";
 
 interface TrashEnv {
@@ -114,7 +114,12 @@ async function listTrashItems(bucket: R2Bucket) {
 
 export const onRequestGet: PagesFunction<TrashEnv> = async (context) => {
   const { request, env } = context;
-  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+  if (!(await isSessionOrKeyAuthorized(
+    request,
+    env.BUCKET,
+    env.WEBDAV_USERNAME,
+    env.WEBDAV_PASSWORD
+  ))) {
     return textResponse("Unauthorized", 401);
   }
   await purgeExpiredTrash(env.BUCKET, retentionDaysFrom(env));
@@ -126,7 +131,12 @@ export const onRequestGet: PagesFunction<TrashEnv> = async (context) => {
 
 export const onRequestPost: PagesFunction<TrashEnv> = async (context) => {
   const { request, env } = context;
-  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+  if (!(await isSessionOrKeyAuthorized(
+    request,
+    env.BUCKET,
+    env.WEBDAV_USERNAME,
+    env.WEBDAV_PASSWORD
+  ))) {
     return textResponse("Unauthorized", 401);
   }
 
@@ -139,7 +149,12 @@ export const onRequestPost: PagesFunction<TrashEnv> = async (context) => {
 
 export const onRequestDelete: PagesFunction<TrashEnv> = async (context) => {
   const { request, env } = context;
-  if (!verifyBasicAuth(request, env.WEBDAV_USERNAME, env.WEBDAV_PASSWORD)) {
+  if (!(await isSessionOrKeyAuthorized(
+    request,
+    env.BUCKET,
+    env.WEBDAV_USERNAME,
+    env.WEBDAV_PASSWORD
+  ))) {
     return textResponse("Unauthorized", 401);
   }
 

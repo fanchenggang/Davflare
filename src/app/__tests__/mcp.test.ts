@@ -45,6 +45,9 @@ function mockApis(overrides: Partial<ToolCallApis> = {}): ToolCallApis {
     shareCreate: async () => httpJsonResponse({ token: "tok-1", url: "http://x/share/tok-1" }, 201),
     shareList: async () => httpJsonResponse([]),
     shareRevoke: async () => new Response(null, { status: 204 }),
+    trashList: async () => httpJsonResponse([]),
+    trashRestore: async () => httpJsonResponse([{ trashKey: "t1", status: "restored" }]),
+    trashEmpty: async () => new Response(null, { status: 204 }),
     sitesList: async () => httpJsonResponse({ sitesHost: "sites.example.com", sites: [] }),
     sitesConfig: async () => httpJsonResponse({ slug: "demo", spa: true }),
     sitesDelete: async () => httpJsonResponse({ slug: "demo", deleted: 2 }),
@@ -82,7 +85,7 @@ function toolPayload(result: Awaited<ReturnType<typeof dispatchMcpRequest>>) {
 }
 
 describe("mcp protocol", () => {
-  test("tool catalog: base + search/move/copy/stat/share/sites + pull/push/publish_site", () => {
+  test("tool catalog: base + search/move/copy/stat/share/trash/sites + pull/push/publish_site", () => {
     expect(MCP_TOOL_NAMES).toEqual([
       "list",
       "upload",
@@ -96,6 +99,9 @@ describe("mcp protocol", () => {
       "share_create",
       "share_list",
       "share_revoke",
+      "trash_list",
+      "trash_restore",
+      "trash_empty",
       "sites_list",
       "sites_config",
       "sites_delete",
@@ -106,7 +112,7 @@ describe("mcp protocol", () => {
       "image_list",
       "image_delete",
     ]);
-    expect(MCP_TOOLS).toHaveLength(21);
+    expect(MCP_TOOLS).toHaveLength(24);
   });
 
   test("parseJsonRpcBody rejects invalid json", () => {
@@ -323,6 +329,51 @@ describe("mcp protocol", () => {
     const missing = await callTool("share_create", {}, { shareCreate });
     expect(toolPayload(missing).isError).toBe(true);
     expect(shareCreate).not.toHaveBeenCalled();
+  });
+
+  test("trash tools list, restore, empty", async () => {
+    const trashList = vi.fn(async () =>
+      httpJsonResponse([{ trashKey: "tid-1", originalKey: "notes.txt" }])
+    );
+    const listed = await callTool("trash_list", {}, { trashList });
+    expect(trashList).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(toolPayload(listed).content[0].text)[0].trashKey).toBe("tid-1");
+
+    const trashRestore = vi.fn(async () =>
+      httpJsonResponse([{ trashKey: "tid-1", status: "restored" }])
+    );
+    const restored = await callTool(
+      "trash_restore",
+      { trashKey: "tid-1" },
+      { trashRestore }
+    );
+    expect(trashRestore).toHaveBeenCalledWith({ trashKeys: ["tid-1"] });
+    expect(JSON.parse(toolPayload(restored).content[0].text)[0].status).toBe("restored");
+
+    const trashRestoreMany = vi.fn(async () =>
+      httpJsonResponse([{ trashKey: "a", status: "restored" }])
+    );
+    await callTool(
+      "trash_restore",
+      { trashKeys: ["a", "b"] },
+      { trashRestore: trashRestoreMany }
+    );
+    expect(trashRestoreMany).toHaveBeenCalledWith({ trashKeys: ["a", "b"] });
+
+    const trashEmpty = vi.fn(async () => new Response(null, { status: 204 }));
+    await callTool("trash_empty", {}, { trashEmpty });
+    expect(trashEmpty).toHaveBeenCalledWith({ all: true });
+
+    const trashEmptySome = vi.fn(async () => new Response(null, { status: 204 }));
+    await callTool("trash_empty", { trashKeys: ["tid-1"] }, { trashEmpty: trashEmptySome });
+    expect(trashEmptySome).toHaveBeenCalledWith({ trashKeys: ["tid-1"] });
+  });
+
+  test("trash_restore rejects missing trashKey", async () => {
+    const trashRestore = vi.fn(async () => httpJsonResponse([]));
+    const missing = await callTool("trash_restore", {}, { trashRestore });
+    expect(toolPayload(missing).isError).toBe(true);
+    expect(trashRestore).not.toHaveBeenCalled();
   });
 
   test("sites tools list/config/delete", async () => {

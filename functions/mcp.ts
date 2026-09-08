@@ -13,6 +13,11 @@ import {
   onRequestPost as sharesOnPost,
 } from "./api/shares";
 import {
+  onRequestDelete as trashOnDelete,
+  onRequestGet as trashOnGet,
+  onRequestPost as trashOnPost,
+} from "./api/trash";
+import {
   onRequestDelete as sitesOnDelete,
   onRequestGet as sitesOnGet,
   onRequestPost as sitesOnPost,
@@ -98,7 +103,7 @@ function withRequest<T extends { BUCKET: R2Bucket }>(
   context: McpContext,
   request: Request
 ): EventContext<T, any, any> {
-  // MCP 流程已通过 API key 鉴权；shares/sites handler 的 Basic 凭据字段在
+  // MCP 流程已通过 API key 鉴权；shares/sites/trash handler 的 Basic 凭据字段在
   // 该分支下仅用于"是否同时允许会话"的判定，缺失时安全跳过。
   return Object.assign({}, context, { request }) as unknown as EventContext<
     T,
@@ -250,6 +255,31 @@ function makeApis(context: McpContext): ToolCallApis {
       url.searchParams.set("token", token);
       const request = cloneApiRequest(context.request, "DELETE", url);
       return sharesOnDelete(withRequest(context, request));
+    },
+    async trashList() {
+      const url = new URL("/api/trash", origin);
+      const request = cloneApiRequest(context.request, "GET", url);
+      return trashOnGet(withRequest(context, request));
+    },
+    async trashRestore({ trashKeys }) {
+      const url = new URL("/api/trash", origin);
+      url.searchParams.set("action", "restore");
+      const request = cloneApiRequest(context.request, "POST", url, {
+        body: JSON.stringify({ trashKeys }),
+        headers: { "Content-Type": "application/json" },
+      });
+      return trashOnPost(withRequest(context, request));
+    },
+    async trashEmpty({ trashKeys, all }) {
+      const url = new URL("/api/trash", origin);
+      const body: Record<string, unknown> = {};
+      if (all) body.all = true;
+      if (trashKeys) body.trashKeys = trashKeys;
+      const request = cloneApiRequest(context.request, "DELETE", url, {
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      });
+      return trashOnDelete(withRequest(context, request));
     },
     async sitesList({ withStats }) {
       const url = new URL("/api/sites", origin);

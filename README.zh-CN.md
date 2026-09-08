@@ -30,7 +30,7 @@
 - 分享链接（限时或永久）、提取码、文件夹 zip，以及零脚本落地页
 - 回收站，保留天数可配（`TRASH_RETENTION_DAYS`）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端）
-- API Key 支持脚本上传 / 下载 / 同步，远程 MCP 在 `/mcp`（21 个工具）
+- API Key 支持脚本上传 / 下载 / 同步，远程 MCP 在 `/mcp`（24 个工具）
 - 静态站点与图床走单独域名（`SITES_HOST`）
 - 拥有者设置页五个持久化功能开关
 - `davflare-cli`、可选 Chrome MV3 扩展，以及 R2 上的 Agent 目录约定

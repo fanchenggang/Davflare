@@ -30,7 +30,7 @@ Share (expiry + extract code):
 - Share links with expiry or forever, extract code, folder zip, and a zero-JS landing page
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
-- API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (21 tools)
+- API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (24 tools)
 - Static sites and image host on a separate hostname (`SITES_HOST`)
 - Owner Settings with five persistent feature switches
 - `davflare-cli`, optional Chrome MV3 extension, and agent layouts on R2

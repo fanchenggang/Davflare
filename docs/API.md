@@ -187,7 +187,7 @@ Public URL: `https://<SITES_HOST>/i/{id}`. SVG responses use `Content-Dispositio
 
 ### MCP
 
-Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). **MCP depends on the API Key switch** — if API Key is off (or MCP is off), `/mcp` returns **404**. Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`, `image_upload`, `image_list`, `image_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys. `pull` walks `agents/{global|agent|agent/project}/{skills|rules|mcp}/` and returns layered files (merge: project > agent > global); large files page like `download`. `push` writes that tree (`mcp.json` must use `${env:...}`, not raw keys). `publish_site` copies a drive folder onto `sites/{slug}/` (overwrite same names; SPA config is kept; 404 if the Sites switch is off). `image_upload` / `image_list` / `image_delete` wrap `/api/images` (public `https://<SITES_HOST>/i/{id}` + Markdown; 20 MB cap; 404 if Image Host is off).
+Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). **MCP depends on the API Key switch** — if API Key is off (or MCP is off), `/mcp` returns **404**. Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `trash_list`, `trash_restore`, `trash_empty`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`, `image_upload`, `image_list`, `image_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. Recover with `trash_list` / `trash_restore`; permanently clear with `trash_empty`. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys. `pull` walks `agents/{global|agent|agent/project}/{skills|rules|mcp}/` and returns layered files (merge: project > agent > global); large files page like `download`. `push` writes that tree (`mcp.json` must use `${env:...}`, not raw keys). `publish_site` copies a drive folder onto `sites/{slug}/` (overwrite same names; SPA config is kept; 404 if the Sites switch is off). `image_upload` / `image_list` / `image_delete` wrap `/api/images` (public `https://<SITES_HOST>/i/{id}` + Markdown; 20 MB cap; 404 if Image Host is off).
 
 ```bash
 # initialize
@@ -223,6 +223,13 @@ Cursor (`mcp.json`):
 1. Ask the agent to call `share_create` on a file or folder path, with `expiresInHours=24` (optional `extractCode`).
 2. Forward the returned share `url` (path `/share/{token}`).
 3. Manage with `share_list` / `share_revoke` (pass the `token`).
+
+### Recover a mistaken delete from chat
+
+1. Soft-deleted via `delete` (default) — the file is in trash.
+2. Call `trash_list` to see `trashKey` / `originalKey`.
+3. Call `trash_restore` with that `trashKey` to put it back.
+4. Or `trash_empty` to permanently clear trash.
 
 ### Try MCP from Cursor
 

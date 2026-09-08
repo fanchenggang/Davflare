@@ -105,6 +105,12 @@ export type ToolCallApis = {
   }) => Promise<Response>;
   shareList: () => Promise<Response>;
   shareRevoke: (query: { token: string }) => Promise<Response>;
+  trashList: () => Promise<Response>;
+  trashRestore: (query: { trashKeys: string[] }) => Promise<Response>;
+  trashEmpty: (query: {
+    trashKeys?: string[];
+    all?: boolean;
+  }) => Promise<Response>;
   sitesList: (query: { withStats?: boolean }) => Promise<Response>;
   sitesConfig: (query: { slug: string; spa: boolean }) => Promise<Response>;
   sitesDelete: (query: { slug: string; purge?: boolean }) => Promise<Response>;
@@ -335,6 +341,46 @@ export const MCP_TOOLS = [
         token: { type: "string", description: "Share token from share_create/share_list" },
       },
       required: ["token"],
+    },
+  },
+  {
+    name: "trash_list",
+    description:
+      "List soft-deleted items in trash (trashKey, originalKey, name, deletedAt, size).",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "trash_restore",
+    description:
+      "Restore soft-deleted item(s) from trash by trashKey (from trash_list). Fails with conflict if the original path already exists.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        trashKey: {
+          type: "string",
+          description: "Single trash id from trash_list",
+        },
+        trashKeys: {
+          type: "array",
+          items: { type: "string" },
+          description: "One or more trash ids from trash_list",
+        },
+      },
+    },
+  },
+  {
+    name: "trash_empty",
+    description:
+      "Permanently delete trash entries. With no args, empties the entire trash. Pass trashKeys to delete specific entries only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        trashKeys: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional trash ids; omit to empty all",
+        },
+      },
     },
   },
   {
@@ -1244,6 +1290,38 @@ async function callTool(
       const token = asString(args.token);
       if (!token) return toolError("token is required");
       return wrapApiResponse(await apis.shareRevoke({ token }));
+    }
+    case "trash_list": {
+      return wrapApiResponse(await apis.trashList());
+    }
+    case "trash_restore": {
+      const trashKeys: string[] = [];
+      const single = asString(args.trashKey).trim();
+      if (single) trashKeys.push(single);
+      if (Array.isArray(args.trashKeys)) {
+        for (const item of args.trashKeys) {
+          const key = asString(item).trim();
+          if (key) trashKeys.push(key);
+        }
+      }
+      if (trashKeys.length === 0) {
+        return toolError("trashKey or trashKeys is required");
+      }
+      return wrapApiResponse(await apis.trashRestore({ trashKeys }));
+    }
+    case "trash_empty": {
+      if (Array.isArray(args.trashKeys) && args.trashKeys.length > 0) {
+        const trashKeys: string[] = [];
+        for (const item of args.trashKeys) {
+          const key = asString(item).trim();
+          if (key) trashKeys.push(key);
+        }
+        if (trashKeys.length === 0) {
+          return toolError("trashKeys must be non-empty strings");
+        }
+        return wrapApiResponse(await apis.trashEmpty({ trashKeys }));
+      }
+      return wrapApiResponse(await apis.trashEmpty({ all: true }));
     }
     case "sites_list": {
       const withStats = asOptionalBoolean(args.stats) !== false;
