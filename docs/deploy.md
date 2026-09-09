@@ -4,13 +4,35 @@
 
 ← [README](../README.md)
 
-## One-click
+## This project is Cloudflare Pages
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
+Davflare deploys as a **Cloudflare Pages** app (static UI in `build/` + backend in `functions/` as Pages Functions).
+
+Evidence in-repo:
+
+- `wrangler.toml` has `pages_build_output_dir = "build"`
+- There is **no** Worker `main` entry — do **not** invent one just to satisfy Workers tooling
+- Correct CLI: `npx wrangler pages deploy build`
+- **Wrong** CLI: `npx wrangler deploy` (Workers) → «Missing entry-point / entry point not configured»
+- **Wrong** button: [Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare) — same failure mode
 
 You need a [Cloudflare](https://dash.cloudflare.com/) account with a payment method and R2 activated (create at least one bucket).
 
-After the first deploy:
+## Deploy via Cloudflare Dashboard (recommended)
+
+There is no official Pages equivalent of the Workers one-click Deploy button. Use the dashboard:
+
+1. Open [Workers & Pages → Create](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create)
+2. Choose **Pages** → **Connect to Git** → select `fanchenggang/Davflare` (or your fork)
+3. Build settings:
+   - Framework preset: **None** (React/Vite, not Docusaurus)
+   - Build command: `npm run build`
+   - Output directory: `build`
+4. Deploy, then configure bindings / env vars (next section) and **retry deploy** so they apply
+
+Official guide: [Pages Git integration](https://developers.cloudflare.com/pages/get-started/git-integration/).
+
+## After the first deploy
 
 1. Bind your R2 bucket to the `BUCKET` variable
 2. Set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`
@@ -19,19 +41,22 @@ After the first deploy:
 5. Retry deploy so the binding and env vars apply
 6. Optional: add a custom domain for the drive UI
 
-## Manual Cloudflare Pages
-
-- Framework preset: **None (React/Vite, not Docusaurus)**
-- Output directory: `build`
-- Then bind `BUCKET`, set the env vars above, and retry deploy
-
-## Wrangler CLI
+## Wrangler CLI (Pages)
 
 `wrangler.toml` binds R2 as `BUCKET` (default bucket name `webdav`). Change `bucket_name` to your bucket if needed.
 
 ```bash
 npm run build
 npx wrangler pages deploy build
+```
+
+Do **not** run `npx wrangler deploy` against this repo — that is the Workers path and will complain that no entry point is configured.
+
+Local preview (Pages + Functions):
+
+```bash
+npm run build
+npx wrangler pages dev build
 ```
 
 ## Feature switches
@@ -55,4 +80,3 @@ Toggle them in the UI:
 3. MCP depends on API Key: if Key is off, `/mcp` is 404 even if MCP is on. Sites and image-host public URLs also need `SITES_HOST`.
 
 See also [webdav.md](./webdav.md), [sites.md](./sites.md), [API.md](./API.md).
-

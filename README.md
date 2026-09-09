@@ -2,9 +2,11 @@
 
 [English](README.md) | [中文](README.zh-CN.md)
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
+[![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to%20Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) · [Deploy guide](docs/deploy.md)
 
-Cloudflare R2 file manager on Pages + Workers — free 10 GB storage and 100,000 Worker invocations per day. [R2 pricing](https://developers.cloudflare.com/r2/platform/pricing/)
+Cloudflare R2 file manager on **Cloudflare Pages** (API via Pages Functions) — free 10 GB storage and 100,000 invocations per day. [R2 pricing](https://developers.cloudflare.com/r2/platform/pricing/)
+
+> **Pages, not Workers.** This repo sets `pages_build_output_dir` in `wrangler.toml` and has no Worker `main`. Do **not** use the [Workers Deploy to Cloudflare](https://deploy.workers.cloudflare.com/) button or `wrangler deploy` — that looks for a Worker entry point and fails with «entry point not configured».
 
 ## Screenshots
 
@@ -38,12 +40,13 @@ Share (expiry + extract code):
 
 ## Quick start
 
-1. One-click deploy with the button above (needs a Cloudflare account with R2 activated and a payment method on file).
-2. Bind your R2 bucket to `BUCKET`, set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`, then retry deploy.
-3. Optional: `WEBDAV_PUBLIC_READ=1`, `TRASH_RETENTION_DAYS` (default `30`, `-1` disables), and for public sites/images bind `sites.<your-domain>` and set `SITES_HOST=sites.<your-domain>`.
-4. Optional: add a custom domain for the drive UI.
+1. Open [Workers & Pages → Create](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) → **Pages** → **Connect to Git**, pick this repo (needs a Cloudflare account with R2 activated and a payment method on file).
+2. Framework preset **None**, build `npm run build`, output directory `build` (or rely on `wrangler.toml`'s `pages_build_output_dir`).
+3. Bind your R2 bucket to `BUCKET`, set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`, then retry deploy.
+4. Optional: `WEBDAV_PUBLIC_READ=1`, `TRASH_RETENTION_DAYS` (default `30`, `-1` disables), and for public sites/images bind `sites.<your-domain>` and set `SITES_HOST=sites.<your-domain>`.
+5. Optional: add a custom domain for the drive UI.
 
-Manual Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs/deploy.md).
+Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs/deploy.md).
 
 ## Documentation
 

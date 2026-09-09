@@ -4,13 +4,35 @@
 
 ← [README](../README.zh-CN.md)
 
-## 一键部署
+## 本项目是 Cloudflare Pages
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare)
+Davflare 以 **Cloudflare Pages** 方式部署（静态 UI 在 `build/`，后端在 `functions/`，即 Pages Functions）。
+
+仓库内依据：
+
+- `wrangler.toml` 有 `pages_build_output_dir = "build"`
+- **没有** Worker `main` 入口——不要为了迁就 Workers 工具而伪造一个
+- 正确 CLI：`npx wrangler pages deploy build`
+- **错误** CLI：`npx wrangler deploy`（Workers）→ «Missing entry-point / entry point not configured»
+- **错误** 按钮：[Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/?url=https://github.com/fanchenggang/Davflare) —— 同样会踩坑
 
 你需要一个已绑定支付方式、并已开通 R2 的 [Cloudflare](https://dash.cloudflare.com/) 账号（至少创建一个 bucket）。
 
-首次部署之后：
+## 用 Cloudflare 控制台部署（推荐）
+
+Cloudflare **没有**与 Workers「一键 Deploy」对等的官方 Pages 按钮。请走控制台：
+
+1. 打开 [Workers & Pages → Create](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create)
+2. 选择 **Pages** → **Connect to Git** → 选 `fanchenggang/Davflare`（或你的 fork）
+3. 构建设置：
+   - 框架预设：**None**（React/Vite，不是 Docusaurus）
+   - 构建命令：`npm run build`
+   - 输出目录：`build`
+4. 先部署，再配置绑定 / 环境变量（下一节），并**重新部署**使配置生效
+
+官方说明：[Pages Git 集成](https://developers.cloudflare.com/pages/get-started/git-integration/)。
+
+## 首次部署之后
 
 1. 将 R2 bucket 绑定到 `BUCKET` 变量
 2. 设置 `WEBDAV_USERNAME` 和 `WEBDAV_PASSWORD`
@@ -19,19 +41,22 @@
 5. 重新部署，使绑定和环境变量生效
 6. 可选：给网盘界面绑自定义域名
 
-## 手动部署 Cloudflare Pages
-
-- 框架预设：**None（React/Vite，不是 Docusaurus）**
-- 输出目录：`build`
-- 然后绑定 `BUCKET`、设置上述环境变量，并重新部署
-
-## Wrangler CLI
+## Wrangler CLI（Pages）
 
 `wrangler.toml` 将 R2 绑定为 `BUCKET`（默认 bucket 名为 `webdav`）。如有需要，把 `bucket_name` 改成你的 bucket。
 
 ```bash
 npm run build
 npx wrangler pages deploy build
+```
+
+**不要**对本仓库执行 `npx wrangler deploy`——那是 Workers 路径，会报没有配置 entry point。
+
+本地预览（Pages + Functions）：
+
+```bash
+npm run build
+npx wrangler pages dev build
 ```
 
 ## 功能开关
@@ -55,4 +80,3 @@ npx wrangler pages deploy build
 3. MCP 依赖 API Key：Key 关闭时，即使 MCP 打开，`/mcp` 也是 404。站点和图床的公开地址还需要 `SITES_HOST`。
 
 另见 [webdav.zh-CN.md](./webdav.zh-CN.md)、[sites.zh-CN.md](./sites.zh-CN.md)、[API.zh-CN.md](./API.zh-CN.md)。
-
