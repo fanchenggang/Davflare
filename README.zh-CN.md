@@ -52,7 +52,7 @@
 
 | 主题 | 链接 |
 | --- | --- |
-| 部署、环境变量、功能开关 | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) |
+| 部署、环境变量、功能开关、部署后 `#/setup` 检查清单 | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) |
 | WebDAV 客户端与限制 | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) |
 | 开放接口与 MCP（含对话分享示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | 静态站点与图床 | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) |

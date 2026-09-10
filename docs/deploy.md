@@ -79,4 +79,6 @@ Toggle them in the UI:
 2. Flip any of the five switches. Stored files are not deleted when a switch is off.
 3. MCP depends on API Key: if Key is off, `/mcp` is 404 even if MCP is on. Sites and image-host public URLs also need `SITES_HOST`.
 
+After deploy, open `#/setup` (also linked from Settings) for a session-only checklist: R2 read/write, WebDAV PROPFIND, the five feature switches, `SITES_HOST`, and MCP `tools/list` (skipped until you create an API key). When every applicable item is green, the page offers a one-click Cursor `mcp.json` snippet (`url` + `Bearer <apiKey>` placeholder).
+
 See also [webdav.md](./webdav.md), [sites.md](./sites.md), [API.md](./API.md).

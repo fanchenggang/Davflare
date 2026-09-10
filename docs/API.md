@@ -10,6 +10,8 @@ If the **API Key** feature switch is off, Bearer / `X-Api-Key` calls fail with *
 
 Owner feature flags live in R2 (`_$flaredrive$/config.json`). `GET /api/config` (session) returns `username`, `publicRead`, `sitesHost`, and `webdav` / `mcp` / `apiKey` / `sites` / `imageHost` (all default **true**). `PATCH /api/config` with a JSON object of those booleans is **Basic session only** — presenting `Bearer` or `X-Api-Key` returns **403**.
 
+`GET /api/setup` (Basic session only) runs the post-deploy checklist (R2, WebDAV PROPFIND, flags, `SITES_HOST`, MCP `tools/list`) used by `#/setup`. See [deploy.md](./deploy.md).
+
 Internal `_$flaredrive$/` keys are rejected. Operations covering more than 1000 objects return **400** and must be batched.
 
 ### Upload

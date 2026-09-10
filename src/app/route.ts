@@ -6,7 +6,8 @@ export type Route =
   | { kind: "shares" }
   | { kind: "sites" }
   | { kind: "images" }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "setup" };
 
 function encodeRoute(route: Route): string {
   switch (route.kind) {
@@ -22,6 +23,8 @@ function encodeRoute(route: Route): string {
       return "#/images";
     case "settings":
       return "#/settings";
+    case "setup":
+      return "#/setup";
   }
 }
 
@@ -32,6 +35,7 @@ function decodeRoute(hash: string): Route {
   if (raw === "sites") return { kind: "sites" };
   if (raw === "images") return { kind: "images" };
   if (raw === "settings") return { kind: "settings" };
+  if (raw === "setup") return { kind: "setup" };
 
   const path = raw
     .split("/")

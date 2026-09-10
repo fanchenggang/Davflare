@@ -61,7 +61,7 @@ describe("useHashRoute", () => {
     expect(result.current[0]).toEqual({ kind: "folder", path: "a b/中文/" });
   });
 
-  test("navigate 到 settings/images", async () => {
+  test("navigate 到 settings/images/setup", async () => {
     const { result } = renderHook(() => useHashRoute());
     act(() => {
       result.current[1]({ kind: "settings" });
@@ -69,6 +69,13 @@ describe("useHashRoute", () => {
     expect(window.location.hash).toBe("#/settings");
     await flushEvents();
     expect(result.current[0]).toEqual({ kind: "settings" });
+
+    act(() => {
+      result.current[1]({ kind: "setup" });
+    });
+    expect(window.location.hash).toBe("#/setup");
+    await flushEvents();
+    expect(result.current[0]).toEqual({ kind: "setup" });
   });
 
   test("navigate 到 trash/shares", async () => {

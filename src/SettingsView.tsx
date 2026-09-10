@@ -2,12 +2,14 @@ import { useState } from "react";
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   FormControlLabel,
   Stack,
   Switch,
   Typography,
 } from "@mui/material";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 
 import { FeatureFlagName, FeatureFlags, useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
@@ -26,7 +28,13 @@ const SWITCHES: Array<{
   { key: "imageHost", label: "flagImageHost", hint: "flagImageHostHint" },
 ];
 
-function SettingsView({ onNotify }: { onNotify: NotifyFn }) {
+function SettingsView({
+  onNotify,
+  onOpenSetup,
+}: {
+  onNotify: NotifyFn;
+  onOpenSetup?: () => void;
+}) {
   const { flags, sitesHost, updateFlags } = useFeatures();
   const [pending, setPending] = useState<FeatureFlagName | null>(null);
 
@@ -50,6 +58,17 @@ function SettingsView({ onNotify }: { onNotify: NotifyFn }) {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {strings.settingsHint}
       </Typography>
+      {onOpenSetup && (
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ChecklistIcon />}
+          onClick={onOpenSetup}
+          sx={{ mb: 2 }}
+        >
+          {strings.setupOpenFromSettings}
+        </Button>
+      )}
       <Alert severity="info" sx={{ mb: 2 }}>
         {strings.mcpRequiresApiKey}
       </Alert>

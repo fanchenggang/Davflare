@@ -79,4 +79,6 @@ npx wrangler pages dev build
 2. 切换任意开关。关闭开关不会删除已有文件。
 3. MCP 依赖 API Key：Key 关闭时，即使 MCP 打开，`/mcp` 也是 404。站点和图床的公开地址还需要 `SITES_HOST`。
 
+部署完成后可打开 `#/setup`（设置页也有入口）做会话级检查清单：R2 读写、WebDAV PROPFIND、五个功能开关、`SITES_HOST`、以及 MCP `tools/list`（尚未创建 API 密钥时跳过，不会自动造密钥）。适用项全部通过后，页面提供一键复制 Cursor `mcp.json`（`url` + `Bearer <apiKey>` 占位符）。
+
 另见 [webdav.zh-CN.md](./webdav.zh-CN.md)、[sites.zh-CN.md](./sites.zh-CN.md)、[API.zh-CN.md](./API.zh-CN.md)。

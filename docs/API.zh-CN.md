@@ -10,6 +10,8 @@
 
 拥有者功能开关存在 R2（`_$flaredrive$/config.json`）。`GET /api/config`（会话）返回 `username`、`publicRead`、`sitesHost` 以及 `webdav` / `mcp` / `apiKey` / `sites` / `imageHost`（默认全部 **true**）。`PATCH /api/config` 提交这些布尔字段，**仅允许 Basic 会话** —— 带 `Bearer` 或 `X-Api-Key` 返回 **403**。
 
+`GET /api/setup`（仅 Basic 会话）跑部署后检查清单（R2、WebDAV PROPFIND、功能开关、`SITES_HOST`、MCP `tools/list`），供 `#/setup` 使用。见 [deploy.zh-CN.md](./deploy.zh-CN.md)。
+
 内部 `_$flaredrive$/` 路径会被拒绝。单次操作覆盖超过 1000 个对象会返回 **400**，需要分批处理。
 
 ### 上传

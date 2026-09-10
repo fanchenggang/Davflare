@@ -26,6 +26,7 @@ import RenameDialog from "./RenameDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
+import SetupView from "./SetupView";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
 import WebDavPanel from "./WebDavPanel";
@@ -159,7 +160,8 @@ function Main({
     route.kind === "trash" ||
     route.kind === "sites" ||
     route.kind === "images" ||
-    route.kind === "settings"
+    route.kind === "settings" ||
+    route.kind === "setup"
       ? route.kind
       : "folder";
 
@@ -828,7 +830,15 @@ function Main({
       )}
       {route.kind === "settings" && (
         <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
-          <SettingsView onNotify={onNotify} />
+          <SettingsView
+            onNotify={onNotify}
+            onOpenSetup={() => navigate({ kind: "setup" })}
+          />
+        </Box>
+      )}
+      {route.kind === "setup" && (
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+          <SetupView onNotify={onNotify} />
         </Box>
       )}
 
