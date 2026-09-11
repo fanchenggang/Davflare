@@ -63,7 +63,7 @@ curl -X DELETE "https://<your-domain.com>/api/upload?path=folder/big.bin&uploadI
 
 ### List, download, mkdir
 
-The same keys can list a folder and download each file (folders are not a zip via `/api/download`; use a directory share for zip).
+The same keys can list a folder and download each file. Single-file download stays on `/api/download`. To zip a folder **without** creating a public share link, use authenticated `/api/archive` (or the MCP `zip` tool). Directory shares still work when you want a link.
 
 ```bash
 # Depth-1 list (empty path = root). Does not recurse.
@@ -79,11 +79,25 @@ curl -L "https://<your-domain.com>/api/download?path=folder/notes.txt" \
 curl -L "https://<your-domain.com>/api/download?path=folder/notes.txt" \
   -H "X-Api-Key: <apiKey>" \
   -o notes.txt
+
+# zip a folder (or single file) — streams application/zip; no public share link
+curl -L "https://<your-domain.com>/api/archive?path=folder/" \
+  -H "Authorization: Bearer <apiKey>" \
+  -o folder.zip
+
+# multi-select zip (same body the web UI uses); Basic session or API key
+curl -X POST "https://<your-domain.com>/api/archive" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"keys":["folder/a.txt","folder/sub/"]}' \
+  -o archive.zip
 ```
 
 `GET /api/list` returns `{ items: [{ key, name, size, isDir, uploaded, etag }] }` for the current folder only. Files always include numeric `size`, ISO `uploaded` (and alias `updated`), and R2 `etag`. Delimited-prefix folders have `isDir: true`, `size: 0`, and `uploaded: null` (unknown; no fake mtime). Nested folders: call `/api/list` again with that item's `key`. If `path` is a file, the list API returns **400** and tells you to use `/api/download`. Missing folder: **404**. Bad/expired key: **401**. Large folders: add `limit=1..1000` (plus `cursor` from the previous response) for paged reads — the response then carries `nextCursor` while more pages remain.
 
 `GET /api/download` `path` is the object key. **HTTP 200** streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns **400**; unknown object **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected.
+
+`GET /api/archive?path=` zips one folder or file with the same Bearer / `X-Api-Key` (or web Basic session). **HTTP 200** streams `application/zip`. Folder keys strip the folder prefix inside the zip (same as directory shares). Missing path **400**; unknown path **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected. `POST /api/archive` with `{ "keys": [...] }` packs multiple selections (web UI multi-download); same auth and internal-key rules.
 
 Create folders from scripts (parents are auto-created):
 
@@ -189,7 +203,7 @@ Public URL: `https://<SITES_HOST>/i/{id}`. SVG responses use `Content-Dispositio
 
 ### MCP
 
-Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). **MCP depends on the API Key switch** — if API Key is off (or MCP is off), `/mcp` returns **404**. Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `trash_list`, `trash_restore`, `trash_empty`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`, `image_upload`, `image_list`, `image_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. Recover with `trash_list` / `trash_restore`; permanently clear with `trash_empty`. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys. `pull` walks `agents/{global|agent|agent/project}/{skills|rules|mcp}/` and returns layered files (merge: project > agent > global); large files page like `download`. `push` writes that tree (`mcp.json` must use `${env:...}`, not raw keys). `publish_site` copies a drive folder onto `sites/{slug}/` (overwrite same names; SPA config is kept; 404 if the Sites switch is off). `image_upload` / `image_list` / `image_delete` wrap `/api/images` (public `https://<SITES_HOST>/i/{id}` + Markdown; 20 MB cap; 404 if Image Host is off).
+Same-origin Streamable HTTP MCP at `POST /mcp` (JSON-RPC 2.0). Auth is the same `Authorization: Bearer <apiKey>` or `X-Api-Key` as the rest of this API (no web session, no OAuth). **MCP depends on the API Key switch** — if API Key is off (or MCP is off), `/mcp` returns **404**. Missing or invalid keys return **HTTP 401**. Tools: `list`, `upload`, `download`, `zip`, `mkdir`, `delete`, `search`, `move`, `copy`, `stat`, `share_create`, `share_list`, `share_revoke`, `trash_list`, `trash_restore`, `trash_empty`, `sites_list`, `sites_config`, `sites_delete`, `pull`, `push`, `publish_site`, `image_upload`, `image_list`, `image_delete` (they wrap the Open API handlers above). Uploads over 1 MiB are automatically sent in multipart chunks (cap **25 MB**; larger returns a tool error — use the web UI or scripts). Downloads over 1 MiB page with `part` / `partSize` (base64 slices). `zip` packs a folder via `/api/archive` (base64; same 1 MiB / `part` paging; hard cap 25 MB — larger use curl on `/api/archive`). Default `delete` is soft-delete to trash; pass `hard=true` to permanently delete. Recover with `trash_list` / `trash_restore`; permanently clear with `trash_empty`. `sites_*` manage the static sites under `sites/` (see [sites.md](./sites.md)); `upload`/`delete` also work directly on `sites/<slug>/` keys. `pull` walks `agents/{global|agent|agent/project}/{skills|rules|mcp}/` and returns layered files (merge: project > agent > global); large files page like `download`. `push` writes that tree (`mcp.json` must use `${env:...}`, not raw keys). `publish_site` copies a drive folder onto `sites/{slug}/` (overwrite same names; SPA config is kept; 404 if the Sites switch is off). `image_upload` / `image_list` / `image_delete` wrap `/api/images` (public `https://<SITES_HOST>/i/{id}` + Markdown; 20 MB cap; 404 if Image Host is off).
 
 ```bash
 # initialize
@@ -225,6 +239,12 @@ Cursor (`mcp.json`):
 1. Ask the agent to call `share_create` on a file or folder path, with `expiresInHours=24` (optional `extractCode`).
 2. Forward the returned share `url` (path `/share/{token}`).
 3. Manage with `share_list` / `share_revoke` (pass the `token`).
+
+### Zip a folder from chat (pull back locally)
+
+1. Ask the agent to call `zip` on a folder path (no `share_create`, no public link).
+2. Small archives (≤ 1 MiB) come back as base64 — decode and save as `.zip`.
+3. Larger ones: pass `part=1`, `part=2`, … (optional `partSize`) and concatenate the base64 slices; or curl `GET /api/archive?path=` with your API key.
 
 ### Recover a mistaken delete from chat
 

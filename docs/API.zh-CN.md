@@ -63,7 +63,7 @@ curl -X DELETE "https://<your-domain.com>/api/upload?path=folder/big.bin&uploadI
 
 ### 列出、下载、创建目录
 
-同一把密钥可以列出文件夹并逐个下载文件（`/api/download` 不会把文件夹打成 zip；目录 zip 请走目录分享）。
+同一把密钥可以列出文件夹并逐个下载文件。单文件仍用 `/api/download`。要把目录打成 zip **且不**创建公开分享链接，用已鉴权的 `/api/archive`（或 MCP `zip` 工具）。需要外链时目录分享照旧可用。
 
 ```bash
 # Depth-1 list (empty path = root). Does not recurse.
@@ -79,11 +79,25 @@ curl -L "https://<your-domain.com>/api/download?path=folder/notes.txt" \
 curl -L "https://<your-domain.com>/api/download?path=folder/notes.txt" \
   -H "X-Api-Key: <apiKey>" \
   -o notes.txt
+
+# 把目录（或单文件）打成 zip 流式下载；无公开分享链接
+curl -L "https://<your-domain.com>/api/archive?path=folder/" \
+  -H "Authorization: Bearer <apiKey>" \
+  -o folder.zip
+
+# 多选打包（与网页多选下载同一 body）；Basic 会话或 API Key
+curl -X POST "https://<your-domain.com>/api/archive" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "Content-Type: application/json" \
+  -d '{"keys":["folder/a.txt","folder/sub/"]}' \
+  -o archive.zip
 ```
 
 `GET /api/list` 只返回当前文件夹的 `{ items: [{ key, name, size, isDir, uploaded, etag }] }`。文件始终包含数值 `size`、ISO `uploaded`（以及别名 `updated`）和 R2 `etag`。前缀分隔出来的文件夹为 `isDir: true`、`size: 0`、`uploaded: null`（未知；不会伪造 mtime）。嵌套目录：再用该项的 `key` 调用一次 `/api/list`。若 `path` 指向文件，列表接口返回 **400** 并提示改用 `/api/download`。目录不存在：**404**。密钥无效或过期：**401**。大目录可加 `limit=1..1000`（以及上一页返回的 `cursor`）做分页 —— 还有下一页时响应会带 `nextCursor`。
 
 `GET /api/download` 的 `path` 是对象 key。**HTTP 200** 会流式返回文件（`Content-Type` 来自 R2，否则为 `application/octet-stream`，`Content-Disposition: attachment`）。`path` 缺失/为空，或指向目录/前缀文件夹，返回 **400**；对象不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。
+
+`GET /api/archive?path=` 把单个目录或文件打成 zip，鉴权与其它开放接口相同（Bearer / `X-Api-Key`，或网页 Basic 会话）。**HTTP 200** 流式返回 `application/zip`。目录键会剥掉文件夹前缀（与目录分享一致）。缺 path **400**；路径不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。`POST /api/archive` 传 `{ "keys": [...] }` 可多选打包（网页多选下载）；鉴权与内部路径规则相同。
 
 脚本创建文件夹（父目录会自动创建）：
 
@@ -177,7 +191,7 @@ curl -X DELETE "https://<your-domain.com>/api/images?id=<id>" \
 
 ### MCP
 
-同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。**MCP 依赖 API Key 开关** —— API Key 关闭（或 MCP 关闭）时 `/mcp` 返回 **404**。密钥缺失或无效返回 **HTTP 401**。工具：`list`、`upload`、`download`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`trash_list`、`trash_restore`、`trash_empty`、`sites_list`、`sites_config`、`sites_delete`、`pull`、`push`、`publish_site`、`image_upload`、`image_list`、`image_delete`（包装上方 Open API）。超过 1 MiB 的上传自动改走分块（上限 **25 MB**；再大返回工具错误，请用网页端或 davflare-cli）。下载超过 1 MiB 用 `part` / `partSize` 分页。`delete` 默认进回收站；`hard=true` 为永久删除。可用 `trash_list` / `trash_restore` 捞回；`trash_empty` 永久清空回收站。`sites_*` 管理 `sites/` 下的静态站；`upload` / `delete` 也可以直接操作 `sites/<slug>/`。`pull` 走 `agents/{global|agent|agent/project}/{skills|rules|mcp}/` 并返回分层文件（合并：project 覆盖 agent 覆盖 global）；大文件与 `download` 一样分页。`push` 写入该树（`mcp.json` 只能用 `${env:...}`，不要明文密钥）。`publish_site` 把网盘目录同步到 `sites/{slug}/`（同名覆盖，不删 SPA 配置；站点开关关闭时 404）。 `image_upload` / `image_list` / `image_delete` 包装 `/api/images`（公开地址 `https://<SITES_HOST>/i/{id}` 和 Markdown；上限 20 MB；图床开关关闭时 404）。
+同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。**MCP 依赖 API Key 开关** —— API Key 关闭（或 MCP 关闭）时 `/mcp` 返回 **404**。密钥缺失或无效返回 **HTTP 401**。工具：`list`、`upload`、`download`、`zip`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`trash_list`、`trash_restore`、`trash_empty`、`sites_list`、`sites_config`、`sites_delete`、`pull`、`push`、`publish_site`、`image_upload`、`image_list`、`image_delete`（包装上方 Open API）。超过 1 MiB 的上传自动改走分块（上限 **25 MB**；再大返回工具错误，请用网页端或 davflare-cli）。下载超过 1 MiB 用 `part` / `partSize` 分页。`zip` 走 `/api/archive` 打包目录（base64；同样 1 MiB / `part` 分页；硬上限 25 MB —— 再大请用 curl 调 `/api/archive`）。`delete` 默认进回收站；`hard=true` 为永久删除。可用 `trash_list` / `trash_restore` 捞回；`trash_empty` 永久清空回收站。`sites_*` 管理 `sites/` 下的静态站；`upload` / `delete` 也可以直接操作 `sites/<slug>/`。`pull` 走 `agents/{global|agent|agent/project}/{skills|rules|mcp}/` 并返回分层文件（合并：project 覆盖 agent 覆盖 global）；大文件与 `download` 一样分页。`push` 写入该树（`mcp.json` 只能用 `${env:...}`，不要明文密钥）。`publish_site` 把网盘目录同步到 `sites/{slug}/`（同名覆盖，不删 SPA 配置；站点开关关闭时 404）。 `image_upload` / `image_list` / `image_delete` 包装 `/api/images`（公开地址 `https://<SITES_HOST>/i/{id}` 和 Markdown；上限 20 MB；图床开关关闭时 404）。
 
 ```bash
 # initialize
@@ -213,6 +227,12 @@ Cursor（`mcp.json`）：
 1. 让助手对某个文件/目录调用 `share_create`，并设 `expiresInHours=24`（可选 `extractCode`）。
 2. 把返回的分享 `url`（路径 `/share/{token}`）转发出去即可。
 3. 用 `share_list` / `share_revoke`（传入 `token`）查看与撤销。
+
+### 对话里把某目录打成 zip 拉回本地
+
+1. 让助手对某个目录路径调用 `zip`（不必 `share_create`，无公开链接）。
+2. 小包（≤ 1 MiB）以 base64 返回 —— 解码后存成 `.zip`。
+3. 更大时传 `part=1`、`part=2`…（可选 `partSize`）拼接各片；或用 API Key curl `GET /api/archive?path=`。
 
 ### 对话里误删再捞回来
 

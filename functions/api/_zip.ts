@@ -2,7 +2,7 @@ import { Zip, ZipPassThrough } from "fflate";
 import { decodeRawPath } from "./_apikey";
 
 // 把选中键（文件或目录）打包为 zip 流。目录递归收齐后代，空目录写占位条目。
-// archive（会话鉴权）与 share（目录分享）共用。
+// archive（会话 Basic + API Key）与 share（目录分享）共用。
 
 export async function listAllObjects(
   bucket: R2Bucket,

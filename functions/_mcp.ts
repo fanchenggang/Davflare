@@ -62,6 +62,8 @@ export type ToolCallApis = {
     overwrite?: boolean;
   }) => Promise<Response>;
   download: (query: { path: string }) => Promise<Response>;
+  /** Authenticated folder/file zip via GET /api/archive?path= */
+  zip: (query: { path: string }) => Promise<Response>;
   mkdir: (query: { path: string }) => Promise<Response>;
   delete: (query: { path: string; hard?: boolean }) => Promise<Response>;
   search: (query: {
@@ -202,6 +204,32 @@ export const MCP_TOOLS = [
           minimum: 1,
           maximum: 1048576,
           description: "Chunk size in bytes for paged download; default 1 MiB",
+        },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "zip",
+    description:
+      "Zip a folder (or single file) and return the archive. Up to 1 MiB is returned inline as base64. Larger zips: pass part (1-based) to page through the buffered archive in partSize (default 1 MiB) chunks. Cap 25 MB; beyond that use GET /api/archive with an API key (no public share link).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "Folder or file key to zip (directories strip the folder prefix)",
+        },
+        part: {
+          type: "number",
+          minimum: 1,
+          description: "1-based part index for paged download of large zips",
+        },
+        partSize: {
+          type: "number",
+          minimum: 1,
+          maximum: 1048576,
+          description: "Chunk size in bytes for paged zip download; default 1 MiB",
         },
       },
       required: ["path"],
@@ -817,6 +845,94 @@ async function downloadPartTool(
   );
 }
 
+/**
+ * Zip 流无 Content-Length / Range：整包缓冲后按 part 分页返回 base64。
+ * 超过 MCP_MAX_UPLOAD_BYTES 时建议改走 HTTP /api/archive。
+ */
+async function zipTool(
+  apis: ToolCallApis,
+  path: string,
+  part?: number,
+  partSize?: number
+): Promise<McpToolResult> {
+  const response = await apis.zip({ path });
+  if (response.status >= 400) return wrapApiResponse(response);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const contentType =
+    response.headers.get("Content-Type") || "application/zip";
+  const filename = (() => {
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+    if (star?.[1]) {
+      try {
+        return decodeURIComponent(star[1]);
+      } catch {
+        return star[1];
+      }
+    }
+    const plain = /filename="([^"]+)"/i.exec(disposition);
+    return plain?.[1] || `${path.split("/").filter(Boolean).pop() || "archive"}.zip`;
+  })();
+
+  if (bytes.byteLength > MCP_MAX_UPLOAD_BYTES) {
+    return toolError(
+      `Zip larger than ${Math.floor(MCP_MAX_UPLOAD_BYTES / 1000000)} MB (${bytes.byteLength} bytes). Use GET /api/archive?path= with an API key (curl -o), or zip a smaller folder.`
+    );
+  }
+
+  const wantsPaging = part !== undefined || partSize !== undefined;
+  if (!wantsPaging) {
+    if (bytes.byteLength > MCP_MAX_BYTES) {
+      return toolError(
+        `Zip larger than 1 MiB (${bytes.byteLength} bytes). Pass part=1 to page through it, or curl GET /api/archive?path=.`
+      );
+    }
+    return toolText(
+      JSON.stringify({
+        path,
+        filename,
+        size: bytes.byteLength,
+        contentType,
+        encoding: "base64",
+        content: encodeBase64(bytes),
+        note: "zip archive encoded as base64",
+      })
+    );
+  }
+
+  const chunkSize = Math.min(
+    Math.max(Math.floor(partSize ?? MCP_DOWNLOAD_PART_SIZE), 1),
+    MCP_DOWNLOAD_PART_SIZE
+  );
+  if (bytes.byteLength === 0) {
+    return toolError("空压缩包，无法分页");
+  }
+  const totalParts = Math.ceil(bytes.byteLength / chunkSize);
+  const index = Math.floor(part ?? 1);
+  if (index < 1 || index > totalParts) {
+    return toolError(`part 需在 1-${totalParts}（共 ${totalParts} 片）`);
+  }
+  const offset = (index - 1) * chunkSize;
+  const slice = bytes.subarray(offset, offset + chunkSize);
+  if (slice.byteLength > MCP_MAX_BYTES) {
+    return toolError("分片超出内联上限，请减小 partSize");
+  }
+  return toolText(
+    JSON.stringify({
+      path,
+      filename,
+      size: bytes.byteLength,
+      contentType,
+      part: index,
+      totalParts,
+      offset,
+      length: slice.byteLength,
+      encoding: "base64",
+      content: encodeBase64(slice),
+    })
+  );
+}
+
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
@@ -1236,6 +1352,13 @@ async function callTool(
           note: "binary content encoded as base64",
         })
       );
+    }
+    case "zip": {
+      const path = asString(args.path);
+      if (!path) return toolError("path is required");
+      const part = asOptionalNumber(args.part);
+      const partSize = asOptionalNumber(args.partSize);
+      return zipTool(apis, path, part, partSize);
     }
     case "mkdir": {
       const path = asString(args.path);

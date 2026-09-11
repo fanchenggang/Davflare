@@ -32,7 +32,7 @@ Share (expiry + extract code):
 - Share links with expiry or forever, extract code, folder zip, and a zero-JS landing page
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
-- API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (24 tools)
+- API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (25 tools)
 - Static sites and image host on a separate hostname (`SITES_HOST`)
 - Owner Settings with five persistent feature switches
 - `davflare-cli`, optional Chrome MV3 extension, and agent layouts on R2
@@ -54,7 +54,7 @@ Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs
 | --- | --- |
 | Deploy, env vars, feature switches, post-deploy `#/setup` checklist | [docs/deploy.md](docs/deploy.md) |
 | WebDAV clients & limits | [docs/webdav.md](docs/webdav.md) |
-| Open API & MCP (incl. chat share example) | [docs/API.md](docs/API.md) |
+| Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
 | Static sites & image host | [docs/sites.md](docs/sites.md) |
 | Agent layouts (`pull` / `push`) | [docs/agents.md](docs/agents.md) |
 | CLI (`davflare-cli`) | [cli/README.md](cli/README.md) |

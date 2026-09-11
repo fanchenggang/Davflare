@@ -28,6 +28,14 @@ function mockApis(overrides: Partial<ToolCallApis> = {}): ToolCallApis {
     list: async () => httpJsonResponse({ items: [] }),
     upload: async () => httpJsonResponse({ key: "notes.txt", overwritten: false }, 201),
     download: async () => new Response("hello", { status: 200, headers: { "Content-Type": "text/plain" } }),
+    zip: async () =>
+      new Response(new Uint8Array([0x50, 0x4b, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": 'attachment; filename="folder.zip"',
+        },
+      }),
     mkdir: async () => httpJsonResponse({ key: "folder/", created: true }, 201),
     delete: async () => httpJsonResponse({ key: "notes.txt", deleted: true, soft: true }),
     search: async () => httpJsonResponse({ matches: [], nextCursor: null }),
@@ -85,11 +93,12 @@ function toolPayload(result: Awaited<ReturnType<typeof dispatchMcpRequest>>) {
 }
 
 describe("mcp protocol", () => {
-  test("tool catalog: base + search/move/copy/stat/share/trash/sites + pull/push/publish_site", () => {
+  test("tool catalog: base + zip + search/move/copy/stat/share/trash/sites + pull/push/publish_site", () => {
     expect(MCP_TOOL_NAMES).toEqual([
       "list",
       "upload",
       "download",
+      "zip",
       "mkdir",
       "delete",
       "search",
@@ -112,7 +121,7 @@ describe("mcp protocol", () => {
       "image_list",
       "image_delete",
     ]);
-    expect(MCP_TOOLS).toHaveLength(24);
+    expect(MCP_TOOLS).toHaveLength(25);
   });
 
   test("parseJsonRpcBody rejects invalid json", () => {
@@ -298,6 +307,75 @@ describe("mcp protocol", () => {
     const stat = vi.fn(async () => httpJsonResponse({ kind: "file", size: 3 }));
     await callTool("stat", { path: "a.txt" }, { stat });
     expect(stat).toHaveBeenCalledWith({ path: "a.txt" });
+  });
+
+  test("zip returns base64 archive for small folders", async () => {
+    const zipBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4]);
+    const zip = vi.fn(async () =>
+      new Response(zipBytes, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": 'attachment; filename="docs.zip"',
+        },
+      })
+    );
+    const result = await callTool("zip", { path: "docs" }, { zip });
+    expect(zip).toHaveBeenCalledWith({ path: "docs" });
+    const body = toolPayload(result);
+    expect(body.isError).toBeFalsy();
+    const parsed = JSON.parse(body.content[0].text);
+    expect(parsed.encoding).toBe("base64");
+    expect(parsed.filename).toBe("docs.zip");
+    expect(parsed.size).toBe(zipBytes.byteLength);
+    expect(parsed.content).toBe(Buffer.from(zipBytes).toString("base64"));
+  });
+
+  test("zip over 1 MiB without part hints paging", async () => {
+    const big = new Uint8Array(MCP_MAX_BYTES + 10);
+    const zip = vi.fn(async () =>
+      new Response(big, {
+        status: 200,
+        headers: { "Content-Type": "application/zip" },
+      })
+    );
+    const result = await callTool("zip", { path: "big" }, { zip });
+    const body = toolPayload(result);
+    expect(body.isError).toBe(true);
+    expect(body.content[0].text).toMatch(/part=1/);
+  });
+
+  test("zip with part pages buffered archive as base64", async () => {
+    const payload = new Uint8Array(12);
+    for (let i = 0; i < payload.length; i++) payload[i] = i + 1;
+    const zip = vi.fn(async () =>
+      new Response(payload, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": "attachment; filename*=UTF-8''pack.zip",
+        },
+      })
+    );
+    const result = await callTool(
+      "zip",
+      { path: "pack", part: 2, partSize: 5 },
+      { zip }
+    );
+    const body = toolPayload(result);
+    expect(body.isError).toBeFalsy();
+    const parsed = JSON.parse(body.content[0].text);
+    expect(parsed.part).toBe(2);
+    expect(parsed.totalParts).toBe(3);
+    expect(parsed.filename).toBe("pack.zip");
+    expect(parsed.content).toBe(Buffer.from(payload.subarray(5, 10)).toString("base64"));
+  });
+
+  test("zip rejects missing path", async () => {
+    const zip = vi.fn(async () => new Response(null, { status: 200 }));
+    const missing = await callTool("zip", {}, { zip });
+    expect(toolPayload(missing).isError).toBe(true);
+    expect(zip).not.toHaveBeenCalled();
   });
 
   test("share tools create, list, revoke", async () => {

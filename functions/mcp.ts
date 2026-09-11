@@ -2,6 +2,7 @@ import { authorizeApiKey } from "./api/_apikey";
 import { featureDisabledResponse, loadFeatureFlags } from "./_flags";
 import { onRequestPost as copyOnPost } from "./api/copy";
 import { onRequestDelete as deleteOnDelete } from "./api/delete";
+import { onRequestGet as archiveOnGet } from "./api/archive";
 import { onRequestGet as downloadOnGet } from "./api/download";
 import { onRequestGet as listOnGet } from "./api/list";
 import { onRequestPost as mkdirOnPost } from "./api/mkdir";
@@ -141,6 +142,12 @@ function makeApis(context: McpContext): ToolCallApis {
       url.searchParams.set("path", path);
       const request = cloneApiRequest(context.request, "GET", url);
       return downloadOnGet(withRequest(context, request));
+    },
+    async zip({ path }) {
+      const url = new URL("/api/archive", origin);
+      url.searchParams.set("path", path);
+      const request = cloneApiRequest(context.request, "GET", url);
+      return archiveOnGet(withRequest(context, request));
     },
     async mkdir({ path }) {
       const url = new URL("/api/mkdir", origin);
