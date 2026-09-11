@@ -185,7 +185,18 @@ export async function isSessionOrKeyAuthorized(
 }
 
 export function isInternalKey(key: string) {
-  return key.startsWith(INTERNAL_PREFIX) || key.includes("/_$flaredrive$/");
+  // normalizeDirKey strips a trailing slash, so the bare internal root
+  // ("_$flaredrive$") must match exactly — startsWith(INTERNAL_PREFIX)
+  // alone requires "_$flaredrive$/". Also catch nested bare roots after
+  // the same normalize (e.g. "wrap/_$flaredrive$"). Do NOT use a bare
+  // startsWith("_$flaredrive$") — that would false-positive user folders
+  // like "_$flaredrive$backup".
+  return (
+    key === "_$flaredrive$" ||
+    key.startsWith(INTERNAL_PREFIX) ||
+    key.includes("/_$flaredrive$/") ||
+    key.endsWith("/_$flaredrive$")
+  );
 }
 
 export function isCollectionObject(

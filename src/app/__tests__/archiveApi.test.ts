@@ -190,6 +190,66 @@ describe("archive validation", () => {
     expect(post.status).toBe(400);
   });
 
+  // #95: normalizeDirKey strips trailing slash → bare "_$flaredrive$" must
+  // still be rejected (was HTTP 200 empty ~22B zip before the harden).
+  test("rejects internal root _$flaredrive$/ and bare _$flaredrive$ after normalize", async () => {
+    const bucket = new InMemoryBucket();
+    await seedApiKey(bucket);
+
+    for (const path of ["_$flaredrive$/", "_$flaredrive$"]) {
+      const get = await onRequestGet(
+        makeContext(
+          new Request(
+            `${HOST}/api/archive?path=${encodeURIComponent(path)}`,
+            { headers: { "X-Api-Key": API_KEY } }
+          ),
+          makeEnv(bucket)
+        )
+      );
+      expect(get.status).toBe(400);
+      expect(await get.text()).toContain("内部");
+      expect(get.headers.get("Content-Type")).not.toBe("application/zip");
+    }
+
+    for (const key of ["_$flaredrive$/", "_$flaredrive$"]) {
+      const post = await onRequestPost(
+        makeContext(
+          new Request(`${HOST}/api/archive`, {
+            method: "POST",
+            headers: {
+              "X-Api-Key": API_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ keys: [key] }),
+          }),
+          makeEnv(bucket)
+        )
+      );
+      expect(post.status).toBe(400);
+      expect(await post.text()).toContain("内部");
+    }
+  });
+
+  test("isInternalKey / normalizeDirKey reject bare internal root", async () => {
+    const { isInternalKey, normalizeDirKey } = await import(
+      "../../../functions/api/_apikey"
+    );
+    expect(isInternalKey("_$flaredrive$")).toBe(true);
+    expect(isInternalKey("_$flaredrive$/")).toBe(true);
+    expect(isInternalKey("_$flaredrive$/thumbnails/x")).toBe(true);
+    expect(isInternalKey("wrap/_$flaredrive$")).toBe(true);
+    // must not false-positive similarly named user folders
+    expect(isInternalKey("_$flaredrive$backup")).toBe(false);
+    expect(isInternalKey("docs")).toBe(false);
+
+    for (const raw of ["_$flaredrive$/", "_$flaredrive$"]) {
+      const result = normalizeDirKey(raw);
+      expect(result).toBeInstanceOf(Response);
+      expect((result as Response).status).toBe(400);
+      expect(await (result as Response).text()).toContain("内部");
+    }
+  });
+
   test("missing path / empty keys / unknown path", async () => {
     const bucket = new InMemoryBucket();
     await seedApiKey(bucket);

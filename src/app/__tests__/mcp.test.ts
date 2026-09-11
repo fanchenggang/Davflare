@@ -378,6 +378,18 @@ describe("mcp protocol", () => {
     expect(zip).not.toHaveBeenCalled();
   });
 
+  // #95: MCP zip must surface archive 400 for internal root (not empty zip).
+  test("zip rejects internal _$flaredrive$/ and bare _$flaredrive$ from archive", async () => {
+    for (const path of ["_$flaredrive$/", "_$flaredrive$"]) {
+      const zip = vi.fn(async () => new Response("禁止访问内部目录", { status: 400 }));
+      const result = await callTool("zip", { path }, { zip });
+      expect(zip).toHaveBeenCalledWith({ path });
+      const payload = toolPayload(result);
+      expect(payload.isError).toBe(true);
+      expect(payload.content[0].text).toContain("内部");
+    }
+  });
+
   test("share tools create, list, revoke", async () => {
     const shareCreate = vi.fn(async () => httpJsonResponse({ token: "tok-1" }, 201));
     const created = await callTool(
