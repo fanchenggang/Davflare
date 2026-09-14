@@ -255,6 +255,8 @@ Cursor (`mcp.json`):
 
 ### Try MCP from Cursor
 
+In-browser playground: open `#/mcp` (also linked from `#/settings`), paste an API Key, run **List tools** (`tools/list`) and **Try it** (read-only `list` on root), then copy Cursor `mcp.json` when both are green. Same `POST /mcp` — no new APIs.
+
 1. Leave **API Key** + **MCP** + **Sites** on in `#/settings`. Create a key.
 2. Paste into Cursor `mcp.json` (replace host + key) — same JSON as above.
 3. Open this repo's [`agents/examples/hello-site/`](../agents/examples/hello-site/) and tell Cursor to follow `SKILL.md` (uses only `publish_site` / optional `image_upload`).

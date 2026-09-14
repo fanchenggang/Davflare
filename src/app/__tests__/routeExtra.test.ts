@@ -36,6 +36,12 @@ describe("useHashRoute extras", () => {
     settings.unmount();
   });
 
+  test("#/mcp 解析为 MCP 试玩台", () => {
+    setHash("#/mcp");
+    const { result } = renderHook(() => useHashRoute());
+    expect(result.current[0]).toEqual({ kind: "mcp" });
+  });
+
   test("navigate 到 sites", async () => {
     const { result } = renderHook(() => useHashRoute());
     act(() => result.current[1]({ kind: "sites" }));

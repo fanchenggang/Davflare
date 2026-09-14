@@ -243,6 +243,8 @@ Cursor（`mcp.json`）：
 
 ### 用 Cursor 试 MCP
 
+网页试玩台：打开 `#/mcp`（`#/settings` 也有入口），粘贴 API Key，点「列出工具」（`tools/list`）与「试一下」（只读 `list` 根目录），两项通过后复制 Cursor `mcp.json`。仍走现有 `POST /mcp`，不新增接口。
+
 1. `#/settings` 保持 **API Key**、**MCP**、**静态站点** 打开，创建一把密钥。
 2. 粘贴到 Cursor 的 `mcp.json`（换成你的域名和密钥）——与上方 JSON 相同。
 3. 打开本仓库 [`agents/examples/hello-site/`](../agents/examples/hello-site/)，让 Cursor 按 `SKILL.md` 做（只用现有 `publish_site`，可选 `image_upload`）。

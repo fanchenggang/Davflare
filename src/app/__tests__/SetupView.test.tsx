@@ -228,4 +228,13 @@ describe("SettingsView setup entry", () => {
     );
     expect(onOpenSetup).toHaveBeenCalled();
   });
+
+  test("opens MCP playground via button", () => {
+    const onOpenMcp = vi.fn();
+    render(<SettingsView onNotify={vi.fn()} onOpenMcp={onOpenMcp} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: strings.mcpPlayOpenFromSettings })
+    );
+    expect(onOpenMcp).toHaveBeenCalled();
+  });
 });

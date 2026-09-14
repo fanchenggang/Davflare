@@ -27,6 +27,7 @@ import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
 import SetupView from "./SetupView";
+import McpPlaygroundView from "./McpPlaygroundView";
 import TextPadDrawer from "./TextPadDrawer";
 import TrashView from "./TrashView";
 import WebDavPanel from "./WebDavPanel";
@@ -161,7 +162,8 @@ function Main({
     route.kind === "sites" ||
     route.kind === "images" ||
     route.kind === "settings" ||
-    route.kind === "setup"
+    route.kind === "setup" ||
+    route.kind === "mcp"
       ? route.kind
       : "folder";
 
@@ -833,12 +835,21 @@ function Main({
           <SettingsView
             onNotify={onNotify}
             onOpenSetup={() => navigate({ kind: "setup" })}
+            onOpenMcp={() => navigate({ kind: "mcp" })}
           />
         </Box>
       )}
       {route.kind === "setup" && (
         <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SetupView onNotify={onNotify} />
+        </Box>
+      )}
+      {route.kind === "mcp" && (
+        <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
+          <McpPlaygroundView
+            onNotify={onNotify}
+            onOpenSettings={() => navigate({ kind: "settings" })}
+          />
         </Box>
       )}
 

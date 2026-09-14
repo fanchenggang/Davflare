@@ -52,7 +52,7 @@ Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs
 
 | Topic | Link |
 | --- | --- |
-| Deploy, env vars, feature switches, post-deploy `#/setup` checklist | [docs/deploy.md](docs/deploy.md) |
+| Deploy, env vars, feature switches, post-deploy `#/setup` checklist; MCP playground `#/mcp` | [docs/deploy.md](docs/deploy.md) · [docs/API.md](docs/API.md) |
 | WebDAV clients & limits | [docs/webdav.md](docs/webdav.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
 | Static sites & image host | [docs/sites.md](docs/sites.md) |

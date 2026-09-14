@@ -10,6 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 import ChecklistIcon from "@mui/icons-material/Checklist";
+import HubIcon from "@mui/icons-material/Hub";
 
 import { FeatureFlagName, FeatureFlags, useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
@@ -31,9 +32,11 @@ const SWITCHES: Array<{
 function SettingsView({
   onNotify,
   onOpenSetup,
+  onOpenMcp,
 }: {
   onNotify: NotifyFn;
   onOpenSetup?: () => void;
+  onOpenMcp?: () => void;
 }) {
   const { flags, sitesHost, updateFlags } = useFeatures();
   const [pending, setPending] = useState<FeatureFlagName | null>(null);
@@ -58,16 +61,29 @@ function SettingsView({
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {strings.settingsHint}
       </Typography>
-      {onOpenSetup && (
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<ChecklistIcon />}
-          onClick={onOpenSetup}
-          sx={{ mb: 2 }}
-        >
-          {strings.setupOpenFromSettings}
-        </Button>
+      {(onOpenSetup || onOpenMcp) && (
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
+          {onOpenSetup && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ChecklistIcon />}
+              onClick={onOpenSetup}
+            >
+              {strings.setupOpenFromSettings}
+            </Button>
+          )}
+          {onOpenMcp && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<HubIcon />}
+              onClick={onOpenMcp}
+            >
+              {strings.mcpPlayOpenFromSettings}
+            </Button>
+          )}
+        </Stack>
       )}
       <Alert severity="info" sx={{ mb: 2 }}>
         {strings.mcpRequiresApiKey}

@@ -24,6 +24,7 @@ import {
   Language as LanguageIcon,
   Search as SearchIcon,
   Share as ShareIcon,
+  Hub as HubIcon,
   Storage as StorageIcon,
   SwapVert as SwapVertIcon,
 } from "@mui/icons-material";
@@ -117,6 +118,12 @@ function CommandPalette({
         handler: () => onNavigate({ kind: "images" }),
       },
       {
+        id: "goto-mcp",
+        icon: <HubIcon />,
+        labelKey: "commandGotoMcp",
+        handler: () => onNavigate({ kind: "mcp" }),
+      },
+      {
         id: "open-transfers",
         icon: <SwapVertIcon />,
         labelKey: "commandOpenTransfers",
@@ -141,13 +148,14 @@ function CommandPalette({
       .filter((command) => {
         if (command.id === "goto-sites") return flags.sites;
         if (command.id === "goto-images") return flags.imageHost;
+        if (command.id === "goto-mcp") return flags.mcp && flags.apiKey;
         return true;
       })
       .map((command) => ({ command, label: strings[command.labelKey] }))
       .filter(
         (item) => !keyword || item.label.toLowerCase().includes(keyword)
       );
-  }, [commands, flags.sites, flags.imageHost, query]);
+  }, [commands, flags.sites, flags.imageHost, flags.mcp, flags.apiKey, query]);
 
   const fileItems = useMemo(
     () => (query.trim() ? results : []),

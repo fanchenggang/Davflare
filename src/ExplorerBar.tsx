@@ -37,7 +37,7 @@ import { RecentEntry } from "./app/recent";
 import { strings, translate } from "./app/strings";
 import { warmShadow } from "./app/theme";
 
-export type ExplorerSection = "folder" | "shares" | "trash" | "sites" | "images" | "settings" | "setup";
+export type ExplorerSection = "folder" | "shares" | "trash" | "sites" | "images" | "settings" | "setup" | "mcp";
 
 // labelKey 延迟到渲染时取 strings，避免模块级快照导致语言切换后标签不变。
 const TYPE_FILTERS: Array<{ value: FileTypeFilter; labelKey: string }> = [
