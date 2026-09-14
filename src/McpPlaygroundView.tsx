@@ -20,6 +20,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 
+import { useFeatures } from "./app/features";
 import {
   buildMcpJsonSnippet,
   loadStoredApiKey,
@@ -55,6 +56,7 @@ function McpPlaygroundView({
   onOpenSettings?: () => void;
 }) {
   useLang();
+  const { flags } = useFeatures();
   const origin =
     typeof window === "undefined" ? "" : window.location.origin;
 
@@ -79,6 +81,10 @@ function McpPlaygroundView({
   );
 
   const bothGreen = listStatus === "green" && tryStatus === "green";
+  // Tip is only for when MCP/API Key switches are off — hide once features are
+  // enabled or the playground Key checks already succeeded.
+  const featuresReady = flags.mcp && flags.apiKey;
+  const showEnableTip = !featuresReady && !bothGreen;
 
   const onKeyChange = (value: string) => {
     setApiKey(value);
@@ -161,22 +167,24 @@ function McpPlaygroundView({
         {strings.mcpPlayHint}
       </Typography>
 
-      <Alert severity="info" sx={{ mb: 2 }}>
-        {strings.mcpPlayInfo}
-        {onOpenSettings && (
-          <>
-            {" "}
-            <Link
-              component="button"
-              type="button"
-              onClick={onOpenSettings}
-              sx={{ verticalAlign: "baseline" }}
-            >
-              {strings.mcpPlayOpenSettings}
-            </Link>
-          </>
-        )}
-      </Alert>
+      {showEnableTip && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {strings.mcpPlayInfo}
+          {onOpenSettings && (
+            <>
+              {" "}
+              <Link
+                component="button"
+                type="button"
+                onClick={onOpenSettings}
+                sx={{ verticalAlign: "baseline" }}
+              >
+                {strings.mcpPlayOpenSettings}
+              </Link>
+            </>
+          )}
+        </Alert>
+      )}
 
       <TextField
         fullWidth
