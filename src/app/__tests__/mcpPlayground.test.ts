@@ -145,4 +145,68 @@ describe("mcpPlayground helpers", () => {
     );
     await expect(mcpToolsList("bad")).rejects.toThrow(/Unauthorized|401/);
   });
+
+  test("mcpToolsList rejects empty key", async () => {
+    await expect(mcpToolsList("   ")).rejects.toThrow(/API key is required/);
+  });
+
+  test("mcpToolsList surfaces JSON-RPC error body on HTTP failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: "key expired" } }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+    await expect(mcpToolsList("fd_x")).rejects.toThrow(/key expired/);
+  });
+
+  test("mcpToolsList rejects empty 200 body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("", { status: 200 }))
+    );
+    await expect(mcpToolsList("fd_x")).rejects.toThrow(/Empty MCP response/);
+  });
+
+  test("mcpToolsList rejects non-JSON 200 body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("not-json", { status: 200 }))
+    );
+    await expect(mcpToolsList("fd_x")).rejects.toThrow(/Empty MCP response/);
+  });
+
+  test("parseToolCallPayload throws on RPC error and isError flag", () => {
+    expect(() =>
+      parseToolCallPayload({
+        jsonrpc: "2.0",
+        id: 2,
+        error: { code: -1, message: "boom" },
+      })
+    ).toThrow(/boom/);
+
+    const flagged = parseToolCallPayload({
+      jsonrpc: "2.0",
+      id: 2,
+      result: {
+        isError: true,
+        content: [{ type: "text", text: "tool failed" }],
+      },
+    });
+    expect(flagged.isError).toBe(true);
+    expect(flagged.text).toBe("tool failed");
+  });
+
+  test("parseToolsListPayload rejects invalid tool entries", () => {
+    expect(() =>
+      parseToolsListPayload({
+        jsonrpc: "2.0",
+        id: 1,
+        result: { tools: [{ description: "no name" }] },
+      })
+    ).toThrow(/Invalid tool entry/);
+  });
 });

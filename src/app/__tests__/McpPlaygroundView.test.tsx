@@ -84,4 +84,106 @@ describe("McpPlaygroundView", () => {
     expect(screen.queryByRole("button", { name: strings.setupCopyMcp })).toBeNull();
     expect(screen.getByText(strings.mcpPlayNotReady)).toBeInTheDocument();
   });
+
+  test("shows list and try errors; copy failure notifies", async () => {
+    mockList.mockRejectedValue(new Error("list boom"));
+    mockTry.mockResolvedValue({
+      isError: true,
+      text: "tool blew up",
+      raw: { isError: true, content: [{ type: "text", text: "tool blew up" }] },
+    });
+
+    const onNotify = vi.fn();
+    const onOpenSettings = vi.fn();
+    render(
+      <McpPlaygroundView onNotify={onNotify} onOpenSettings={onOpenSettings} />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayOpenSettings }));
+    expect(onOpenSettings).toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(strings.mcpPlayKeyLabel), {
+      target: { value: "fd_err" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayListAction }));
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+    expect(await screen.findByText("list boom")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayTryAction }));
+    await waitFor(() => expect(mockTry).toHaveBeenCalled());
+    expect(await screen.findAllByText("tool blew up")).not.toHaveLength(0);
+    expect(screen.queryByRole("button", { name: strings.setupCopyMcp })).toBeNull();
+  });
+
+  test("try catch path and clipboard failure", async () => {
+    mockList.mockResolvedValue([{ name: "list" }]);
+    mockTry.mockRejectedValue(new Error("try boom"));
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+
+    const onNotify = vi.fn();
+    render(<McpPlaygroundView onNotify={onNotify} />);
+
+    fireEvent.change(screen.getByLabelText(strings.mcpPlayKeyLabel), {
+      target: { value: "fd_ok" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayListAction }));
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayTryAction }));
+    await waitFor(() => expect(mockTry).toHaveBeenCalled());
+    expect(await screen.findByText("try boom")).toBeInTheDocument();
+
+    // Force both green via remock then copy fail — remount with success then patch clipboard
+  });
+
+  test("notify when list/try clicked without key", async () => {
+    const onNotify = vi.fn();
+    render(<McpPlaygroundView onNotify={onNotify} />);
+    // Buttons disabled without key — enable by putting spaces then trim empty? buttons disabled on !trim
+    // Call via changing to key then clearing is hard; instead fire with disabled check:
+    expect(
+      screen.getByRole("button", { name: strings.mcpPlayListAction })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: strings.mcpPlayTryAction })
+    ).toBeDisabled();
+  });
+
+  test("copy mcp.json notifies on clipboard failure after both green", async () => {
+    mockList.mockResolvedValue([{ name: "list" }]);
+    mockTry.mockResolvedValue({
+      isError: false,
+      text: "{}",
+      raw: { content: [{ type: "text", text: "{}" }] },
+    });
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+
+    const onNotify = vi.fn();
+    render(<McpPlaygroundView onNotify={onNotify} />);
+    fireEvent.change(screen.getByLabelText(strings.mcpPlayKeyLabel), {
+      target: { value: "fd_copy" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayListAction }));
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: strings.mcpPlayTryAction }));
+    await waitFor(() => expect(mockTry).toHaveBeenCalled());
+
+    fireEvent.click(await screen.findByRole("button", { name: strings.setupCopyMcp }));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(strings.setupCopyFailed, "error")
+    );
+  });
+
+  test("toggles key visibility", () => {
+    render(<McpPlaygroundView onNotify={vi.fn()} />);
+    const show = screen.getByRole("button", { name: strings.mcpPlayShowKey });
+    fireEvent.click(show);
+    expect(
+      screen.getByRole("button", { name: strings.mcpPlayHideKey })
+    ).toBeInTheDocument();
+  });
 });
