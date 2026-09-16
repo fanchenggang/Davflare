@@ -72,6 +72,29 @@ describe("MultiSelectToolbar", () => {
     expect(screen.getByText(strings.rename).closest("button")).not.toBeDisabled();
     expect(screen.getByText(strings.share).closest("button")).not.toBeDisabled();
   });
+
+  test("canPublish 控制发布按钮", () => {
+    const onPublish = vi.fn();
+    const { rerender } = render(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["dir"]}
+        onPublish={onPublish}
+        canPublish={false}
+      />
+    );
+    expect(screen.getByText(strings.publishAsSite).closest("button")).toBeDisabled();
+    rerender(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["dir"]}
+        onPublish={onPublish}
+        canPublish
+      />
+    );
+    fireEvent.click(screen.getByText(strings.publishAsSite));
+    expect(onPublish).toHaveBeenCalled();
+  });
 });
 
 describe("FileActionSheet", () => {
@@ -100,17 +123,42 @@ describe("FileActionSheet", () => {
     await waitFor(() => expect(onAction).toHaveBeenCalledWith("download", file));
   });
 
-  test("目录也渲染全部动作（当前无 filesOnly 动作）", () => {
+  test("目录在 sitesEnabled 时显示发布为静态站", () => {
     render(
       <FileActionSheet
         file={{ ...file, isDir: true, key: "d/", name: "d" }}
         anchorPosition={{ top: 10, left: 20 }}
         onClose={vi.fn()}
         onAction={vi.fn()}
+        sitesEnabled
       />
     );
     expect(screen.getByText(strings.download)).toBeInTheDocument();
     expect(screen.getByText(strings.open)).toBeInTheDocument();
+    expect(screen.getByText(strings.publishAsSite)).toBeInTheDocument();
+  });
+
+  test("文件或站点关闭时不显示发布为静态站", () => {
+    const { rerender } = render(
+      <FileActionSheet
+        file={file}
+        anchorPosition={{ top: 10, left: 20 }}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+        sitesEnabled
+      />
+    );
+    expect(screen.queryByText(strings.publishAsSite)).not.toBeInTheDocument();
+    rerender(
+      <FileActionSheet
+        file={{ ...file, isDir: true, key: "d/", name: "d" }}
+        anchorPosition={{ top: 10, left: 20 }}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+        sitesEnabled={false}
+      />
+    );
+    expect(screen.queryByText(strings.publishAsSite)).not.toBeInTheDocument();
   });
 
   test("file 为 null 时不渲染菜单项", () => {

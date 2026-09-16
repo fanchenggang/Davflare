@@ -1,3 +1,4 @@
+import { featureDisabledResponse, loadFeatureFlags } from "../_flags";
 import {
   SITES_PREFIX,
   SiteConfig,
@@ -7,8 +8,13 @@ import {
   siteConfigKey,
 } from "../_sites";
 import {
+  copyObject,
+  isCollectionObject,
   isSessionOrKeyAuthorized,
   jsonResponse,
+  listDescendants,
+  normalizeDirKey,
+  resolveAsDirectory,
   textResponse,
 } from "./_apikey";
 
@@ -122,7 +128,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     return textResponse("Unauthorized", 401);
   }
 
-  let body: { slug?: string; spa?: boolean };
+  let body: { slug?: string; spa?: boolean; source?: string };
   try {
     body = await request.json();
   } catch {
@@ -132,6 +138,46 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   const slug = String(body.slug || "").trim().toLowerCase();
   if (!isValidSlug(slug)) {
     return new Response("Bad slug", { status: 400 });
+  }
+
+  // Publish: copy a drive folder onto sites/{slug}/ (same semantics as MCP publish_site).
+  const sourceRaw = typeof body.source === "string" ? body.source.trim() : "";
+  if (sourceRaw) {
+    const flags = await loadFeatureFlags(env.BUCKET);
+    if (!flags.sites) return featureDisabledResponse();
+
+    const source = normalizeDirKey(sourceRaw);
+    if (source instanceof Response) return source;
+
+    const targetPrefix = `${SITES_PREFIX}${slug}`;
+    if (source === targetPrefix || source.startsWith(`${targetPrefix}/`)) {
+      return textResponse("source cannot be the target site folder", 400);
+    }
+
+    if (!(await resolveAsDirectory(env.BUCKET, source))) {
+      return textResponse("source folder not found", 404);
+    }
+
+    const descendants = await listDescendants(env.BUCKET, source);
+    if (descendants instanceof Response) return descendants;
+
+    let copied = 0;
+    for (const object of descendants.objects) {
+      if (isCollectionObject(object)) continue;
+      const rel = object.key.slice(source.length + 1);
+      if (!rel || rel.includes("..")) continue;
+      const to = `${SITES_PREFIX}${slug}/${rel}`;
+      const error = await copyObject(env.BUCKET, object.key, to, { overwrite: true });
+      if (error) return error;
+      copied += 1;
+    }
+
+    return jsonResponse({
+      slug,
+      source,
+      copied,
+      sitesHost: normalizeSitesHost(env.SITES_HOST) || null,
+    });
   }
 
   // 只允许给已存在的站点改配置：前缀下至少要有一个对象

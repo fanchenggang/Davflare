@@ -16,7 +16,7 @@
 
 ## 发布
 
-把目录上传到 `sites/{slug}/`（网页端站点 zip 部署、开放接口、MCP 的 `mkdir` + `upload`、MCP `publish_site` 从网盘目录同步，或 davflare-cli cp/sync）。`{slug}` 为 `[a-z0-9][a-z0-9-]{0,62}`。
+把目录上传到 `sites/{slug}/`（网页端文件管理器选中文件夹「发布为静态站」、站点 zip 部署、开放接口、MCP 的 `mkdir` + `upload`、MCP `publish_site` 从网盘目录同步，或 davflare-cli cp/sync）。`{slug}` 为 `[a-z0-9][a-z0-9-]{0,62}`。
 
 ```
 sites/blog/index.html
@@ -27,10 +27,10 @@ sites/blog/style.css
 
 ## 管理 API 与界面
 
-- 网页端：打开「站点」区块（`#/sites`）——站点列表与统计、zip 一键部署（浏览器解压后走上传队列）、SPA 开关、按站删除；「管理文件」直接跳到 `sites/<slug>/` 的常规文件管理器。
+- 网页端：文件管理器选中文件夹 →「发布为静态站」（`POST /api/sites` 带 `source`，与 MCP `publish_site` 同语义）；「站点」区块（`#/sites`）——列表与统计、zip 一键部署、SPA 开关、按站删除；「管理文件」跳到 `sites/<slug>/`。
 - MCP：`sites_list`、`sites_config`、`sites_delete`（同一套 `/api/sites`）。`publish_site` 把网盘目录同步到 `sites/{slug}/`（同名覆盖，不删 SPA 配置）。
 - `GET /api/sites` — 列站点（`?stats=1` 附带缓存的文件数/总大小）。会话（Basic）或 API key 均可。
-- `POST /api/sites` — `{"slug":"blog","spa":true}` 切换 SPA 回退；站点需已存在。
+- `POST /api/sites` — `{"slug":"blog","source":"my-folder"}` 把网盘文件夹发布到 `sites/{slug}/`（同名覆盖，保留 SPA 配置；Sites 开关关闭时 404）；或 `{"slug":"blog","spa":true}` 切换 SPA 回退（站点需已存在）。
 - `DELETE /api/sites?slug=blog` — 删除站点全部文件（保留配置，重新部署同 slug 时 SPA 开关仍在）；加 `&purge=1` 连配置一起删。
 - SPA 回退：最终未命中时，`spa=true` 以 200 返回 `sites/<slug>/index.html`；否则若存在 `sites/<slug>/404.html` 以 404 状态返回它。
 

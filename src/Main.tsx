@@ -23,6 +23,7 @@ import MoveDialog from "./MoveDialog";
 import MultiSelectToolbar from "./MultiSelectToolbar";
 import PathBar, { SearchScope } from "./PathBar";
 import RenameDialog from "./RenameDialog";
+import PublishSiteDialog from "./PublishSiteDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
@@ -130,6 +131,7 @@ function Main({
   } | null>(null);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null);
+  const [publishTarget, setPublishTarget] = useState<FileItem | null>(null);
   const [detailsFile, setDetailsFile] = useState<FileItem | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
@@ -452,6 +454,12 @@ function Main({
           window.setTimeout(() => setConfirmDelete([file.key]), 50);
         } else if (action === "share") {
           window.setTimeout(() => setShareTarget(file), 50);
+        } else if (action === "publishSite") {
+          if (!file.isDir) {
+            onNotify(translate("publishSiteOnlyFolder"), "error");
+            return;
+          }
+          window.setTimeout(() => setPublishTarget(file), 50);
         } else if (action === "copy") {
           copyToClipboard([file.key]);
           onNotify(translate("copiedToClipboard"), "success");
@@ -949,6 +957,7 @@ function Main({
         }
         onClose={() => setContextMenu(null)}
         onAction={handleContextAction}
+        sitesEnabled={flags.sites}
       />
 
       <RenameDialog
@@ -985,6 +994,13 @@ function Main({
         open={Boolean(shareTarget)}
         file={shareTarget}
         onClose={() => setShareTarget(null)}
+        onNotify={onNotify}
+      />
+
+      <PublishSiteDialog
+        open={Boolean(publishTarget)}
+        folder={publishTarget}
+        onClose={() => setPublishTarget(null)}
         onNotify={onNotify}
       />
 
@@ -1115,6 +1131,20 @@ function Main({
           onNotify(translate("cutToClipboard"), "success");
         }}
         onMove={() => setMoveTarget(selectedKeys)}
+        canPublish={
+          flags.sites &&
+          selectedKeys.length === 1 &&
+          files.find((item) => item.key === selectedKeys[0])?.isDir === true
+        }
+        onPublish={() => {
+          if (selectedKeys.length !== 1) return;
+          const file = files.find((item) => item.key === selectedKeys[0]);
+          if (!file?.isDir) {
+            onNotify(translate("publishSiteOnlyFolder"), "error");
+            return;
+          }
+          setPublishTarget(file);
+        }}
       />
     </Box>
   );

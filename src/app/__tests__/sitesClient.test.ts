@@ -1,5 +1,13 @@
 import { vi } from "vitest";
-import { deleteSite, listSites, siteUrl, updateSiteConfig } from "../sites";
+import {
+  deleteSite,
+  isValidSiteSlug,
+  listSites,
+  publishSite,
+  siteUrl,
+  suggestSiteSlug,
+  updateSiteConfig,
+} from "../sites";
 import { authFetch } from "../auth";
 import { setLang } from "../strings";
 import { asAuthFetchMock } from "../testUtils";
@@ -74,5 +82,46 @@ describe("sites / siteUrl", () => {
 
   test("使用当前协议拼接地址", () => {
     expect(siteUrl("sites.example.com", "blog")).toBe(`${window.location.protocol}//sites.example.com/blog/`);
+  });
+});
+
+
+describe("sites / suggestSiteSlug + isValidSiteSlug", () => {
+  test("normalizes folder names", () => {
+    expect(suggestSiteSlug("My Blog!")).toBe("my-blog");
+    expect(suggestSiteSlug("---")).toBe("site");
+    expect(isValidSiteSlug("my-blog")).toBe(true);
+    expect(isValidSiteSlug("Bad")).toBe(false);
+  });
+});
+
+describe("sites / publishSite", () => {
+  test("POST slug + source", async () => {
+    mockAuthFetch.mockOk({
+      slug: "blog",
+      source: "src",
+      copied: 2,
+      sitesHost: "sites.example.com",
+    });
+    await expect(publishSite("src", "Blog")).resolves.toEqual({
+      slug: "blog",
+      source: "src",
+      copied: 2,
+      sitesHost: "sites.example.com",
+    });
+    const [url, init] = mockAuthFetch.mock.calls[0];
+    expect(url).toBe("/api/sites");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ slug: "blog", source: "src" });
+  });
+
+  test("rejects bad slug before fetch", async () => {
+    await expect(publishSite("src", "has_underscore")).rejects.toThrow(/slug|a-z0-9/i);
+    expect(mockAuthFetch).not.toHaveBeenCalled();
+  });
+
+  test("failure uses response text", async () => {
+    mockAuthFetch.mockError(400, "source folder not found");
+    await expect(publishSite("src", "blog")).rejects.toThrow("source folder not found");
   });
 });

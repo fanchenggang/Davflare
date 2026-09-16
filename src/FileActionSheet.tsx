@@ -21,6 +21,7 @@ import {
   FolderOpen as OpenIcon,
   InfoOutlined as DetailsIcon,
   Share as ShareIcon,
+  Language as PublishIcon,
 } from "@mui/icons-material";
 
 import { FileItem } from "./app/types";
@@ -33,6 +34,7 @@ export type FileAction =
   | "rename"
   | "move"
   | "share"
+  | "publishSite"
   | "copy"
   | "cut"
   | "delete";
@@ -43,6 +45,8 @@ const ACTIONS: Array<{
   labelKey: string;
   icon: React.ReactNode;
   filesOnly?: boolean;
+  dirsOnly?: boolean;
+  sitesOnly?: boolean;
 }> = [
   { id: "open", labelKey: "open", icon: <OpenIcon /> },
   { id: "download", labelKey: "download", icon: <DownloadIcon /> },
@@ -50,6 +54,13 @@ const ACTIONS: Array<{
   { id: "rename", labelKey: "rename", icon: <RenameIcon /> },
   { id: "move", labelKey: "move", icon: <MoveIcon /> },
   { id: "share", labelKey: "share", icon: <ShareIcon /> },
+  {
+    id: "publishSite",
+    labelKey: "publishAsSite",
+    icon: <PublishIcon />,
+    dirsOnly: true,
+    sitesOnly: true,
+  },
   { id: "copy", labelKey: "copy", icon: <CopyIcon /> },
   { id: "cut", labelKey: "cut", icon: <CutIcon /> },
   { id: "delete", labelKey: "delete", icon: <DeleteIcon /> },
@@ -60,17 +71,22 @@ function FileActionSheet({
   anchorPosition,
   onClose,
   onAction,
+  sitesEnabled = false,
 }: {
   file: FileItem | null;
   anchorPosition: { top: number; left: number } | null;
   onClose: () => void;
   onAction: (action: FileAction, file: FileItem) => void;
+  sitesEnabled?: boolean;
 }) {
   const isPhone = useMediaQuery("(max-width:600px)");
   const open = Boolean(file);
-  const actions = ACTIONS.filter(
-    (action) => !action.filesOnly || (file && !file.isDir)
-  ).map((action) => ({ ...action, label: strings[action.labelKey] }));
+  const actions = ACTIONS.filter((action) => {
+    if (action.filesOnly && (!file || file.isDir)) return false;
+    if (action.dirsOnly && (!file || !file.isDir)) return false;
+    if (action.sitesOnly && !sitesEnabled) return false;
+    return true;
+  }).map((action) => ({ ...action, label: strings[action.labelKey] }));
 
   const run = (action: FileAction) => {
     if (!file) return;
@@ -81,7 +97,8 @@ function FileActionSheet({
       action === "rename" ||
       action === "share" ||
       action === "delete" ||
-      action === "move";
+      action === "move" ||
+      action === "publishSite";
     if (openDialog) window.setTimeout(() => onAction(action, target), 0);
     else onAction(action, target);
   };

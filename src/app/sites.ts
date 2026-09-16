@@ -55,3 +55,49 @@ export function siteUrl(sitesHost: string | null, slug: string): string | null {
   if (!sitesHost) return null;
   return `${window.location.protocol}//${sitesHost}/${slug}/`;
 }
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+export function isValidSiteSlug(slug: string): boolean {
+  return SLUG_RE.test(slug);
+}
+
+/** Turn a folder name into a default site slug (lowercase, dashes, max 63). */
+export function suggestSiteSlug(folderName: string): string {
+  const normalized = folderName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const started = normalized.replace(/^[^a-z0-9]+/, "");
+  const clipped = (started || "site").slice(0, 63).replace(/-+$/, "");
+  return clipped || "site";
+}
+
+export interface PublishSiteResult {
+  slug: string;
+  source: string;
+  copied: number;
+  sitesHost: string | null;
+}
+
+/** Copy a drive folder onto sites/{slug}/ (overwrite same names; SPA config kept). */
+export async function publishSite(
+  source: string,
+  slug: string
+): Promise<PublishSiteResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const response = await authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug: normalizedSlug, source }),
+  });
+  if (!response.ok) {
+    throw new Error((await response.text()) || translate("publishSiteFailed"));
+  }
+  return response.json();
+}

@@ -13,6 +13,7 @@ import {
   Edit as RenameIcon,
   SelectAll as SelectAllIcon,
   Share as ShareIcon,
+  Language as PublishIcon,
 } from "@mui/icons-material";
 
 function ActionButton({
@@ -53,6 +54,8 @@ function MultiSelectToolbar({
   onCopy,
   onCut,
   onMove,
+  onPublish,
+  canPublish = false,
 }: {
   selectedKeys: string[];
   onClose: () => void;
@@ -64,6 +67,8 @@ function MultiSelectToolbar({
   onCopy: () => void;
   onCut: () => void;
   onMove: () => void;
+  onPublish?: () => void;
+  canPublish?: boolean;
 }) {
   const count = selectedKeys.length;
 
@@ -130,6 +135,14 @@ function MultiSelectToolbar({
           disabled={count !== 1}
           onClick={onShare}
         />
+        {onPublish ? (
+          <ActionButton
+            icon={<PublishIcon />}
+            label={strings.publishAsSite}
+            disabled={!canPublish}
+            onClick={onPublish}
+          />
+        ) : null}
         <ActionButton
           icon={<DeleteIcon />}
           label={strings.delete}
