@@ -63,6 +63,11 @@ vi.mock("../trash", () => ({
 
 vi.mock("../../PreviewDialog", () => ({ __esModule: true, default: () => null }));
 vi.mock("../../ShareDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../PublishSiteDialog", () => ({
+  __esModule: true,
+  default: ({ open, folder }: { open: boolean; folder: { name?: string } | null }) =>
+    open ? <div>publish-stub:{folder?.name ?? ""}</div> : null,
+}));
 vi.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
 vi.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
 vi.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
@@ -312,6 +317,14 @@ describe("Main 上下文菜单动作", () => {
     );
     fireEvent.click(screen.getByText(strings.cancel));
   });
+
+  test("文件夹菜单发布为静态站打开对话框", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "docs" })));
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.publishAsSite }));
+    await waitFor(() => expect(screen.getByText("publish-stub:docs")).toBeInTheDocument());
+  });
 });
 
 describe("Main 删除-撤销/重试闭环", () => {
@@ -440,6 +453,16 @@ describe("Main 多选工具栏", () => {
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("zip-fail", "error"));
   });
 });
+
+
+  test("单选文件夹 → 发布为静态站", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "docs" })));
+    const toolbar = document.querySelector(".MuiToolbar-root")!;
+    fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsSite }));
+    await waitFor(() => expect(screen.getByText("publish-stub:docs")).toBeInTheDocument());
+  });
 
 describe("Main 空目录入口", () => {
   test("空目录展示上传/新建入口，上传按钮触发文件选择并入队", async () => {

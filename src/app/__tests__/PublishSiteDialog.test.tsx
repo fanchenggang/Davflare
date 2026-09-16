@@ -68,4 +68,46 @@ describe("PublishSiteDialog", () => {
       expect(onNotify).toHaveBeenCalledWith(expect.stringContaining("my-blog"), "info")
     );
   });
+
+  test("rejects bad slug and surfaces publish errors", async () => {
+    const onNotify = vi.fn();
+    render(
+      <PublishSiteDialog open folder={folder} onClose={vi.fn()} onNotify={onNotify} />
+    );
+    fireEvent.change(screen.getByLabelText(strings.publishSiteSlug), {
+      target: { value: "has_underscore" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteSubmit }));
+    expect(publishSite).not.toHaveBeenCalled();
+    expect(screen.getByText(strings.publishSiteBadSlug)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(strings.publishSiteSlug), {
+      target: { value: "ok-slug" },
+    });
+    vi.mocked(publishSite).mockRejectedValue(new Error("boom"));
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteSubmit }));
+    await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
+  });
+
+  test("copy URL notifies success", async () => {
+    vi.mocked(publishSite).mockResolvedValue({
+      slug: "my-blog",
+      source: "My Blog",
+      copied: 1,
+      sitesHost: "sites.example.com",
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const onNotify = vi.fn();
+    render(
+      <PublishSiteDialog open folder={folder} onClose={vi.fn()} onNotify={onNotify} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteSubmit }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: strings.publishSiteCopyUrl })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteCopyUrl }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(onNotify).toHaveBeenCalledWith(strings.linkCopied, "success");
+  });
 });
