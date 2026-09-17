@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
 import os from "node:os";
+import crypto from "node:crypto";
 
 import { ApiError, DavflareClient } from "./client.js";
 import {
@@ -277,6 +278,124 @@ program
       fail(error);
     }
   });
+
+
+const SITE_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+function assertSiteSlug(slug: string): string {
+  const normalized = slug.trim().toLowerCase();
+  if (!SITE_SLUG_RE.test(normalized)) {
+    throw new Error("slug 须匹配 [a-z0-9][a-z0-9-]{0,62}");
+  }
+  return normalized;
+}
+
+function sitePublicUrl(sitesHost: string | null | undefined, slug: string): string | null {
+  if (!sitesHost) return null;
+  return `https://${sitesHost.replace(/\/$/, "")}/${slug}/`;
+}
+
+const sitesCmd = program.command("sites").description("管理静态站点（list / publish / delete，走 /api/sites）");
+
+sitesCmd
+  .command("list")
+  .description("列出已发布站点")
+  .option("--stats", "显示文件数与总大小")
+  .option("--json", "输出原始 JSON")
+  .action(async (options: { stats?: boolean; json?: boolean }) => {
+    try {
+      const api = client();
+      const data = await api.listSites(options.stats === true);
+      if (options.json) {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+      if (data.sitesHost) {
+        console.error(`sitesHost: ${data.sitesHost}`);
+      } else {
+        console.error("sitesHost: （未配置 SITES_HOST）");
+      }
+      if (data.sites.length === 0) {
+        console.log("(无站点)");
+        return;
+      }
+      for (const site of data.sites) {
+        const url = sitePublicUrl(data.sitesHost, site.slug);
+        const spa = site.spa ? " spa" : "";
+        let stats = "";
+        if (site.stats) {
+          const trunc = site.stats.truncated ? "+" : "";
+          stats = `  ${site.stats.objects}${trunc} files  ${humanSize(site.stats.size)}`;
+        }
+        console.log(`${site.slug}${spa}${stats}${url ? `  ${url}` : ""}`);
+      }
+    } catch (error) {
+      fail(error);
+    }
+  });
+
+sitesCmd
+  .command("publish")
+  .description("发布本地目录到 sites/{slug}/（先上传暂存，再走 /api/sites，语义同 MCP publish_site）")
+  .argument("<localDir>", "本地目录")
+  .requiredOption("--slug <slug>", "站点 slug（[a-z0-9][a-z0-9-]{0,62}）")
+  .action(async (localDir: string, options: { slug: string }) => {
+    const stagingPrefix = `.davflare-publish/${crypto.randomUUID()}`;
+    try {
+      const slug = assertSiteSlug(options.slug);
+      const root = path.resolve(localDir);
+      if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+        throw new Error(`${localDir} 不是本地目录`);
+      }
+      const files = walkLocal(root);
+      if (files.length === 0) {
+        throw new Error("本地目录没有可发布的文件");
+      }
+      const api = client();
+      console.error(`上传 ${files.length} 个文件到暂存 ${stagingPrefix}/ …`);
+      for (const entry of files) {
+        const localPath = path.join(root, ...entry.path.split("/"));
+        const progress = makeProgressBar(`上传 ${entry.path}`);
+        await api.uploadFile(localPath, `${stagingPrefix}/${entry.path}`, progress);
+      }
+      console.error(`发布到 sites/${slug}/ …`);
+      const result = await api.publishSite(stagingPrefix, slug);
+      try {
+        await api.remove(`${stagingPrefix}/`, true);
+      } catch {
+        console.error(`警告: 暂存目录 ${stagingPrefix}/ 清理失败，可稍后手动删除`);
+      }
+      const url = sitePublicUrl(result.sitesHost, result.slug);
+      console.error(`已发布 ${result.copied} 个文件 → sites/${result.slug}/`);
+      if (url) console.log(url);
+      else console.error("未配置 SITES_HOST，公开地址不可用");
+    } catch (error) {
+      try {
+        await client().remove(`${stagingPrefix}/`, true);
+      } catch {
+        // best-effort cleanup
+      }
+      fail(error);
+    }
+  });
+
+sitesCmd
+  .command("delete")
+  .description("删除站点文件（默认保留 SPA 等配置；--purge 连配置一起删）")
+  .argument("<slug>", "站点 slug")
+  .option("--purge", "连配置一起删除")
+  .action(async (slugArg: string, options: { purge?: boolean }) => {
+    try {
+      const slug = assertSiteSlug(slugArg);
+      const result = await client().deleteSite(slug, options.purge === true);
+      console.error(
+        `已删除站点 ${result.slug}（${result.deleted} 个对象）${options.purge ? "（含配置）" : ""}`
+      );
+    } catch (error) {
+      fail(error);
+    }
+  });
+
 
 program.parseAsync(process.argv).catch((error) => {
   console.error(`错误: ${(error as Error)?.message ?? error}`);

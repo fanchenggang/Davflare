@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => {
     search: vi.fn(),
     createKeyWithSession: vi.fn(),
     revokeKey: vi.fn(),
+    listSites: vi.fn(),
+    publishSite: vi.fn(),
+    deleteSite: vi.fn(),
   };
   return {
     api,
@@ -219,5 +222,88 @@ describe("index 错误处理", () => {
 
     expect(console.error).toHaveBeenCalledWith("错误: direction 必须是 push 或 pull");
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("index sites 命令", () => {
+  it("sites list 打印 slug 与 URL", async () => {
+    mocks.api.listSites.mockResolvedValue({
+      sitesHost: "sites.example.com",
+      sites: [{ slug: "blog", spa: true, stats: null }],
+    });
+
+    await runCli("sites", "list");
+    await vi.waitFor(() => expect(mocks.api.listSites).toHaveBeenCalled());
+
+    expect(mocks.api.listSites).toHaveBeenCalledWith(false);
+    expect(console.error).toHaveBeenCalledWith("sitesHost: sites.example.com");
+    expect(console.log).toHaveBeenCalledWith("blog spa  https://sites.example.com/blog/");
+  });
+
+  it("sites list --stats --json 透传", async () => {
+    const payload = {
+      sitesHost: null,
+      sites: [{ slug: "hello", spa: false, stats: { objects: 2, size: 10, cachedAt: "2026-01-01T00:00:00.000Z" } }],
+    };
+    mocks.api.listSites.mockResolvedValue(payload);
+
+    await runCli("sites", "list", "--stats", "--json");
+    await vi.waitFor(() => expect(console.log).toHaveBeenCalled());
+
+    expect(mocks.api.listSites).toHaveBeenCalledWith(true);
+    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0] as string)).toEqual(payload);
+  });
+
+  it("sites publish 上传暂存后调用 publishSite 并清理", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-sites-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "<h1>hi</h1>");
+    fs.mkdirSync(path.join(dir, "css"));
+    fs.writeFileSync(path.join(dir, "css", "a.css"), "body{}");
+    mocks.api.uploadFile.mockResolvedValue(undefined);
+    mocks.api.publishSite.mockResolvedValue({
+      slug: "blog",
+      source: "staging",
+      copied: 2,
+      sitesHost: "sites.example.com",
+    });
+    mocks.api.remove.mockResolvedValue(undefined);
+
+    await runCli("sites", "publish", dir, "--slug", "Blog");
+    await vi.waitFor(() => expect(mocks.api.publishSite).toHaveBeenCalled());
+
+    expect(mocks.api.uploadFile).toHaveBeenCalledTimes(2);
+    const stagingArg = mocks.api.publishSite.mock.calls[0][0] as string;
+    expect(stagingArg).toMatch(/^\.davflare-publish\//);
+    expect(mocks.api.publishSite).toHaveBeenCalledWith(stagingArg, "blog");
+    expect(mocks.api.remove).toHaveBeenCalledWith(`${stagingArg}/`, true);
+    expect(console.log).toHaveBeenCalledWith("https://sites.example.com/blog/");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sites publish 非法 slug 报错", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-sites-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "x");
+
+    await runCli("sites", "publish", dir, "--slug", "Bad_Slug");
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled());
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("slug 须匹配")
+    );
+    expect(mocks.api.uploadFile).not.toHaveBeenCalled();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sites delete --purge 传递 purge", async () => {
+    mocks.api.deleteSite.mockResolvedValue({ slug: "blog", deleted: 3 });
+
+    await runCli("sites", "delete", "blog", "--purge");
+    await vi.waitFor(() => expect(mocks.api.deleteSite).toHaveBeenCalled());
+
+    expect(mocks.api.deleteSite).toHaveBeenCalledWith("blog", true);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("已删除站点 blog（3 个对象）（含配置）")
+    );
   });
 });

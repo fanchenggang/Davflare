@@ -16,7 +16,7 @@ On this host, `/i/{id}` (image host) is matched **first**, then slug static site
 
 ## Publish
 
-Upload a folder to `sites/{slug}/` (web file manager **Publish as site**, Sites zip deploy, Open API, MCP `mkdir` + `upload`, MCP `publish_site` from a drive folder, or davflare-cli cp/sync). `{slug}` is `[a-z0-9][a-z0-9-]{0,62}`.
+Upload a folder to `sites/{slug}/` (web file manager **Publish as site**, Sites zip deploy, Open API, MCP `mkdir` + `upload`, MCP `publish_site` from a drive folder, or `davflare sites publish ./dist --slug <slug>` / davflare-cli cp/sync). `{slug}` is `[a-z0-9][a-z0-9-]{0,62}`.
 
 ```
 sites/blog/index.html

@@ -41,9 +41,20 @@ export DAVFLARE_KEY=fd_xxx
 | `mv [--overwrite] <from> <to>` | 重命名/移动（目录整树） |
 | `cp <src> <dst>` | 本地⇄远端复制：源是本地文件则上传（>100MB 自动分块），否则下载（支持 Range 断点续传） |
 | `sync push\|pull [--dry-run] [--delete] [--backup-conflicts] <localDir> <remoteDir>` | 目录同步 |
+| `sites list [--stats] [--json]` | 列出已发布静态站 |
+| `sites publish <本地目录> --slug <slug>` | 发布本地目录到 `sites/{slug}/`（同 MCP `publish_site`） |
+| `sites delete <slug> [--purge]` | 删除站点（默认保留配置） |
 | `login` / `logout` | 登录/登出 |
 
 进度输出走 stderr，管道安全；`ls --json` 输出机器可读 JSON。
+
+
+一键发布静态站（宣传示例）：
+
+```bash
+davflare sites publish ./dist --slug blog
+# → https://sites.example.com/blog/
+```
 
 ## 同步语义
 

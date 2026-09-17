@@ -17,6 +17,32 @@ export interface ListPage {
   nextCursor?: string | null;
 }
 
+
+export interface SiteStats {
+  objects: number;
+  size: number;
+  cachedAt: string;
+  truncated?: boolean;
+}
+
+export interface SiteInfo {
+  slug: string;
+  spa: boolean;
+  stats: SiteStats | null;
+}
+
+export interface SitesListResponse {
+  sitesHost: string | null;
+  sites: SiteInfo[];
+}
+
+export interface PublishSiteResult {
+  slug: string;
+  source: string;
+  copied: number;
+  sitesHost: string | null;
+}
+
 const SINGLE_UPLOAD_LIMIT = 100 * 1000 * 1000; // 与服务端 413 阈值一致
 const PART_SIZE = 8 * 1000 * 1000; // 三段式分块大小（服务端按 R2 multipart 转存）
 
@@ -250,4 +276,26 @@ export class DavflareClient {
     const response = await this.request("DELETE", "/api/keys", { id });
     await response.arrayBuffer();
   }
+
+  async listSites(withStats = false): Promise<SitesListResponse> {
+    const params = withStats ? { stats: "1" } : undefined;
+    const response = await this.request("GET", "/api/sites", params);
+    return (await response.json()) as SitesListResponse;
+  }
+
+  /** Copy a drive folder onto sites/{slug}/ (overwrite same names; SPA config kept). */
+  async publishSite(source: string, slug: string): Promise<PublishSiteResult> {
+    const response = await this.request("POST", "/api/sites", undefined, {
+      json: { slug, source },
+    });
+    return (await response.json()) as PublishSiteResult;
+  }
+
+  async deleteSite(slug: string, purge = false): Promise<{ slug: string; deleted: number }> {
+    const params: Record<string, string> = { slug };
+    if (purge) params.purge = "1";
+    const response = await this.request("DELETE", "/api/sites", params);
+    return (await response.json()) as { slug: string; deleted: number };
+  }
+
 }

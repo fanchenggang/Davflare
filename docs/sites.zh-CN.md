@@ -16,7 +16,7 @@
 
 ## 发布
 
-把目录上传到 `sites/{slug}/`（网页端文件管理器选中文件夹「发布为静态站」、站点 zip 部署、开放接口、MCP 的 `mkdir` + `upload`、MCP `publish_site` 从网盘目录同步，或 davflare-cli cp/sync）。`{slug}` 为 `[a-z0-9][a-z0-9-]{0,62}`。
+把目录上传到 `sites/{slug}/`（网页端文件管理器选中文件夹「发布为静态站」、站点 zip 部署、开放接口、MCP 的 `mkdir` + `upload`、MCP `publish_site` 从网盘目录同步，或 `davflare sites publish ./dist --slug <slug>` / davflare-cli cp/sync）。`{slug}` 为 `[a-z0-9][a-z0-9-]{0,62}`。
 
 ```
 sites/blog/index.html

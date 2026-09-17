@@ -403,3 +403,45 @@ describe("createKeyWithSession / revokeKey", () => {
     expect(err.message).toBe("HTTP 403");
   });
 });
+
+describe("DavflareClient sites API", () => {
+  it("listSites / publishSite / deleteSite 走 /api/sites", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/api/sites" && (init?.method ?? "GET") === "GET") {
+        return jsonRes({ sitesHost: "sites.example.com", sites: [] });
+      }
+      if (url.pathname === "/api/sites" && init?.method === "POST") {
+        return jsonRes({ slug: "blog", source: "docs", copied: 1, sitesHost: "sites.example.com" });
+      }
+      if (url.pathname === "/api/sites" && init?.method === "DELETE") {
+        return jsonRes({ slug: "blog", deleted: 2 });
+      }
+      return textRes("unexpected", 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new DavflareClient(SERVER, "k1");
+    await expect(client.listSites(true)).resolves.toMatchObject({ sitesHost: "sites.example.com" });
+    await expect(client.publishSite("docs", "blog")).resolves.toMatchObject({ copied: 1 });
+    await expect(client.deleteSite("blog", true)).resolves.toMatchObject({ deleted: 2 });
+
+    const calls = fetchMock.mock.calls.map(([input, init]) => {
+      const url = new URL(String(input));
+      return {
+        method: (init?.method as string) || "GET",
+        pathname: url.pathname,
+        params: Object.fromEntries(url.searchParams.entries()),
+        body: init?.body ? String(init.body) : undefined,
+      };
+    });
+    expect(calls[0]).toMatchObject({ method: "GET", pathname: "/api/sites", params: { stats: "1" } });
+    expect(calls[1]).toMatchObject({ method: "POST", pathname: "/api/sites" });
+    expect(JSON.parse(calls[1].body!)).toEqual({ slug: "blog", source: "docs" });
+    expect(calls[2]).toMatchObject({
+      method: "DELETE",
+      pathname: "/api/sites",
+      params: { slug: "blog", purge: "1" },
+    });
+  });
+});

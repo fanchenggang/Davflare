@@ -1,7 +1,7 @@
 {
   "name": "davflare-cli",
   "version": "0.1.0",
-  "description": "Command-line client for the Davflare Open API (Cloudflare R2 drive): ls/mkdir/rm/mv/cp/sync",
+  "description": "Command-line client for the Davflare Open API (Cloudflare R2 drive): ls/mkdir/rm/mv/cp/sync/sites",
   "type": "module",
   "license": "MIT",
   "bin": {
