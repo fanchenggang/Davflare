@@ -69,8 +69,8 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   sitePasswordProtected: { zh: "已加密", en: "Password" },
   sitePasswordDialogTitle: { zh: "站点访问密码 — {name}", en: "Site access password — {name}" },
   sitePasswordHint: {
-    zh: "访客打开站点时需输入此密码（浏览器 Basic 认证）。用户名可留空，只校验密码。留空并保存可清除保护。",
-    en: "Visitors must enter this password (browser Basic Auth). Username can be empty; only the password is checked. Leave blank and save to clear protection.",
+    zh: "访客打开站点时需输入此密码（浏览器 Basic 认证）。用户名可留空，只校验密码。已设密码时可用「清除密码」取消保护。",
+    en: "Visitors must enter this password (browser Basic Auth). Username can be empty; only the password is checked. Use Clear password to remove protection.",
   },
   sitePasswordSaved: { zh: "访问密码已更新", en: "Access password updated" },
   sitePasswordCleared: { zh: "已清除访问密码", en: "Access password cleared" },
