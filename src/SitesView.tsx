@@ -152,19 +152,19 @@ function SiteCard({
               site.passwordProtected ? strings.sitePasswordChange : strings.sitePasswordSet
             }
           >
-            <IconButton
-              size="small"
-              onClick={() => onPassword(site)}
-              aria-label={
-                site.passwordProtected ? strings.sitePasswordChange : strings.sitePasswordSet
-              }
-            >
-              {site.passwordProtected ? (
-                <LockIcon fontSize="small" color="primary" />
-              ) : (
-                <LockOpenIcon fontSize="small" />
-              )}
-            </IconButton>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => onPassword(site)}
+                aria-label={strings.sitePasswordManage}
+              >
+                {site.passwordProtected ? (
+                  <LockIcon fontSize="small" color="primary" />
+                ) : (
+                  <LockOpenIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title={strings.openSite}>
             <span>

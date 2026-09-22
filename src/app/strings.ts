@@ -62,6 +62,7 @@ const entries: Record<string, Entry> = {  searchPlaceholder: { zh: "搜索文件
   siteConfigFailed: { zh: "更新站点配置失败", en: "Failed to update site config" },
   siteConfigSaved: { zh: "站点配置已更新", en: "Site config updated" },
   sitePasswordLabel: { zh: "访问密码", en: "Access password" },
+  sitePasswordManage: { zh: "管理访问密码", en: "Manage access password" },
   sitePasswordSet: { zh: "设置密码", en: "Set password" },
   sitePasswordChange: { zh: "更改密码", en: "Change password" },
   sitePasswordClear: { zh: "清除密码", en: "Clear password" },

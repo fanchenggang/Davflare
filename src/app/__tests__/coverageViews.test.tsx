@@ -1,5 +1,5 @@
 import { vi, type Mock } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import ImagesView from "../../ImagesView";
 import SettingsView from "../../SettingsView";
@@ -364,6 +364,74 @@ describe("SitesView leftovers", () => {
     fireEvent.click(screen.getAllByText(strings.deployZip).pop()!);
     await waitFor(() => expect(mockEnqueue).toHaveBeenCalled());
     expect(mockDeleteSite).toHaveBeenCalled();
+  });
+
+  test("site password set / clear / cancel / failure", async () => {
+    mockListSites.mockResolvedValue({
+      sitesHost: "sites.example.com",
+      sites: [{ ...site, passwordProtected: false }],
+    });
+    mockUpdateSite
+      .mockResolvedValueOnce({ slug: "blog", spa: true, passwordProtected: true })
+      .mockResolvedValueOnce({ slug: "blog", spa: true, passwordProtected: true })
+      .mockResolvedValueOnce({ slug: "blog", spa: true, passwordProtected: false })
+      .mockRejectedValueOnce(new Error("pw-fail"));
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
+
+    // open + cancel (list button uses unique Manage aria-label)
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordManage }));
+    await waitFor(() => expect(screen.getByLabelText(strings.sitePasswordLabel)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: strings.cancel }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText(strings.sitePasswordLabel)).not.toBeInTheDocument()
+    );
+
+    // set password
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordManage }));
+    fireEvent.change(await screen.findByLabelText(strings.sitePasswordLabel), {
+      target: { value: "s3cret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordSet }));
+    await waitFor(() =>
+      expect(mockUpdateSite).toHaveBeenCalledWith("blog", { password: "s3cret" })
+    );
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("sitePasswordSaved"), "success")
+    );
+    expect(screen.getByText(strings.sitePasswordProtected)).toBeInTheDocument();
+
+    // change password (covers dialog primary label when already protected)
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordManage }));
+    fireEvent.change(await screen.findByLabelText(strings.sitePasswordLabel), {
+      target: { value: "n3wpass" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordChange }));
+    await waitFor(() =>
+      expect(mockUpdateSite).toHaveBeenCalledWith("blog", { password: "n3wpass" })
+    );
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("sitePasswordSaved"), "success")
+    );
+
+    // clear
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordManage }));
+    fireEvent.click(await screen.findByRole("button", { name: strings.sitePasswordClear }));
+    await waitFor(() =>
+      expect(mockUpdateSite).toHaveBeenCalledWith("blog", { password: null })
+    );
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("sitePasswordCleared"), "success")
+    );
+
+    // failure path
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordManage }));
+    fireEvent.change(await screen.findByLabelText(strings.sitePasswordLabel), {
+      target: { value: "again" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.sitePasswordSet }));
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith("pw-fail", "error"));
   });
 
   test("spa save failure reloads list", async () => {
