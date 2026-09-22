@@ -44,17 +44,33 @@ describe("sites / listSites", () => {
 
 describe("sites / updateSiteConfig", () => {
   test("POST slug 与 spa", async () => {
-    mockAuthFetch.mockOk({});
-    await updateSiteConfig("blog", true);
+    mockAuthFetch.mockOk({ slug: "blog", spa: true, passwordProtected: false });
+    await updateSiteConfig("blog", { spa: true });
     const [url, init] = mockAuthFetch.mock.calls[0];
     expect(url).toBe("/api/sites");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ slug: "blog", spa: true });
   });
 
+  test("POST password set / clear", async () => {
+    mockAuthFetch.mockOk({ slug: "blog", spa: false, passwordProtected: true });
+    await updateSiteConfig("blog", { password: "s3cret" });
+    expect(JSON.parse(mockAuthFetch.mock.calls[0][1].body)).toEqual({
+      slug: "blog",
+      password: "s3cret",
+    });
+
+    mockAuthFetch.mockOk({ slug: "blog", spa: false, passwordProtected: false });
+    await updateSiteConfig("blog", { password: null });
+    expect(JSON.parse(mockAuthFetch.mock.calls[1][1].body)).toEqual({
+      slug: "blog",
+      password: null,
+    });
+  });
+
   test("失败抛出响应文本", async () => {
     mockAuthFetch.mockError(400, "bad spa");
-    await expect(updateSiteConfig("blog", true)).rejects.toThrow("bad spa");
+    await expect(updateSiteConfig("blog", { spa: true })).rejects.toThrow("bad spa");
   });
 });
 

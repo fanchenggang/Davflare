@@ -1,4 +1,6 @@
+import { sha256Hex, utf8ToBase64 } from "../../../functions/api/_apikey";
 import {
+  hashSitePassword,
   indexFallbackKey,
   isSitesHost,
   isValidSlug,
@@ -6,8 +8,10 @@ import {
   parseSitesPath,
   siteConfigKey,
   siteNotFoundKey,
+  sitePasswordAuthorized,
   siteSpaKey,
   sitesNotFoundPage,
+  sitesUnauthorized,
 } from "../../../functions/_sites";
 
 describe("static sites host routing", () => {
@@ -107,5 +111,27 @@ describe("static sites host routing", () => {
     expect(response.headers.get("Content-Type")).toMatch(/^text\/html/);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
+  });
+
+  test("sitesUnauthorized challenges with Basic Auth", () => {
+    const response = sitesUnauthorized();
+    expect(response.status).toBe(401);
+    expect(response.headers.get("WWW-Authenticate")).toMatch(/Basic realm="Davflare Site"/);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  test("sitePasswordAuthorized accepts matching Basic password only", async () => {
+    const hash = await hashSitePassword("passphrase");
+    expect(hash).toBe(await sha256Hex("passphrase"));
+    const ok = new Request("https://sites.example.com/blog/", {
+      headers: { Authorization: `Basic ${utf8ToBase64(":passphrase")}` },
+    });
+    const bad = new Request("https://sites.example.com/blog/", {
+      headers: { Authorization: `Basic ${utf8ToBase64(":nope")}` },
+    });
+    const missing = new Request("https://sites.example.com/blog/");
+    expect(await sitePasswordAuthorized(ok, hash)).toBe(true);
+    expect(await sitePasswordAuthorized(bad, hash)).toBe(false);
+    expect(await sitePasswordAuthorized(missing, hash)).toBe(false);
   });
 });

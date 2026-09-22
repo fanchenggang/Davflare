@@ -1,3 +1,9 @@
+import {
+  parseBasicAuthHeader,
+  sha256Hex,
+  timingSafeEqual,
+} from "./api/_apikey";
+
 export const SITES_PREFIX = "sites/";
 
 // 每站配置与统计缓存放内部前缀（与 shares 元数据同惯例），不会出现在 sites/ 列表里
@@ -21,7 +27,38 @@ export interface SiteStats {
 export interface SiteConfig {
   slug: string;
   spa?: boolean;
+  /** SHA-256 hex of the site access password; omit/empty = public site. Never return to clients. */
+  passwordHash?: string;
   stats?: SiteStats;
+}
+
+export const SITE_PASSWORD_MAX_LEN = 128;
+
+export async function hashSitePassword(password: string): Promise<string> {
+  return sha256Hex(password);
+}
+
+/** True when Basic Auth password matches the stored hash (username ignored). */
+export async function sitePasswordAuthorized(
+  request: Request,
+  passwordHash: string
+): Promise<boolean> {
+  const creds = parseBasicAuthHeader(request.headers.get("Authorization") || "");
+  if (!creds || !creds.password) return false;
+  const incoming = await sha256Hex(creds.password);
+  return timingSafeEqual(incoming, passwordHash);
+}
+
+export function sitesUnauthorized(): Response {
+  return new Response("Unauthorized", {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": 'Basic realm="Davflare Site", charset="UTF-8"',
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 export function siteConfigKey(slug: string): string {
@@ -153,11 +190,22 @@ export function sitesNotFound(): Response {
   });
 }
 
-export function sitesResponse(object: { body: ReadableStream | null; httpEtag?: string }, key: string, head: boolean) {
+export function sitesResponse(
+  object: { body: ReadableStream | null; httpEtag?: string },
+  key: string,
+  head: boolean,
+  options?: { privateCache?: boolean }
+) {
   const headers = new Headers();
   headers.set("Content-Type", mimeForKey(key));
   headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("Cache-Control", "public, max-age=60");
+  if (options?.privateCache) {
+    // Password-gated sites must not land in shared CDN caches.
+    headers.set("Cache-Control", "private, max-age=60");
+    headers.set("Vary", "Authorization");
+  } else {
+    headers.set("Cache-Control", "public, max-age=60");
+  }
   headers.set("X-Robots-Tag", "noindex");
   if (object.httpEtag) headers.set("ETag", object.httpEtag);
   return new Response(head ? null : object.body, { status: 200, headers });

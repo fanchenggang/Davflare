@@ -28,6 +28,7 @@ export interface SiteStats {
 export interface SiteInfo {
   slug: string;
   spa: boolean;
+  passwordProtected?: boolean;
   stats: SiteStats | null;
 }
 

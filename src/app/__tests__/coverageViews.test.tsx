@@ -86,6 +86,7 @@ const hosted = {
 const site = {
   slug: "blog",
   spa: true,
+  passwordProtected: false,
   stats: { objects: 3, size: 40, cachedAt: "2026-01-01T00:00:00.000Z" },
 };
 
@@ -334,7 +335,7 @@ describe("SitesView leftovers", () => {
     await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("switch", { name: strings.siteSpaLabel }));
-    await waitFor(() => expect(mockUpdateSite).toHaveBeenCalledWith("blog", false));
+    await waitFor(() => expect(mockUpdateSite).toHaveBeenCalledWith("blog", { spa: false }));
 
     fireEvent.click(screen.getAllByRole("button", { name: strings.openSite })[0]);
     expect(open).toHaveBeenCalled();

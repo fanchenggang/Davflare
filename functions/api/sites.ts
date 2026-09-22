@@ -1,7 +1,9 @@
 import { featureDisabledResponse, loadFeatureFlags } from "../_flags";
 import {
+  SITE_PASSWORD_MAX_LEN,
   SITES_PREFIX,
   SiteConfig,
+  hashSitePassword,
   isValidSlug,
   loadSiteConfig,
   normalizeSitesHost,
@@ -108,7 +110,12 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
         await saveSiteConfig(env.BUCKET, { ...config, slug, stats });
       }
     }
-    sites.push({ slug, spa: Boolean(config.spa), stats: stats || null });
+    sites.push({
+      slug,
+      spa: Boolean(config.spa),
+      passwordProtected: Boolean(config.passwordHash),
+      stats: stats || null,
+    });
   }
 
   return jsonResponse({
@@ -128,7 +135,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     return textResponse("Unauthorized", 401);
   }
 
-  let body: { slug?: string; spa?: boolean; source?: string };
+  let body: { slug?: string; spa?: boolean; source?: string; password?: string | null };
   try {
     body = await request.json();
   } catch {
@@ -188,10 +195,33 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
 
   const config = (await loadSiteConfig(env.BUCKET, slug)) || { slug };
   config.slug = slug;
-  config.spa = Boolean(body.spa);
+  if (typeof body.spa === "boolean") {
+    config.spa = body.spa;
+  }
+
+  // password key present: set (non-empty) or clear (null/""); omit leaves hash unchanged.
+  // Never store plaintext — SHA-256 hex only; never echo the secret back.
+  if (Object.prototype.hasOwnProperty.call(body, "password")) {
+    if (body.password === null || body.password === "") {
+      delete config.passwordHash;
+    } else if (typeof body.password !== "string") {
+      return new Response("Bad password", { status: 400 });
+    } else {
+      const password = body.password;
+      if (password.length > SITE_PASSWORD_MAX_LEN) {
+        return new Response("Password too long", { status: 400 });
+      }
+      config.passwordHash = await hashSitePassword(password);
+    }
+  }
+
   await saveSiteConfig(env.BUCKET, config);
 
-  return jsonResponse({ slug, spa: config.spa });
+  return jsonResponse({
+    slug,
+    spa: Boolean(config.spa),
+    passwordProtected: Boolean(config.passwordHash),
+  });
 };
 
 export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {

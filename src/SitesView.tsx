@@ -15,6 +15,7 @@ import {
   Skeleton,
   Stack,
   Switch,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -24,6 +25,8 @@ import {
   Delete as DeleteIcon,
   FolderOpen as FolderOpenIcon,
   Language as LanguageIcon,
+  Lock as LockIcon,
+  LockOpen as LockOpenIcon,
   Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import { unzip } from "fflate";
@@ -85,6 +88,7 @@ function SiteCard({
   onNotify,
   onManageFiles,
   onToggleSpa,
+  onPassword,
   onDeploy,
   onRequestDelete,
 }: {
@@ -93,6 +97,7 @@ function SiteCard({
   onNotify: NotifyFn;
   onManageFiles: (slug: string) => void;
   onToggleSpa: (site: SiteInfo, spa: boolean) => void;
+  onPassword: (site: SiteInfo) => void;
   onDeploy: (site: SiteInfo) => void;
   onRequestDelete: (site: SiteInfo) => void;
 }) {
@@ -142,6 +147,25 @@ function SiteCard({
               />
             </Stack>
           </Tooltip>
+          <Tooltip
+            title={
+              site.passwordProtected ? strings.sitePasswordChange : strings.sitePasswordSet
+            }
+          >
+            <IconButton
+              size="small"
+              onClick={() => onPassword(site)}
+              aria-label={
+                site.passwordProtected ? strings.sitePasswordChange : strings.sitePasswordSet
+              }
+            >
+              {site.passwordProtected ? (
+                <LockIcon fontSize="small" color="primary" />
+              ) : (
+                <LockOpenIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
           <Tooltip title={strings.openSite}>
             <span>
               <IconButton
@@ -184,6 +208,16 @@ function SiteCard({
               color={site.spa ? "primary" : "default"}
               sx={{ height: 20, fontSize: "0.7rem" }}
             />
+            {site.passwordProtected && (
+              <Chip
+                icon={<LockIcon sx={{ fontSize: "0.85rem !important" }} />}
+                label={strings.sitePasswordProtected}
+                size="small"
+                color="warning"
+                variant="outlined"
+                sx={{ height: 20, fontSize: "0.7rem" }}
+              />
+            )}
           </Stack>
         }
         secondary={
@@ -236,6 +270,9 @@ function SitesView({
   const [deployClear, setDeployClear] = useState(true);
   const [deploying, setDeploying] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<SiteInfo | null>(null);
+  const [passwordSite, setPasswordSite] = useState<SiteInfo | null>(null);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const load = useCallback(
     async (withStats: boolean) => {
@@ -266,11 +303,48 @@ function SitesView({
         : prev
     );
     try {
-      await updateSiteConfig(site.slug, spa);
+      await updateSiteConfig(site.slug, { spa });
       onNotify(translate("siteConfigSaved"), "success");
     } catch (error) {
       onNotify(errorMessage(error), "error");
       await load(false);
+    }
+  };
+
+  const openPasswordDialog = (site: SiteInfo) => {
+    setPasswordSite(site);
+    setPasswordValue("");
+  };
+
+  const handleSavePassword = async (clear: boolean) => {
+    if (!passwordSite) return;
+    setPasswordSaving(true);
+    try {
+      const result = await updateSiteConfig(passwordSite.slug, {
+        password: clear ? null : passwordValue,
+      });
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              sites: prev.sites.map((item) =>
+                item.slug === passwordSite.slug
+                  ? { ...item, passwordProtected: result.passwordProtected }
+                  : item
+              ),
+            }
+          : prev
+      );
+      onNotify(
+        translate(result.passwordProtected ? "sitePasswordSaved" : "sitePasswordCleared"),
+        "success"
+      );
+      setPasswordSite(null);
+      setPasswordValue("");
+    } catch (error) {
+      onNotify(errorMessage(error), "error");
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -380,6 +454,7 @@ function SitesView({
               onNotify={onNotify}
               onManageFiles={onManageFiles}
               onToggleSpa={handleToggleSpa}
+              onPassword={openPasswordDialog}
               onDeploy={setDeploySite}
               onRequestDelete={setPendingDelete}
             />
@@ -448,6 +523,70 @@ function SitesView({
             onClick={handleDeploy}
           >
             {strings.deployZip}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+
+      <Dialog
+        open={Boolean(passwordSite)}
+        onClose={() => {
+          if (passwordSaving) return;
+          setPasswordSite(null);
+          setPasswordValue("");
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {passwordSite
+            ? translate("sitePasswordDialogTitle", { name: passwordSite.slug })
+            : ""}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {strings.sitePasswordHint}
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              type="password"
+              label={strings.sitePasswordLabel}
+              value={passwordValue}
+              onChange={(event) => setPasswordValue(event.target.value)}
+              disabled={passwordSaving}
+              inputProps={{ maxLength: 128, autoComplete: "new-password" }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setPasswordSite(null);
+              setPasswordValue("");
+            }}
+            disabled={passwordSaving}
+          >
+            {strings.cancel}
+          </Button>
+          {passwordSite?.passwordProtected && (
+            <Button
+              color="warning"
+              disabled={passwordSaving}
+              onClick={() => handleSavePassword(true)}
+            >
+              {strings.sitePasswordClear}
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            disabled={passwordSaving || !passwordValue.trim()}
+            onClick={() => handleSavePassword(false)}
+          >
+            {passwordSite?.passwordProtected
+              ? strings.sitePasswordChange
+              : strings.sitePasswordSet}
           </Button>
         </DialogActions>
       </Dialog>

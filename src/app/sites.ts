@@ -11,6 +11,8 @@ export interface SiteStats {
 export interface SiteInfo {
   slug: string;
   spa: boolean;
+  /** True when an access password is set (hash never exposed). */
+  passwordProtected?: boolean;
   stats: SiteStats | null;
 }
 
@@ -25,15 +27,30 @@ export async function listSites(withStats = false): Promise<SitesResponse> {
   return response.json();
 }
 
-export async function updateSiteConfig(slug: string, spa: boolean): Promise<void> {
+export interface SiteConfigPatch {
+  spa?: boolean;
+  /** Set a new access password; null or "" clears protection. */
+  password?: string | null;
+}
+
+export async function updateSiteConfig(
+  slug: string,
+  patch: SiteConfigPatch
+): Promise<{ slug: string; spa: boolean; passwordProtected: boolean }> {
+  const body: Record<string, unknown> = { slug };
+  if (typeof patch.spa === "boolean") body.spa = patch.spa;
+  if (Object.prototype.hasOwnProperty.call(patch, "password")) {
+    body.password = patch.password;
+  }
   const response = await authFetch("/api/sites", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ slug, spa }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error((await response.text()) || translate("siteConfigFailed"));
   }
+  return response.json();
 }
 
 /** clear=true 只删文件（保留配置）；purge 连配置一起删，用于彻底移除站点 */

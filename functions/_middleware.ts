@@ -9,10 +9,12 @@ import {
   isSitesHost,
   loadSiteConfig,
   siteNotFoundKey,
+  sitePasswordAuthorized,
   siteSpaKey,
   sitesNotFound,
   sitesNotFoundPage,
   sitesResponse,
+  sitesUnauthorized,
 } from "./_sites";
 
 interface MiddlewareEnv {
@@ -45,6 +47,17 @@ async function serveSlugSite(
   parsed: { slug: string; key: string; tryIndex: boolean }
 ): Promise<Response> {
   const method = context.request.method.toUpperCase();
+  // Password gate runs before any content (and before a future _redirects hook).
+  // Load config once up front so SPA/404 reuse it without a second R2 get.
+  const config = await loadSiteConfig(context.env.BUCKET, parsed.slug);
+  const passwordHash = config?.passwordHash;
+  const privateCache = Boolean(passwordHash);
+  if (passwordHash) {
+    if (!(await sitePasswordAuthorized(context.request, passwordHash))) {
+      return sitesUnauthorized();
+    }
+  }
+
   let key = parsed.key;
   let object = await context.env.BUCKET.get(key);
   if (!object && parsed.tryIndex) {
@@ -52,15 +65,14 @@ async function serveSlugSite(
     object = await context.env.BUCKET.get(key);
   }
   if (!object) {
-    // SPA/404 兜底：仅在最终 miss 时读一次站点配置，正常命中路径零额外 R2 读
-    const config = await loadSiteConfig(context.env.BUCKET, parsed.slug);
     if (config?.spa) {
       const spaObject = await context.env.BUCKET.get(siteSpaKey(parsed.slug));
       if (spaObject) {
         return sitesResponse(
           { body: spaObject.body, httpEtag: spaObject.httpEtag },
           siteSpaKey(parsed.slug),
-          method === "HEAD"
+          method === "HEAD",
+          { privateCache }
         );
       }
       return sitesNotFound();
@@ -77,7 +89,8 @@ async function serveSlugSite(
   return sitesResponse(
     { body: object.body, httpEtag: object.httpEtag },
     key,
-    method === "HEAD"
+    method === "HEAD",
+    { privateCache }
   );
 }
 

@@ -5,6 +5,7 @@ import { vi } from "vitest";
  * 路径穿越与内部前缀保护、图片宿主 /i/{id}、产品路由开关门禁。
  */
 import { onRequest } from "../../../functions/_middleware";
+import { sha256Hex, utf8ToBase64 } from "../../../functions/api/_apikey";
 import {
   isValidSlug,
   mimeForKey,
@@ -213,6 +214,72 @@ describe("sites host: static serving", () => {
     }
   });
 
+
+  test("passwordProtected site rejects without auth and allows with Basic password", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const passwordHash = await sha256Hex("s3cret");
+    bucket.seed([
+      {
+        key: siteConfigKey("blog"),
+        body: JSON.stringify({ slug: "blog", passwordHash }),
+        contentType: "application/json",
+      },
+    ]);
+    const env = defaultEnv(bucket);
+
+    const rejected = await siteRequest("/blog/app.js", env);
+    expect(rejected.status).toBe(401);
+    expect(rejected.headers.get("WWW-Authenticate")).toMatch(/Basic/i);
+    expect(rejected.headers.get("Cache-Control")).toBe("no-store");
+
+    const wrong = await siteRequest("/blog/app.js", env, {
+      headers: { Authorization: `Basic ${utf8ToBase64("anyone:wrong")}` },
+    });
+    expect(wrong.status).toBe(401);
+
+    const allowed = await siteRequest("/blog/app.js", env, {
+      headers: { Authorization: `Basic ${utf8ToBase64(":s3cret")}` },
+    });
+    expect(allowed.status).toBe(200);
+    expect(await allowed.text()).toBe("console.log(1)");
+    expect(allowed.headers.get("Cache-Control")).toBe("private, max-age=60");
+    expect(allowed.headers.get("Vary")).toBe("Authorization");
+  });
+
+  test("password gate blocks before SPA / 404 content", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    bucket.seed([
+      {
+        key: siteConfigKey("blog"),
+        body: JSON.stringify({
+          slug: "blog",
+          spa: true,
+          passwordHash: await sha256Hex("gate"),
+        }),
+        contentType: "application/json",
+      },
+      { key: "sites/blog/404.html", body: "<h1>custom 404</h1>", contentType: "text/html" },
+    ]);
+    const blocked = await siteRequest("/blog/missing.png", defaultEnv(bucket));
+    expect(blocked.status).toBe(401);
+
+    const withAuth = await siteRequest("/blog/missing.png", defaultEnv(bucket), {
+      headers: { Authorization: `Basic ${utf8ToBase64("u:gate")}` },
+    });
+    expect(withAuth.status).toBe(200);
+    expect(await withAuth.text()).toBe("<h1>home</h1>");
+  });
+
+  test("public site still uses public cache when no passwordHash", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const response = await siteRequest("/blog/app.js", defaultEnv(bucket));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(response.headers.get("Vary")).toBeNull();
+  });
   test("sites flag off 404s slug routes but keeps images host working", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);

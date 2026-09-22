@@ -110,6 +110,69 @@ describe("sites API publish", () => {
       makeContext(post({ slug: "blog", spa: true }), makeEnv(bucket))
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ slug: "blog", spa: true });
+    expect(await response.json()).toEqual({
+      slug: "blog",
+      spa: true,
+      passwordProtected: false,
+    });
+  });
+
+  test("set / clear access password stores hash only", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([{ key: "sites/blog/index.html", body: "<h1/>" }]);
+
+    const setResponse = await onRequestPost(
+      makeContext(post({ slug: "blog", password: "s3cret" }), makeEnv(bucket))
+    );
+    expect(setResponse.status).toBe(200);
+    expect(await setResponse.json()).toEqual({
+      slug: "blog",
+      spa: false,
+      passwordProtected: true,
+    });
+
+    const stored = await bucket.asBucket().get("_$flaredrive$/sites/blog.json");
+    expect(stored).not.toBeNull();
+    const config = (await stored!.json()) as { passwordHash?: string; password?: string };
+    expect(config.password).toBeUndefined();
+    expect(config.passwordHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(config.passwordHash).not.toContain("s3cret");
+
+    // SPA toggle must not clear the password hash
+    const spaResponse = await onRequestPost(
+      makeContext(post({ slug: "blog", spa: true }), makeEnv(bucket))
+    );
+    expect(await spaResponse.json()).toEqual({
+      slug: "blog",
+      spa: true,
+      passwordProtected: true,
+    });
+    const afterSpa = (await (
+      await bucket.asBucket().get("_$flaredrive$/sites/blog.json")
+    )!.json()) as { passwordHash?: string; spa?: boolean };
+    expect(afterSpa.spa).toBe(true);
+    expect(afterSpa.passwordHash).toBe(config.passwordHash);
+
+    const clearResponse = await onRequestPost(
+      makeContext(post({ slug: "blog", password: null }), makeEnv(bucket))
+    );
+    expect(await clearResponse.json()).toEqual({
+      slug: "blog",
+      spa: true,
+      passwordProtected: false,
+    });
+    const cleared = (await (
+      await bucket.asBucket().get("_$flaredrive$/sites/blog.json")
+    )!.json()) as { passwordHash?: string };
+    expect(cleared.passwordHash).toBeUndefined();
+  });
+
+  test("rejects oversized password", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([{ key: "sites/blog/index.html", body: "x" }]);
+    const response = await onRequestPost(
+      makeContext(post({ slug: "blog", password: "x".repeat(129) }), makeEnv(bucket))
+    );
+    expect(response.status).toBe(400);
   });
 });

@@ -74,6 +74,33 @@ export function utf8ToBase64(value: string): string {
   return btoa(binary);
 }
 
+/** Inverse of utf8ToBase64 for parsing Basic Auth credentials. */
+export function utf8FromBase64(value: string): string {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+/** Parse `Authorization: Basic …` into username/password (UTF-8 safe). */
+export function parseBasicAuthHeader(
+  authorization: string
+): { username: string; password: string } | null {
+  const match = /^Basic\s+(.+)$/i.exec(authorization.trim());
+  if (!match) return null;
+  try {
+    const decoded = utf8FromBase64(match[1].trim());
+    const colon = decoded.indexOf(":");
+    if (colon < 0) return null;
+    return {
+      username: decoded.slice(0, colon),
+      password: decoded.slice(colon + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Basic 认证统一入口：常数时间比较整个 Authorization 头，
 // 各端点不要再用 `===` 明文比对凭据。
 export function verifyBasicAuth(
