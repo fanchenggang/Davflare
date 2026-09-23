@@ -129,6 +129,14 @@ var COPY = {
     wsNameTitle: "Workspace name",
     restoreAll: "Restore all",
     restoreSelected: "Restore selected",
+    wsSelectAll: "Select all pages",
+    wsSelectNone: "Clear selection",
+    wsUpdateFromWindow: "Replace with current window",
+    wsUpdateConfirm: "Replace “{name}” ({n} pages) with the {m} open tab(s) in this window?",
+    wsUpdated: "Workspace updated ({n} page(s)).",
+    wsRestored: "Opened {n} tab(s) in a new window.",
+    wsReload: "Reload",
+    wsSelectedCount: "{n} selected",
     rename: "Rename",
     pinMark: "pinned",
     groupMark: "group: {t}",
@@ -164,9 +172,16 @@ var COPY = {
     snapMissing: "Snapshot file is missing on the server.",
     snapConfirmDelete: "Delete this snapshot from WebDAV?",
     snapDeleted: "Snapshot deleted.",
+    snapBadge: "Snapshot",
+    snapViewQuick: "View snapshot",
+    snapReplaceConfirm: "Replace the existing snapshot for this bookmark?",
+    snapConflict: "Snapshot index changed elsewhere — reloaded. Please retry.",
     navPinned: "Pinned",
     pinAdd: "Pin",
     pinRemove: "Unpin",
+    batchPinDone: "Pinned {n} bookmark(s).",
+    batchUnpinDone: "Unpinned {n} bookmark(s).",
+    batchUnpinConfirm: "Unpin {n} selected bookmark(s)?",
     emptyPinnedTitle: "No pinned bookmarks yet",
     selAll: "Select all",
     selNone: "Deselect all",
@@ -196,7 +211,7 @@ var COPY = {
     folderExists: "This folder already exists.",
     exportChromeLegend: "Browser",
     exportChromeFolderLabel: "Target folder",
-    exportChromeSkip: "Skip duplicates (same URL)",
+    exportChromeSkip: "Prefer skipping duplicates (same URL)",
     exportChromeClear: "Clear the target folder first",
     exportChromeBtn: "Write back to browser",
     exportChromeClearConfirm:
@@ -204,6 +219,17 @@ var COPY = {
     exportChromeDone: "Wrote {n} bookmark(s) into browser bookmarks.",
     exportChromeDenied:
       "Write-back needs the “Read and change your bookmarks” permission.",
+    exportChromeConflictNote:
+      "Same-URL overlaps in the target folder always show a conflict prompt — nothing is overwritten silently.",
+    chromeConflictTitle: "Write-back conflicts",
+    chromeConflictSummary: "{c} URL(s) already exist in the target · {n} new will be created.",
+    chromeConflictHint:
+      "Skip keeps browser copies. Update matching rewrites their titles from the library.",
+    chromeConflictSkip: "Skip conflicts",
+    chromeConflictOverwrite: "Update matching",
+    chromeConflictCancel: "Cancel",
+    chromeConflictLib: "Library: {t}",
+    chromeConflictBrowser: "Browser: {t}",
     exportHhLegend: "HamHome round-trip",
     exportHhHint:
       "Merges this library into /HamHomeSync/ (meta.json + categories.json); existing HamHome entries are kept.",
@@ -214,8 +240,12 @@ var COPY = {
     presetDeleteTitle: "Delete this preset",
     presetDialogTitle: "Save filter preset",
     presetNameLabel: "Name",
-    presetNeedTag: "Pick a tag filter first, then save it as a preset.",
+    presetNeedTag: "Pick a tag, folder, or Pinned filter first, then save it as a preset.",
     presetSaved: "Preset saved.",
+    presetKindTag: "tag",
+    presetKindFolder: "folder",
+    presetKindPinned: "Pinned",
+    presetUnfiled: "Unfiled",
     presetDeleteConfirm: "Delete the preset “{p}”?",
   },
   zh: {
@@ -333,6 +363,14 @@ var COPY = {
     wsNameTitle: "工作区名称",
     restoreAll: "全部恢复",
     restoreSelected: "恢复选中",
+    wsSelectAll: "全选页面",
+    wsSelectNone: "清除勾选",
+    wsUpdateFromWindow: "用当前窗口替换",
+    wsUpdateConfirm: "用当前窗口的 {m} 个标签页替换「{name}」的 {n} 个页面？",
+    wsUpdated: "工作区已更新（{n} 页）。",
+    wsRestored: "已在新窗口打开 {n} 个标签页。",
+    wsReload: "刷新",
+    wsSelectedCount: "已选 {n}",
     rename: "重命名",
     pinMark: "已固定",
     groupMark: "分组：{t}",
@@ -368,9 +406,16 @@ var COPY = {
     snapMissing: "服务器上的快照文件已缺失。",
     snapConfirmDelete: "确定从 WebDAV 删除这个快照？",
     snapDeleted: "快照已删除。",
+    snapBadge: "快照",
+    snapViewQuick: "查看快照",
+    snapReplaceConfirm: "替换该书签已有的快照？",
+    snapConflict: "快照索引已在别处更新——已重新加载，请重试。",
     navPinned: "置顶",
     pinAdd: "置顶",
     pinRemove: "取消置顶",
+    batchPinDone: "已置顶 {n} 条。",
+    batchUnpinDone: "已取消置顶 {n} 条。",
+    batchUnpinConfirm: "取消置顶选中的 {n} 条书签？",
     emptyPinnedTitle: "还没有置顶书签",
     selAll: "全选",
     selNone: "取消全选",
@@ -399,12 +444,21 @@ var COPY = {
     folderExists: "该文件夹已存在。",
     exportChromeLegend: "浏览器",
     exportChromeFolderLabel: "目标文件夹",
-    exportChromeSkip: "跳过重复（同一 URL）",
+    exportChromeSkip: "优先跳过重复（同一 URL）",
     exportChromeClear: "先清空目标文件夹",
     exportChromeBtn: "写回浏览器书签",
     exportChromeClearConfirm: "将先从目标文件夹删除现有 {n} 项，确定继续？",
     exportChromeDone: "已写回 {n} 个书签到浏览器书签。",
     exportChromeDenied: "写回需要授权「读取和更改您的书签」权限。",
+    exportChromeConflictNote: "目标文件夹中同一 URL 的重叠会弹出冲突确认——绝不会静默覆盖。",
+    chromeConflictTitle: "写回冲突",
+    chromeConflictSummary: "目标中已有 {c} 个相同 URL · 将新建 {n} 个。",
+    chromeConflictHint: "「跳过冲突」保留浏览器原项；「更新匹配」用书签库标题覆盖浏览器标题。",
+    chromeConflictSkip: "跳过冲突",
+    chromeConflictOverwrite: "更新匹配",
+    chromeConflictCancel: "取消",
+    chromeConflictLib: "书签库：{t}",
+    chromeConflictBrowser: "浏览器：{t}",
     exportHhLegend: "HamHome 往返",
     exportHhHint:
       "把当前书签库合并写入 /HamHomeSync/（meta.json + categories.json）；HamHome 已有条目会保留。",
@@ -415,8 +469,12 @@ var COPY = {
     presetDeleteTitle: "删除该预设",
     presetDialogTitle: "保存筛选预设",
     presetNameLabel: "名称",
-    presetNeedTag: "请先选择一个标签筛选，再保存为预设。",
+    presetNeedTag: "请先选择标签、文件夹或「置顶」筛选，再保存为预设。",
     presetSaved: "预设已保存。",
+    presetKindTag: "标签",
+    presetKindFolder: "文件夹",
+    presetKindPinned: "置顶",
+    presetUnfiled: "未分类",
     presetDeleteConfirm: "确定删除预设「{p}」？",
   },
 };
@@ -660,6 +718,10 @@ async function refresh() {
     saveCache();
     hideBanner();
     renderAll();
+    // Phase 2: keep snapshot badges visible without opening the editor.
+    loadSnapshots().then(function () {
+      renderItems();
+    });
   } catch (err) {
     showLibraryError("network");
     renderAll();
@@ -1246,6 +1308,27 @@ function togglePinBookmark(item) {
   });
 }
 
+function snapshotFor(item) {
+  if (!item || !item.id) return null;
+  return Snapshots.findByBookmarkId(appState.snapshots, item.id);
+}
+
+function snapBadgeChip(item) {
+  var entry = snapshotFor(item);
+  if (!entry) return null;
+  var chip = document.createElement("button");
+  chip.type = "button";
+  chip.className = "chip snap";
+  chip.textContent = "📷";
+  chip.title = t.snapBadge + " · " + BookmarksView.formatRelative(entry.capturedAt, Date.now(), lang);
+  chip.addEventListener("click", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    viewSnapshot(entry);
+  });
+  return chip;
+}
+
 function cardMenuNode(item) {
   var wrap = document.createElement("div");
   wrap.className = "cardMenuWrap";
@@ -1270,6 +1353,15 @@ function cardMenuNode(item) {
       togglePinBookmark(item);
     })
   );
+  var existingSnap = snapshotFor(item);
+  if (existingSnap) {
+    menu.appendChild(
+      iconButton("menuItem", t.snapViewQuick, function () {
+        closePopMenus();
+        viewSnapshot(existingSnap);
+      })
+    );
+  }
   menu.appendChild(
     iconButton("menuItem", t.cardSnap, function () {
       closePopMenus();
@@ -1335,6 +1427,8 @@ function cardNode(item) {
     pin.title = t.pinMark;
     meta.appendChild(pin);
   }
+  var snapChip = snapBadgeChip(item);
+  if (snapChip) meta.appendChild(snapChip);
   var chip = document.createElement("span");
   chip.className = "chip";
   chip.textContent = folderLabel(item.folder);
@@ -1387,6 +1481,8 @@ function rowNode(item) {
     pin.title = t.pinMark;
     chips.appendChild(pin);
   }
+  var snapChip = snapBadgeChip(item);
+  if (snapChip) chips.appendChild(snapChip);
   var chip = document.createElement("span");
   chip.className = "chip";
   chip.textContent = folderLabel(item.folder);
@@ -1515,7 +1611,9 @@ function updateBatchBar() {
   bar.classList.toggle("hidden", ids.length === 0);
   $("batchCount").textContent = fmt(t.batchSelected, { n: ids.length });
   $("selAllBtn").textContent = t.selAll;
-  $("batchPin").textContent = allSelectedPinned(ids) ? t.batchUnpin : t.batchPin;
+  var unpin = allSelectedPinned(ids);
+  $("batchPin").textContent = unpin ? t.batchUnpin : t.batchPin;
+  $("batchPin").classList.toggle("batchPinPrimary", !unpin && ids.length > 0);
 }
 
 function toggleSelAll() {
@@ -1592,9 +1690,26 @@ async function submitBatchPin() {
   var ids = selectedExistingIds();
   if (!ids.length) return;
   var allPinned = allSelectedPinned(ids);
+  var count = ids.length;
+  if (allPinned && count >= 5) {
+    var confirmed = await new Promise(function (resolve) {
+      confirmThen(
+        fmt(t.batchUnpinConfirm, { n: count }),
+        function () {
+          resolve(true);
+        },
+        function () {
+          resolve(false);
+        }
+      );
+    });
+    if (!confirmed) return;
+  }
   state.model = Bookmarks.setPinned(state.model, ids, !allPinned);
   clearSelection();
-  if (await persist()) flashStatus(allPinned ? t.pinRemove : t.pinAdd);
+  if (await persist()) {
+    flashStatus(fmt(allPinned ? t.batchUnpinDone : t.batchPinDone, { n: count }));
+  }
 }
 
 function submitBatchDelete() {
@@ -1756,6 +1871,7 @@ function wsCard(ws) {
   restoreSel.className = "ghost";
   restoreSel.type = "button";
   restoreSel.textContent = t.restoreSelected;
+  restoreSel.disabled = wsSelectedCount(ws) === 0;
   restoreSel.addEventListener("click", function () {
     var idxs = [];
     for (var k = 0; k < ws.pages.length; k++) {
@@ -1770,10 +1886,42 @@ function wsCard(ws) {
   renameBtn.addEventListener("click", function () {
     openWsNameDialog(ws);
   });
+  var updateBtn = document.createElement("button");
+  updateBtn.className = "ghost";
+  updateBtn.type = "button";
+  updateBtn.textContent = t.wsUpdateFromWindow;
+  updateBtn.addEventListener("click", function () {
+    updateWorkspaceFromWindow(ws);
+  });
   actions.appendChild(restoreAll);
   actions.appendChild(restoreSel);
   actions.appendChild(renameBtn);
+  actions.appendChild(updateBtn);
   card.appendChild(actions);
+
+  var selectBar = document.createElement("div");
+  selectBar.className = "wsSelectBar";
+  var selAll = document.createElement("button");
+  selAll.className = "ghost";
+  selAll.type = "button";
+  selAll.textContent = t.wsSelectAll;
+  selAll.addEventListener("click", function () {
+    setWsPageSelection(ws, true);
+  });
+  var selNone = document.createElement("button");
+  selNone.className = "ghost";
+  selNone.type = "button";
+  selNone.textContent = t.wsSelectNone;
+  selNone.addEventListener("click", function () {
+    setWsPageSelection(ws, false);
+  });
+  var selHint = document.createElement("span");
+  selHint.className = "wsSelectedHint";
+  selHint.textContent = fmt(t.wsSelectedCount, { n: wsSelectedCount(ws) });
+  selectBar.appendChild(selAll);
+  selectBar.appendChild(selNone);
+  selectBar.appendChild(selHint);
+  card.appendChild(selectBar);
 
   var pages = document.createElement("div");
   pages.className = "wsPages";
@@ -1794,11 +1942,14 @@ function wsPageRow(wsId, page, idx) {
   box.checked = Boolean(appState.wsSelected[wsCheckedKey(wsId, idx)]);
   box.addEventListener("change", function () {
     appState.wsSelected[wsCheckedKey(wsId, idx)] = box.checked;
+    renderWorkspaces();
   });
   row.appendChild(box);
+  row.appendChild(faviconNode({ url: page.url, title: page.title }));
   var text = document.createElement("span");
   text.className = "pageRowTitle";
   text.textContent = page.title || BookmarksView.domainOf(page.url) || page.url;
+  text.title = page.url || "";
   row.appendChild(text);
   if (page.pinned) {
     var pin = document.createElement("span");
@@ -1815,7 +1966,7 @@ function wsPageRow(wsId, page, idx) {
   return row;
 }
 
-async function saveCurrentWindow() {
+async function collectCurrentWindowPages() {
   var tabs = await chrome.tabs.query({ currentWindow: true });
   var pages = [];
   for (var i = 0; i < tabs.length; i++) {
@@ -1837,11 +1988,56 @@ async function saveCurrentWindow() {
       tabGroup: group,
     });
   }
+  return pages;
+}
+
+async function saveCurrentWindow() {
+  var pages = await collectCurrentWindowPages();
   if (!pages.length) {
     showWsBanner(t.wsNoPages);
     return;
   }
   openWsNameDialog(null, pages);
+}
+
+function wsSelectedCount(ws) {
+  var n = 0;
+  for (var i = 0; i < ws.pages.length; i++) {
+    if (appState.wsSelected[wsCheckedKey(ws.id, i)]) n += 1;
+  }
+  return n;
+}
+
+function setWsPageSelection(ws, checked) {
+  for (var i = 0; i < ws.pages.length; i++) {
+    appState.wsSelected[wsCheckedKey(ws.id, i)] = Boolean(checked);
+  }
+  renderWorkspaces();
+}
+
+async function updateWorkspaceFromWindow(ws) {
+  var pages = await collectCurrentWindowPages();
+  if (!pages.length) {
+    showWsBanner(t.wsNoPages);
+    return;
+  }
+  confirmThen(
+    fmt(t.wsUpdateConfirm, { name: ws.name, n: ws.pages.length, m: pages.length }),
+    async function () {
+      appState.workspaces = Workspaces.upsert(appState.workspaces, {
+        id: ws.id,
+        name: ws.name,
+        createdAt: ws.createdAt,
+        pages: pages,
+      });
+      if (await persistWorkspaces()) {
+        var updated = findWorkspace(ws.id);
+        if (updated) setWsPageSelection(updated, false);
+        else renderWorkspaces();
+        showWsBanner(fmt(t.wsUpdated, { n: pages.length }));
+      }
+    }
+  );
 }
 
 async function restoreWorkspace(wsId, selectedIdxs) {
@@ -1877,6 +2073,7 @@ async function restoreWorkspace(wsId, selectedIdxs) {
       /* grouping saved tabs is best-effort */
     }
   }
+  showWsBanner(fmt(t.wsRestored, { n: pages.length }));
 }
 
 /* ---------- tab group rules ---------- */
@@ -2192,8 +2389,14 @@ async function persistSnapshots() {
     "application/json; charset=utf-8",
     appState.snapshotsEtag
   );
-  if (put.ok) return true;
-  if (put.kind === "conflict") await loadSnapshots();
+  if (put.ok) {
+    if (put.etag) appState.snapshotsEtag = put.etag;
+    return true;
+  }
+  if (put.kind === "conflict") {
+    await loadSnapshots();
+    setSnapStatus(t.snapConflict);
+  }
   return false;
 }
 
@@ -2221,8 +2424,23 @@ async function captureSnapshotFor(bookmark) {
     setSnapStatus(t.snapCaptureFail);
     return;
   }
-  setSnapStatus(t.snapCapturing);
   await loadSnapshots();
+  var prior = Snapshots.findByBookmarkId(appState.snapshots, bookmark.id);
+  if (prior) {
+    var okReplace = await new Promise(function (resolve) {
+      confirmThen(
+        t.snapReplaceConfirm,
+        function () {
+          resolve(true);
+        },
+        function () {
+          resolve(false);
+        }
+      );
+    });
+    if (!okReplace) return;
+  }
+  setSnapStatus(t.snapCapturing);
 
   var tab = await chrome.tabs.create({ url: bookmark.url, active: false });
   var html = "";
@@ -2272,8 +2490,9 @@ async function captureSnapshotFor(bookmark) {
     size: html.length,
   });
   var ok = await persistSnapshots();
-  setSnapStatus(ok ? t.snapSaved : t.errConflict);
+  setSnapStatus(ok ? t.snapSaved : t.snapConflict);
   renderSnapSection();
+  if (ok) renderItems();
 }
 
 async function fetchSnapshotHtml(entry) {
@@ -2328,6 +2547,7 @@ async function deleteSnapshot(entry) {
   var ok = await persistSnapshots();
   if (ok) setSnapStatus(t.snapDeleted);
   renderSnapSection();
+  if (ok) renderItems();
 }
 
 /* ---------- tag / note editing ---------- */
@@ -2607,6 +2827,20 @@ function activePreset() {
   );
 }
 
+function presetOptionLabel(p) {
+  var filter = BookmarksView.presetFilterLabel(p, {
+    pinned: t.presetKindPinned,
+    unfiled: t.presetUnfiled,
+  });
+  var kind =
+    p.kind === "folder"
+      ? t.presetKindFolder
+      : p.kind === "pinned"
+        ? t.presetKindPinned
+        : t.presetKindTag;
+  return p.name + "（" + kind + ":" + filter + " · " + sinceLabel(p.since) + "）";
+}
+
 function renderPresetSelect() {
   var select = $("presetSelect");
   select.textContent = "";
@@ -2618,12 +2852,14 @@ function renderPresetSelect() {
     var p = appState.presets[i];
     var opt = document.createElement("option");
     opt.value = p.name;
-    opt.textContent = p.name + "（" + p.tag + " · " + sinceLabel(p.since) + "）";
+    opt.textContent = presetOptionLabel(p);
     select.appendChild(opt);
   }
   var active = activePreset();
   select.value = active ? active.name : "";
   $("presetDelete").hidden = !active;
+  var wrap = $("presetWrap");
+  if (wrap) wrap.classList.toggle("isActive", Boolean(active));
 }
 
 function applyPreset(name) {
@@ -2638,7 +2874,14 @@ function applyPreset(name) {
     renderPresetSelect();
     return;
   }
-  state.filter = { kind: "tag", value: preset.tag };
+  var kind = preset.kind === "folder" || preset.kind === "pinned" ? preset.kind : "tag";
+  if (kind === "pinned") {
+    state.filter = { kind: "pinned", value: "" };
+  } else if (kind === "folder") {
+    state.filter = { kind: "folder", value: preset.value || "" };
+  } else {
+    state.filter = { kind: "tag", value: preset.value || preset.tag || "" };
+  }
   state.since = preset.since;
   $("sinceSelect").value = preset.since;
   // renderAll → renderPresetSelect so ✕ / selected option update immediately (#84).
@@ -2646,14 +2889,31 @@ function applyPreset(name) {
 }
 
 function openPresetDialog() {
-  if (state.filter.kind !== "tag") {
+  var kind = state.filter.kind;
+  if (kind !== "tag" && kind !== "folder" && kind !== "pinned") {
+    showBanner(t.presetNeedTag);
+    return;
+  }
+  if (kind === "tag" && !state.filter.value) {
     showBanner(t.presetNeedTag);
     return;
   }
   $("presetError").textContent = "";
   $("presetName").value = "";
+  var filterText =
+    kind === "pinned"
+      ? t.presetKindPinned
+      : kind === "folder"
+        ? folderLabel(state.filter.value)
+        : state.filter.value;
+  var kindLabel =
+    kind === "folder"
+      ? t.presetKindFolder
+      : kind === "pinned"
+        ? t.presetKindPinned
+        : t.presetKindTag;
   $("presetSummary").textContent =
-    folderLabel(state.filter.value) + " · " + sinceLabel(state.since);
+    kindLabel + ":" + filterText + " · " + sinceLabel(state.since);
   $("presetDialog").showModal();
   $("presetName").focus();
 }
@@ -2665,10 +2925,17 @@ async function submitPreset(event) {
     $("presetError").textContent = t.invalidName;
     return;
   }
+  var kind = state.filter.kind;
+  if (kind !== "tag" && kind !== "folder" && kind !== "pinned") {
+    $("presetError").textContent = t.presetNeedTag;
+    return;
+  }
   var kept = appState.presets.filter(function (p) {
     return p.name !== name;
   });
-  kept.push({ name: name, tag: state.filter.value, since: state.since });
+  var row = { name: name, kind: kind, value: state.filter.value || "", since: state.since };
+  if (kind === "tag") row.tag = state.filter.value;
+  kept.push(row);
   appState.presets = BookmarksView.normalizePresets(kept);
   await savePresets();
   $("presetDialog").close();
@@ -2761,6 +3028,22 @@ function collectSubtreeUrls(node, out) {
   }
 }
 
+/** Map urlKey → { id, title } for bookmarks under a Chrome folder tree. */
+function collectSubtreeUrlMap(node, out) {
+  if (!node) return;
+  if (node.url) {
+    var key = Bookmarks.urlKey(node.url);
+    if (key && !out[key]) {
+      out[key] = { id: node.id || "", title: node.title || "" };
+    }
+  }
+  if (Array.isArray(node.children)) {
+    for (var i = 0; i < node.children.length; i++) {
+      collectSubtreeUrlMap(node.children[i], out);
+    }
+  }
+}
+
 function countSubtree(node) {
   if (!node || !Array.isArray(node.children)) return 0;
   return node.children.length;
@@ -2784,6 +3067,78 @@ async function createChromePlan(nodes, parentId) {
   return created;
 }
 
+var pendingChromeConflict = null;
+
+function closeChromeConflictDialog(action) {
+  var pending = pendingChromeConflict;
+  pendingChromeConflict = null;
+  $("chromeConflictDialog").close();
+  if (pending && typeof pending.resolve === "function") pending.resolve(action || "cancel");
+}
+
+function promptChromeConflicts(analysis) {
+  return new Promise(function (resolve) {
+    pendingChromeConflict = { resolve: resolve };
+    $("chromeConflictTitle").textContent = t.chromeConflictTitle;
+    $("chromeConflictSummary").textContent = fmt(t.chromeConflictSummary, {
+      c: analysis.conflicts.length,
+      n: analysis.newCount,
+    });
+    $("chromeConflictHint").textContent = t.chromeConflictHint;
+    var list = $("chromeConflictList");
+    list.textContent = "";
+    var max = Math.min(analysis.conflicts.length, 40);
+    for (var i = 0; i < max; i++) {
+      var c = analysis.conflicts[i];
+      var li = document.createElement("li");
+      var titles = document.createElement("div");
+      titles.className = "conflictTitles";
+      var lib = document.createElement("span");
+      lib.textContent = fmt(t.chromeConflictLib, { t: c.libraryTitle });
+      var bro = document.createElement("span");
+      bro.textContent = fmt(t.chromeConflictBrowser, { t: c.browserTitle || "—" });
+      titles.appendChild(lib);
+      titles.appendChild(bro);
+      var url = document.createElement("div");
+      url.className = "conflictUrl";
+      url.textContent = c.url;
+      li.appendChild(titles);
+      li.appendChild(url);
+      list.appendChild(li);
+    }
+    if (analysis.conflicts.length > max) {
+      var more = document.createElement("li");
+      more.textContent = "… +" + (analysis.conflicts.length - max);
+      list.appendChild(more);
+    }
+    $("chromeConflictSkip").textContent = t.chromeConflictSkip;
+    $("chromeConflictOverwrite").textContent = t.chromeConflictOverwrite;
+    $("chromeConflictCancel").textContent = t.chromeConflictCancel;
+    // Prefer-skip checkbox nudges the primary action.
+    var preferSkip = $("exportChromeSkip").checked;
+    $("chromeConflictSkip").classList.toggle("primary", preferSkip);
+    $("chromeConflictSkip").classList.toggle("ghost", !preferSkip);
+    $("chromeConflictOverwrite").classList.toggle("primary", !preferSkip);
+    $("chromeConflictOverwrite").classList.toggle("ghost", preferSkip);
+    $("chromeConflictDialog").showModal();
+  });
+}
+
+async function overwriteChromeConflicts(conflicts) {
+  var updated = 0;
+  for (var i = 0; i < conflicts.length; i++) {
+    var c = conflicts[i];
+    if (!c.browserId) continue;
+    try {
+      await chrome.bookmarks.update(c.browserId, { title: c.libraryTitle || c.url });
+      updated += 1;
+    } catch (err) {
+      /* best-effort title sync */
+    }
+  }
+  return updated;
+}
+
 async function exportChromeWrite() {
   $("exportChromeStatus").textContent = "";
   if (!chromeBookmarksAvailable()) {
@@ -2800,7 +3155,6 @@ async function exportChromeWrite() {
     $("exportChromeStatus").textContent = t.exportChromeDenied;
     return;
   }
-  var skip = $("exportChromeSkip").checked;
   var clear = $("exportChromeClear").checked;
   var subtree = await chrome.bookmarks.getSubTree(folderId);
   var target = subtree && subtree[0];
@@ -2826,18 +3180,37 @@ async function exportChromeWrite() {
       await chrome.bookmarks.removeTree(target.children[i].id);
     }
   }
-  var existingUrls = [];
-  if (skip) {
-    var fresh = await chrome.bookmarks.getSubTree(folderId);
-    var current = fresh && fresh[0];
-    collectSubtreeUrls(current, existingUrls);
+
+  var fresh = await chrome.bookmarks.getSubTree(folderId);
+  var current = fresh && fresh[0];
+  var existingMap = Object.create(null);
+  collectSubtreeUrlMap(current, existingMap);
+  var analysis = Bookmarks.collectChromeWriteConflicts(state.model, existingMap);
+  var mode = "skip"; // after clear, no conflicts expected
+  if (analysis.conflicts.length > 0) {
+    mode = await promptChromeConflicts(analysis);
+    if (mode === "cancel") return;
   }
-  var plan = Bookmarks.buildChromeWritePlan(state.model, existingUrls, {
-    skipDuplicates: skip,
-  });
-  var created = await createChromePlan(plan, folderId);
+
+  var existingUrls = Object.keys(existingMap);
+  var created = 0;
+  var updated = 0;
+  if (mode === "overwrite") {
+    updated = await overwriteChromeConflicts(analysis.conflicts);
+    // Create only URLs that are not already present.
+    var plan = Bookmarks.buildChromeWritePlan(state.model, existingUrls, {
+      skipDuplicates: true,
+    });
+    created = await createChromePlan(plan, folderId);
+  } else {
+    // skip conflicts (default) — never silently duplicate same URL
+    var planSkip = Bookmarks.buildChromeWritePlan(state.model, existingUrls, {
+      skipDuplicates: true,
+    });
+    created = await createChromePlan(planSkip, folderId);
+  }
   $("exportDialog").close();
-  flashStatus(fmt(t.exportChromeDone, { n: created }));
+  flashStatus(fmt(t.exportChromeDone, { n: created + updated }));
 }
 
 /* ---------- HamHome round-trip write (#64) ---------- */
@@ -3067,10 +3440,20 @@ function applyCopy() {
   $("folderNameLabel").textContent = t.folderNameLabel;
   $("folderNameHint").textContent = t.folderNameHint;
   $("exportChromeLegend").textContent = t.exportChromeLegend;
+  if ($("exportChromeConflictNote")) {
+    $("exportChromeConflictNote").textContent = t.exportChromeConflictNote;
+  }
   $("exportChromeFolderLabel").textContent = t.exportChromeFolderLabel;
   $("exportChromeSkipText").textContent = t.exportChromeSkip;
   $("exportChromeClearText").textContent = t.exportChromeClear;
   $("exportChromeBtn").textContent = t.exportChromeBtn;
+  if ($("chromeConflictTitle")) {
+    $("chromeConflictTitle").textContent = t.chromeConflictTitle;
+    $("chromeConflictHint").textContent = t.chromeConflictHint;
+    $("chromeConflictSkip").textContent = t.chromeConflictSkip;
+    $("chromeConflictOverwrite").textContent = t.chromeConflictOverwrite;
+    $("chromeConflictCancel").textContent = t.chromeConflictCancel;
+  }
   $("exportHhLegend").textContent = t.exportHhLegend;
   $("exportHhHint").textContent = t.exportHhHint;
   $("exportHamHomeBtn").textContent = t.exportHhBtn;
@@ -3110,6 +3493,8 @@ function applyCopy() {
   $("wsNameTitle").textContent = t.wsNameTitle;
   $("wsNameCancel").textContent = t.cancel;
   $("wsNameSave").textContent = t.save;
+  if ($("wsRefresh")) $("wsRefresh").textContent = t.wsReload;
+  if ($("saveWindowBtn")) $("saveWindowBtn").textContent = t.saveWindow;
   $("ruleDialogTitle").textContent = t.ruleDialogTitle;
   $("ruleDomainLabel").textContent = t.ruleDomainLabel;
   $("ruleUrlLabel").textContent = t.ruleUrlLabel;
@@ -3354,12 +3739,31 @@ function wireEvents() {
     exportJson();
   });
   $("exportChromeBtn").addEventListener("click", exportChromeWrite);
+  if ($("chromeConflictCancel")) {
+    $("chromeConflictCancel").addEventListener("click", function () {
+      closeChromeConflictDialog("cancel");
+    });
+    $("chromeConflictSkip").addEventListener("click", function () {
+      closeChromeConflictDialog("skip");
+    });
+    $("chromeConflictOverwrite").addEventListener("click", function () {
+      closeChromeConflictDialog("overwrite");
+    });
+    $("chromeConflictDialog").addEventListener("cancel", function () {
+      closeChromeConflictDialog("cancel");
+    });
+  }
   $("exportHamHomeBtn").addEventListener("click", exportHamHomeWrite);
   $("exportCancel").addEventListener("click", function () {
     $("exportDialog").close();
   });
   $("settingsBtn").addEventListener("click", openSettings);
   $("saveWindowBtn").addEventListener("click", saveCurrentWindow);
+  if ($("wsRefresh")) {
+    $("wsRefresh").addEventListener("click", function () {
+      loadWorkspaces();
+    });
+  }
   $("driveBtn").addEventListener("click", function () {
     switchView("drive");
   });
@@ -3381,6 +3785,7 @@ applyCopy();
 fillSinceSelect();
 fillColorSelect();
 loadPresets();
+loadSnapshots();
 initTheme();
 wireEvents();
 renderFromCache();

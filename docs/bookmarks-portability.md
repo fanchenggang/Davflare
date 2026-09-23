@@ -43,7 +43,8 @@ URL identity strips the `#hash` of http(s) links (`urlKey`).
   `chrome.bookmarks`. Options: target folder (picked from the browser tree),
   skip duplicates (URL keys already under the target are not re-created),
   optionally clear the target folder first (confirm, children removed with
-  `removeTree`). Folders are created before their siblings' order matters —
+  `removeTree`). Same-URL overlaps always open a conflict dialog (skip /
+  update matching titles / cancel) — never silent overwrite. Folders are created before their siblings' order matters —
   creation order matches the HTML export (links, then subfolders).
 - **HamHome write-back** (#64) — merges into the existing HamHome remote
   (see below); `categories.json` is written first, `meta.json` last,

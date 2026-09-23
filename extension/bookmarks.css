@@ -1318,3 +1318,100 @@ dialog textarea {
   font-size: 0.8125rem;
   line-height: 1;
 }
+
+/* ---------- phase 2: workspace / snapshot / preset / conflict polish ---------- */
+
+.wsCard.isRestoring {
+  outline: 2px solid var(--orange);
+  outline-offset: 1px;
+}
+
+.wsSelectBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  flex-wrap: wrap;
+}
+
+.wsSelectBar .ghost {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+}
+
+.wsSelectedHint {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.pageRow .favicon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.pageRow .favicon img {
+  width: 18px;
+  height: 18px;
+}
+
+.chip.snap {
+  background: var(--accent-soft, rgba(249, 115, 22, 0.15));
+  color: var(--orange);
+}
+
+.presetWrap.isActive {
+  box-shadow: 0 0 0 1px var(--orange);
+  border-radius: 8px;
+}
+
+.presetWrap.isActive select {
+  font-weight: 600;
+}
+
+.batchBar .batchPinPrimary {
+  background: var(--orange);
+  color: #fff;
+  border-color: var(--orange);
+}
+
+.conflictList {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.conflictList li {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+
+.conflictList li:last-child {
+  border-bottom: 0;
+}
+
+.conflictList .conflictUrl {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conflictList .conflictTitles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+#exportChromeConflictNote {
+  margin: 0 0 8px;
+}

@@ -181,11 +181,13 @@ var BookmarksView = (function () {
   }
 
   /**
-   * Issue #63 P2: sanitize stored filter presets ({name, tag, since}) —
-   * drop junk rows, require name+tag, cap the list so sync storage stays
-   * small. `since` must be one of the sinceSelect values.
+   * Issue #63 P2 / Phase 2: sanitize stored filter presets.
+   * Shape: { name, kind: "tag"|"folder"|"pinned", value, since [, tag] }.
+   * Legacy rows { name, tag, since } normalize to kind=tag, value=tag.
+   * Cap the list so sync storage stays small; `since` must be a sinceSelect value.
    */
   var SINCE_KINDS = ["all", "today", "week", "month", "year"];
+  var PRESET_KINDS = ["tag", "folder", "pinned"];
 
   function normalizePresets(raw, limit) {
     if (!Array.isArray(raw)) return [];
@@ -196,29 +198,77 @@ var BookmarksView = (function () {
       var p = raw[i];
       if (!p || typeof p !== "object") continue;
       var name = typeof p.name === "string" ? p.name.trim().slice(0, 40) : "";
-      var tag = typeof p.tag === "string" ? p.tag.trim().slice(0, 64) : "";
+      if (!name || seen[name]) continue;
+      var kind =
+        PRESET_KINDS.indexOf(p.kind) !== -1
+          ? p.kind
+          : typeof p.tag === "string" && p.tag.trim()
+            ? "tag"
+            : "";
+      if (!kind) continue;
       var since = SINCE_KINDS.indexOf(p.since) !== -1 ? p.since : "all";
-      if (!name || !tag || seen[name]) continue;
+      var value = "";
+      if (kind === "tag") {
+        value =
+          typeof p.value === "string" && p.value.trim()
+            ? p.value.trim().slice(0, 64)
+            : typeof p.tag === "string"
+              ? p.tag.trim().slice(0, 64)
+              : "";
+        if (!value) continue;
+      } else if (kind === "folder") {
+        value =
+          typeof p.value === "string"
+            ? p.value.trim().slice(0, 200)
+            : typeof p.folder === "string"
+              ? p.folder.trim().slice(0, 200)
+              : "";
+        // empty string = unfiled folder filter — allowed
+      } else {
+        value = "";
+      }
       seen[name] = true;
-      out.push({ name: name, tag: tag, since: since });
+      var row = { name: name, kind: kind, value: value, since: since };
+      if (kind === "tag") row.tag = value; // legacy readers / option labels
+      out.push(row);
     }
     return out;
   }
 
   /**
-   * Issue #84 / #82: which stored preset matches the active tag+since filter.
-   * Returns the preset object or null. Drives dropdown selection + ✕ visibility —
-   * callers must re-run this after applyPreset / any filter or since change.
+   * Issue #84 / #82 / Phase 2: which stored preset matches the active filter.
+   * Supports tag / folder / pinned + since. Callers re-run after applyPreset
+   * or any filter/since change so the dropdown + ✕ stay in sync.
    */
   function findActivePreset(presets, filterKind, filterValue, since) {
-    if (filterKind !== "tag" || !Array.isArray(presets)) return null;
-    var tag = typeof filterValue === "string" ? filterValue : "";
+    if (!Array.isArray(presets)) return null;
+    if (PRESET_KINDS.indexOf(filterKind) === -1) return null;
+    var want = typeof filterValue === "string" ? filterValue : "";
     var sinceKind = typeof since === "string" ? since : "all";
     for (var i = 0; i < presets.length; i++) {
       var p = presets[i];
-      if (p && p.tag === tag && p.since === sinceKind) return p;
+      if (!p) continue;
+      var kind = PRESET_KINDS.indexOf(p.kind) !== -1 ? p.kind : "tag";
+      if (kind !== filterKind) continue;
+      if (p.since !== sinceKind) continue;
+      if (kind === "pinned") return p;
+      var val = kind === "tag" ? p.value || p.tag || "" : p.value || "";
+      if (val === want) return p;
     }
     return null;
+  }
+
+  /** Short label for a preset's filter (tag / folder / pinned). */
+  function presetFilterLabel(preset, copy) {
+    var c = copy || {};
+    if (!preset) return "";
+    var kind = PRESET_KINDS.indexOf(preset.kind) !== -1 ? preset.kind : "tag";
+    if (kind === "pinned") return c.pinned || "Pinned";
+    if (kind === "folder") {
+      var folder = preset.value || "";
+      return folder ? folder : c.unfiled || "Unfiled";
+    }
+    return preset.value || preset.tag || "";
   }
 
   return {
@@ -236,6 +286,7 @@ var BookmarksView = (function () {
     matchesQuery: matchesQuery,
     normalizePresets: normalizePresets,
     orderPinnedFirst: orderPinnedFirst,
+    presetFilterLabel: presetFilterLabel,
     tagList: tagList,
   };
 })();

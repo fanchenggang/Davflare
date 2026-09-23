@@ -26,7 +26,7 @@
 
 - **HTML** —— 纯 Netscape 文件，文件夹渲染为 `<H3>`/`<DL>`（含声明的空文件夹），可被 Chrome/Firefox 重新导入。
 - **JSON** —— `davflare-bookmarks.json`，完整模型 `{version, bookmarks, folders}`，再次导入可还原文件夹、标签、备注与置顶。
-- **浏览器书签栏**（#64）—— 通过 `chrome.bookmarks` 把书签库写回 Chrome。选项：目标文件夹（来自浏览器书签树）、跳过重复（目标夹下已存在的 URL 不重建）、可选先清空目标文件夹（需确认，子项用 `removeTree` 移除）。创建顺序与 HTML 导出一致（先链接后子文件夹），空文件夹也会创建。
+- **浏览器书签栏**（#64）—— 通过 `chrome.bookmarks` 把书签库写回 Chrome。选项：目标文件夹（来自浏览器书签树）、跳过重复（目标夹下已存在的 URL 不重建）、可选先清空目标文件夹（需确认，子项用 `removeTree` 移除）。 若目标中已有相同 URL，会弹出冲突确认：可跳过冲突、用书签库标题更新匹配项，或取消——不会静默覆盖。创建顺序与 HTML 导出一致（先链接后子文件夹），空文件夹也会创建。
 - **HamHome 写回**（#64）—— 合并写入已有 HamHome 远端（见下）；先写 `categories.json`、后写 `meta.json`，与 HamHome 自身的安全写序一致。
 
 ## HamHome 字段映射

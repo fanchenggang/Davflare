@@ -13,6 +13,19 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
     existingUrlKeys: string[],
     opts?: { skipDuplicates?: boolean }
   ) => Array<{ title: string; url?: string; children?: Array<Record<string, unknown>> }>;
+  collectChromeWriteConflicts: (
+    model: unknown,
+    existingByUrlKey: Record<string, { id?: string; title?: string }>
+  ) => {
+    conflicts: Array<{
+      urlKey: string;
+      url: string;
+      libraryTitle: string;
+      browserTitle: string;
+      browserId: string;
+    }>;
+    newCount: number;
+  };
   folderPaths: (model: unknown) => string[];
   mergeModels: (base: unknown, incoming: unknown) => BookmarkModel;
   modelFromJson: (text: string) => { ok: boolean; model: BookmarkModel };
@@ -215,5 +228,37 @@ describe("extension/bookmarks.js buildChromeWritePlan (#64)", () => {
       skipDuplicates: false,
     });
     expect(keepAll).toHaveLength(2);
+  });
+});
+
+describe("extension/bookmarks.js collectChromeWriteConflicts (phase 2)", () => {
+  test("lists same-URL overlaps and counts brand-new bookmarks", () => {
+    const base = modelWith([
+      item("a", "https://a.example/x#frag", { title: "Lib A" }),
+      item("b", "https://b.example", { title: "Lib B" }),
+      item("c", "https://c.example", { title: "Lib C" }),
+    ]);
+    const analysis = Bookmarks.collectChromeWriteConflicts(base, {
+      "https://a.example/x": { id: "chrome-1", title: "Browser A" },
+      // URL.href normalizes bare hosts with a trailing slash
+      "https://c.example/": { id: "chrome-3", title: "Browser C" },
+    });
+    expect(analysis.newCount).toBe(1);
+    expect(analysis.conflicts).toHaveLength(2);
+    expect(analysis.conflicts.map((c) => c.urlKey).sort()).toEqual([
+      "https://a.example/x",
+      "https://c.example/",
+    ]);
+    expect(analysis.conflicts.find((c) => c.urlKey === "https://a.example/x")).toMatchObject({
+      libraryTitle: "Lib A",
+      browserTitle: "Browser A",
+      browserId: "chrome-1",
+    });
+  });
+
+  test("empty / missing map means everything is new", () => {
+    const base = modelWith([item("a", "https://a.example", { title: "A" })]);
+    expect(Bookmarks.collectChromeWriteConflicts(base, {}).newCount).toBe(1);
+    expect(Bookmarks.collectChromeWriteConflicts(base, null as never).conflicts).toEqual([]);
   });
 });

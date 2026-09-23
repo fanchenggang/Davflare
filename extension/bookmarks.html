@@ -87,7 +87,7 @@
             <div class="topbarFilters">
               <select id="folderSelect"></select>
               <select id="sinceSelect"></select>
-              <div class="presetWrap">
+              <div class="presetWrap" id="presetWrap">
                 <select id="presetSelect"></select>
                 <button id="presetSave" class="ghost" type="button" title="Save current filter as preset">＋</button>
                 <button id="presetDelete" class="ghost" type="button" title="Delete preset" hidden>✕</button>
@@ -137,6 +137,7 @@
             <button id="saveWindowBtn" class="primary" type="button">Save current window</button>
             <span id="wsCount" class="topHint"></span>
             <div class="spacer"></div>
+            <button id="wsRefresh" class="ghost" type="button" title="Reload">Reload</button>
           </header>
           <div id="bannerWs" class="banner hidden"></div>
           <section id="wsList" class="wsList"></section>
@@ -288,11 +289,12 @@
         </div>
         <fieldset class="dlgSection">
           <legend id="exportChromeLegend">Browser</legend>
+          <p id="exportChromeConflictNote" class="dialogSubtitle"></p>
           <label for="exportChromeFolder" id="exportChromeFolderLabel">Target folder</label>
           <select id="exportChromeFolder"></select>
           <label class="checkLabel" id="exportChromeSkipLabel">
             <input type="checkbox" id="exportChromeSkip" checked />
-            <span id="exportChromeSkipText">Skip duplicates (same URL)</span>
+            <span id="exportChromeSkipText">Prefer skipping duplicates (same URL)</span>
           </label>
           <label class="checkLabel" id="exportChromeClearLabel">
             <input type="checkbox" id="exportChromeClear" />
@@ -447,6 +449,20 @@
         <menu>
           <button id="presetCancel" class="ghost" type="button">Cancel</button>
           <button id="presetSaveBtn" class="primary" type="submit">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="chromeConflictDialog">
+      <form id="chromeConflictForm" method="dialog">
+        <h2 id="chromeConflictTitle">Write-back conflicts</h2>
+        <p id="chromeConflictSummary" class="dialogSubtitle"></p>
+        <ul id="chromeConflictList" class="conflictList"></ul>
+        <p id="chromeConflictHint" class="dialogSubtitle"></p>
+        <menu>
+          <button id="chromeConflictCancel" class="ghost" type="button">Cancel</button>
+          <button id="chromeConflictSkip" class="ghost" type="button">Skip conflicts</button>
+          <button id="chromeConflictOverwrite" class="primary" type="button">Update matching</button>
         </menu>
       </form>
     </dialog>

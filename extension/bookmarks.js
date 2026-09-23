@@ -679,6 +679,42 @@ var Bookmarks = (function () {
    * (including declared empty ones) keep their structure, links optionally
    * skip URLs already present under the target folder.
    */
+  /**
+   * Phase 2: list library bookmarks whose URL already exists under a Chrome
+   * target folder. existingByUrlKey maps urlKey → { id, title }.
+   * Returns { conflicts: [...], newCount } so the UI can prompt instead of
+   * silently skipping or duplicating.
+   */
+  function collectChromeWriteConflicts(model, existingByUrlKey) {
+    var known =
+      existingByUrlKey && typeof existingByUrlKey === "object" ? existingByUrlKey : {};
+    var conflicts = [];
+    var seen = Object.create(null);
+    var newCount = 0;
+    var list = normalizeModel(model).bookmarks;
+    for (var i = 0; i < list.length; i++) {
+      var b = list[i];
+      var key = urlKey(b.url);
+      if (!key) continue;
+      var hit = known[key];
+      if (hit) {
+        if (!seen[key]) {
+          seen[key] = true;
+          conflicts.push({
+            urlKey: key,
+            url: b.url,
+            libraryTitle: b.title || b.url,
+            browserTitle: hit.title || "",
+            browserId: hit.id || "",
+          });
+        }
+      } else {
+        newCount += 1;
+      }
+    }
+    return { conflicts: conflicts, newCount: newCount };
+  }
+
   function buildChromeWritePlan(model, existingUrlKeys, opts) {
     var options = opts || {};
     var skip = options.skipDuplicates !== false;
@@ -823,6 +859,7 @@ var Bookmarks = (function () {
     adoptRichFields: adoptRichFields,
     adjustTags: adjustTags,
     buildChromeWritePlan: buildChromeWritePlan,
+    collectChromeWriteConflicts: collectChromeWriteConflicts,
     emptyModel: emptyModel,
     folderPaths: folderPaths,
     importBackup: importBackup,

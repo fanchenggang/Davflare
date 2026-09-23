@@ -24,6 +24,10 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
   orderPinnedFirst: (
     items: Array<Record<string, unknown>>
   ) => Array<Record<string, unknown>>;
+  presetFilterLabel: (
+    preset: unknown,
+    copy?: { pinned?: string; unfiled?: string }
+  ) => string;
   normalizePresets: (
     raw: unknown,
     limit?: number
@@ -235,8 +239,8 @@ describe("extension/bookmarksView.js normalizePresets (#63 P2)", () => {
       "junk",
     ]);
     expect(presets).toEqual([
-      { name: "docs 长期", tag: "docs", since: "year" },
-      { name: "dev 周", tag: "dev", since: "all" },
+      { name: "docs 长期", kind: "tag", value: "docs", tag: "docs", since: "year" },
+      { name: "dev 周", kind: "tag", value: "dev", tag: "dev", since: "all" },
     ]);
     expect(BookmarksView.normalizePresets(null)).toEqual([]);
   });
@@ -277,6 +281,54 @@ describe("extension/bookmarksView.js findActivePreset (#84 select→✕)", () =>
     expect(BookmarksView.findActivePreset(null, "tag", "docs", "week")).toBeNull();
     expect(BookmarksView.findActivePreset(presets, "tag", "dev", "year")?.name).toBe(
       "dev 长期"
+    );
+  });
+});
+
+describe("extension/bookmarksView.js presets folder/pinned (phase 2)", () => {
+  test("normalizePresets accepts folder + pinned kinds and keeps legacy tag rows", () => {
+    const presets = BookmarksView.normalizePresets([
+      { name: "work", kind: "folder", value: "Work", since: "week" },
+      { name: "pins", kind: "pinned", since: "all" },
+      { name: "legacy", tag: "docs", since: "month" },
+      { name: "bad-folder", kind: "folder" }, // empty folder value OK
+    ]);
+    expect(presets).toEqual([
+      { name: "work", kind: "folder", value: "Work", since: "week" },
+      { name: "pins", kind: "pinned", value: "", since: "all" },
+      { name: "legacy", kind: "tag", value: "docs", tag: "docs", since: "month" },
+      { name: "bad-folder", kind: "folder", value: "", since: "all" },
+    ]);
+  });
+
+  test("findActivePreset matches folder and pinned filters", () => {
+    const presets = BookmarksView.normalizePresets([
+      { name: "work", kind: "folder", value: "Work", since: "week" },
+      { name: "pins", kind: "pinned", since: "all" },
+    ]);
+    expect(BookmarksView.findActivePreset(presets, "folder", "Work", "week")?.name).toBe(
+      "work"
+    );
+    expect(BookmarksView.findActivePreset(presets, "folder", "Work", "all")).toBeNull();
+    expect(BookmarksView.findActivePreset(presets, "pinned", "", "all")?.name).toBe("pins");
+    expect(BookmarksView.findActivePreset(presets, "tag", "Work", "week")).toBeNull();
+  });
+
+  test("presetFilterLabel renders kind-aware short labels", () => {
+    expect(
+      BookmarksView.presetFilterLabel(
+        { kind: "pinned", value: "" },
+        { pinned: "置顶", unfiled: "未分类" }
+      )
+    ).toBe("置顶");
+    expect(
+      BookmarksView.presetFilterLabel(
+        { kind: "folder", value: "" },
+        { pinned: "Pinned", unfiled: "Unfiled" }
+      )
+    ).toBe("Unfiled");
+    expect(BookmarksView.presetFilterLabel({ kind: "tag", value: "docs", tag: "docs" })).toBe(
+      "docs"
     );
   });
 });
