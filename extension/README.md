@@ -18,6 +18,14 @@ One zip on the GitHub Release: `davflare-extension.zip` (toolbar + in-shell sett
 
 **Release zip:** download from [GitHub Releases](https://github.com/fanchenggang/Davflare/releases), unzip, then load unpacked. A tag (`v*` / `extension-*`) or **Actions → Release extension** attaches the zip.
 
+## Library screenshots (phase 1 redesign)
+
+Light and dark library chrome after the phase-1 visual pass — denser sidebar, cover/favicon cards, shared tokens with the save popup.
+
+![Library light](screenshots/library-light.png)
+
+![Library dark](screenshots/library-dark.png)
+
 ## Bookmarks
 
 The extension’s bookmark library keeps your bookmarks **on your own WebDAV** — no third-party service, no AI. Requires the WebDAV feature switch to be on for your instance.

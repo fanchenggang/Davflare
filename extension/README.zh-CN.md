@@ -18,6 +18,14 @@ GitHub Release 附一个 zip：`davflare-extension.zip`（工具栏 + 内嵌设�
 
 **Release zip：** 从 [GitHub Releases](https://github.com/fanchenggang/Davflare/releases) 下载后解压再按上面的方式加载。打 tag（`v*` / `extension-*`）或在 **Actions → Release extension** 里运行工作流会附上 zip。
 
+## 书签库截图（一期视觉）
+
+一期视觉与骨架之后的书签库：更密的侧栏分类/标签、带封面/favicon 的卡片网格，与收藏弹窗共用设计 tokens。
+
+![书签库浅色](screenshots/library-light.png)
+
+![书签库深色](screenshots/library-dark.png)
+
 ## 书签
 
 扩展的书签库把书签存在**你自己的 WebDAV 上**——不依赖第三方服务，不含任何 AI。要求实例的 WebDAV 功能开关已打开。

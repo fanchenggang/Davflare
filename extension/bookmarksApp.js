@@ -1304,7 +1304,10 @@ function cardNode(item) {
   link.target = "_blank";
   link.rel = "noreferrer noopener";
 
-  link.appendChild(faviconNode(item));
+  var cover = document.createElement("div");
+  cover.className = "cardCover";
+  cover.appendChild(faviconNode(item));
+  link.appendChild(cover);
 
   var title = document.createElement("h3");
   title.textContent = item.title || BookmarksView.domainOf(item.url) || item.url;

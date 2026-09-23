@@ -68,8 +68,8 @@ button.danger {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px 14px;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
   background: var(--paper);
   border-right: 1px solid var(--line);
   position: sticky;
@@ -105,11 +105,11 @@ button.danger {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--nav-item-gap);
 }
 
 .navTitle {
-  margin: 12px 8px 2px;
+  margin: var(--space-3) var(--space-2) var(--space-1);
   font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -121,14 +121,14 @@ button.danger {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
   background: transparent;
   color: var(--text);
   font-weight: 500;
-  font-size: 0.875rem;
-  padding: 7px 10px;
-  border-radius: 9px;
+  font-size: 0.8125rem;
+  padding: var(--nav-item-pad-y) var(--nav-item-pad-x);
+  border-radius: var(--radius-sm);
   text-align: left;
 }
 
@@ -145,14 +145,15 @@ button.danger {
 }
 
 .navItem .count {
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   color: var(--muted);
   background: var(--paper-soft);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0 8px;
-  min-width: 28px;
+  border-radius: var(--radius-pill);
+  padding: 0 6px;
+  min-width: 22px;
   text-align: center;
+  line-height: 1.5;
 }
 
 .navItem.active .count {
@@ -473,8 +474,8 @@ button.danger {
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
 }
 
 .card {
@@ -496,9 +497,38 @@ button.danger {
 
 .cardMain {
   display: block;
-  padding: 14px 16px 10px;
+  padding: 0 0 var(--space-2);
   color: inherit;
   text-decoration: none;
+}
+
+.cardCover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--card-cover-h);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  background:
+    radial-gradient(120% 80% at 20% 0%, var(--orange-soft), transparent 55%),
+    linear-gradient(180deg, var(--paper-soft), var(--paper));
+  border-bottom: 1px solid var(--line);
+}
+
+.cardCover .favicon {
+  width: var(--favicon-lg);
+  height: var(--favicon-lg);
+  border-radius: var(--radius-md);
+  font-size: 1.125rem;
+  margin-bottom: 0;
+  box-shadow: var(--shadow);
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+
+.cardCover .favicon img {
+  width: var(--favicon-md);
+  height: var(--favicon-md);
 }
 
 .favicon {
@@ -508,7 +538,7 @@ button.danger {
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--orange-soft);
   color: var(--orange-dark);
   font-weight: 700;
@@ -530,7 +560,7 @@ button.danger {
 }
 
 .cardMain h3 {
-  margin: 0 0 4px;
+  margin: 0 var(--space-4) 4px;
   font-size: 0.9375rem;
   line-height: 1.35;
   display: -webkit-box;
@@ -539,21 +569,8 @@ button.danger {
   overflow: hidden;
 }
 
-.cardMain .favicon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  font-size: 1.0625rem;
-  margin-bottom: 10px;
-}
-
-.cardMain .favicon img {
-  width: 24px;
-  height: 24px;
-}
-
 .cardMain .domain {
-  margin: 0;
+  margin: 0 var(--space-4);
   color: var(--muted);
   font-size: 0.78125rem;
   overflow: hidden;
@@ -562,7 +579,7 @@ button.danger {
 }
 
 .cardMain .note {
-  margin: 8px 0 0;
+  margin: var(--space-2) var(--space-4) 0;
   color: var(--muted);
   font-size: 0.8125rem;
   display: -webkit-box;
@@ -572,6 +589,7 @@ button.danger {
 }
 
 .cardMeta {
+
   display: flex;
   align-items: center;
   gap: 6px;
