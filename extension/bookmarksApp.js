@@ -1042,11 +1042,14 @@ function navButton(label, count, active, onClick) {
   btn.type = "button";
   var span = document.createElement("span");
   span.textContent = label;
-  var badge = document.createElement("span");
-  badge.className = "count";
-  badge.textContent = String(count);
   btn.appendChild(span);
-  btn.appendChild(badge);
+  // Favorites pass null/undefined — omit badge so UI never shows the literal "null".
+  if (count != null) {
+    var badge = document.createElement("span");
+    badge.className = "count";
+    badge.textContent = String(count);
+    btn.appendChild(badge);
+  }
   btn.addEventListener("click", onClick);
   return btn;
 }
@@ -2698,17 +2701,12 @@ async function submitAdd(event) {
 }
 
 async function importChromeBookmarks() {
-  if (typeof chrome === "undefined" || !chrome.permissions || !chrome.bookmarks) {
+  if (!chromeBookmarksAvailable()) {
     showBanner(t.importDenied);
     return;
   }
-  var granted;
-  try {
-    granted = await chrome.permissions.request({ permissions: ["bookmarks"] });
-  } catch (err) {
-    granted = false;
-  }
-  if (!granted) {
+  // Same pre-prompt + permissions.request path as exportChromeWrite (#109).
+  if (!(await ensureBookmarksPermission())) {
     showBanner(t.importDenied);
     return;
   }

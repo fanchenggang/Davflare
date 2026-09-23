@@ -327,3 +327,32 @@ describe("Davflare Chrome extension / library live refresh (#77)", () => {
     expect(css).toContain("#libRefresh");
   });
 });
+
+describe("Davflare Chrome extension / #109 PM hotfix", () => {
+  const app = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+
+  test("importChromeBookmarks uses ensureBookmarksPermission (same as write-back)", () => {
+    // PM 验收 #108 FAIL：导入曾直调 chrome.permissions.request，跳过 confirm 预提示。
+    expect(app).toMatch(
+      /async function importChromeBookmarks\(\)[\s\S]*?ensureBookmarksPermission\(\)/
+    );
+    const importFn = app.match(
+      /async function importChromeBookmarks\(\)[\s\S]*?(?=\nasync function |\nfunction )/
+    );
+    expect(importFn?.[0]).toBeTruthy();
+    expect(importFn![0]).not.toMatch(
+      /chrome\.permissions\.request\(\s*\{\s*permissions:\s*\[\"bookmarks\"\]/
+    );
+    expect(app).toMatch(
+      /async function exportChromeWrite\(\)[\s\S]*?ensureBookmarksPermission\(\)/
+    );
+  });
+
+  test("navButton omits count badge when count is null/undefined", () => {
+    // renderFavoritesNav 传 null；String(null) 曾把字面量 "null" 画上侧栏。
+    expect(app).toMatch(
+      /function navButton\(label, count, active, onClick\)[\s\S]*?if \(count != null\)[\s\S]*?badge\.className = "count"/
+    );
+    expect(app).toContain("navButton(favLabel(entry), null, active,");
+  });
+});
