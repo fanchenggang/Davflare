@@ -4,7 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Davflare Bookmarks</title>
+    <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="bookmarks.css" />
+    <script>
+      (function () {
+        try {
+          var k = "davflare-theme";
+          var t = localStorage.getItem(k);
+          if (t !== "light" && t !== "dark") {
+            t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = t;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div class="app">
@@ -67,23 +80,28 @@
 
       <main class="main">
         <div id="viewBookmarks">
-          <header class="topbar">
-            <input id="search" type="search" spellcheck="false" placeholder="Search bookmarks…" />
-            <select id="folderSelect"></select>
-            <select id="sinceSelect"></select>
-            <div class="presetWrap">
-              <select id="presetSelect"></select>
-              <button id="presetSave" class="ghost" type="button" title="Save current filter as preset">＋</button>
-              <button id="presetDelete" class="ghost" type="button" title="Delete preset" hidden>✕</button>
+          <header class="topbar" role="toolbar" aria-label="Library filters">
+            <div class="topbarSearch">
+              <input id="search" type="search" spellcheck="false" placeholder="Search bookmarks…" />
             </div>
-            <div class="spacer"></div>
-            <button id="selAllBtn" class="ghost" type="button">Select all</button>
-            <button id="libRefresh" type="button" title="Reload">Reload</button>
-            <div class="viewToggle" role="group" aria-label="View">
-              <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
-              <button id="viewList" type="button" title="List">☰</button>
+            <div class="topbarFilters">
+              <select id="folderSelect"></select>
+              <select id="sinceSelect"></select>
+              <div class="presetWrap">
+                <select id="presetSelect"></select>
+                <button id="presetSave" class="ghost" type="button" title="Save current filter as preset">＋</button>
+                <button id="presetDelete" class="ghost" type="button" title="Delete preset" hidden>✕</button>
+              </div>
             </div>
-            <button id="themeToggle" type="button" title="Theme">☾</button>
+            <div class="topbarActions">
+              <button id="selAllBtn" class="ghost" type="button">Select all</button>
+              <button id="libRefresh" type="button" title="Reload">Reload</button>
+              <div class="viewToggle" role="group" aria-label="View">
+                <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
+                <button id="viewList" type="button" title="List">☰</button>
+              </div>
+              <button id="themeToggle" type="button" title="Theme">☾</button>
+            </div>
           </header>
 
           <div id="batchBar" class="batchBar hidden">

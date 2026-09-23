@@ -1,35 +1,3 @@
-:root {
-  color-scheme: light;
-  --bg: #f4f1ec;
-  --paper: #ffffff;
-  --paper-soft: #faf8f4;
-  --text: #1a1714;
-  --muted: rgba(26, 23, 20, 0.64);
-  --line: rgba(28, 22, 16, 0.08);
-  --orange: #f38020;
-  --orange-dark: #d96e12;
-  --orange-soft: rgba(243, 128, 32, 0.12);
-  --focus: rgba(243, 128, 32, 0.16);
-  --ok: #2e7d4f;
-  --err: #c4472c;
-  --shadow: 0 6px 16px rgba(26, 23, 20, 0.06);
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #14110c;
-  --paper: #221e17;
-  --paper-soft: #191611;
-  --text: #f0ece4;
-  --muted: rgba(240, 236, 228, 0.6);
-  --line: rgba(240, 236, 228, 0.13);
-  --orange: #f79b45;
-  --orange-dark: #ffb066;
-  --orange-soft: rgba(247, 155, 69, 0.16);
-  --focus: rgba(247, 155, 69, 0.22);
-  --shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-}
-
 * {
   box-sizing: border-box;
 }
@@ -91,7 +59,7 @@ button.danger {
 
 .app {
   display: grid;
-  grid-template-columns: 248px 1fr;
+  grid-template-columns: var(--sidebar-w) 1fr;
   min-height: 100vh;
 }
 
@@ -279,7 +247,7 @@ button.danger {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-md);
   padding: 4px;
   z-index: 60;
 }
@@ -312,49 +280,74 @@ button.danger {
 /* ---------- main ---------- */
 
 .main {
-  padding: 18px 26px 40px;
+  padding: var(--space-4) var(--space-5) 40px;
   min-width: 0;
 }
 
+/* Topbar chrome: search | filters | actions — kept consistent across densities */
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
 }
 
-.topbar input[type="search"] {
-  flex: 1 1 260px;
-  max-width: 460px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 9px 14px;
-  font: inherit;
-  background: var(--paper);
-  color: var(--text);
+.topbarSearch {
+  flex: 1 1 240px;
+  min-width: 180px;
+  max-width: 420px;
 }
 
-.topbar select {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font: inherit;
-  background: var(--paper);
-  color: var(--text);
-  max-width: 220px;
+.topbarFilters,
+.topbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topbarActions {
+  margin-left: auto;
 }
 
 .topbar input[type="search"],
 .topbar select,
 .topbar .viewToggle,
 .topbar #libRefresh,
-.topbar #themeToggle {
-  height: 36px;
+.topbar #themeToggle,
+.topbar .ghost {
+  height: var(--topbar-control-h);
   font-size: 0.875rem;
 }
 
+.topbar input[type="search"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  font: inherit;
+  background: var(--paper-soft);
+  color: var(--text);
+}
+
+.topbar select {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0 10px;
+  font: inherit;
+  background: var(--paper-soft);
+  color: var(--text);
+  max-width: 200px;
+}
+
 .topbar .viewToggle button {
-  height: 34px;
+  height: calc(var(--topbar-control-h) - 2px);
   padding: 0 12px;
   font-size: 0.875rem;
 }
@@ -366,9 +359,9 @@ button.danger {
 .viewToggle {
   display: flex;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--paper);
+  background: var(--paper-soft);
 }
 
 .viewToggle button {
@@ -383,21 +376,38 @@ button.danger {
   color: #fff;
 }
 
-#themeToggle {
-  background: var(--paper);
+#themeToggle,
+#libRefresh {
+  background: var(--paper-soft);
   color: var(--text);
   border: 1px solid var(--line);
-  padding: 7px 12px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
 }
 
-#libRefresh {
-  background: var(--paper);
-  color: var(--text);
-  border: 1px solid var(--line);
-  padding: 7px 12px;
+#themeToggle:hover,
+#libRefresh:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.presetWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.presetWrap select {
+  max-width: 160px;
+}
+
+.presetWrap .ghost {
+  padding: 0 10px;
+  min-width: var(--topbar-control-h);
 }
 
 .banner {
+
   display: flex;
   align-items: center;
   gap: 8px;
@@ -473,7 +483,7 @@ button.danger {
   justify-content: space-between;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   overflow: hidden;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
@@ -481,7 +491,7 @@ button.danger {
 
 .card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(26, 23, 20, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .cardMain {
@@ -634,7 +644,7 @@ button.danger {
 
 .cardMeta .del:hover,
 .row .del:hover {
-  background: rgba(196, 71, 44, 0.12);
+  background: var(--err-soft);
   color: var(--err);
 }
 
@@ -722,11 +732,11 @@ dialog {
   color: var(--text);
   padding: 22px;
   width: min(420px, 92vw);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-lg);
 }
 
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
 }
 
 dialog h2 {
@@ -945,7 +955,7 @@ dialog textarea {
 }
 
 .wsHead .del:hover {
-  background: rgba(196, 71, 44, 0.12);
+  background: var(--err-soft);
   color: var(--err);
 }
 

@@ -1,0 +1,86 @@
+/**
+ * Shared Davflare extension design tokens (library page + save popup).
+ * Phase-1 foundation: keep PR2 card/sidebar polish on these vars — do not
+ * reintroduce hardcoded surfaces/shadows in feature CSS.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg: #f4f1ec;
+  --paper: #ffffff;
+  --paper-soft: #faf8f4;
+  --paper-elevated: #ffffff;
+
+  /* ink */
+  --text: #1a1714;
+  --muted: rgba(26, 23, 20, 0.64);
+  --line: rgba(28, 22, 16, 0.08);
+  --line-strong: rgba(28, 22, 16, 0.14);
+
+  /* brand */
+  --orange: #f38020;
+  --orange-dark: #d96e12;
+  --orange-soft: rgba(243, 128, 32, 0.12);
+  --focus: rgba(243, 128, 32, 0.16);
+
+  /* status */
+  --ok: #2e7d4f;
+  --err: #c4472c;
+  --err-soft: rgba(196, 71, 44, 0.12);
+
+  /* elevation */
+  --shadow: 0 6px 16px rgba(26, 23, 20, 0.06);
+  --shadow-md: 0 10px 22px rgba(26, 23, 20, 0.1);
+  --shadow-lg: 0 18px 44px rgba(26, 23, 20, 0.16);
+  --overlay: rgba(26, 23, 20, 0.4);
+
+  /* density / geometry (PR2 layers on these) */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --sidebar-w: 248px;
+  --topbar-control-h: 36px;
+  --card-cover-h: 88px;
+  --favicon-sm: 20px;
+  --favicon-md: 28px;
+  --favicon-lg: 40px;
+  --nav-item-pad-y: 6px;
+  --nav-item-pad-x: 10px;
+  --nav-item-gap: 2px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #14110c;
+  --paper: #221e17;
+  --paper-soft: #191611;
+  --paper-elevated: #2a251c;
+
+  --text: #f0ece4;
+  --muted: rgba(240, 236, 228, 0.6);
+  --line: rgba(240, 236, 228, 0.13);
+  --line-strong: rgba(240, 236, 228, 0.2);
+
+  --orange: #f79b45;
+  --orange-dark: #ffb066;
+  --orange-soft: rgba(247, 155, 69, 0.16);
+  --focus: rgba(247, 155, 69, 0.22);
+
+  --ok: #5dba7f;
+  --err: #e5735a;
+  --err-soft: rgba(229, 115, 90, 0.16);
+
+  --shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 10px 22px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --overlay: rgba(0, 0, 0, 0.55);
+}
