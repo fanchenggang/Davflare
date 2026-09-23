@@ -3,10 +3,14 @@ import {
   hashSitePassword,
   indexFallbackKey,
   isSitesHost,
+  isValidHostname,
   isValidSlug,
   mimeForKey,
+  normalizeHostname,
   parseSitesPath,
+  parseSitesRootPath,
   siteConfigKey,
+  siteHostnameKey,
   siteNotFoundKey,
   sitePasswordAuthorized,
   siteSpaKey,
@@ -133,5 +137,58 @@ describe("static sites host routing", () => {
     expect(await sitePasswordAuthorized(ok, hash)).toBe(true);
     expect(await sitePasswordAuthorized(bad, hash)).toBe(false);
     expect(await sitePasswordAuthorized(missing, hash)).toBe(false);
+  });
+});
+
+
+describe("custom hostname helpers", () => {
+  test("normalizeHostname strips scheme/port/path/trailing dot", () => {
+    expect(normalizeHostname("https://Blog.Example.com:443/path")).toBe("blog.example.com");
+    expect(normalizeHostname("blog.example.com.")).toBe("blog.example.com");
+    expect(normalizeHostname("  ")).toBe("");
+  });
+
+  test("isValidHostname accepts FQDNs and rejects junk", () => {
+    expect(isValidHostname("blog.example.com")).toBe(true);
+    expect(isValidHostname("a.co")).toBe(true);
+    expect(isValidHostname("localhost")).toBe(false);
+    expect(isValidHostname("blog")).toBe(false);
+    expect(isValidHostname("1.2.3.4")).toBe(false);
+    expect(isValidHostname("-bad.example.com")).toBe(false);
+    expect(isValidHostname("https://blog.example.com")).toBe(true);
+  });
+
+  test("siteHostnameKey uses normalized host", () => {
+    expect(siteHostnameKey("Blog.Example.com")).toBe(
+      "_$flaredrive$/site-hostnames/blog.example.com"
+    );
+  });
+
+  test("parseSitesRootPath maps domain root onto slug prefix", () => {
+    expect(parseSitesRootPath("/", "blog")).toEqual({
+      ok: true,
+      slug: "blog",
+      key: "sites/blog/index.html",
+      tryIndex: false,
+    });
+    expect(parseSitesRootPath("/style.css", "blog")).toEqual({
+      ok: true,
+      slug: "blog",
+      key: "sites/blog/style.css",
+      tryIndex: false,
+    });
+    expect(parseSitesRootPath("/about", "blog")).toEqual({
+      ok: true,
+      slug: "blog",
+      key: "sites/blog/about",
+      tryIndex: true,
+    });
+    expect(parseSitesRootPath("/about/", "blog")).toEqual({
+      ok: true,
+      slug: "blog",
+      key: "sites/blog/about/index.html",
+      tryIndex: false,
+    });
+    expect(parseSitesRootPath("/%2e%2e/secret", "blog").ok).toBe(false);
   });
 });

@@ -114,6 +114,7 @@ describe("sites API publish", () => {
       slug: "blog",
       spa: true,
       passwordProtected: false,
+      hostname: null,
     });
   });
 
@@ -129,6 +130,7 @@ describe("sites API publish", () => {
       slug: "blog",
       spa: false,
       passwordProtected: true,
+      hostname: null,
     });
 
     const stored = await bucket.asBucket().get("_$flaredrive$/sites/blog.json");
@@ -146,6 +148,7 @@ describe("sites API publish", () => {
       slug: "blog",
       spa: true,
       passwordProtected: true,
+      hostname: null,
     });
     const afterSpa = (await (
       await bucket.asBucket().get("_$flaredrive$/sites/blog.json")
@@ -160,6 +163,7 @@ describe("sites API publish", () => {
       slug: "blog",
       spa: true,
       passwordProtected: false,
+      hostname: null,
     });
     const cleared = (await (
       await bucket.asBucket().get("_$flaredrive$/sites/blog.json")
@@ -174,5 +178,67 @@ describe("sites API publish", () => {
       makeContext(post({ slug: "blog", password: "x".repeat(129) }), makeEnv(bucket))
     );
     expect(response.status).toBe(400);
+  });
+
+  test("set / clear custom hostname with uniqueness", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([
+      { key: "sites/blog/index.html", body: "<h1/>" },
+      { key: "sites/other/index.html", body: "<h1/>" },
+    ]);
+
+    const setResponse = await onRequestPost(
+      makeContext(post({ slug: "blog", hostname: "Blog.Example.com" }), makeEnv(bucket))
+    );
+    expect(setResponse.status).toBe(200);
+    expect(await setResponse.json()).toEqual({
+      slug: "blog",
+      spa: false,
+      passwordProtected: false,
+      hostname: "blog.example.com",
+    });
+    const index = await bucket.asBucket().get("_$flaredrive$/site-hostnames/blog.example.com");
+    expect(await index!.text()).toBe("blog");
+    const config = (await (
+      await bucket.asBucket().get("_$flaredrive$/sites/blog.json")
+    )!.json()) as { hostname?: string };
+    expect(config.hostname).toBe("blog.example.com");
+
+    const conflict = await onRequestPost(
+      makeContext(post({ slug: "other", hostname: "blog.example.com" }), makeEnv(bucket))
+    );
+    expect(conflict.status).toBe(409);
+
+    const equalsSitesHost = await onRequestPost(
+      makeContext(post({ slug: "blog", hostname: "sites.example.com" }), makeEnv(bucket))
+    );
+    expect(equalsSitesHost.status).toBe(400);
+
+    const bad = await onRequestPost(
+      makeContext(post({ slug: "blog", hostname: "localhost" }), makeEnv(bucket))
+    );
+    expect(bad.status).toBe(400);
+
+    // SPA toggle must not clear hostname
+    const spaResponse = await onRequestPost(
+      makeContext(post({ slug: "blog", spa: true }), makeEnv(bucket))
+    );
+    expect(await spaResponse.json()).toEqual({
+      slug: "blog",
+      spa: true,
+      passwordProtected: false,
+      hostname: "blog.example.com",
+    });
+
+    const clearResponse = await onRequestPost(
+      makeContext(post({ slug: "blog", hostname: null }), makeEnv(bucket))
+    );
+    expect(await clearResponse.json()).toEqual({
+      slug: "blog",
+      spa: true,
+      passwordProtected: false,
+      hostname: null,
+    });
+    expect(await bucket.asBucket().get("_$flaredrive$/site-hostnames/blog.example.com")).toBeNull();
   });
 });

@@ -23,6 +23,7 @@ import {
   CloudUpload as DeployIcon,
   ContentCopy as ContentCopyIcon,
   Delete as DeleteIcon,
+  Dns as DnsIcon,
   FolderOpen as FolderOpenIcon,
   Language as LanguageIcon,
   Lock as LockIcon,
@@ -34,7 +35,15 @@ import { unzip } from "fflate";
 import ConfirmDialog from "./ConfirmDialog";
 import EmptyState from "./EmptyState";
 import { NotifyFn } from "./app/notify";
-import { SiteInfo, SitesResponse, deleteSite, listSites, siteUrl, updateSiteConfig } from "./app/sites";
+import {
+  SiteInfo,
+  SitesResponse,
+  deleteSite,
+  listSites,
+  siteHostnameUrl,
+  siteUrl,
+  updateSiteConfig,
+} from "./app/sites";
 import { strings, translate } from "./app/strings";
 import { useUploadEnqueue } from "./app/transferQueue";
 import { errorMessage, humanReadableSize } from "./app/utils";
@@ -89,6 +98,7 @@ function SiteCard({
   onManageFiles,
   onToggleSpa,
   onPassword,
+  onHostname,
   onDeploy,
   onRequestDelete,
 }: {
@@ -98,14 +108,17 @@ function SiteCard({
   onManageFiles: (slug: string) => void;
   onToggleSpa: (site: SiteInfo, spa: boolean) => void;
   onPassword: (site: SiteInfo) => void;
+  onHostname: (site: SiteInfo) => void;
   onDeploy: (site: SiteInfo) => void;
   onRequestDelete: (site: SiteInfo) => void;
 }) {
-  const url = siteUrl(sitesHost, site.slug);
-  const copyUrl = async () => {
-    if (!url) return;
+  const pathUrl = siteUrl(sitesHost, site.slug);
+  const customUrl = siteHostnameUrl(site.hostname);
+  const openUrl = customUrl || pathUrl;
+  const copyText = async (value: string | null) => {
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(value);
       onNotify(translate("linkCopied"), "success");
     } catch {
       onNotify(translate("copyFailed2"), "error");
@@ -166,12 +179,24 @@ function SiteCard({
               </IconButton>
             </span>
           </Tooltip>
+          <Tooltip title={strings.siteHostnameManage}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => onHostname(site)}
+                aria-label={strings.siteHostnameManage}
+                color={site.hostname ? "primary" : "default"}
+              >
+                <DnsIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip title={strings.openSite}>
             <span>
               <IconButton
                 size="small"
-                disabled={!url}
-                onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")}
+                disabled={!openUrl}
+                onClick={() => openUrl && window.open(openUrl, "_blank", "noopener,noreferrer")}
                 aria-label={strings.openSite}
               >
                 <LanguageIcon fontSize="small" />
@@ -218,10 +243,44 @@ function SiteCard({
                 sx={{ height: 20, fontSize: "0.7rem" }}
               />
             )}
+            {site.hostname && (
+              <Chip
+                icon={<DnsIcon sx={{ fontSize: "0.85rem !important" }} />}
+                label={strings.siteHostnameBadge}
+                size="small"
+                color="info"
+                variant="outlined"
+                sx={{ height: 20, fontSize: "0.7rem" }}
+              />
+            )}
           </Stack>
         }
         secondary={
           <>
+            {customUrl && (
+              <Stack
+                direction="row"
+                spacing={0.5}
+                alignItems="center"
+                sx={{ display: "inline-flex", maxWidth: "100%" }}
+              >
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{ wordBreak: "break-all", display: "block", fontWeight: 600 }}
+                >
+                  {customUrl}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => copyText(customUrl)}
+                  aria-label={strings.copy}
+                  sx={{ p: 0.25 }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </Stack>
+            )}
             <Stack
               direction="row"
               spacing={0.5}
@@ -233,10 +292,15 @@ function SiteCard({
                 variant="body2"
                 sx={{ wordBreak: "break-all", display: "block" }}
               >
-                {url || strings.sitesHostMissing}
+                {pathUrl || strings.sitesHostMissing}
               </Typography>
-              {url && (
-                <IconButton size="small" onClick={copyUrl} aria-label={strings.copy} sx={{ p: 0.25 }}>
+              {pathUrl && (
+                <IconButton
+                  size="small"
+                  onClick={() => copyText(pathUrl)}
+                  aria-label={strings.copy}
+                  sx={{ p: 0.25 }}
+                >
                   <ContentCopyIcon sx={{ fontSize: 14 }} />
                 </IconButton>
               )}
@@ -273,6 +337,9 @@ function SitesView({
   const [passwordSite, setPasswordSite] = useState<SiteInfo | null>(null);
   const [passwordValue, setPasswordValue] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [hostnameSite, setHostnameSite] = useState<SiteInfo | null>(null);
+  const [hostnameValue, setHostnameValue] = useState("");
+  const [hostnameSaving, setHostnameSaving] = useState(false);
 
   const load = useCallback(
     async (withStats: boolean) => {
@@ -314,6 +381,46 @@ function SitesView({
   const openPasswordDialog = (site: SiteInfo) => {
     setPasswordSite(site);
     setPasswordValue("");
+  };
+
+  const openHostnameDialog = (site: SiteInfo) => {
+    setHostnameSite(site);
+    setHostnameValue(site.hostname || "");
+  };
+
+  const handleSaveHostname = async (clear: boolean) => {
+    if (!hostnameSite) return;
+    const next = clear ? null : hostnameValue.trim().toLowerCase();
+    if (!clear && !next) {
+      onNotify(translate("siteHostnameInvalid"), "error");
+      return;
+    }
+    setHostnameSaving(true);
+    try {
+      const result = await updateSiteConfig(hostnameSite.slug, { hostname: next });
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              sites: prev.sites.map((item) =>
+                item.slug === hostnameSite.slug
+                  ? { ...item, hostname: result.hostname }
+                  : item
+              ),
+            }
+          : prev
+      );
+      onNotify(
+        translate(result.hostname ? "siteHostnameSaved" : "siteHostnameCleared"),
+        "success"
+      );
+      setHostnameSite(null);
+      setHostnameValue("");
+    } catch (error) {
+      onNotify(errorMessage(error), "error");
+    } finally {
+      setHostnameSaving(false);
+    }
   };
 
   const handleSavePassword = async (clear: boolean) => {
@@ -455,6 +562,7 @@ function SitesView({
               onManageFiles={onManageFiles}
               onToggleSpa={handleToggleSpa}
               onPassword={openPasswordDialog}
+              onHostname={openHostnameDialog}
               onDeploy={setDeploySite}
               onRequestDelete={setPendingDelete}
             />
@@ -587,6 +695,67 @@ function SitesView({
             {passwordSite?.passwordProtected
               ? strings.sitePasswordChange
               : strings.sitePasswordSet}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(hostnameSite)}
+        onClose={() => {
+          if (hostnameSaving) return;
+          setHostnameSite(null);
+          setHostnameValue("");
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          {hostnameSite
+            ? translate("siteHostnameDialogTitle", { name: hostnameSite.slug })
+            : ""}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {strings.siteHostnameHint}
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              label={strings.siteHostnameLabel}
+              placeholder="blog.example.com"
+              value={hostnameValue}
+              onChange={(event) => setHostnameValue(event.target.value)}
+              disabled={hostnameSaving}
+              inputProps={{ maxLength: 253, autoComplete: "off", spellCheck: false }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setHostnameSite(null);
+              setHostnameValue("");
+            }}
+            disabled={hostnameSaving}
+          >
+            {strings.cancel}
+          </Button>
+          {hostnameSite?.hostname && (
+            <Button
+              color="warning"
+              disabled={hostnameSaving}
+              onClick={() => handleSaveHostname(true)}
+            >
+              {strings.siteHostnameClear}
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            disabled={hostnameSaving || !hostnameValue.trim()}
+            onClick={() => handleSaveHostname(false)}
+          >
+            {strings.siteHostnameSet}
           </Button>
         </DialogActions>
       </Dialog>

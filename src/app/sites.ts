@@ -13,6 +13,8 @@ export interface SiteInfo {
   spa: boolean;
   /** True when an access password is set (hash never exposed). */
   passwordProtected?: boolean;
+  /** Optional custom hostname served at domain root (e.g. blog.example.com). */
+  hostname?: string | null;
   stats: SiteStats | null;
 }
 
@@ -31,16 +33,26 @@ export interface SiteConfigPatch {
   spa?: boolean;
   /** Set a new access password; null or "" clears protection. */
   password?: string | null;
+  /** Set custom hostname; null or "" clears it. */
+  hostname?: string | null;
 }
 
 export async function updateSiteConfig(
   slug: string,
   patch: SiteConfigPatch
-): Promise<{ slug: string; spa: boolean; passwordProtected: boolean }> {
+): Promise<{
+  slug: string;
+  spa: boolean;
+  passwordProtected: boolean;
+  hostname: string | null;
+}> {
   const body: Record<string, unknown> = { slug };
   if (typeof patch.spa === "boolean") body.spa = patch.spa;
   if (Object.prototype.hasOwnProperty.call(patch, "password")) {
     body.password = patch.password;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "hostname")) {
+    body.hostname = patch.hostname;
   }
   const response = await authFetch("/api/sites", {
     method: "POST",
@@ -71,6 +83,13 @@ export async function deleteSite(slug: string, options?: { purge?: boolean }): P
 export function siteUrl(sitesHost: string | null, slug: string): string | null {
   if (!sitesHost) return null;
   return `${window.location.protocol}//${sitesHost}/${slug}/`;
+}
+
+/** Custom hostname URL at domain root; null when unset. */
+export function siteHostnameUrl(hostname: string | null | undefined): string | null {
+  const host = (hostname || "").trim().toLowerCase();
+  if (!host) return null;
+  return `${window.location.protocol}//${host}/`;
 }
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;

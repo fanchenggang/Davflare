@@ -441,6 +441,75 @@ describe("SitesView leftovers", () => {
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("pw-fail", "error"));
   });
 
+  test("site hostname set / clear / invalid", async () => {
+    mockListSites.mockResolvedValue({
+      sitesHost: "sites.example.com",
+      sites: [{ ...site, hostname: null }],
+    });
+    mockUpdateSite
+      .mockResolvedValueOnce({
+        slug: "blog",
+        spa: true,
+        passwordProtected: false,
+        hostname: "blog.example.com",
+      })
+      .mockResolvedValueOnce({
+        slug: "blog",
+        spa: true,
+        passwordProtected: false,
+        hostname: null,
+      })
+      .mockRejectedValueOnce(new Error("host-fail"));
+    const onNotify = vi.fn();
+    render(<SitesView onNotify={onNotify} onManageFiles={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("blog")).toBeInTheDocument());
+
+    const openManage = async () => {
+      fireEvent.click(await screen.findByRole("button", { name: strings.siteHostnameManage }));
+      await screen.findByLabelText(strings.siteHostnameLabel);
+    };
+    const waitClosed = async () => {
+      await waitFor(() =>
+        expect(screen.queryByLabelText(strings.siteHostnameLabel)).not.toBeInTheDocument()
+      );
+    };
+
+    await openManage();
+    fireEvent.click(screen.getByText(strings.cancel));
+    await waitClosed();
+
+    await openManage();
+    fireEvent.change(screen.getByLabelText(strings.siteHostnameLabel), {
+      target: { value: "Blog.Example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.siteHostnameSet }));
+    await waitFor(() =>
+      expect(mockUpdateSite).toHaveBeenCalledWith("blog", { hostname: "blog.example.com" })
+    );
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("siteHostnameSaved"), "success")
+    );
+    await waitClosed();
+    expect(screen.getByText(strings.siteHostnameBadge)).toBeInTheDocument();
+    expect(screen.getByText(`${window.location.protocol}//blog.example.com/`)).toBeInTheDocument();
+
+    await openManage();
+    fireEvent.click(screen.getByRole("button", { name: strings.siteHostnameClear }));
+    await waitFor(() =>
+      expect(mockUpdateSite).toHaveBeenCalledWith("blog", { hostname: null })
+    );
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("siteHostnameCleared"), "success")
+    );
+    await waitClosed();
+
+    await openManage();
+    fireEvent.change(screen.getByLabelText(strings.siteHostnameLabel), {
+      target: { value: "again.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: strings.siteHostnameSet }));
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith("host-fail", "error"));
+  });
 
   test("spa save failure reloads list", async () => {
     mockListSites

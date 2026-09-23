@@ -8,6 +8,8 @@ import {
   indexFallbackKey,
   isSitesHost,
   loadSiteConfig,
+  loadSlugForHostname,
+  parseSitesRootPath,
   siteNotFoundKey,
   sitePasswordAuthorized,
   siteSpaKey,
@@ -99,9 +101,9 @@ export const onRequest: PagesFunction<MiddlewareEnv> = async (context) => {
     context.request.headers.get("Host") ||
     new URL(context.request.url).host;
   const url = new URL(context.request.url);
+  const method = context.request.method.toUpperCase();
 
   if (isSitesHost(host, context.env.SITES_HOST)) {
-    const method = context.request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
       return new Response("Method Not Allowed", {
         status: 405,
@@ -119,6 +121,31 @@ export const onRequest: PagesFunction<MiddlewareEnv> = async (context) => {
       return serveImage(context.env.BUCKET, route.id, method === "HEAD");
     }
     return serveSlugSite(context, route);
+  }
+
+  // Per-slug custom hostname: serve sites/{slug}/ at the domain root.
+  // Order: hostname resolve → password gate (inside serveSlugSite) → content.
+  // Skip non-GET/HEAD and drive product prefixes so the drive origin stays cheap.
+  // (Custom hostnames should not shadow /api|/webdav|/mcp|/share.)
+  const path = url.pathname;
+  const skipCustomHostLookup =
+    path === "/api" ||
+    path.startsWith("/api/") ||
+    path === "/webdav" ||
+    path.startsWith("/webdav/") ||
+    path === "/mcp" ||
+    path.startsWith("/mcp/") ||
+    path === "/share" ||
+    path.startsWith("/share/");
+  if ((method === "GET" || method === "HEAD") && !skipCustomHostLookup) {
+    const customSlug = await loadSlugForHostname(context.env.BUCKET, host);
+    if (customSlug) {
+      const flags = await loadFeatureFlags(context.env.BUCKET);
+      if (!flags.sites) return sitesNotFound();
+      const parsed = parseSitesRootPath(path, customSlug);
+      if (!parsed.ok) return sitesNotFound();
+      return serveSlugSite(context, parsed);
+    }
   }
 
   // Only hit R2 for product routes; static assets and /api/* skip the extra read.

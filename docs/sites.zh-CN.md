@@ -27,12 +27,29 @@ sites/blog/style.css
 
 ## 管理 API 与界面
 
-- 网页端：文件管理器选中文件夹 →「发布为静态站」（`POST /api/sites` 带 `source`，与 MCP `publish_site` 同语义）；「站点」区块（`#/sites`）——列表与统计、zip 一键部署、SPA 开关、按站删除；「管理文件」跳到 `sites/<slug>/`。
+- 网页端：文件管理器选中文件夹 →「发布为静态站」（`POST /api/sites` 带 `source`，与 MCP `publish_site` 同语义）；「站点」区块（`#/sites`）——列表与统计、zip 一键部署、SPA 开关、可选访问密码、可选自定义域名、按站删除；「管理文件」跳到 `sites/<slug>/`。
 - MCP：`sites_list`、`sites_config`、`sites_delete`（同一套 `/api/sites`）。`publish_site` 把网盘目录同步到 `sites/{slug}/`（同名覆盖，不删 SPA 配置）。
 - `GET /api/sites` — 列站点（`?stats=1` 附带缓存的文件数/总大小）。会话（Basic）或 API key 均可。
-- `POST /api/sites` — `{"slug":"blog","source":"my-folder"}` 把网盘文件夹发布到 `sites/{slug}/`（同名覆盖，保留 SPA 配置；Sites 开关关闭时 404）；或 `{"slug":"blog","spa":true}` 切换 SPA 回退（站点需已存在）。
+- `POST /api/sites` — `{"slug":"blog","source":"my-folder"}` 把网盘文件夹发布到 `sites/{slug}/`（同名覆盖，保留 SPA 配置；Sites 开关关闭时 404）；或 `{"slug":"blog","spa":true}` 切换 SPA 回退；或 `{"slug":"blog","hostname":"blog.example.com"}` 设置/清除自定义域名（`null`/空串清除；站点需已存在）。
 - `DELETE /api/sites?slug=blog` — 删除站点全部文件（保留配置，重新部署同 slug 时 SPA 开关仍在）；加 `&purge=1` 连配置一起删。
 - SPA 回退：最终未命中时，`spa=true` 以 200 返回 `sites/<slug>/index.html`；否则若存在 `sites/<slug>/404.html` 以 404 状态返回它。
+
+## 自定义域名（按 slug）
+
+可选：给某个 slug 绑定主机名（如 `blog.example.com`），站点在**域名根路径**提供（`https://blog.example.com/`），而不是 `https://sites.<域>/blog/`。
+
+1. 在「站点」界面（`#/sites`）打开该站的 DNS/自定义域名控件并填写主机名（或 `POST /api/sites`：`{"slug":"blog","hostname":"blog.example.com"}`；`hostname: null` 清除）。
+2. DNS：为该主机名添加 **CNAME**，指向本 Pages 项目主机名（如 `flaredrive-xxx.pages.dev` 或 Cloudflare 给出的目标）。
+3. Cloudflare 控制台 → Pages → 你的项目 → **Custom domains** → 添加**同一**主机名，让 TLS 落在本 Worker/Pages 部署上。
+4. 等域名变为 Active 后打开 `https://blog.example.com/`（根路径）。原有的 `SITES_HOST` 路径访问方式仍然可用。
+
+规则：
+
+- 一个主机名只能对应一个 slug（已被占用返回 409）。
+- 主机名须为带至少一个点的 DNS 名（如 `blog.example.com`）；不能等于 `SITES_HOST`。
+- **不要**填网盘/管理界面自己的域名——自定义域中间件会遮蔽应用。
+- 可与站点访问密码共存：先按 Host 解析 → Basic Auth 门禁 → 再出内容（与未来 `_redirects` 钩子同序）。
+- 自定义域名上的 `/api`、`/webdav`、`/mcp`、`/share` 不会映射成站点文件（留给网盘产品路径）。
 
 ## 安全
 

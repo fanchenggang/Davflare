@@ -4,6 +4,7 @@ import {
   isValidSiteSlug,
   listSites,
   publishSite,
+  siteHostnameUrl,
   siteUrl,
   suggestSiteSlug,
   updateSiteConfig,
@@ -53,18 +54,44 @@ describe("sites / updateSiteConfig", () => {
   });
 
   test("POST password set / clear", async () => {
-    mockAuthFetch.mockOk({ slug: "blog", spa: false, passwordProtected: true });
+    mockAuthFetch.mockOk({ slug: "blog", spa: false, passwordProtected: true, hostname: null });
     await updateSiteConfig("blog", { password: "s3cret" });
     expect(JSON.parse(mockAuthFetch.mock.calls[0][1].body)).toEqual({
       slug: "blog",
       password: "s3cret",
     });
 
-    mockAuthFetch.mockOk({ slug: "blog", spa: false, passwordProtected: false });
+    mockAuthFetch.mockOk({ slug: "blog", spa: false, passwordProtected: false, hostname: null });
     await updateSiteConfig("blog", { password: null });
     expect(JSON.parse(mockAuthFetch.mock.calls[1][1].body)).toEqual({
       slug: "blog",
       password: null,
+    });
+  });
+
+  test("POST hostname set / clear", async () => {
+    mockAuthFetch.mockOk({
+      slug: "blog",
+      spa: false,
+      passwordProtected: false,
+      hostname: "blog.example.com",
+    });
+    await updateSiteConfig("blog", { hostname: "blog.example.com" });
+    expect(JSON.parse(mockAuthFetch.mock.calls[0][1].body)).toEqual({
+      slug: "blog",
+      hostname: "blog.example.com",
+    });
+
+    mockAuthFetch.mockOk({
+      slug: "blog",
+      spa: false,
+      passwordProtected: false,
+      hostname: null,
+    });
+    await updateSiteConfig("blog", { hostname: null });
+    expect(JSON.parse(mockAuthFetch.mock.calls[1][1].body)).toEqual({
+      slug: "blog",
+      hostname: null,
     });
   });
 
@@ -98,6 +125,13 @@ describe("sites / siteUrl", () => {
 
   test("使用当前协议拼接地址", () => {
     expect(siteUrl("sites.example.com", "blog")).toBe(`${window.location.protocol}//sites.example.com/blog/`);
+  });
+
+  test("siteHostnameUrl builds root URL", () => {
+    expect(siteHostnameUrl(null)).toBeNull();
+    expect(siteHostnameUrl("blog.example.com")).toBe(
+      `${window.location.protocol}//blog.example.com/`
+    );
   });
 });
 

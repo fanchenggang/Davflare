@@ -280,6 +280,67 @@ describe("sites host: static serving", () => {
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
     expect(response.headers.get("Vary")).toBeNull();
   });
+
+  test("custom hostname serves slug at domain root", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    bucket.seed([
+      {
+        key: "_$flaredrive$/site-hostnames/blog.example.com",
+        body: "blog",
+        contentType: "text/plain",
+      },
+      {
+        key: siteConfigKey("blog"),
+        body: JSON.stringify({ slug: "blog", hostname: "blog.example.com" }),
+        contentType: "application/json",
+      },
+    ]);
+    const env = makeEnv(bucket, { SITES_HOST: "sites.example.com" });
+    const root = await siteRequest("/", env, { host: "blog.example.com" });
+    expect(root.status).toBe(200);
+    expect(await root.text()).toBe("<h1>home</h1>");
+
+    const asset = await siteRequest("/app.js", env, { host: "blog.example.com" });
+    expect(asset.status).toBe(200);
+    expect(await asset.text()).toBe("console.log(1)");
+
+    // Path-based SITES_HOST still works
+    const pathBased = await siteRequest("/blog/app.js", env);
+    expect(pathBased.status).toBe(200);
+  });
+
+  test("custom hostname respects password gate then content", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const passwordHash = await sha256Hex("gate");
+    bucket.seed([
+      {
+        key: "_$flaredrive$/site-hostnames/blog.example.com",
+        body: "blog",
+        contentType: "text/plain",
+      },
+      {
+        key: siteConfigKey("blog"),
+        body: JSON.stringify({
+          slug: "blog",
+          hostname: "blog.example.com",
+          passwordHash,
+        }),
+        contentType: "application/json",
+      },
+    ]);
+    const env = makeEnv(bucket, { SITES_HOST: "sites.example.com" });
+    const blocked = await siteRequest("/", env, { host: "blog.example.com" });
+    expect(blocked.status).toBe(401);
+    const ok = await siteRequest("/", env, {
+      host: "blog.example.com",
+      headers: { Authorization: `Basic ${utf8ToBase64(":gate")}` },
+    });
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).toBe("<h1>home</h1>");
+  });
+
   test("sites flag off 404s slug routes but keeps images host working", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);

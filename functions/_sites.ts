@@ -29,6 +29,8 @@ export interface SiteConfig {
   spa?: boolean;
   /** SHA-256 hex of the site access password; omit/empty = public site. Never return to clients. */
   passwordHash?: string;
+  /** Optional custom hostname (e.g. blog.example.com); served at domain root. */
+  hostname?: string;
   stats?: SiteStats;
 }
 
@@ -63,6 +65,13 @@ export function sitesUnauthorized(): Response {
 
 export function siteConfigKey(slug: string): string {
   return `${SITES_CONFIG_PREFIX}${slug}.json`;
+}
+
+/** Reverse index: one hostname → one slug (O(1) Host lookup). */
+export const SITE_HOSTNAME_PREFIX = "_$flaredrive$/site-hostnames/";
+
+export function siteHostnameKey(hostname: string): string {
+  return `${SITE_HOSTNAME_PREFIX}${normalizeHostname(hostname)}`;
 }
 
 export function siteSpaKey(slug: string): string {
@@ -122,6 +131,113 @@ export function isSitesHost(requestHost: string, sitesHost: string | undefined |
   if (!want) return false;
   const got = normalizeSitesHost(requestHost.split(":")[0]);
   return got === want;
+}
+
+/** Strip scheme/path/port/trailing dot; lowercase. Empty if unusable. */
+export function normalizeHostname(raw: string | undefined | null): string {
+  let value = (raw || "").trim().toLowerCase();
+  if (!value) return "";
+  value = value.replace(/^https?:\/\//, "");
+  value = value.split("/")[0] || "";
+  value = value.split(":")[0] || "";
+  value = value.replace(/\.$/, "");
+  return value;
+}
+
+const HOSTNAME_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** DNS hostname (labels + dots). Rejects IPs, empty, overly long, or invalid labels. */
+export function isValidHostname(raw: string): boolean {
+  const host = normalizeHostname(raw);
+  if (!host || host.length > 253) return false;
+  if (host.includes("..")) return false;
+  // Reject IPv4 / bare numbers that are not DNS names we want for custom domains.
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return false;
+  const labels = host.split(".");
+  if (labels.length < 2) return false; // require at least one dot (e.g. blog.example.com)
+  return labels.every((label) => HOSTNAME_LABEL_RE.test(label));
+}
+
+export async function loadSlugForHostname(
+  bucket: R2Bucket,
+  hostname: string
+): Promise<string | null> {
+  const host = normalizeHostname(hostname);
+  if (!host || !isValidHostname(host)) return null;
+  const object = await bucket.get(siteHostnameKey(host));
+  if (object === null) return null;
+  try {
+    const text = (await object.text()).trim().toLowerCase();
+    if (!isValidSlug(text)) return null;
+    return text;
+  } catch {
+    return null;
+  }
+}
+
+export async function putHostnameIndex(
+  bucket: R2Bucket,
+  hostname: string,
+  slug: string
+): Promise<void> {
+  const host = normalizeHostname(hostname);
+  await bucket.put(siteHostnameKey(host), slug, {
+    httpMetadata: { contentType: "text/plain; charset=utf-8" },
+  });
+}
+
+export async function deleteHostnameIndex(
+  bucket: R2Bucket,
+  hostname: string | undefined | null
+): Promise<void> {
+  const host = normalizeHostname(hostname);
+  if (!host) return;
+  await bucket.delete(siteHostnameKey(host));
+}
+
+/**
+ * Map a custom-hostname request path onto sites/{slug}/… at the domain root
+ * (no slug segment in the URL).
+ */
+export function parseSitesRootPath(
+  pathname: string,
+  slug: string
+): { ok: true; slug: string; key: string; tryIndex: boolean } | { ok: false; reason: string } {
+  const normalizedSlug = slug.toLowerCase();
+  if (!SLUG_RE.test(normalizedSlug)) return { ok: false, reason: "bad slug" };
+  const raw = pathname.replace(/\\/g, "/");
+  const parts = raw.split("/").map(decodeSegment).filter(Boolean);
+  if (
+    parts.some(
+      (part) => part === ".." || part.includes("/") || part.includes("_$flaredrive$")
+    )
+  ) {
+    return { ok: false, reason: "bad path" };
+  }
+  if (parts.length === 0) {
+    return {
+      ok: true,
+      slug: normalizedSlug,
+      key: `${SITES_PREFIX}${normalizedSlug}/index.html`,
+      tryIndex: false,
+    };
+  }
+  const file = parts.join("/");
+  if (raw.endsWith("/")) {
+    return {
+      ok: true,
+      slug: normalizedSlug,
+      key: `${SITES_PREFIX}${normalizedSlug}/${file.replace(/\/$/, "")}/index.html`,
+      tryIndex: false,
+    };
+  }
+  const hasDot = parts[parts.length - 1].includes(".");
+  return {
+    ok: true,
+    slug: normalizedSlug,
+    key: `${SITES_PREFIX}${normalizedSlug}/${file}`,
+    tryIndex: !hasDot,
+  };
 }
 
 export function mimeForKey(key: string): string {

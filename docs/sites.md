@@ -27,12 +27,29 @@ Then open `https://sites.<your-domain>/blog/` (or `/blog/style.css`). Missing fi
 
 ## Management API & UI
 
-- Web UI: in the file manager, select a folder → **Publish as site** (`POST /api/sites` with `source`, same semantics as MCP `publish_site`); **Sites** section (`#/sites`) — list/stats, zip deploy, SPA toggle, delete. "Manage files" opens `sites/<slug>/`.
+- Web UI: in the file manager, select a folder → **Publish as site** (`POST /api/sites` with `source`, same semantics as MCP `publish_site`); **Sites** section (`#/sites`) — list/stats, zip deploy, SPA toggle, optional access password, optional custom hostname, delete. "Manage files" opens `sites/<slug>/`.
 - MCP: `sites_list`, `sites_config`, `sites_delete` (same `/api/sites` handlers). `publish_site` copies a drive folder onto `sites/{slug}/` (overwrite same names; SPA config is kept).
 - `GET /api/sites` — list sites (`?stats=1` adds cached object count / total size). Session (Basic) or API key.
-- `POST /api/sites` — `{"slug":"blog","source":"my-folder"}` publishes a drive folder to `sites/{slug}/` (overwrite same names; SPA config kept; 404 if Sites switch is off); or `{"slug":"blog","spa":true}` toggles SPA fallback (site must already exist).
+- `POST /api/sites` — `{"slug":"blog","source":"my-folder"}` publishes a drive folder to `sites/{slug}/` (overwrite same names; SPA config kept; 404 if Sites switch is off); or `{"slug":"blog","spa":true}` toggles SPA fallback; or `{"slug":"blog","hostname":"blog.example.com"}` sets/clears a custom hostname (`null`/empty clears; site must already exist).
 - `DELETE /api/sites?slug=blog` — remove all site files (config kept, so a redeploy keeps the SPA flag); add `&purge=1` to also delete the config.
 - SPA fallback: on a final miss, `spa=true` serves `sites/<slug>/index.html` with 200; otherwise a custom `sites/<slug>/404.html` is served with status 404 when present.
+
+## Custom hostname (per slug)
+
+Optional: bind a hostname such as `blog.example.com` to one slug so the site is served at the **domain root** (`https://blog.example.com/`), not at `https://sites.<domain>/blog/`.
+
+1. In **Sites** (`#/sites`), open the DNS / custom-domain control for the slug and set the hostname (or `POST /api/sites` with `{"slug":"blog","hostname":"blog.example.com"}`; `hostname: null` clears it).
+2. DNS: create a **CNAME** for that hostname pointing at your Pages project hostname (e.g. `flaredrive-xxx.pages.dev` or the project’s Cloudflare target).
+3. Cloudflare Dashboard → Pages → your project → **Custom domains** → add the **same** hostname so TLS terminates on this Worker/Pages deploy.
+4. Wait for the domain to become Active, then open `https://blog.example.com/` (root). Path-based `SITES_HOST` URLs keep working.
+
+Rules:
+
+- One hostname → one slug (409 if already taken).
+- Hostname must be a DNS name with at least one dot (`blog.example.com`); it cannot equal `SITES_HOST`.
+- Do **not** use your drive/manager hostname — the custom-host middleware would shadow the app.
+- Coexists with site access password: Host resolve → Basic Auth gate → content (same order as a future `_redirects` hook).
+- `/api`, `/webdav`, `/mcp`, and `/share` on a custom hostname are not remapped to site files (reserved for the drive product).
 
 ## Security
 

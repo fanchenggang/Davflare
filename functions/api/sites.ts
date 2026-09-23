@@ -3,10 +3,15 @@ import {
   SITE_PASSWORD_MAX_LEN,
   SITES_PREFIX,
   SiteConfig,
+  deleteHostnameIndex,
   hashSitePassword,
+  isValidHostname,
   isValidSlug,
   loadSiteConfig,
+  loadSlugForHostname,
+  normalizeHostname,
   normalizeSitesHost,
+  putHostnameIndex,
   siteConfigKey,
 } from "../_sites";
 import {
@@ -114,6 +119,7 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
       slug,
       spa: Boolean(config.spa),
       passwordProtected: Boolean(config.passwordHash),
+      hostname: config.hostname || null,
       stats: stats || null,
     });
   }
@@ -135,7 +141,13 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     return textResponse("Unauthorized", 401);
   }
 
-  let body: { slug?: string; spa?: boolean; source?: string; password?: string | null };
+  let body: {
+    slug?: string;
+    spa?: boolean;
+    source?: string;
+    password?: string | null;
+    hostname?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -215,12 +227,44 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     }
   }
 
+  // hostname key present: set (non-empty) or clear (null/""); omit leaves unchanged.
+  // Uniqueness: one hostname → one slug via reverse index.
+  if (Object.prototype.hasOwnProperty.call(body, "hostname")) {
+    if (body.hostname === null || body.hostname === "") {
+      if (config.hostname) {
+        await deleteHostnameIndex(env.BUCKET, config.hostname);
+        delete config.hostname;
+      }
+    } else if (typeof body.hostname !== "string") {
+      return new Response("Bad hostname", { status: 400 });
+    } else {
+      const hostname = normalizeHostname(body.hostname);
+      if (!isValidHostname(hostname)) {
+        return new Response("Bad hostname", { status: 400 });
+      }
+      const sitesHost = normalizeSitesHost(env.SITES_HOST);
+      if (sitesHost && hostname === sitesHost) {
+        return new Response("Hostname cannot equal SITES_HOST", { status: 400 });
+      }
+      const existingSlug = await loadSlugForHostname(env.BUCKET, hostname);
+      if (existingSlug && existingSlug !== slug) {
+        return new Response("Hostname already in use", { status: 409 });
+      }
+      if (config.hostname && config.hostname !== hostname) {
+        await deleteHostnameIndex(env.BUCKET, config.hostname);
+      }
+      await putHostnameIndex(env.BUCKET, hostname, slug);
+      config.hostname = hostname;
+    }
+  }
+
   await saveSiteConfig(env.BUCKET, config);
 
   return jsonResponse({
     slug,
     spa: Boolean(config.spa),
     passwordProtected: Boolean(config.passwordHash),
+    hostname: config.hostname || null,
   });
 };
 
@@ -267,6 +311,10 @@ export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
     cursor = listing.cursor;
   } while (true);
 
-  if (purge) await env.BUCKET.delete(siteConfigKey(slug));
+  if (purge) {
+    const config = await loadSiteConfig(env.BUCKET, slug);
+    if (config?.hostname) await deleteHostnameIndex(env.BUCKET, config.hostname);
+    await env.BUCKET.delete(siteConfigKey(slug));
+  }
   return jsonResponse({ slug, deleted });
 };
