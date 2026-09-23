@@ -36,6 +36,9 @@ GitHub Release 附一个 zip：`davflare-extension.zip`（工具栏 + 内嵌设�
 - **工作区**：把当前窗口存为工作区——页面顺序、固定状态、原生标签组元数据——之后可全部或勾选恢复到新窗口（URL 去重，还原固定与分组）。
 - **Tab 分组**：本地规则引擎（域名后缀 / URL / 标题 / 正则，多条件 AND），一键把当前窗口收进原生标签组，可自定义标题/颜色/折叠/优先级；未命中可按根域名兜底。规则经 `tabGroups.json` 同步。
 - **快照**：把页面捕获为单文件 HTML（CORS 允许的图片尽力内联；剥离 script/iframe；8 MB 上限）存到 `bookmarks/snapshots/`，在书签编辑里查看、下载、更新、删除。无 CORS 头的跨域资源无法内联（浏览器安全限制），`chrome://` 等受限页无法捕获。
+- **侧栏收藏夹**：把常用文件夹 / 标签 / 「置顶」视图钉到侧栏顶部，点 ★ 添加或移除（存在本机 `chrome.storage.sync`，不写 WebDAV）。
+- **Omnibox**：地址栏输入 `df` + 空格后搜索缓存书签；无命中或选「在书签库中搜索」时打开库页并带上 `?q=` 筛选。
+- **库占用可视**：设置页展示书签 HTML/JSON、工作区、Tab 规则、快照索引与 HTML 的估计体积（相对 `/webdav/<书签目录>/`）。
 - **错误不静默**：WebDAV 开关关闭（404）、服务端未配置凭据（403）、凭据错误（401）、编辑冲突（412）各有独立文案，并提供打开设置的入口。
 
 格式映射、HamHome 导入导出与冲突策略见 [docs/bookmarks-portability.zh-CN.md](../docs/bookmarks-portability.zh-CN.md)。

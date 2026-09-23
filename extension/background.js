@@ -297,9 +297,16 @@ chrome.omnibox.onInputChanged.addListener(async function (text, suggest) {
   var model = await cachedBookmarksModel();
   var matches = Bookmarks.searchBookmarks(model, text, OMNI_LIMIT);
   if (!matches.length) {
+    var emptyQ = String(text || "").trim();
     chrome.omnibox.setDefaultSuggestion({
       description:
-        pickLang() === "zh" ? "搜索 Davflare 书签…" : "Search Davflare bookmarks…",
+        pickLang() === "zh"
+          ? emptyQ
+            ? "在书签库中搜索 “" + emptyQ.replace(/[<>&]/g, "") + "”…"
+            : "搜索 Davflare 书签…"
+          : emptyQ
+            ? "Search library for “" + emptyQ.replace(/[<>&]/g, "") + "”…"
+            : "Search Davflare bookmarks…",
     });
     suggest([]);
     return;
@@ -311,14 +318,28 @@ chrome.omnibox.onInputChanged.addListener(async function (text, suggest) {
       description: omniDescription(matches[i]),
     });
   }
-  // 第一条作为默认建议（回车直达），其余进下拉列表。
+  // 第一条作为默认建议（回车直达），其余进下拉列表；末尾附带「在库中搜索」。
   chrome.omnibox.setDefaultSuggestion({ description: suggestions[0].description });
+  var q = String(text || "").trim();
+  if (q && suggestions.length) {
+    suggestions.push({
+      content: "davflare-search:" + q,
+      description:
+        pickLang() === "zh"
+          ? "<dim>在书签库中搜索</dim> " + xmlEscape(q)
+          : "<dim>Search library for</dim> " + xmlEscape(q),
+    });
+  }
   suggest(suggestions.slice(1));
 });
 
 chrome.omnibox.onInputEntered.addListener(async function (text, disposition) {
   var target = "";
-  if (Bookmarks.isWebUrl(text)) {
+  if (String(text || "").indexOf("davflare-search:") === 0) {
+    // Explicit “search library” suggestion — open filtered library page.
+    target = "";
+    text = String(text).slice("davflare-search:".length);
+  } else if (Bookmarks.isWebUrl(text)) {
     // 用户选中了某条建议：content 即书签 URL。
     target = text;
   } else {
@@ -336,8 +357,12 @@ chrome.omnibox.onInputEntered.addListener(async function (text, disposition) {
     open(target);
     return;
   }
-  // 没有命中：退回书签库页面继续找。
+  // 没有命中：打开书签库并带上搜索词，便于继续筛选。
   var libraryUrl = chrome.runtime.getURL("bookmarks.html");
+  var q = String(text || "").trim();
+  if (q) {
+    libraryUrl += "?q=" + encodeURIComponent(q);
+  }
   if (disposition === "newForegroundTab" || disposition === "newBackgroundTab") {
     chrome.tabs.create({ url: libraryUrl, active: disposition === "newForegroundTab" });
   } else {

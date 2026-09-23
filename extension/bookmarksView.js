@@ -271,6 +271,117 @@ var BookmarksView = (function () {
     return preset.value || preset.tag || "";
   }
 
+
+  /**
+   * Phase 3: sidebar favorites — pin folders / tags / the Pinned view for
+   * quick access. Stored in chrome.storage.sync (UI preference, not WebDAV).
+   * Shape: { kind: "folder"|"tag"|"pinned", value: string }.
+   */
+  var FAVORITE_KINDS = ["folder", "tag", "pinned"];
+
+  function favoriteKey(entry) {
+    if (!entry || typeof entry !== "object") return "";
+    var kind = FAVORITE_KINDS.indexOf(entry.kind) !== -1 ? entry.kind : "";
+    if (!kind) return "";
+    var value =
+      kind === "pinned"
+        ? ""
+        : typeof entry.value === "string"
+          ? entry.value.trim().slice(0, kind === "tag" ? 64 : 200)
+          : "";
+    if (kind === "tag" && !value) return "";
+    // folder may be "" (unfiled)
+    return kind + "\0" + value;
+  }
+
+  function normalizeFavorites(raw, limit) {
+    if (!Array.isArray(raw)) return [];
+    var cap = typeof limit === "number" && isFinite(limit) && limit > 0 ? limit : 20;
+    var out = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < raw.length && out.length < cap; i++) {
+      var row = raw[i];
+      var key = favoriteKey(row);
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      var kind = key.split("\0")[0];
+      var value = key.slice(kind.length + 1);
+      out.push({ kind: kind, value: value });
+    }
+    return out;
+  }
+
+  function isFavorite(list, entry) {
+    var want = favoriteKey(entry);
+    if (!want) return false;
+    var rows = normalizeFavorites(list);
+    for (var i = 0; i < rows.length; i++) {
+      if (favoriteKey(rows[i]) === want) return true;
+    }
+    return false;
+  }
+
+  /** Toggle membership; returns the next normalized list (does not mutate). */
+  function toggleFavorite(list, entry) {
+    var want = favoriteKey(entry);
+    if (!want) return normalizeFavorites(list);
+    var rows = normalizeFavorites(list);
+    var out = [];
+    var found = false;
+    for (var i = 0; i < rows.length; i++) {
+      if (favoriteKey(rows[i]) === want) {
+        found = true;
+        continue;
+      }
+      out.push(rows[i]);
+    }
+    if (!found) {
+      var kind = want.split("\0")[0];
+      var value = want.slice(kind.length + 1);
+      out.push({ kind: kind, value: value });
+    }
+    return normalizeFavorites(out);
+  }
+
+  /**
+   * Phase 3: library storage footprint summary for settings.
+   * parts: { bookmarks?, workspaces?, tabRules?, snapshotsIndex?, snapshotsHtml?, path? }
+   * unknown / missing numbers are treated as 0; total = sum of known parts.
+   */
+  function summarizeStorage(parts) {
+    var src = parts && typeof parts === "object" ? parts : {};
+    function num(v) {
+      return typeof v === "number" && isFinite(v) && v > 0 ? Math.floor(v) : 0;
+    }
+    var bookmarks = num(src.bookmarks);
+    var workspaces = num(src.workspaces);
+    var tabRules = num(src.tabRules);
+    var snapshotsIndex = num(src.snapshotsIndex);
+    var snapshotsHtml = num(src.snapshotsHtml);
+    return {
+      path: typeof src.path === "string" ? src.path : "",
+      bookmarks: bookmarks,
+      workspaces: workspaces,
+      tabRules: tabRules,
+      snapshotsIndex: snapshotsIndex,
+      snapshotsHtml: snapshotsHtml,
+      total: bookmarks + workspaces + tabRules + snapshotsIndex + snapshotsHtml,
+    };
+  }
+
+  /** Sum snapshot HTML sizes recorded in the snapshots index. */
+  function sumSnapshotSizes(model) {
+    var list = [];
+    if (model && Array.isArray(model.snapshots)) list = model.snapshots;
+    else if (Array.isArray(model)) list = model;
+    var total = 0;
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i] && list[i].size;
+      if (typeof s === "number" && isFinite(s) && s > 0) total += Math.floor(s);
+    }
+    return total;
+  }
+
   return {
     domainOf: domainOf,
     fallbackLetter: function (item) {
@@ -285,6 +396,12 @@ var BookmarksView = (function () {
     folderList: folderList,
     matchesQuery: matchesQuery,
     normalizePresets: normalizePresets,
+    normalizeFavorites: normalizeFavorites,
+    favoriteKey: favoriteKey,
+    isFavorite: isFavorite,
+    toggleFavorite: toggleFavorite,
+    summarizeStorage: summarizeStorage,
+    sumSnapshotSizes: sumSnapshotSizes,
     orderPinnedFirst: orderPinnedFirst,
     presetFilterLabel: presetFilterLabel,
     tagList: tagList,

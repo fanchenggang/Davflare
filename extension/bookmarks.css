@@ -1415,3 +1415,149 @@ dialog textarea {
 #exportChromeConflictNote {
   margin: 0 0 8px;
 }
+
+
+/* ---------- phase 3: sidebar favorites ---------- */
+
+.favoritesNav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.favoritesNav .navEmptyFav {
+  margin: 0;
+  padding: 4px 10px 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.favItemWrap {
+  position: relative;
+}
+
+.favItemWrap .navItem {
+  padding-right: 28px;
+}
+
+.favItemWrap .navItem .favKind {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.favRemove {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 6px;
+  visibility: hidden;
+  cursor: pointer;
+}
+
+.favItemWrap:hover .favRemove,
+.favRemove:focus-visible {
+  visibility: visible;
+}
+
+.favRemove:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.navItem.favStar {
+  /* star affordance on folder/tag rows */
+}
+
+.navFolderStar,
+.navTagStar {
+  position: absolute;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  visibility: hidden;
+  cursor: pointer;
+}
+
+.navItemWrap:hover .navFolderStar,
+.navItemWrap:hover .navTagStar,
+.navFolderStar[aria-pressed="true"],
+.navTagStar[aria-pressed="true"] {
+  visibility: visible;
+}
+
+.navFolderStar[aria-pressed="true"],
+.navTagStar[aria-pressed="true"] {
+  color: var(--orange);
+}
+
+.navFolderStar:hover,
+.navTagStar:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.navItemWrap.hasStar .navItem {
+  padding-right: 52px;
+}
+
+/* ---------- phase 3: storage visibility ---------- */
+
+.storageList {
+  margin: 8px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.storageList > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+
+.storageList dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.storageList dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.storageList .storageTotal {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.storageList .storageTotal dt,
+.storageList .storageTotal dd {
+  color: var(--text);
+}
+
+#storageSection .ghost {
+  margin-top: 4px;
+}

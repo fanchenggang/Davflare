@@ -36,6 +36,9 @@ The extension’s bookmark library keeps your bookmarks **on your own WebDAV** �
 - **Workspaces:** save the current window — page order, pinned state, native tab-group metadata — and restore all or selected pages into a new window (duplicate URLs skipped, pinned/group state restored).
 - **Tab groups:** local rule engine (domain suffix / URL / title / regex, AND-combined) that groups the current window into native tab groups with custom title/color/collapse/priority; unmatched tabs can fall back to root-domain grouping. Rules sync via `tabGroups.json`.
 - **Snapshots:** capture the current page as a single self-contained HTML file (images best-effort inlined where CORS allows; scripts/iframes stripped; 8 MB cap) onto `bookmarks/snapshots/`. View, download, update, or delete from the bookmark editor. Cross-origin assets without CORS headers cannot be inlined (browser security), and restricted pages such as `chrome://` cannot be captured.
+- **Sidebar favorites:** pin folders, tags, or the Pinned view at the top of the sidebar (★ to add/remove; stored in `chrome.storage.sync`, not on WebDAV).
+- **Omnibox:** type `df` + space in the address bar to search the cached library; on miss (or “Search library”) opens the library with `?q=` applied.
+- **Storage visibility:** Settings shows estimated sizes for bookmarks HTML/JSON, workspaces, tab rules, and snapshots under `/webdav/<bookmark dir>/`.
 - **Errors never fail silently:** a disabled WebDAV switch (404), missing server credentials (403), wrong credentials (401), and edit conflicts (412) each get a distinct message with a shortcut to Options.
 
 Format mapping, HamHome import/export, and conflict rules: [docs/bookmarks-portability.md](../docs/bookmarks-portability.md).

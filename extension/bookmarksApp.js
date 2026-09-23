@@ -247,6 +247,35 @@ var COPY = {
     presetKindPinned: "Pinned",
     presetUnfiled: "Unfiled",
     presetDeleteConfirm: "Delete the preset “{p}”?",
+    favoritesTitle: "Favorites",
+    favoritesEmpty: "Star folders or tags below for quick access.",
+    favAdd: "Add to favorites",
+    favRemove: "Remove from favorites",
+    favKindFolder: "Folder",
+    favKindTag: "Tag",
+    favKindPinned: "Pinned",
+    storageLegend: "Library storage",
+    storageBookmarks: "Bookmarks (HTML + JSON)",
+    storageWorkspaces: "Workspaces",
+    storageTabRules: "Tab group rules",
+    storageSnaps: "Snapshots (index + HTML)",
+    storageTotal: "Estimated total",
+    storageNote:
+      "Sizes are read from your WebDAV bookmark directory (R2/Drive footprint for this library). Snapshot HTML uses sizes recorded in the index.",
+    storageRefresh: "Refresh sizes",
+    storageLoading: "Measuring…",
+    storageNeedConfig: "Save instance settings first to measure storage.",
+    storageDone: "Storage sizes updated.",
+    storageFailed: "Could not read some library files.",
+    storagePath: "Path: {p}",
+    permBookmarksTitle: "Allow bookmark access?",
+    permBookmarksBody:
+      "Davflare needs Chrome’s “Read and change your bookmarks” permission to import or write back. Chrome will show a system prompt next — choose Allow to continue.",
+    permBookmarksContinue: "Continue",
+    snapIndexMissing:
+      "No snapshots index yet (snapshots.json). Capturing a page will create it under your bookmark directory.",
+    snapWriteFailPath:
+      "Could not write the snapshot file. Check WebDAV is enabled and the bookmark directory is writable.",
   },
   zh: {
     title: "Davflare 书签",
@@ -476,6 +505,35 @@ var COPY = {
     presetKindPinned: "置顶",
     presetUnfiled: "未分类",
     presetDeleteConfirm: "确定删除预设「{p}」？",
+    favoritesTitle: "收藏夹",
+    favoritesEmpty: "在下方文件夹或标签上点 ★，即可固定到此处。",
+    favAdd: "加入收藏夹",
+    favRemove: "移出收藏夹",
+    favKindFolder: "文件夹",
+    favKindTag: "标签",
+    favKindPinned: "置顶",
+    storageLegend: "库占用",
+    storageBookmarks: "书签（HTML + JSON）",
+    storageWorkspaces: "工作区",
+    storageTabRules: "Tab 分组规则",
+    storageSnaps: "快照（索引 + HTML）",
+    storageTotal: "合计（估计）",
+    storageNote:
+      "体积来自你 WebDAV 书签目录（本库在 R2/网盘上的占用）。快照 HTML 按索引里记录的 size 汇总。",
+    storageRefresh: "刷新体积",
+    storageLoading: "正在统计…",
+    storageNeedConfig: "请先保存实例设置，再统计占用。",
+    storageDone: "占用已更新。",
+    storageFailed: "部分库文件读取失败。",
+    storagePath: "路径：{p}",
+    permBookmarksTitle: "需要书签权限",
+    permBookmarksBody:
+      "导入或写回浏览器书签前，Davflare 需要 Chrome「读取和更改您的书签」权限。接下来会弹出系统授权框，请选择「允许」。",
+    permBookmarksContinue: "继续授权",
+    snapIndexMissing:
+      "还没有快照索引（snapshots.json）。捕获页面时会在书签目录下自动创建。",
+    snapWriteFailPath:
+      "无法写入快照文件。请确认 WebDAV 已开启，且书签目录可写。",
   },
 };
 
@@ -515,6 +573,7 @@ var inflightSync = 0;
 var appState = {
   view: "bookmarks",
   presets: [],
+  favorites: [],
   workspaces: { version: 1, workspaces: [] },
   workspacesEtag: null,
   tabRules: { version: 1, fallbackDomain: true, rules: [] },
@@ -823,7 +882,10 @@ function switchView(view) {
   if (view === "drive") loadDriveView();
   if (view === "workspaces") loadWorkspaces();
   if (view === "tabRules") loadTabRules();
-  if (view === "settings") loadSettings();
+  if (view === "settings") {
+    loadSettings();
+    refreshStoragePanel();
+  }
 }
 
 /* ---------- drive view (embedded React app) ---------- */
@@ -1000,6 +1062,8 @@ function renderNav() {
   }
   $("navPinnedCount").textContent = String(pinnedCount);
   $("navPinned").classList.toggle("active", state.filter.kind === "pinned");
+  ensurePinnedFavoriteStar();
+  renderFavoritesNav();
 
   var folderNav = $("folderNav");
   folderNav.textContent = "";
@@ -1018,12 +1082,16 @@ function renderNav() {
   for (var j = 0; j < tags.length; j++) {
     (function (entry) {
       var active = state.filter.kind === "tag" && state.filter.value === entry.name;
-      tagNav.appendChild(
+      var tagWrap = document.createElement("div");
+      tagWrap.className = "navItemWrap hasStar";
+      tagWrap.appendChild(
         navButton(entry.name, entry.count, active, function () {
           state.filter = { kind: "tag", value: entry.name };
           renderAll();
         })
       );
+      tagWrap.appendChild(makeFavoriteStar("tag", entry.name));
+      tagNav.appendChild(tagWrap);
     })(tags[j]);
   }
   if (!tags.length) tagNav.appendChild(emptyHint());
@@ -1042,6 +1110,8 @@ function folderNavItem(entry, active) {
       renderAll();
     })
   );
+  wrap.classList.add("hasStar");
+  wrap.appendChild(makeFavoriteStar("folder", entry.name));
   if (entry.name !== "") {
     var more = document.createElement("button");
     more.className = "navFolderMore menuToggle";
@@ -2368,7 +2438,15 @@ async function loadSnapshots() {
   var made = await makeClient();
   if (!made.cfg.instanceUrl) return;
   var res = await made.client.getFile(SNAP_FILE);
-  if (!res.ok) return;
+  if (!res.ok) {
+    // Feature-off / auth errors stay silent here; capture path surfaces them.
+    return;
+  }
+  if (res.missing) {
+    appState.snapshots = Snapshots.normalize(null);
+    appState.snapshotsEtag = null;
+    return;
+  }
   appState.snapshotsEtag = res.etag;
   var parsed = null;
   if (res.text) {
@@ -2475,7 +2553,11 @@ async function captureSnapshotFor(bookmark) {
   var id = Snapshots.makeId();
   var put = await made.client.putFile(Snapshots.fileName(id), html, "text/html; charset=utf-8");
   if (!put.ok) {
-    setSnapStatus(errorText(put.kind));
+    var writeMsg = errorText(put.kind);
+    if (put.kind === "disabled" || put.kind === "http404" || put.status === 404) {
+      writeMsg = t.snapWriteFailPath;
+    }
+    setSnapStatus(writeMsg);
     return;
   }
   if (previous && previous.id && previous.id !== id) {
@@ -2789,6 +2871,7 @@ async function submitFolderDialog(event) {
 /* ---------- filter presets (#63 P2) ---------- */
 
 var PRESETS_KEY = "bookmarkPresets";
+var FAVORITES_KEY = "bookmarkFavorites";
 
 function sinceLabel(kind) {
   var labels = {
@@ -2811,11 +2894,310 @@ async function loadPresets() {
   renderPresetSelect();
 }
 
+
 async function savePresets() {
   var payload = {};
   payload[PRESETS_KEY] = appState.presets;
   await chrome.storage.sync.set(payload);
 }
+
+/* ---------- sidebar favorites (phase 3) ---------- */
+
+async function loadFavorites() {
+  try {
+    var stored = await chrome.storage.sync.get([FAVORITES_KEY]);
+    appState.favorites = BookmarksView.normalizeFavorites(
+      stored && stored[FAVORITES_KEY]
+    );
+  } catch (err) {
+    appState.favorites = [];
+  }
+}
+
+async function saveFavorites() {
+  var payload = {};
+  payload[FAVORITES_KEY] = appState.favorites;
+  try {
+    await chrome.storage.sync.set(payload);
+  } catch (err) {
+    /* ignore quota */
+  }
+}
+
+function favoriteEntry(kind, value) {
+  return { kind: kind, value: kind === "pinned" ? "" : value || "" };
+}
+
+function favLabel(entry) {
+  if (!entry) return "";
+  if (entry.kind === "pinned") return t.favKindPinned;
+  if (entry.kind === "tag") return entry.value;
+  return folderLabel(entry.value || "");
+}
+
+function favKindPrefix(entry) {
+  if (!entry) return "";
+  if (entry.kind === "tag") return t.favKindTag;
+  if (entry.kind === "pinned") return t.favKindPinned;
+  return t.favKindFolder;
+}
+
+function applyFavorite(entry) {
+  if (!entry) return;
+  if (entry.kind === "pinned") {
+    state.filter = { kind: "pinned", value: "" };
+  } else if (entry.kind === "tag") {
+    state.filter = { kind: "tag", value: entry.value };
+  } else {
+    state.filter = { kind: "folder", value: entry.value || "" };
+  }
+  renderAll();
+}
+
+async function toggleFavoriteEntry(kind, value) {
+  appState.favorites = BookmarksView.toggleFavorite(
+    appState.favorites,
+    favoriteEntry(kind, value)
+  );
+  await saveFavorites();
+  renderNav();
+}
+
+function renderFavoritesNav() {
+  var title = $("favoritesTitle");
+  var host = $("favoritesNav");
+  if (!title || !host) return;
+  title.textContent = t.favoritesTitle;
+  host.textContent = "";
+  var list = BookmarksView.normalizeFavorites(appState.favorites);
+  if (!list.length) {
+    var empty = document.createElement("p");
+    empty.className = "navEmptyFav";
+    empty.textContent = t.favoritesEmpty;
+    host.appendChild(empty);
+    return;
+  }
+  for (var i = 0; i < list.length; i++) {
+    (function (entry) {
+      var wrap = document.createElement("div");
+      wrap.className = "favItemWrap";
+      var active =
+        (entry.kind === "pinned" && state.filter.kind === "pinned") ||
+        (entry.kind === "folder" &&
+          state.filter.kind === "folder" &&
+          state.filter.value === (entry.value || "")) ||
+        (entry.kind === "tag" &&
+          state.filter.kind === "tag" &&
+          state.filter.value === entry.value);
+      var btn = navButton(favLabel(entry), null, active, function () {
+        applyFavorite(entry);
+      });
+      var kind = document.createElement("span");
+      kind.className = "favKind";
+      kind.textContent = favKindPrefix(entry) + " · ";
+      if (btn.firstChild) btn.insertBefore(kind, btn.firstChild);
+      else btn.appendChild(kind);
+      wrap.appendChild(btn);
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "favRemove";
+      rm.title = t.favRemove;
+      rm.setAttribute("aria-label", t.favRemove);
+      rm.textContent = "×";
+      rm.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleFavoriteEntry(entry.kind, entry.value);
+      });
+      wrap.appendChild(rm);
+      host.appendChild(wrap);
+    })(list[i]);
+  }
+}
+
+
+function ensurePinnedFavoriteStar() {
+  var pinned = $("navPinned");
+  if (!pinned) return;
+  var wrap = pinned.closest
+    ? pinned.closest(".navItemWrap")
+    : null;
+  if (!wrap) {
+    wrap = document.createElement("div");
+    wrap.className = "navItemWrap hasStar pinnedWrap";
+    pinned.parentNode.insertBefore(wrap, pinned);
+    wrap.appendChild(pinned);
+  } else {
+    wrap.classList.add("hasStar");
+  }
+  var existing = wrap.querySelector(".navFolderStar, .navTagStar");
+  if (existing) existing.remove();
+  wrap.appendChild(makeFavoriteStar("pinned", ""));
+}
+
+function makeFavoriteStar(kind, value) {
+  var star = document.createElement("button");
+  star.type = "button";
+  star.className = kind === "tag" ? "navTagStar" : "navFolderStar";
+  var on = BookmarksView.isFavorite(appState.favorites, favoriteEntry(kind, value));
+  star.setAttribute("aria-pressed", on ? "true" : "false");
+  star.title = on ? t.favRemove : t.favAdd;
+  star.setAttribute("aria-label", on ? t.favRemove : t.favAdd);
+  star.textContent = on ? "★" : "☆";
+  star.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    toggleFavoriteEntry(kind, value);
+  });
+  return star;
+}
+
+/* ---------- storage visibility (phase 3) ---------- */
+
+function utf8Bytes(text) {
+  try {
+    if (typeof TextEncoder !== "undefined") {
+      return new TextEncoder().encode(String(text || "")).length;
+    }
+  } catch (err) {
+    /* fall through */
+  }
+  return String(text || "").length;
+}
+
+async function measureLibraryStorage() {
+  var made = await makeClient();
+  if (!made.cfg.instanceUrl) {
+    return { error: "needConfig", summary: null };
+  }
+  var client = made.client;
+  var path = "";
+  try {
+    path = (client.paths && client.paths.dir) || "";
+  } catch (err) {
+    path = "";
+  }
+  var bookmarks = 0;
+  var workspaces = 0;
+  var tabRules = 0;
+  var snapshotsIndex = 0;
+  var snapshotsHtml = 0;
+  var failed = false;
+
+  // Bookmarks: prefer in-memory encode (matches what we would PUT), else GET.
+  try {
+    bookmarks = computeBytes();
+  } catch (err2) {
+    bookmarks = state.bytes || 0;
+  }
+
+  async function sizeOf(fileName) {
+    var res = await client.getFile(fileName);
+    if (!res.ok) {
+      failed = true;
+      return 0;
+    }
+    if (res.missing) return 0;
+    return utf8Bytes(res.text || "");
+  }
+
+  workspaces = await sizeOf(WS_FILE);
+  tabRules = await sizeOf(RULES_FILE);
+
+  var snapRes = await client.getFile(SNAP_FILE);
+  if (!snapRes.ok) {
+    failed = true;
+  } else if (!snapRes.missing) {
+    snapshotsIndex = utf8Bytes(snapRes.text || "");
+    var parsed = null;
+    try {
+      parsed = JSON.parse(snapRes.text || "null");
+    } catch (err3) {
+      parsed = null;
+    }
+    var normalized = Snapshots.normalize(parsed);
+    snapshotsHtml = BookmarksView.sumSnapshotSizes(normalized);
+    appState.snapshots = normalized;
+    if (snapRes.etag) appState.snapshotsEtag = snapRes.etag;
+  }
+
+  return {
+    error: failed ? "partial" : null,
+    summary: BookmarksView.summarizeStorage({
+      path: path,
+      bookmarks: bookmarks,
+      workspaces: workspaces,
+      tabRules: tabRules,
+      snapshotsIndex: snapshotsIndex,
+      snapshotsHtml: snapshotsHtml,
+    }),
+  };
+}
+
+function renderStorageSummary(summary) {
+  var dash = "—";
+  function set(id, n) {
+    var el = $(id);
+    if (!el) return;
+    el.textContent =
+      typeof n === "number" && n > 0 ? BookmarksView.formatBytes(n) : n === 0 ? "0 B" : dash;
+  }
+  if (!summary) {
+    set("storageBookmarks");
+    set("storageWorkspaces");
+    set("storageTabRules");
+    set("storageSnaps");
+    set("storageTotal");
+    return;
+  }
+  set("storageBookmarks", summary.bookmarks);
+  set("storageWorkspaces", summary.workspaces);
+  set("storageTabRules", summary.tabRules);
+  set("storageSnaps", summary.snapshotsIndex + summary.snapshotsHtml);
+  set("storageTotal", summary.total);
+  var pathHint = $("storagePathHint");
+  if (pathHint) {
+    pathHint.textContent = summary.path
+      ? fmt(t.storagePath, { p: summary.path })
+      : "";
+  }
+}
+
+
+/** Omnibox / deep-link: bookmarks.html?q=term opens the library filtered. */
+function applyLibraryQueryFromUrl() {
+  var q = "";
+  try {
+    q = new URLSearchParams(location.search).get("q") || "";
+  } catch (err) {
+    q = "";
+  }
+  q = String(q || "").trim();
+  if (!q) return;
+  state.query = q;
+  var search = $("search");
+  if (search) search.value = q;
+  switchView("bookmarks");
+  renderAll();
+  renderItems();
+}
+
+async function refreshStoragePanel() {
+  var status = $("storageStatus");
+  if (status) status.textContent = t.storageLoading;
+  var result = await measureLibraryStorage();
+  if (!result.summary) {
+    if (status) status.textContent = t.storageNeedConfig;
+    renderStorageSummary(null);
+    return;
+  }
+  renderStorageSummary(result.summary);
+  if (status) {
+    status.textContent =
+      result.error === "partial" ? t.storageFailed : t.storageDone;
+  }
+}
+
 
 /** The preset matching the active tag+since filter, if any. */
 function activePreset() {
@@ -3011,6 +3393,17 @@ async function ensureBookmarksPermission() {
   if (!chromeBookmarksAvailable()) return false;
   try {
     if (await chrome.permissions.contains({ permissions: ["bookmarks"] })) return true;
+    // Pre-prompt so the Chrome optional-permission dialog is never a surprise
+    // (and so a blocked/ignored system prompt has an explicit user gesture).
+    var proceed = true;
+    try {
+      proceed = window.confirm(
+        t.permBookmarksTitle + "\n\n" + t.permBookmarksBody
+      );
+    } catch (confirmErr) {
+      proceed = true;
+    }
+    if (!proceed) return false;
     return Boolean(await chrome.permissions.request({ permissions: ["bookmarks"] }));
   } catch (err) {
     return false;
@@ -3421,6 +3814,7 @@ function applyCopy() {
   $("switchSettings").textContent = t.viewSettings;
   $("navAllText").textContent = t.navAll;
   $("navPinnedText").textContent = t.navPinned;
+  if ($("favoritesTitle")) $("favoritesTitle").textContent = t.favoritesTitle;
   $("folderTitle").textContent = t.folders;
   $("folderAddBtn").title = t.folderAdd;
   $("tagTitle").textContent = t.tags;
@@ -3530,6 +3924,14 @@ function applyCopy() {
   $("davHint").textContent = t.davHint;
   $("settingsSave").textContent = t.save;
   $("testConn").textContent = t.testConn;
+  if ($("storageLegend")) $("storageLegend").textContent = t.storageLegend;
+  if ($("storageBookmarksLabel")) $("storageBookmarksLabel").textContent = t.storageBookmarks;
+  if ($("storageWorkspacesLabel")) $("storageWorkspacesLabel").textContent = t.storageWorkspaces;
+  if ($("storageTabRulesLabel")) $("storageTabRulesLabel").textContent = t.storageTabRules;
+  if ($("storageSnapsLabel")) $("storageSnapsLabel").textContent = t.storageSnaps;
+  if ($("storageTotalLabel")) $("storageTotalLabel").textContent = t.storageTotal;
+  if ($("storageNote")) $("storageNote").textContent = t.storageNote;
+  if ($("storageRefresh")) $("storageRefresh").textContent = t.storageRefresh;
 }
 
 function setView(view) {
@@ -3575,6 +3977,11 @@ function wireEvents() {
   });
   $("settingsForm").addEventListener("submit", saveSettings);
   $("testConn").addEventListener("click", testConnection);
+  if ($("storageRefresh")) {
+    $("storageRefresh").addEventListener("click", function () {
+      refreshStoragePanel();
+    });
+  }
   wirePopMenus();
   // 侧栏「更多」菜单项执行后收起菜单
   var footMenuItems = document.querySelectorAll("#moreMenu button");
@@ -3785,6 +4192,9 @@ applyCopy();
 fillSinceSelect();
 fillColorSelect();
 loadPresets();
+loadFavorites().then(function () {
+  renderFavoritesNav();
+});
 loadSnapshots();
 initTheme();
 wireEvents();
@@ -3792,20 +4202,32 @@ renderFromCache();
 // 主页初始视图：显式 ?view= 优先；否则跟随「插件主页默认视图」设置
 // （resolveToolbarTarget 在未配置实例时指向 settings，保持先配置后使用）。
 void (async function () {
-  var requested = null;
+  var params = null;
   try {
-    requested = new URLSearchParams(location.search).get("view");
+    params = new URLSearchParams(location.search);
   } catch (err) {
-    requested = null;
+    params = null;
   }
+  var requested = params ? params.get("view") : null;
+  var query = params ? params.get("q") : null;
   if (requested && VALID_VIEWS.indexOf(requested) !== -1) {
     switchView(requested);
   } else {
     var stored = await chrome.storage.sync.get(["instanceUrl", "toolbarMode"]);
     switchView(resolveToolbarTarget(stored).action);
   }
+  // Omnibox deep-link: ?q= forces the library view with the search box filled.
+  if (query && String(query).trim()) {
+    switchView("bookmarks");
+    state.query = String(query).trim();
+    var search = $("search");
+    if (search) search.value = state.query;
+    renderAll();
+  }
   var cfg = await loadConfig();
   if (cfg.instanceUrl || appState.view === "settings") return;
+  // Don't steal focus from an omnibox search deep-link.
+  if (query && String(query).trim()) return;
   switchView("settings");
   showIn("bannerSettings", t.setupHint);
 })();

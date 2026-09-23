@@ -38,6 +38,26 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
     filterValue: unknown,
     since: unknown
   ) => { name: string; tag: string; since: string } | null;
+  normalizeFavorites: (
+    raw: unknown,
+    limit?: number
+  ) => Array<{ kind: string; value: string }>;
+  favoriteKey: (entry: unknown) => string;
+  isFavorite: (list: unknown, entry: unknown) => boolean;
+  toggleFavorite: (
+    list: unknown,
+    entry: unknown
+  ) => Array<{ kind: string; value: string }>;
+  summarizeStorage: (parts: unknown) => {
+    path: string;
+    bookmarks: number;
+    workspaces: number;
+    tabRules: number;
+    snapshotsIndex: number;
+    snapshotsHtml: number;
+    total: number;
+  };
+  sumSnapshotSizes: (model: unknown) => number;
 };
 
 function modelWith(bookmarks: Array<Record<string, unknown>>) {
@@ -330,5 +350,75 @@ describe("extension/bookmarksView.js presets folder/pinned (phase 2)", () => {
     expect(BookmarksView.presetFilterLabel({ kind: "tag", value: "docs", tag: "docs" })).toBe(
       "docs"
     );
+  });
+});
+
+
+describe("extension/bookmarksView.js favorites (phase 3)", () => {
+  test("normalizeFavorites keeps folder/tag/pinned and drops junk/dupes", () => {
+    const list = BookmarksView.normalizeFavorites([
+      { kind: "folder", value: "Work" },
+      { kind: "tag", value: "docs" },
+      { kind: "pinned", value: "ignored" },
+      { kind: "folder", value: "Work" },
+      { kind: "tag", value: "" },
+      { kind: "nope", value: "x" },
+      null,
+      "junk",
+    ]);
+    expect(list).toEqual([
+      { kind: "folder", value: "Work" },
+      { kind: "tag", value: "docs" },
+      { kind: "pinned", value: "" },
+    ]);
+    expect(BookmarksView.normalizeFavorites(null)).toEqual([]);
+  });
+
+  test("toggleFavorite / isFavorite round-trip", () => {
+    let list = BookmarksView.normalizeFavorites([]);
+    expect(BookmarksView.isFavorite(list, { kind: "folder", value: "A" })).toBe(false);
+    list = BookmarksView.toggleFavorite(list, { kind: "folder", value: "A" });
+    expect(BookmarksView.isFavorite(list, { kind: "folder", value: "A" })).toBe(true);
+    list = BookmarksView.toggleFavorite(list, { kind: "folder", value: "A" });
+    expect(BookmarksView.isFavorite(list, { kind: "folder", value: "A" })).toBe(false);
+    list = BookmarksView.toggleFavorite(list, { kind: "pinned", value: "" });
+    expect(BookmarksView.favoriteKey({ kind: "pinned", value: "x" })).toBe(
+      BookmarksView.favoriteKey({ kind: "pinned", value: "" })
+    );
+    expect(list).toEqual([{ kind: "pinned", value: "" }]);
+  });
+});
+
+describe("extension/bookmarksView.js storage summary (phase 3)", () => {
+  test("summarizeStorage sums known parts and ignores junk", () => {
+    const summary = BookmarksView.summarizeStorage({
+      path: "/webdav/bookmarks/",
+      bookmarks: 100.9,
+      workspaces: 20,
+      tabRules: -5,
+      snapshotsIndex: 10,
+      snapshotsHtml: 40,
+      extra: 999,
+    });
+    expect(summary).toEqual({
+      path: "/webdav/bookmarks/",
+      bookmarks: 100,
+      workspaces: 20,
+      tabRules: 0,
+      snapshotsIndex: 10,
+      snapshotsHtml: 40,
+      total: 170,
+    });
+    expect(BookmarksView.summarizeStorage(null).total).toBe(0);
+  });
+
+  test("sumSnapshotSizes totals entry.size from the snapshots index", () => {
+    expect(
+      BookmarksView.sumSnapshotSizes({
+        snapshots: [{ size: 100 }, { size: 250 }, { size: "nope" }, null],
+      })
+    ).toBe(350);
+    expect(BookmarksView.sumSnapshotSizes([{ size: 10 }, { size: 5 }])).toBe(15);
+    expect(BookmarksView.sumSnapshotSizes(null)).toBe(0);
   });
 });

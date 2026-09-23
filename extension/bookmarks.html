@@ -47,6 +47,8 @@
             <span id="navPinnedText">Pinned</span>
             <span class="count" id="navPinnedCount">0</span>
           </button>
+          <p class="navTitle" id="favoritesTitle">Favorites</p>
+          <div id="favoritesNav" class="favoritesNav"></div>
           <p class="navTitle navTitleRow">
             <span id="folderTitle">Folders</span>
             <button id="folderAddBtn" class="navAdd" type="button" title="New folder">＋</button>
@@ -228,6 +230,21 @@
                   Stored only on this device. Same values as your deployment's
                   WEBDAV_USERNAME / WEBDAV_PASSWORD.
                 </p>
+              </fieldset>
+
+              <fieldset class="settingsSection" id="storageSection">
+                <legend id="storageLegend">Library storage</legend>
+                <p class="hint" id="storagePathHint"></p>
+                <dl class="storageList" id="storageList">
+                  <div><dt id="storageBookmarksLabel">Bookmarks</dt><dd id="storageBookmarks">—</dd></div>
+                  <div><dt id="storageWorkspacesLabel">Workspaces</dt><dd id="storageWorkspaces">—</dd></div>
+                  <div><dt id="storageTabRulesLabel">Tab groups</dt><dd id="storageTabRules">—</dd></div>
+                  <div><dt id="storageSnapsLabel">Snapshots</dt><dd id="storageSnaps">—</dd></div>
+                  <div class="storageTotal"><dt id="storageTotalLabel">Total</dt><dd id="storageTotal">—</dd></div>
+                </dl>
+                <p class="hint" id="storageNote"></p>
+                <button type="button" id="storageRefresh" class="ghost">Refresh sizes</button>
+                <p id="storageStatus" class="status" role="status"></p>
               </fieldset>
 
               <div class="settingsActions">
