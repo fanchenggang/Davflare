@@ -168,6 +168,14 @@ var COPY = {
     snapCapturing: "Capturing…",
     snapSaved: "Snapshot saved.",
     snapCaptureFail: "Could not capture this page (restricted or failed to load).",
+    snapRestricted:
+      "This URL cannot be captured (chrome://, extension, or other restricted pages).",
+    snapHostDenied:
+      "Capture needs permission to read this site. Allow access when Chrome prompts, then try again.",
+    snapLoadFail: "The page failed to open or timed out before capture.",
+    snapInjectFail:
+      "Could not inject the capture script into this page (host permission or page blocked it).",
+    snapWriteFail: "Page was captured, but writing the snapshot to WebDAV failed.",
     snapTooLarge: "Snapshot exceeds 8 MB and was not saved.",
     snapMissing: "Snapshot file is missing on the server.",
     snapConfirmDelete: "Delete this snapshot from WebDAV?",
@@ -219,6 +227,8 @@ var COPY = {
     exportChromeDone: "Wrote {n} bookmark(s) into browser bookmarks.",
     exportChromeDenied:
       "Write-back needs the “Read and change your bookmarks” permission.",
+    exportChromeDeniedHint:
+      "If Chrome did not show a system prompt: open chrome://extensions → Davflare → Details, grant Bookmarks under Site access / Permissions, then retry. Some unpacked Chromium builds never show optional-permission dialogs — use Google Chrome or a packed install.",
     exportChromeConflictNote:
       "Same-URL overlaps in the target folder always show a conflict prompt — nothing is overwritten silently.",
     chromeConflictTitle: "Write-back conflicts",
@@ -270,7 +280,7 @@ var COPY = {
     storagePath: "Path: {p}",
     permBookmarksTitle: "Allow bookmark access?",
     permBookmarksBody:
-      "Davflare needs Chrome’s “Read and change your bookmarks” permission to import or write back. Chrome will show a system prompt next — choose Allow to continue.",
+      "Davflare needs Chrome’s “Read and change your bookmarks” permission to import or write back. Chrome should show a system prompt next — choose Allow. If no prompt appears (common in some unpacked Chromium builds), grant Bookmarks under chrome://extensions → Davflare → Details, then retry.",
     permBookmarksContinue: "Continue",
     snapIndexMissing:
       "No snapshots index yet (snapshots.json). Capturing a page will create it under your bookmark directory.",
@@ -431,6 +441,11 @@ var COPY = {
     snapCapturing: "捕获中…",
     snapSaved: "快照已保存。",
     snapCaptureFail: "无法捕获该页面（受限页面或加载失败）。",
+    snapRestricted: "该地址无法捕获（chrome://、扩展页或其他受限页面）。",
+    snapHostDenied: "捕获需要读取该站点的权限。请在 Chrome 弹窗中允许后重试。",
+    snapLoadFail: "页面打开失败或超时，未能捕获。",
+    snapInjectFail: "无法向该页面注入捕获脚本（缺少站点权限或页面阻止注入）。",
+    snapWriteFail: "页面已捕获，但写入 WebDAV 失败。",
     snapTooLarge: "快照超过 8 MB，未保存。",
     snapMissing: "服务器上的快照文件已缺失。",
     snapConfirmDelete: "确定从 WebDAV 删除这个快照？",
@@ -479,6 +494,8 @@ var COPY = {
     exportChromeClearConfirm: "将先从目标文件夹删除现有 {n} 项，确定继续？",
     exportChromeDone: "已写回 {n} 个书签到浏览器书签。",
     exportChromeDenied: "写回需要授权「读取和更改您的书签」权限。",
+    exportChromeDeniedHint:
+      "若未出现系统授权框：打开 chrome://extensions → Davflare → 详细信息，在「权限」中开启书签，然后重试。部分未打包的 Chromium 环境不会弹出可选权限对话框——请用 Google Chrome 或打包安装验证。",
     exportChromeConflictNote: "目标文件夹中同一 URL 的重叠会弹出冲突确认——绝不会静默覆盖。",
     chromeConflictTitle: "写回冲突",
     chromeConflictSummary: "目标中已有 {c} 个相同 URL · 将新建 {n} 个。",
@@ -528,7 +545,7 @@ var COPY = {
     storagePath: "路径：{p}",
     permBookmarksTitle: "需要书签权限",
     permBookmarksBody:
-      "导入或写回浏览器书签前，Davflare 需要 Chrome「读取和更改您的书签」权限。接下来会弹出系统授权框，请选择「允许」。",
+      "导入或写回浏览器书签前，Davflare 需要 Chrome「读取和更改您的书签」权限。接下来应弹出系统授权框，请选择「允许」。若无弹窗（部分未打包 Chromium 常见），请到 chrome://extensions → Davflare → 详细信息 中手动开启书签权限后重试。",
     permBookmarksContinue: "继续授权",
     snapIndexMissing:
       "还没有快照索引（snapshots.json）。捕获页面时会在书签目录下自动创建。",
@@ -2439,10 +2456,25 @@ function setSnapStatus(message) {
 
 async function loadSnapshots() {
   var made = await makeClient();
-  if (!made.cfg.instanceUrl) return;
+  if (!made.cfg.instanceUrl) {
+    appState.snapshots = Snapshots.normalize(null);
+    appState.snapshotsEtag = null;
+    return;
+  }
   var res = await made.client.getFile(SNAP_FILE);
+  // First-time libraries have no snapshots.json yet (GET 404). Treat as an
+  // empty index so capture can create the file; do not surface as a hard error.
   if (!res.ok) {
-    // Feature-off / auth errors stay silent here; capture path surfaces them.
+    var softEmpty =
+      res.missing ||
+      res.status === 404 ||
+      res.kind === "http404" ||
+      res.kind === "disabled";
+    if (softEmpty) {
+      appState.snapshots = Snapshots.normalize(null);
+      appState.snapshotsEtag = null;
+    }
+    // Transient network/auth errors: keep any prior in-memory index.
     return;
   }
   if (res.missing) {
@@ -2500,11 +2532,66 @@ function renderSnapSection() {
   }
 }
 
+/** True for http(s) pages that scripting may inject into once host perm is granted. */
+function isCapturableUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  try {
+    var u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch (err) {
+    return false;
+  }
+}
+
+/**
+ * Request optional_host_permissions for the page origin so executeScript can run.
+ * Must be invoked without a prior await in the click stack — permissions.request
+ * needs the user-gesture token. Already-granted origins resolve immediately.
+ */
+async function ensureCaptureHostPermission(pageUrl) {
+  if (!chrome.permissions || typeof chrome.permissions.request !== "function") {
+    return { granted: false, reason: "unavailable" };
+  }
+  var originPattern;
+  try {
+    originPattern = new URL(pageUrl).origin + "/*";
+  } catch (err) {
+    return { granted: false, reason: "restricted" };
+  }
+  try {
+    var granted = await chrome.permissions.request({ origins: [originPattern] });
+    return { granted: Boolean(granted), reason: granted ? "ok" : "denied" };
+  } catch (err) {
+    return { granted: false, reason: "denied" };
+  }
+}
+
+function classifyCaptureError(err) {
+  var msg = err && err.message ? String(err.message) : String(err || "");
+  if (/snapshot tab timeout/i.test(msg) || /timeout/i.test(msg)) return "load";
+  if (/Cannot access contents|Missing host permission|Cannot access a chrome|The extensions gallery|frame with URL/i.test(msg)) {
+    return "inject";
+  }
+  if (/permission|host permission|Cannot create item/i.test(msg)) return "inject";
+  return "generic";
+}
+
 async function captureSnapshotFor(bookmark) {
   if (!bookmark || !chrome.scripting) {
     setSnapStatus(t.snapCaptureFail);
     return;
   }
+  if (!isCapturableUrl(bookmark.url)) {
+    setSnapStatus(t.snapRestricted);
+    return;
+  }
+  // Host permission FIRST — preserve click user-gesture (no prior await).
+  var host = await ensureCaptureHostPermission(bookmark.url);
+  if (!host.granted) {
+    setSnapStatus(host.reason === "restricted" ? t.snapRestricted : t.snapHostDenied);
+    return;
+  }
+
   await loadSnapshots();
   var prior = Snapshots.findByBookmarkId(appState.snapshots, bookmark.id);
   if (prior) {
@@ -2523,24 +2610,67 @@ async function captureSnapshotFor(bookmark) {
   }
   setSnapStatus(t.snapCapturing);
 
-  var tab = await chrome.tabs.create({ url: bookmark.url, active: false });
+  var tab = null;
   var html = "";
   try {
-    await waitForTabComplete(tab.id, 25000);
-    var results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      world: "MAIN",
-      func: PAGE_CAPTURE_FUNC,
-    });
+    try {
+      tab = await chrome.tabs.create({ url: bookmark.url, active: false });
+    } catch (createErr) {
+      setSnapStatus(t.snapLoadFail);
+      return;
+    }
+    if (!tab || tab.id == null) {
+      setSnapStatus(t.snapLoadFail);
+      return;
+    }
+    try {
+      await waitForTabComplete(tab.id, 25000);
+    } catch (timeoutErr) {
+      setSnapStatus(t.snapLoadFail);
+      return;
+    }
+    // Reject chrome-error / blocked interstitial pages.
+    try {
+      var loaded = await chrome.tabs.get(tab.id);
+      var loadedUrl = loaded && loaded.url ? String(loaded.url) : "";
+      if (
+        !loadedUrl ||
+        /^chrome(?:-error|-extension)?:/i.test(loadedUrl) ||
+        /^about:(?!blank)/i.test(loadedUrl)
+      ) {
+        setSnapStatus(t.snapLoadFail);
+        return;
+      }
+    } catch (getErr) {
+      setSnapStatus(t.snapLoadFail);
+      return;
+    }
+    var results;
+    try {
+      results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: "MAIN",
+        func: PAGE_CAPTURE_FUNC,
+      });
+    } catch (injectErr) {
+      var kind = classifyCaptureError(injectErr);
+      setSnapStatus(
+        kind === "inject" ? t.snapInjectFail : kind === "load" ? t.snapLoadFail : t.snapCaptureFail
+      );
+      return;
+    }
     html =
       results && results[0] && typeof results[0].result === "string"
         ? results[0].result
         : "";
-  } catch (err) {
-    setSnapStatus(t.snapCaptureFail);
-    return;
   } finally {
-    chrome.tabs.remove(tab.id);
+    if (tab && tab.id != null) {
+      try {
+        chrome.tabs.remove(tab.id);
+      } catch (removeErr) {
+        /* tab may already be gone */
+      }
+    }
   }
   if (!html) {
     setSnapStatus(t.snapCaptureFail);
@@ -2556,9 +2686,11 @@ async function captureSnapshotFor(bookmark) {
   var id = Snapshots.makeId();
   var put = await made.client.putFile(Snapshots.fileName(id), html, "text/html; charset=utf-8");
   if (!put.ok) {
-    var writeMsg = errorText(put.kind);
+    var writeMsg = t.snapWriteFail;
     if (put.kind === "disabled" || put.kind === "http404" || put.status === 404) {
       writeMsg = t.snapWriteFailPath;
+    } else if (put.kind) {
+      writeMsg = errorText(put.kind) || t.snapWriteFail;
     }
     setSnapStatus(writeMsg);
     return;
@@ -2702,12 +2834,17 @@ async function submitAdd(event) {
 
 async function importChromeBookmarks() {
   if (!chromeBookmarksAvailable()) {
-    showBanner(t.importDenied);
+    showBanner(bookmarksPermissionDeniedMessage());
     return;
   }
-  // Same pre-prompt + permissions.request path as exportChromeWrite (#109).
+  // Same pre-prompt + permissions.request path as exportChromeWrite (#109 / #107).
+  // Must stay first awaits after click so the user-gesture token reaches request().
   if (!(await ensureBookmarksPermission())) {
-    showBanner(t.importDenied);
+    showBanner(bookmarksPermissionDeniedMessage());
+    return;
+  }
+  if (!chrome.bookmarks) {
+    showBanner(bookmarksPermissionDeniedMessage());
     return;
   }
   var tree = await chrome.bookmarks.getTree();
@@ -3352,7 +3489,47 @@ function exportJson() {
 /* ---------- write back to the browser bookmarks bar (#64) ---------- */
 
 function chromeBookmarksAvailable() {
-  return typeof chrome !== "undefined" && chrome.permissions && chrome.bookmarks;
+  // optional_permissions: chrome.bookmarks may be undefined until granted.
+  // Gate only on chrome.permissions so we can still call permissions.request.
+  return typeof chrome !== "undefined" && !!chrome.permissions;
+}
+
+/** In-memory grant cache so click handlers can skip contains() (which would burn the user gesture). */
+var bookmarksPermGranted = null;
+
+async function warmBookmarksPermissionCache() {
+  if (!chromeBookmarksAvailable()) {
+    bookmarksPermGranted = false;
+    return;
+  }
+  try {
+    bookmarksPermGranted = await chrome.permissions.contains({
+      permissions: ["bookmarks"],
+    });
+  } catch (err) {
+    bookmarksPermGranted = false;
+  }
+}
+
+function bookmarksPermissionDeniedMessage() {
+  return t.exportChromeDenied + " " + t.exportChromeDeniedHint;
+}
+
+if (typeof chrome !== "undefined" && chrome.permissions && chrome.permissions.onAdded) {
+  try {
+    chrome.permissions.onAdded.addListener(function (perm) {
+      if (perm && Array.isArray(perm.permissions) && perm.permissions.indexOf("bookmarks") >= 0) {
+        bookmarksPermGranted = true;
+      }
+    });
+    chrome.permissions.onRemoved.addListener(function (perm) {
+      if (perm && Array.isArray(perm.permissions) && perm.permissions.indexOf("bookmarks") >= 0) {
+        bookmarksPermGranted = false;
+      }
+    });
+  } catch (permListenErr) {
+    /* older Chromium */
+  }
 }
 
 /** Fill the target-folder select from the browser's bookmark tree. */
@@ -3389,10 +3566,12 @@ async function populateChromeFolderSelect() {
 
 async function ensureBookmarksPermission() {
   if (!chromeBookmarksAvailable()) return false;
+  if (bookmarksPermGranted === true) return true;
   try {
-    if (await chrome.permissions.contains({ permissions: ["bookmarks"] })) return true;
-    // Pre-prompt so the Chrome optional-permission dialog is never a surprise
-    // (and so a blocked/ignored system prompt has an explicit user gesture).
+    // Do NOT await permissions.contains here — that await consumes the click
+    // user-gesture token and chrome.permissions.request then silently returns
+    // false with no system dialog (common PM failure mode on unpacked builds).
+    // permissions.request is a no-op (resolves true) when already granted.
     var proceed = true;
     try {
       proceed = window.confirm(
@@ -3402,8 +3581,11 @@ async function ensureBookmarksPermission() {
       proceed = true;
     }
     if (!proceed) return false;
-    return Boolean(await chrome.permissions.request({ permissions: ["bookmarks"] }));
+    var ok = Boolean(await chrome.permissions.request({ permissions: ["bookmarks"] }));
+    bookmarksPermGranted = ok;
+    return ok;
   } catch (err) {
+    bookmarksPermGranted = false;
     return false;
   }
 }
@@ -3533,17 +3715,23 @@ async function overwriteChromeConflicts(conflicts) {
 async function exportChromeWrite() {
   $("exportChromeStatus").textContent = "";
   if (!chromeBookmarksAvailable()) {
-    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    $("exportChromeStatus").textContent = bookmarksPermissionDeniedMessage();
     return;
   }
+  // ensureBookmarksPermission must be the first await after the click so
+  // permissions.request keeps the user-gesture (see #107).
   if (!(await ensureBookmarksPermission())) {
-    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    $("exportChromeStatus").textContent = bookmarksPermissionDeniedMessage();
+    return;
+  }
+  if (!chrome.bookmarks) {
+    $("exportChromeStatus").textContent = bookmarksPermissionDeniedMessage();
     return;
   }
   if (!$("exportChromeFolder").value) await populateChromeFolderSelect();
   var folderId = $("exportChromeFolder").value;
   if (!folderId) {
-    $("exportChromeStatus").textContent = t.exportChromeDenied;
+    $("exportChromeStatus").textContent = bookmarksPermissionDeniedMessage();
     return;
   }
   var clear = $("exportChromeClear").checked;
@@ -4193,6 +4381,7 @@ loadPresets();
 loadFavorites().then(function () {
   renderFavoritesNav();
 });
+warmBookmarksPermissionCache();
 loadSnapshots();
 initTheme();
 wireEvents();

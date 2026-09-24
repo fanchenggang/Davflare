@@ -356,3 +356,69 @@ describe("Davflare Chrome extension / #109 PM hotfix", () => {
     expect(app).toContain("navButton(favLabel(entry), null, active,");
   });
 });
+
+describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", () => {
+  const app = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(extDir, "manifest.json"), "utf8")
+  ) as { version: string };
+
+  test("manifest bumped for snapshot/perm hotfix", () => {
+    expect(manifest.version).toBe("1.3.9");
+  });
+
+  test("capture requests page host permission before tabs.create / executeScript", () => {
+    // Root cause of PM 404-noise + "Could not capture": executeScript needs
+    // optional_host_permissions for the bookmark origin; activeTab alone is not enough.
+    expect(app).toContain("function ensureCaptureHostPermission");
+    expect(app).toContain("function isCapturableUrl");
+    const captureFn = app.match(
+      /async function captureSnapshotFor\(bookmark\)[\s\S]*?(?=\nasync function |\nfunction fetchSnapshotHtml)/
+    );
+    expect(captureFn?.[0]).toBeTruthy();
+    const body = captureFn![0];
+    expect(body.indexOf("ensureCaptureHostPermission")).toBeGreaterThan(-1);
+    expect(body.indexOf("ensureCaptureHostPermission")).toBeLessThan(
+      body.indexOf("chrome.tabs.create")
+    );
+    expect(body.indexOf("ensureCaptureHostPermission")).toBeLessThan(
+      body.indexOf("chrome.scripting.executeScript")
+    );
+    // Distinguish load / inject / write failures.
+    expect(app).toContain("snapHostDenied");
+    expect(app).toContain("snapInjectFail");
+    expect(app).toContain("snapLoadFail");
+    expect(app).toContain("snapWriteFail");
+    expect(app).toContain("snapRestricted");
+  });
+
+  test("loadSnapshots treats missing snapshots.json as empty index", () => {
+    const loadFn = app.match(
+      /async function loadSnapshots\(\)[\s\S]*?(?=\nasync function persistSnapshots)/
+    );
+    expect(loadFn?.[0]).toBeTruthy();
+    expect(loadFn![0]).toMatch(/softEmpty/);
+    expect(loadFn![0]).toMatch(/Snapshots\.normalize\(null\)/);
+    expect(loadFn![0]).toMatch(/status === 404/);
+  });
+
+  test("ensureBookmarksPermission preserves user gesture (no contains before request)", () => {
+    const ensureFn = app.match(
+      /async function ensureBookmarksPermission\(\)[\s\S]*?(?=\nfunction collectSubtreeUrls)/
+    );
+    expect(ensureFn?.[0]).toBeTruthy();
+    // Must not await contains() before request — that burns the click gesture.
+    expect(ensureFn![0]).not.toMatch(
+      /await chrome\.permissions\.contains[\s\S]*?permissions\.request/
+    );
+    expect(ensureFn![0]).toMatch(
+      /chrome\.permissions\.request\(\s*\{\s*permissions:\s*\[\"bookmarks\"\]/
+    );
+    // Gate availability on permissions API, not chrome.bookmarks (undefined until granted).
+    expect(app).toMatch(
+      /function chromeBookmarksAvailable\(\)[\s\S]*?!!chrome\.permissions/
+    );
+    expect(app).toContain("exportChromeDeniedHint");
+    expect(app).toContain("warmBookmarksPermissionCache");
+  });
+});
