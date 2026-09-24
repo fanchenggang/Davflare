@@ -1292,7 +1292,13 @@ async function handlePut({
   }
 
   const conditionalHeaders = getConditionalHeaders(request.headers);
-  const hasPreconditions = [...conditionalHeaders.keys()].length > 0;
+  // Headers.keys() is missing from the Workers/DOM Headers typings we use.
+  const hasPreconditions =
+    conditionalHeaders.has("if-match") ||
+    conditionalHeaders.has("if-none-match") ||
+    conditionalHeaders.has("if-modified-since") ||
+    conditionalHeaders.has("if-unmodified-since") ||
+    conditionalHeaders.has("if-range");
   const result = await bucket.put(path, body, {
     ...(hasPreconditions ? { onlyIf: conditionalHeaders } : {}),
     httpMetadata: request.headers,
