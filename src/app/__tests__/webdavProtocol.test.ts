@@ -624,6 +624,24 @@ describe("webdav PUT", () => {
     expect(bucket.rawText("a.txt")).toBe("new");
   });
 
+  test("PUT create/update returns ETag (#112)", async () => {
+    const bucket = new InMemoryBucket();
+    const created = await call(
+      req("/webdav/new-etag.txt", "PUT", { Authorization: AUTH }, "hello"),
+      makeEnv(bucket)
+    );
+    expect(created.status).toBe(201);
+    const createdEtag = created.headers.get("ETag");
+    expect(createdEtag).toBeTruthy();
+
+    const updated = await call(
+      req("/webdav/new-etag.txt", "PUT", { Authorization: AUTH }, "hello2"),
+      makeEnv(bucket)
+    );
+    expect(updated.status).toBe(204);
+    expect(updated.headers.get("ETag")).toBeTruthy();
+  });
+
   test("If-None-Match * on existing is 412, on new is 201", async () => {
     const bucket = new InMemoryBucket();
     bucket.seed([{ key: "a.txt", body: "old" }]);

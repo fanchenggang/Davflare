@@ -216,12 +216,27 @@ var DavflareDav = (function () {
       return { ok: true, missing: false, text: res.text, etag: res.etag };
     }
 
-    /** PUT one file under bookmarks/; sends If-Match when an etag is given. */
+    /**
+     * Real strong-validator etags only. If-Match: * means "resource must already
+     * exist" (RFC 7232) and yields 412 on first create — never treat "*" / junk
+     * as a match token (#112).
+     */
+    function etagForIfMatch(etag) {
+      if (etag == null) return null;
+      var s = String(etag).trim();
+      if (!s || s === "*" || s === '""' || s === "null" || s === "undefined") {
+        return null;
+      }
+      return s;
+    }
+
+    /** PUT one file under bookmarks/; sends If-Match when a real etag is given. */
     async function putFile(fileName, body, contentType, etag) {
       var mk = await ensureParentDirs(fileName);
       if (!mk.ok) return mk;
       var headers = { "Content-Type": contentType };
-      if (etag) headers["If-Match"] = etag;
+      var match = etagForIfMatch(etag);
+      if (match) headers["If-Match"] = match;
       var res = await request("PUT", dir + fileName, {
         body: String(body == null ? "" : body),
         headers: headers,
@@ -299,7 +314,8 @@ var DavflareDav = (function () {
       if (!mk.ok) return mk;
 
       var headers = { "Content-Type": "text/html; charset=utf-8" };
-      if (payload.etag) headers["If-Match"] = payload.etag;
+      var match = etagForIfMatch(payload.etag);
+      if (match) headers["If-Match"] = match;
       var res = await request("PUT", dir + HTML_PATH, {
         body: String(payload.html || ""),
         headers: headers,

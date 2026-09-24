@@ -364,7 +364,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.9");
+    expect(manifest.version).toBe("1.3.10");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -420,5 +420,38 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
     );
     expect(app).toContain("exportChromeDeniedHint");
     expect(app).toContain("warmBookmarksPermissionCache");
+  });
+});
+
+describe("Davflare Chrome extension / #112 snapshot index first-create 412", () => {
+  const app = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const dav = fs.readFileSync(path.join(extDir, "dav.js"), "utf8");
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(extDir, "manifest.json"), "utf8")
+  ) as { version: string };
+
+  test("manifest bumped for snapshot index create hotfix", () => {
+    expect(manifest.version).toBe("1.3.10");
+  });
+
+  test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
+    expect(dav).toContain("function etagForIfMatch");
+    expect(dav).toMatch(/etagForIfMatch\([\s\S]*?s === "\*"/);
+    expect(dav).toMatch(/var match = etagForIfMatch\(etag\)/);
+    expect(dav).toMatch(/var match = etagForIfMatch\(payload\.etag\)/);
+  });
+
+  test("persistSnapshots retries 412 without wiping in-memory upserts", () => {
+    const persistFn = app.match(
+      /async function persistSnapshots\(\)[\s\S]*?(?=\nfunction renderSnapSection)/
+    );
+    expect(persistFn?.[0]).toBeTruthy();
+    const body = persistFn![0];
+    expect(body).toContain('var pending = appState.snapshots;');
+    expect(body).toContain("writeOnce(null)");
+    expect(body).toContain("rememberEtag");
+    expect(body).not.toMatch(
+      /kind === "conflict"[\s\S]*?await loadSnapshots\(\)/
+    );
   });
 });

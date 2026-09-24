@@ -420,6 +420,19 @@ describe("extension/dav.js generic getFile / putFile", () => {
     expect((calls[1].init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
   });
 
+  test("putFile does not send If-Match for etag * (create must not 412) (#112)", async () => {
+    const { client, calls } = clientWith({}, () => ({ status: 201 }));
+    expect(
+      await client.putFile(
+        "snapshots.json",
+        '{"version":1,"snapshots":[]}',
+        "application/json; charset=utf-8",
+        "*"
+      )
+    ).toEqual({ ok: true, etag: null });
+    expect((calls[1].init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
+  });
+
   test("putFile MKCOLs nested parent folders before PUT", async () => {
     const { client, calls } = clientWith({}, (_url, init) => {
       if ((init.method as string) === "MKCOL") return { status: 201 };

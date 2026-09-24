@@ -2496,18 +2496,56 @@ async function loadSnapshots() {
 
 async function persistSnapshots() {
   var made = await makeClient();
-  var put = await made.client.putFile(
-    SNAP_FILE,
-    JSON.stringify(appState.snapshots, null, 2),
-    "application/json; charset=utf-8",
-    appState.snapshotsEtag
-  );
+  if (!made.cfg.instanceUrl) return false;
+
+  async function writeOnce(etag) {
+    return made.client.putFile(
+      SNAP_FILE,
+      JSON.stringify(appState.snapshots, null, 2),
+      "application/json; charset=utf-8",
+      etag
+    );
+  }
+
+  /** 201 Created often omits ETag; re-GET so the next replace can If-Match. */
+  async function rememberEtag(put) {
+    if (put && put.etag) {
+      appState.snapshotsEtag = put.etag;
+      return;
+    }
+    var tip = await made.client.getFile(SNAP_FILE);
+    if (tip.ok && !tip.missing && tip.etag) {
+      appState.snapshotsEtag = tip.etag;
+    }
+  }
+
+  var put = await writeOnce(appState.snapshotsEtag);
+  // #112: first-time create can 412 when a stale/wrong If-Match was sent
+  // (or tip etag never learned after a prior 201). Keep in-memory upserts —
+  // do NOT loadSnapshots() here (that wiped the new entry on GET 404).
+  if (!put.ok && put.kind === "conflict") {
+    var pending = appState.snapshots;
+    var remote = await made.client.getFile(SNAP_FILE);
+    if (!remote.ok) {
+      setSnapStatus(t.snapConflict);
+      return false;
+    }
+    if (remote.missing) {
+      appState.snapshotsEtag = null;
+      appState.snapshots = pending;
+      put = await writeOnce(null);
+    } else {
+      appState.snapshotsEtag = remote.etag || null;
+      appState.snapshots = pending;
+      put = await writeOnce(appState.snapshotsEtag);
+    }
+  }
+
   if (put.ok) {
-    if (put.etag) appState.snapshotsEtag = put.etag;
+    await rememberEtag(put);
     return true;
   }
   if (put.kind === "conflict") {
-    await loadSnapshots();
     setSnapStatus(t.snapConflict);
   }
   return false;
