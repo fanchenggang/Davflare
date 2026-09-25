@@ -24,6 +24,20 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
   orderPinnedFirst: (
     items: Array<Record<string, unknown>>
   ) => Array<Record<string, unknown>>;
+  SORT_KEYS: string[];
+  sortItems: (
+    items: Array<Record<string, unknown>> | null,
+    key?: string,
+    locale?: string
+  ) => Array<Record<string, unknown>>;
+  dragSelectionIds: (
+    item: { id?: string } | null | undefined,
+    sel: unknown,
+    orderedIds?: string[]
+  ) => string[];
+  tagTiers: (
+    list: Array<{ name: string; count?: number } | null> | unknown
+  ) => Record<string, number>;
   presetFilterLabel: (
     preset: unknown,
     copy?: { pinned?: string; unfiled?: string }
@@ -420,5 +434,134 @@ describe("extension/bookmarksView.js storage summary (phase 3)", () => {
     ).toBe(350);
     expect(BookmarksView.sumSnapshotSizes([{ size: 10 }, { size: 5 }])).toBe(15);
     expect(BookmarksView.sumSnapshotSizes(null)).toBe(0);
+  });
+});
+
+describe("extension/bookmarksView.js sortItems (HamHome-style sorting)", () => {
+  const items = [
+    { id: "a", title: "banana", url: "https://zoo.example", added: 100 },
+    { id: "b", title: "Apple", url: "https://ant.example", added: 300 },
+    { id: "c", title: "cherry", url: "https://mango.example", added: 200 },
+  ];
+
+  test("default key preserves the current pinned-first insertion order", () => {
+    const pinned = { id: "p", pinned: true, pinnedAt: 5 };
+    const ordered = BookmarksView.sortItems([...items, pinned]);
+    expect(ordered.map((b) => b.id)).toEqual(["p", "a", "b", "c"]);
+    // default equals orderPinnedFirst exactly
+    expect(BookmarksView.sortItems(items, "default")).toEqual(
+      BookmarksView.orderPinnedFirst(items)
+    );
+  });
+
+  test("latest / oldest sort by added within the pinned group", () => {
+    expect(BookmarksView.sortItems(items, "latest").map((b) => b.id)).toEqual([
+      "b",
+      "c",
+      "a",
+    ]);
+    expect(BookmarksView.sortItems(items, "oldest").map((b) => b.id)).toEqual([
+      "a",
+      "c",
+      "b",
+    ]);
+  });
+
+  test("title sort is case-insensitive; domain sorts by hostname", () => {
+    expect(BookmarksView.sortItems(items, "title", "en").map((b) => b.id)).toEqual([
+      "b",
+      "a",
+      "c",
+    ]);
+    expect(BookmarksView.sortItems(items, "domain").map((b) => b.id)).toEqual([
+      "b",
+      "c",
+      "a",
+    ]);
+  });
+
+  test("pinned bookmarks still lead under every explicit sort", () => {
+    const pins = { id: "p2", pinned: true, pinnedAt: 900, title: "aaa", added: 1 };
+    const mixed = BookmarksView.sortItems([...items, pins], "title", "en");
+    expect(mixed[0].id).toBe("p2");
+    expect(mixed.slice(1).map((b) => b.id)).toEqual(["b", "a", "c"]);
+  });
+
+  test("junk keys and non-array input fall back safely", () => {
+    expect(BookmarksView.sortItems(items, "nonsense")).toEqual(
+      BookmarksView.sortItems(items, "default")
+    );
+    expect(BookmarksView.sortItems(null, "latest")).toEqual([]);
+  });
+
+  test("SORT_KEYS gates the persisted sort preference", () => {
+    expect(BookmarksView.SORT_KEYS).toEqual([
+      "default",
+      "latest",
+      "oldest",
+      "title",
+      "domain",
+    ]);
+  });
+});
+
+describe("extension/bookmarksView.js dragSelectionIds (drag to folder)", () => {
+  test("unselected bookmark drags alone", () => {
+    expect(BookmarksView.dragSelectionIds({ id: "a" }, {}, ["a", "b"])).toEqual(["a"]);
+    expect(BookmarksView.dragSelectionIds({ id: "a" }, { b: true }, ["a", "b"])).toEqual([
+      "a",
+    ]);
+  });
+
+  test("dragging a selected bookmark carries the whole selection in display order", () => {
+    const sel = { a: true, c: true };
+    expect(
+      BookmarksView.dragSelectionIds({ id: "c" }, sel, ["a", "b", "c"])
+    ).toEqual(["a", "c"]);
+    expect(
+      BookmarksView.dragSelectionIds({ id: "a" }, sel, ["c", "b", "a"])
+    ).toEqual(["c", "a"]);
+  });
+
+  test("junk input and empty selections fall back to the dragged item", () => {
+    expect(BookmarksView.dragSelectionIds(null, {}, ["a"])).toEqual([]);
+    expect(BookmarksView.dragSelectionIds({ id: "a" }, null)).toEqual(["a"]);
+    expect(BookmarksView.dragSelectionIds({ id: "a" }, { a: true }, [])).toEqual(["a"]);
+  });
+});
+
+describe("extension/bookmarksView.js tagTiers (tag cloud)", () => {
+  test("rank-based thirds spread sizes across the sorted tag list", () => {
+    const tags = [
+      { name: "dev", count: 9 },
+      { name: "docs", count: 6 },
+      { name: "ui", count: 4 },
+      { name: "api", count: 2 },
+      { name: "rust", count: 1 },
+      { name: "aigc", count: 1 },
+    ];
+    const tiers = BookmarksView.tagTiers(tags);
+    expect(tiers.dev).toBe(2);
+    expect(tiers.docs).toBe(2);
+    expect(tiers.ui).toBe(1);
+    expect(tiers.api).toBe(1);
+    expect(tiers.rust).toBe(0);
+    expect(tiers.aigc).toBe(0);
+  });
+
+  test("tiny lists still get a visible largest tier", () => {
+    const tiers = BookmarksView.tagTiers([{ name: "solo", count: 3 }]);
+    expect(tiers.solo).toBe(2);
+    const pair = BookmarksView.tagTiers([
+      { name: "x", count: 2 },
+      { name: "y", count: 1 },
+    ]);
+    expect(pair.x).toBe(2);
+    expect(pair.y).toBe(1);
+  });
+
+  test("junk input yields an empty tier map", () => {
+    expect(BookmarksView.tagTiers(null)).toEqual({});
+    expect(BookmarksView.tagTiers([])).toEqual({});
   });
 });

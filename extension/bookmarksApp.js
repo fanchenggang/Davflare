@@ -26,7 +26,6 @@ var COPY = {
     sinceWeek: "Last 7 days",
     sinceMonth: "Last 30 days",
     sinceYear: "Last year",
-    loading: "Loading…",
     empty: "No bookmarks yet. Right-click any page and choose “Save page to Davflare”, or click Add.",
     emptyFilter: "Nothing matches the current filter.",
     add: "Add",
@@ -118,6 +117,7 @@ var COPY = {
     importDenied: "Import needs the “Read and change your bookmarks” permission.",
     importDone: "Imported {n} new bookmark(s).",
     importNone: "No new bookmarks to import.",
+    moveDone: "Moved {n} bookmark(s).",
     exported: "Exported bookmarks.html.",
     syncPrefix: "synced",
     neverSynced: "never synced",
@@ -193,6 +193,13 @@ var COPY = {
     emptyPinnedTitle: "No pinned bookmarks yet",
     selAll: "Select all",
     selNone: "Deselect all",
+    sortLabel: "Sort",
+    sortDefault: "Default order",
+    sortLatest: "Newest first",
+    sortOldest: "Oldest first",
+    sortTitle: "Title A–Z",
+    sortDomain: "Domain A–Z",
+    openBookmark: "Open",
     batchSelected: "{n} selected",
     batchMove: "Move",
     batchTags: "Tags",
@@ -304,7 +311,6 @@ var COPY = {
     sinceWeek: "最近 7 天",
     sinceMonth: "最近 30 天",
     sinceYear: "最近一年",
-    loading: "加载中…",
     empty: "还没有书签。在任意网页右键选择「收藏此页到 Davflare」，或点「添加」。",
     emptyFilter: "没有符合当前筛选的书签。",
     add: "添加",
@@ -391,6 +397,7 @@ var COPY = {
     importDenied: "导入需要授权「读取和更改您的书签」权限。",
     importDone: "已导入 {n} 个新书签。",
     importNone: "没有需要导入的新书签。",
+    moveDone: "已移动 {n} 条书签。",
     exported: "已导出 bookmarks.html。",
     syncPrefix: "已同步",
     neverSynced: "从未同步",
@@ -463,6 +470,13 @@ var COPY = {
     emptyPinnedTitle: "还没有置顶书签",
     selAll: "全选",
     selNone: "取消全选",
+    sortLabel: "排序",
+    sortDefault: "默认排序",
+    sortLatest: "最新添加",
+    sortOldest: "最早添加",
+    sortTitle: "标题 A–Z",
+    sortDomain: "域名 A–Z",
+    openBookmark: "打开",
     batchSelected: "已选 {n} 项",
     batchMove: "移动",
     batchTags: "标签",
@@ -565,8 +579,27 @@ var ERROR_KEY = {
 
 var CACHE_KEY = "bookmarksCache";
 var THEME_KEY = "davflare-theme";
+var VIEW_KEY = "davflare-bookmarks-view";
+var SORT_KEY = "davflare-bookmarks-sort";
 var WS_FILE = "workspaces.json";
 var RULES_FILE = "tabGroups.json";
+
+function readLocalPref(key, allowed, fallback) {
+  try {
+    var v = localStorage.getItem(key);
+    return allowed.indexOf(v) !== -1 ? v : fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function writeLocalPref(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    /* private mode: prefs just won't persist */
+  }
+}
 
 var state = {
   model: Bookmarks.emptyModel(),
@@ -574,7 +607,8 @@ var state = {
   filter: { kind: "all", value: "" },
   query: "",
   since: "all",
-  view: "grid",
+  view: readLocalPref(VIEW_KEY, ["grid", "list"], "grid"),
+  sort: readLocalPref(SORT_KEY, BookmarksView.SORT_KEYS, "default"),
   syncedAt: 0,
   bytes: 0,
   // Issue #63 multi-select: bookmark ids -> true; anchor for shift-range picks.
@@ -765,7 +799,7 @@ function showLibraryError(kind) {
 
 async function refresh() {
   hideBanner();
-  $("loading").classList.remove("hidden");
+  showSkeleton();
   inflightSync++;
   try {
     var made = await makeClient();
@@ -803,7 +837,6 @@ async function refresh() {
     renderAll();
   } finally {
     inflightSync--;
-    $("loading").classList.add("hidden");
   }
 }
 
@@ -1099,22 +1132,34 @@ function renderNav() {
   var tagNav = $("tagNav");
   tagNav.textContent = "";
   var tags = BookmarksView.tagList(state.model);
-  for (var j = 0; j < tags.length; j++) {
-    (function (entry) {
-      var active = state.filter.kind === "tag" && state.filter.value === entry.name;
-      var tagWrap = document.createElement("div");
-      tagWrap.className = "navItemWrap hasStar";
-      tagWrap.appendChild(
-        navButton(entry.name, entry.count, active, function () {
+  if (!tags.length) {
+    tagNav.classList.remove("tagCloud");
+    tagNav.appendChild(emptyHint());
+  } else {
+    // HamHome 式标签云：频次排序 + 三档字号，点击行为与列表形态一致。
+    tagNav.classList.add("tagCloud");
+    var tiers = BookmarksView.tagTiers(tags);
+    for (var j = 0; j < tags.length; j++) {
+      (function (entry) {
+        var active = state.filter.kind === "tag" && state.filter.value === entry.name;
+        var wrap = document.createElement("span");
+        wrap.className = "tagCloudItem" + (active ? " active" : "");
+        var chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tagChip tier" + tiers[entry.name];
+        chip.textContent = entry.name;
+        chip.title = entry.name + " · " + entry.count;
+        chip.setAttribute("aria-pressed", String(active));
+        chip.addEventListener("click", function () {
           state.filter = { kind: "tag", value: entry.name };
           renderAll();
-        })
-      );
-      tagWrap.appendChild(makeFavoriteStar("tag", entry.name));
-      tagNav.appendChild(tagWrap);
-    })(tags[j]);
+        });
+        wrap.appendChild(chip);
+        wrap.appendChild(makeFavoriteStar("tag", entry.name));
+        tagNav.appendChild(wrap);
+      })(tags[j]);
+    }
   }
-  if (!tags.length) tagNav.appendChild(emptyHint());
 }
 
 /**
@@ -1124,6 +1169,7 @@ function renderNav() {
 function folderNavItem(entry, active) {
   var wrap = document.createElement("div");
   wrap.className = "navItemWrap";
+  wireFolderDropTarget(wrap, entry.name);
   wrap.appendChild(
     navButton(folderLabel(entry.name), entry.count, active, function () {
       state.filter = { kind: "folder", value: entry.name };
@@ -1338,8 +1384,12 @@ function filteredItemsOrdered() {
     pinned: state.filter.kind === "pinned" ? true : null,
     since: sinceMs(state.since, Date.now()),
   };
-  return BookmarksView.orderPinnedFirst(
-    BookmarksView.filterBookmarks(state.model, filter, PINYIN)
+  // sortItems keeps pinned-first semantics; "default" preserves the
+  // historical insertion order.
+  return BookmarksView.sortItems(
+    BookmarksView.filterBookmarks(state.model, filter, PINYIN),
+    state.sort,
+    lang === "zh" ? "zh" : "en"
   );
 }
 
@@ -1354,6 +1404,62 @@ function selectedExistingIds() {
 function clearSelection() {
   state.sel = {};
   state.selAnchor = null;
+}
+
+/* ---------- drag to folder (HamHome 式) ---------- */
+
+// In-flight drag payload (ids being dragged). dataTransfer is set for
+// semantics, but same-document drop targets read this authoritative copy.
+var dragMoveIds = null;
+
+function wireBookmarkDrag(node, item) {
+  node.draggable = true;
+  node.addEventListener("dragstart", function (event) {
+    var ordered = filteredItemsOrdered().map(function (it) {
+      return it.id;
+    });
+    dragMoveIds = BookmarksView.dragSelectionIds(item, state.sel, ordered);
+    try {
+      event.dataTransfer.setData("text/plain", dragMoveIds.join("\n"));
+      event.dataTransfer.effectAllowed = "move";
+    } catch (err) {
+      /* older engines */
+    }
+    node.classList.add("dragging");
+  });
+  node.addEventListener("dragend", function () {
+    dragMoveIds = null;
+    node.classList.remove("dragging");
+  });
+}
+
+/** Wire a sidebar folder entry as a move-to-folder drop target. */
+function wireFolderDropTarget(wrap, folder) {
+  wrap.addEventListener("dragover", function (event) {
+    if (!dragMoveIds || !dragMoveIds.length) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    wrap.classList.add("dragOver");
+  });
+  wrap.addEventListener("dragleave", function () {
+    wrap.classList.remove("dragOver");
+  });
+  wrap.addEventListener("drop", function (event) {
+    event.preventDefault();
+    wrap.classList.remove("dragOver");
+    var ids = dragMoveIds;
+    dragMoveIds = null;
+    if (!ids || !ids.length) return;
+    moveBookmarksToFolder(ids, folder);
+  });
+}
+
+async function moveBookmarksToFolder(ids, folder) {
+  state.model = Bookmarks.moveBookmarks(state.model, ids, folder);
+  renderAll();
+  if (await persist()) {
+    flashStatus(fmt(t.moveDone, { n: ids.length }));
+  }
 }
 
 /** One checkbox driving multi-select; shift-click selects a filtered range. */
@@ -1476,20 +1582,86 @@ function cardMenuNode(item) {
   return wrap;
 }
 
+/** Hover action bar overlaid on the card cover (open / pin / snapshot / delete). */
+function cardActionBar(item) {
+  function actBtn(cls, glyph, label, onClick) {
+    var btn = document.createElement("button");
+    btn.className = "cardAct " + cls;
+    btn.type = "button";
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+    btn.textContent = glyph;
+    btn.addEventListener("click", function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+  var bar = document.createElement("div");
+  bar.className = "cardActions";
+  bar.appendChild(
+    actBtn("open", "↗", t.openBookmark, function () {
+      window.open(item.url, "_blank", "noopener,noreferrer");
+    })
+  );
+  // 与行内 📍 不同，这里需要随置顶变化的 ★/☆ + aria-pressed
+  var pin = document.createElement("button");
+  pin.className = "cardAct pin";
+  pin.type = "button";
+  pin.title = item.pinned ? t.pinRemove : t.pinAdd;
+  pin.setAttribute("aria-label", pin.title);
+  pin.setAttribute("aria-pressed", String(Boolean(item.pinned)));
+  pin.textContent = item.pinned ? "★" : "☆";
+  pin.addEventListener("click", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    togglePinBookmark(item);
+  });
+  bar.appendChild(pin);
+  bar.appendChild(
+    actBtn("snap", "📷", snapshotFor(item) ? t.snapUpdate : t.cardSnap, function () {
+      openTagDialog(item);
+      var snap = $("snapSection");
+      if (snap && snap.scrollIntoView) snap.scrollIntoView({ block: "nearest" });
+    })
+  );
+  bar.appendChild(
+    actBtn("del", "✕", t.deleteLabel, function () {
+      confirmThen(t.confirmDelete, function () {
+        state.model = Bookmarks.removeBookmark(state.model, item.id);
+        persist().then(function (ok) {
+          if (ok) flashStatus(t.deleted);
+        });
+      });
+    })
+  );
+  return bar;
+}
+
 function cardNode(item) {
   var card = document.createElement("article");
   card.className = "card" + (state.sel[item.id] ? " sel" : "");
+  wireBookmarkDrag(card, item);
 
   var link = document.createElement("a");
   link.className = "cardMain";
   link.href = item.url;
   link.target = "_blank";
   link.rel = "noreferrer noopener";
+  link.draggable = false; // 拖拽语义交给卡片级 move-to-folder
 
   var cover = document.createElement("div");
   cover.className = "cardCover";
   cover.appendChild(faviconNode(item));
   link.appendChild(cover);
+  // 快照徽章整合进封面左下角（点击直接查看快照）。
+  // 挂在卡片而非封面：封面在 <a> 内，button 嵌进链接属于无效嵌套。
+  var snapBadge = snapBadgeChip(item);
+  if (snapBadge) {
+    snapBadge.classList.add("onCover");
+    card.appendChild(snapBadge);
+  }
 
   var title = document.createElement("h3");
   title.textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
@@ -1507,6 +1679,35 @@ function cardNode(item) {
     link.appendChild(note);
   }
 
+  card.appendChild(link);
+  card.appendChild(cardActionBar(item));
+
+  // HamHome 式信息层次：分类/标签独立一行可换行，meta 只留勾选、置顶、时间、菜单
+  var tags = Array.isArray(item.tags) ? item.tags : [];
+  if (item.folder || tags.length) {
+    var tagRow = document.createElement("div");
+    tagRow.className = "cardTags";
+    var chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = folderLabel(item.folder);
+    tagRow.appendChild(chip);
+    var maxCardTags = 4;
+    for (var i = 0; i < tags.length && i < maxCardTags; i++) {
+      var tag = document.createElement("span");
+      tag.className = "chip tag";
+      tag.textContent = tags[i];
+      tagRow.appendChild(tag);
+    }
+    if (tags.length > maxCardTags) {
+      var moreTag = document.createElement("span");
+      moreTag.className = "chip tag";
+      moreTag.textContent = "+" + (tags.length - maxCardTags);
+      moreTag.title = tags.join(", ");
+      tagRow.appendChild(moreTag);
+    }
+    card.appendChild(tagRow);
+  }
+
   var meta = document.createElement("footer");
   meta.className = "cardMeta";
   meta.appendChild(pickBox(item));
@@ -1517,25 +1718,11 @@ function cardNode(item) {
     pin.title = t.pinMark;
     meta.appendChild(pin);
   }
-  var snapChip = snapBadgeChip(item);
-  if (snapChip) meta.appendChild(snapChip);
-  var chip = document.createElement("span");
-  chip.className = "chip";
-  chip.textContent = folderLabel(item.folder);
-  meta.appendChild(chip);
-  var tags = Array.isArray(item.tags) ? item.tags : [];
-  for (var i = 0; i < tags.length; i++) {
-    var tag = document.createElement("span");
-    tag.className = "chip tag";
-    tag.textContent = tags[i];
-    meta.appendChild(tag);
-  }
   var time = document.createElement("time");
   time.textContent = BookmarksView.formatDate(item.added, lang);
   meta.appendChild(time);
   meta.appendChild(cardMenuNode(item));
 
-  card.appendChild(link);
   card.appendChild(meta);
   return card;
 }
@@ -1543,12 +1730,14 @@ function cardNode(item) {
 function rowNode(item) {
   var row = document.createElement("div");
   row.className = "row" + (state.sel[item.id] ? " sel" : "");
+  wireBookmarkDrag(row, item);
   row.appendChild(pickBox(item));
   var link = document.createElement("a");
   link.className = "rowLink";
   link.href = item.url;
   link.target = "_blank";
   link.rel = "noreferrer noopener";
+  link.draggable = false;
   link.appendChild(faviconNode(item));
   var main = document.createElement("span");
   main.className = "rowMain";
@@ -1559,6 +1748,12 @@ function rowNode(item) {
   domain.className = "rowDomain";
   domain.textContent = BookmarksView.domainOf(item.url);
   main.appendChild(title);
+  if (item.note) {
+    var note = document.createElement("span");
+    note.className = "rowNote";
+    note.textContent = item.note;
+    main.appendChild(note);
+  }
   main.appendChild(domain);
   link.appendChild(main);
   row.appendChild(link);
@@ -1620,6 +1815,44 @@ function rowNode(item) {
   return row;
 }
 
+/**
+ * First-load placeholder: shimmering card/row skeletons so the library
+ * paints structure instantly. Skipped when a cached render is already on
+ * screen (refresh happens after renderFromCache in the normal boot path).
+ */
+function showSkeleton() {
+  var cards = $("cards");
+  var rows = $("rows");
+  var empty = $("emptyState");
+  if (empty) empty.classList.add("hidden");
+  if (state.view === "grid") {
+    rows.classList.add("hidden");
+    cards.classList.remove("hidden");
+    if (cards.children.length) return;
+    for (var i = 0; i < 8; i++) {
+      var card = document.createElement("div");
+      card.className = "card skel";
+      card.setAttribute("aria-hidden", "true");
+      card.innerHTML =
+        '<div class="skelCover"></div>' +
+        '<div class="skelLine w70"></div>' +
+        '<div class="skelLine w45"></div>';
+      cards.appendChild(card);
+    }
+  } else {
+    cards.classList.add("hidden");
+    rows.classList.remove("hidden");
+    if (rows.children.length) return;
+    for (var j = 0; j < 8; j++) {
+      var row = document.createElement("div");
+      row.className = "row skel";
+      row.setAttribute("aria-hidden", "true");
+      row.innerHTML = '<div class="skelDot"></div><div class="skelLine w70"></div>';
+      rows.appendChild(row);
+    }
+  }
+}
+
 function renderItems() {
   var items = filteredItemsOrdered();
 
@@ -1627,7 +1860,6 @@ function renderItems() {
   var rows = $("rows");
   cards.textContent = "";
   rows.textContent = "";
-
   var isGrid = state.view === "grid";
   cards.classList.toggle("hidden", !isGrid);
   rows.classList.toggle("hidden", isGrid);
@@ -4014,6 +4246,25 @@ function fillSinceSelect() {
   select.value = "all";
 }
 
+function fillSortSelect() {
+  var select = $("sortSelect");
+  if (!select) return;
+  var options = [
+    ["default", t.sortDefault],
+    ["latest", t.sortLatest],
+    ["oldest", t.sortOldest],
+    ["title", t.sortTitle],
+    ["domain", t.sortDomain],
+  ];
+  for (var i = 0; i < options.length; i++) {
+    var option = document.createElement("option");
+    option.value = options[i][0];
+    option.textContent = options[i][1];
+    select.appendChild(option);
+  }
+  select.value = state.sort;
+}
+
 function fillColorSelect() {
   var select = $("ruleColor");
   var colors = TabRules.COLORS;
@@ -4042,8 +4293,11 @@ function applyCopy() {
   $("folderTitle").textContent = t.folders;
   $("folderAddBtn").title = t.folderAdd;
   $("tagTitle").textContent = t.tags;
+  if ($("sortSelect")) {
+    $("sortSelect").title = t.sortLabel;
+    $("sortSelect").setAttribute("aria-label", t.sortLabel);
+  }
   $("search").placeholder = t.searchPlaceholder;
-  $("loading").textContent = t.loading;
   $("selAllBtn").textContent = t.selAll;
   $("batchMove").textContent = t.batchMove;
   $("batchTags").textContent = t.batchTags;
@@ -4160,6 +4414,7 @@ function applyCopy() {
 
 function setView(view) {
   state.view = view;
+  writeLocalPref(VIEW_KEY, view);
   $("viewGrid").classList.toggle("active", view === "grid");
   $("viewList").classList.toggle("active", view === "list");
   renderItems();
@@ -4243,9 +4498,17 @@ function wireEvents() {
     submitBatchPin();
   });
   $("batchDelete").addEventListener("click", submitBatchDelete);
+  // Search debounce (large libraries rebuild the whole list per keystroke);
+  // deep-links / programmatic resets call renderItems directly, so only the
+  // typing path defers.
+  var searchTimer = null;
   $("search").addEventListener("input", function (event) {
     state.query = event.target.value;
-    renderItems();
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      searchTimer = null;
+      renderItems();
+    }, 180);
   });
   $("folderSelect").addEventListener("change", function (event) {
     var value = event.target.value;
@@ -4257,6 +4520,13 @@ function wireEvents() {
     renderItems();
     // since alone can make/break an active preset match (#84 / #82).
     renderPresetSelect();
+  });
+  $("sortSelect").addEventListener("change", function (event) {
+    state.sort = BookmarksView.SORT_KEYS.indexOf(event.target.value) !== -1
+      ? event.target.value
+      : "default";
+    writeLocalPref(SORT_KEY, state.sort);
+    renderItems();
   });
   $("presetSelect").addEventListener("change", function (event) {
     applyPreset(event.target.value);
@@ -4414,7 +4684,10 @@ function wireEvents() {
 
 applyCopy();
 fillSinceSelect();
+fillSortSelect();
 fillColorSelect();
+// Restore the persisted grid/list choice into the toggle buttons.
+setView(state.view);
 loadPresets();
 loadFavorites().then(function () {
   renderFavoritesNav();

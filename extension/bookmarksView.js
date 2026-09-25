@@ -135,6 +135,93 @@ var BookmarksView = (function () {
     return pinned.concat(rest);
   }
 
+  /**
+   * HamHome-style sort options, applied within the pinned-first groups.
+   * key: "default" (insertion order — current behaviour) | "latest" | "oldest"
+   * | "title" | "domain". `locale` (e.g. "zh") collates titles; omit it for a
+   * plain code-unit compare (tests).
+   */
+  var SORT_KEYS = ["default", "latest", "oldest", "title", "domain"];
+
+  function compareBy(key, locale) {
+    return function (a, b) {
+      if (key === "latest" || key === "oldest") {
+        var at = a && typeof a.added === "number" ? a.added : 0;
+        var bt = b && typeof b.added === "number" ? b.added : 0;
+        return key === "latest" ? bt - at : at - bt;
+      }
+      var av = "";
+      var bv = "";
+      if (key === "domain") {
+        av = domainOf(a && a.url);
+        bv = domainOf(b && b.url);
+      } else {
+        av = String((a && a.title) || "");
+        bv = String((b && b.title) || "");
+      }
+      if (av === bv) return 0;
+      if (locale && typeof av.localeCompare === "function") {
+        var c = av.localeCompare(bv, locale, { sensitivity: "base", numeric: true });
+        return c !== 0 ? c : av < bv ? -1 : 1;
+      }
+      return av < bv ? -1 : 1;
+    };
+  }
+
+  function sortItems(items, key, locale) {
+    var list = Array.isArray(items) ? items.slice() : [];
+    var kind = SORT_KEYS.indexOf(key) !== -1 ? key : "default";
+    if (kind === "default") return orderPinnedFirst(list);
+    var pinned = [];
+    var rest = [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].pinned) pinned.push(list[i]);
+      else rest.push(list[i]);
+    }
+    pinned.sort(function (a, b) {
+      var at = a.pinnedAt || 0;
+      var bt = b.pinnedAt || 0;
+      if (bt !== at) return bt - at;
+      return 0;
+    });
+    rest.sort(compareBy(kind, locale));
+    return pinned.concat(rest);
+  }
+
+  /**
+   * Drag-to-folder payload: dragging a selected bookmark moves the whole
+   * selection (in the given display order); dragging an unselected one moves
+   * just that bookmark.
+   */
+  function dragSelectionIds(item, sel, orderedIds) {
+    var id = item && item.id;
+    if (!id) return [];
+    var selMap = sel && typeof sel === "object" ? sel : {};
+    if (!selMap[id]) return [id];
+    var ids = Array.isArray(orderedIds) ? orderedIds : [];
+    var out = [];
+    for (var i = 0; i < ids.length; i++) {
+      if (selMap[ids[i]]) out.push(ids[i]);
+    }
+    return out.length ? out : [id];
+  }
+
+  /**
+   * Tag-cloud size tiers: rank-based thirds of the sorted list (0 = small,
+   * 2 = large) so the cloud always shows a balanced spread. Returns a
+   * name → tier map.
+   */
+  function tagTiers(list) {
+    var tiers = Object.create(null);
+    var rows = Array.isArray(list) ? list : [];
+    var n = rows.length;
+    for (var i = 0; i < n; i++) {
+      var t = n <= 2 ? (i === 0 ? 2 : 1) : i < n / 3 ? 2 : i < (2 * n) / 3 ? 1 : 0;
+      tiers[rows[i] && rows[i].name] = t;
+    }
+    return tiers;
+  }
+
   function formatBytes(n) {
     var value = typeof n === "number" && isFinite(n) && n > 0 ? n : 0;
     if (value < 1024) return value + " B";
@@ -388,6 +475,7 @@ var BookmarksView = (function () {
       var t = String((item && item.title) || domainOf(item && item.url) || "").trim();
       return t ? t.charAt(0).toUpperCase() : "?";
     },
+    dragSelectionIds: dragSelectionIds,
     filterBookmarks: filterBookmarks,
     findActivePreset: findActivePreset,
     formatDate: formatDate,
@@ -404,7 +492,10 @@ var BookmarksView = (function () {
     sumSnapshotSizes: sumSnapshotSizes,
     orderPinnedFirst: orderPinnedFirst,
     presetFilterLabel: presetFilterLabel,
+    sortItems: sortItems,
+    SORT_KEYS: SORT_KEYS,
     tagList: tagList,
+    tagTiers: tagTiers,
   };
 })();
 

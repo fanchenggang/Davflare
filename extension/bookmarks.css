@@ -2,6 +2,37 @@
   box-sizing: border-box;
 }
 
+/* subtle themed scrollbars (library page scrolls sidebar + main) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
 html,
 body {
   margin: 0;
@@ -373,8 +404,8 @@ button.danger {
 }
 
 .viewToggle button.active {
-  background: var(--orange);
-  color: #fff;
+  background: var(--orange-soft);
+  color: var(--orange-dark);
 }
 
 #themeToggle,
@@ -408,7 +439,6 @@ button.danger {
 }
 
 .banner {
-
   display: flex;
   align-items: center;
   gap: 8px;
@@ -425,11 +455,6 @@ button.danger {
 .banner.hidden,
 .hidden {
   display: none !important;
-}
-
-.loading {
-  color: var(--muted);
-  font-size: 0.8125rem;
 }
 
 .emptyState {
@@ -479,6 +504,7 @@ button.danger {
 }
 
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -487,12 +513,17 @@ button.danger {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   overflow: hidden;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) ease;
 }
 
 .card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+}
+
+.card.dragging {
+  opacity: 0.45;
 }
 
 .cardMain {
@@ -503,6 +534,7 @@ button.danger {
 }
 
 .cardCover {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -510,16 +542,17 @@ button.danger {
   margin: 0 0 var(--space-3);
   padding: var(--space-3);
   background:
-    radial-gradient(120% 80% at 20% 0%, var(--orange-soft), transparent 55%),
+    radial-gradient(120% 90% at 18% 0%, var(--orange-soft), transparent 55%),
+    radial-gradient(90% 70% at 88% 105%, var(--orange-faint), transparent 62%),
     linear-gradient(180deg, var(--paper-soft), var(--paper));
   border-bottom: 1px solid var(--line);
 }
 
 .cardCover .favicon {
-  width: var(--favicon-lg);
-  height: var(--favicon-lg);
+  width: var(--favicon-cover);
+  height: var(--favicon-cover);
   border-radius: var(--radius-md);
-  font-size: 1.125rem;
+  font-size: 1.375rem;
   margin-bottom: 0;
   box-shadow: var(--shadow);
   background: var(--paper);
@@ -527,8 +560,24 @@ button.danger {
 }
 
 .cardCover .favicon img {
-  width: var(--favicon-md);
-  height: var(--favicon-md);
+  width: 30px;
+  height: 30px;
+}
+
+/* 快照徽章整合进封面左下角：点击直接查看快照（绝对定位于卡片，避开 <a> 嵌套） */
+.chip.snap.onCover {
+  position: absolute;
+  left: 10px;
+  top: calc(var(--card-cover-h) - 30px);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+
+.chip.snap.onCover:hover {
+  border-color: var(--orange);
 }
 
 .favicon {
@@ -619,6 +668,26 @@ button.danger {
   margin-left: auto;
 }
 
+/* 分类/标签行：独立于 meta,可换行不挤压 */
+.cardTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.cardTags .chip {
+  flex: none;
+  max-width: 160px;
+}
+
+.cardMeta .chip,
+.cardMeta time,
+.cardMeta .cardMenuWrap {
+  flex: none;
+}
+
 .cardMenuWrap {
   position: relative;
   flex: none;
@@ -666,6 +735,117 @@ button.danger {
   color: var(--err);
 }
 
+/* hover 快捷操作条：浮在封面下缘，回应悬停/键盘聚焦 */
+.cardActions {
+  position: absolute;
+  top: calc(var(--card-cover-h) - 36px);
+  right: 10px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+
+.card:hover .cardActions,
+.card:focus-within .cardActions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.cardAct {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1;
+  box-shadow: var(--shadow);
+}
+
+.cardAct:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.cardAct.pin[aria-pressed="true"] {
+  color: var(--orange);
+}
+
+.cardAct.del:hover {
+  background: var(--err-soft);
+  color: var(--err);
+}
+
+/* ---------- first-load skeleton ---------- */
+
+.card.skel,
+.row.skel {
+  pointer-events: none;
+}
+
+.card.skel {
+  border: 1px solid var(--line);
+}
+
+.skelCover {
+  height: var(--card-cover-h);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.skelDot {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  flex: none;
+}
+
+.skelLine {
+  height: 12px;
+  border-radius: 6px;
+  margin: 0 var(--space-4) 8px;
+}
+
+.skelLine.w70 {
+  width: 70%;
+}
+
+.skelLine.w45 {
+  width: 45%;
+}
+
+.skelCover,
+.skelLine,
+.skelDot {
+  background: linear-gradient(
+    100deg,
+    var(--paper-soft) 40%,
+    var(--paper-elevated) 50%,
+    var(--paper-soft) 60%
+  );
+  background-size: 200% 100%;
+  animation: skelShimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skelShimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
 /* ---------- rows ---------- */
 
 .rows {
@@ -688,6 +868,19 @@ button.danger {
 
 .row:hover {
   border-color: var(--orange);
+}
+
+.row.dragging {
+  opacity: 0.45;
+}
+
+.rowNote {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .row .favicon {
@@ -757,6 +950,29 @@ dialog::backdrop {
   background: var(--overlay);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  dialog[open] {
+    animation: dialogIn var(--dur-base) var(--ease-out);
+  }
+
+  dialog[open]::backdrop {
+    animation: fadeIn var(--dur-base) ease-out;
+  }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
 dialog h2 {
   margin: 0 0 14px;
   font-size: 1.05rem;
@@ -800,18 +1016,20 @@ dialog menu {
 
 /* ---------- view switch & shared bits ---------- */
 
+/* 竖排两字堆叠在中文下过挤：改为与主导航一致的整行列表（HamHome 式侧栏） */
 .viewSwitch {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
   background: var(--paper-soft);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 3px;
+  padding: 4px;
 }
 
 .viewSwitch .navItem {
-  justify-content: center;
-  padding: 6px 8px;
+  justify-content: flex-start;
+  padding: 7px var(--nav-item-pad-x);
   font-size: 0.8125rem;
   border-radius: 8px;
 }
@@ -820,6 +1038,7 @@ dialog menu {
   background: var(--orange-soft);
   color: var(--orange-dark);
   font-weight: 600;
+  box-shadow: inset 3px 0 0 0 var(--orange);
 }
 
 .checkLabel {
@@ -1301,6 +1520,107 @@ dialog textarea {
   min-width: 140px;
 }
 
+/* 拖拽书签到文件夹：悬停高亮放置目标 */
+.navItemWrap.dragOver {
+  background: var(--orange-soft);
+  outline: 2px solid var(--orange);
+  outline-offset: -1px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- tag cloud (HamHome 式) ---------- */
+
+.tagCloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 var(--space-1);
+}
+
+.tagCloudItem {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  max-width: 100%;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+
+.tagCloudItem:hover {
+  border-color: var(--orange);
+}
+
+.tagCloudItem.active {
+  background: var(--orange-soft);
+  border-color: var(--orange);
+}
+
+.tagCloud .tagChip {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+  line-height: 1.5;
+  padding: 2px 9px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tagCloud .tagChip:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.tagCloudItem.active .tagChip {
+  color: var(--orange-dark);
+  font-weight: 600;
+}
+
+.tagChip.tier0 {
+  font-size: 0.71875rem;
+}
+
+.tagChip.tier1 {
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+
+.tagChip.tier2 {
+  font-size: 0.9375rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* 收藏星标在云胶囊内改为内联，跟随悬停出现 */
+.tagCloudItem .navTagStar {
+  position: static;
+  transform: none;
+  visibility: hidden;
+  font-size: 0.7rem;
+  padding: 0 7px 0 0;
+  color: var(--muted);
+}
+
+.tagCloudItem:hover .navTagStar,
+.tagCloudItem .navTagStar[aria-pressed="true"],
+.tagCloudItem .navTagStar:focus-visible {
+  visibility: visible;
+}
+
+.tagCloudItem .navTagStar[aria-pressed="true"] {
+  color: var(--orange);
+}
+
+.tagCloudItem .navTagStar:hover {
+  background: transparent;
+  color: var(--orange-dark);
+}
+
 /* ---------- filter presets (issue #63 P2) ---------- */
 
 .presetWrap {
@@ -1356,7 +1676,7 @@ dialog textarea {
 }
 
 .chip.snap {
-  background: var(--accent-soft, rgba(249, 115, 22, 0.15));
+  background: var(--orange-soft);
   color: var(--orange);
 }
 
@@ -1440,6 +1760,9 @@ dialog textarea {
 
 .favItemWrap .navItem {
   padding-right: 28px;
+  /* kind 前缀与名称同行排列；favorites 无计数徽章，禁用两端分布 */
+  justify-content: flex-start;
+  gap: 4px;
 }
 
 .favItemWrap .navItem .favKind {
@@ -1472,10 +1795,6 @@ dialog textarea {
 .favRemove:hover {
   background: var(--orange-soft);
   color: var(--orange-dark);
-}
-
-.navItem.favStar {
-  /* star affordance on folder/tag rows */
 }
 
 .navFolderStar,
@@ -1549,7 +1868,7 @@ dialog textarea {
 .storageList .storageTotal {
   margin-top: 4px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line-strong);
   font-weight: 600;
 }
 

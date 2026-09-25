@@ -23,6 +23,7 @@
   --orange: #f38020;
   --orange-dark: #d96e12;
   --orange-soft: rgba(243, 128, 32, 0.12);
+  --orange-faint: rgba(243, 128, 32, 0.06);
   --focus: rgba(243, 128, 32, 0.16);
 
   /* status */
@@ -48,13 +49,20 @@
   --space-5: 24px;
   --sidebar-w: 248px;
   --topbar-control-h: 36px;
-  --card-cover-h: 88px;
+  --card-cover-h: 92px;
   --favicon-sm: 20px;
   --favicon-md: 28px;
   --favicon-lg: 40px;
+  --favicon-cover: 52px;
   --nav-item-pad-y: 6px;
   --nav-item-pad-x: 10px;
   --nav-item-gap: 2px;
+
+  /* motion (hover/reveal transitions answer user actions; reduced-motion
+     overrides flatten these) */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
 :root[data-theme="dark"] {
@@ -73,6 +81,7 @@
   --orange: #f79b45;
   --orange-dark: #ffb066;
   --orange-soft: rgba(247, 155, 69, 0.16);
+  --orange-faint: rgba(247, 155, 69, 0.08);
   --focus: rgba(247, 155, 69, 0.22);
 
   --ok: #5dba7f;
