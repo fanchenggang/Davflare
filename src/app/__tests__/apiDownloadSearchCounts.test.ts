@@ -72,7 +72,7 @@ describe("download", () => {
 
     const response = await download(bucket, "/api/download?path=a.txt");
     expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(response.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
     expect(response.headers.get("Content-Disposition")).toBe(
       'attachment; filename="a.txt"; filename*=UTF-8\'\'a.txt'
     );

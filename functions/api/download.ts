@@ -1,4 +1,5 @@
 import { contentDisposition } from "./_disposition";
+import { withUtf8Charset } from "../_contentType";
 import {
   authorizeApiKey,
   decodeRawPath,
@@ -103,8 +104,9 @@ export const onRequestGet: PagesFunction<DownloadEnv> = async (context) => {
   await touchLastUsed(env.BUCKET, auth);
 
   const headers = new Headers();
-  const contentType =
-    object.httpMetadata?.contentType || "application/octet-stream";
+  const contentType = withUtf8Charset(
+    object.httpMetadata?.contentType || "application/octet-stream"
+  );
   headers.set("Content-Type", contentType);
   headers.set("Content-Disposition", attachmentDisposition(basename(key)));
   headers.set("Accept-Ranges", "bytes");

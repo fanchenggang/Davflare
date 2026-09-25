@@ -257,7 +257,7 @@ describe("mcp 文件工具", () => {
     expect(download.json).toMatchObject({
       path: "docs/hi.txt",
       size: 5,
-      contentType: "text/plain",
+      contentType: "text/plain; charset=utf-8",
       encoding: "utf8",
       content: "hello",
     });

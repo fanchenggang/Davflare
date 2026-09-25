@@ -352,7 +352,7 @@ describe("share raw / download responses", () => {
     seedFileShare(bucket);
     const response = await callShareGet(bucket, "tok1", "?download=1");
     expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(response.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
     expect(response.headers.get("Content-Security-Policy")).toBe("sandbox");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
@@ -522,7 +522,7 @@ describe("share extract code gate", () => {
       )
     );
     expect(granted.status).toBe(200);
-    expect(granted.headers.get("Content-Type")).toBe("text/plain");
+    expect(granted.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
     const landing = await shareHead(
       makeContext(
         shareRequest("gate", "HEAD", "", { Cookie: `fd_share_code=${await sha256Hex("abcd")}` }),

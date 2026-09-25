@@ -1,5 +1,6 @@
 // WebDAV 方法实现与请求分发；工具层在 davUtil/davXml/davLock，类型在 davTypes。
 import { utf8ToBase64 } from "../api/_apikey";
+import { withUtf8Charset } from "../_contentType";
 import {
   DAV_ENDPOINT,
   DAV_ENDPOINT_WITH_SLASH,
@@ -185,7 +186,7 @@ async function handleGet({
   const rangeRequested = request.headers.has("Range") && object.range !== undefined;
   const headers = new Headers();
   headers.set("Accept-Ranges", "bytes");
-  headers.set("Content-Type", object.httpMetadata?.contentType ?? "application/octet-stream");
+  headers.set("Content-Type", withUtf8Charset(object.httpMetadata?.contentType ?? "application/octet-stream"));
   headers.set("Content-Length", contentLength.toString());
   headers.set("ETag", object.httpEtag);
   headers.set("Last-Modified", object.uploaded.toUTCString());

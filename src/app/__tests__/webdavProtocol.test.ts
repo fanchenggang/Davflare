@@ -370,7 +370,7 @@ describe("webdav GET / HEAD", () => {
       makeEnv(bucket)
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(response.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
     expect(response.headers.get("Accept-Ranges")).toBe("bytes");
     expect(response.headers.get("ETag")).toMatch(/^"/);
     expect(await response.text()).toBe("Hello World");
@@ -532,7 +532,7 @@ describe("webdav GET / HEAD", () => {
       makeEnv(bucket)
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("text/plain");
+    expect(response.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
     expect(response.headers.get("Content-Length")).toBe("5");
     expect(await response.text()).toBe("");
   });

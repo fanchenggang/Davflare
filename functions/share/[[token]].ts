@@ -5,6 +5,7 @@ interface ShareEnv {
 import { buildZipStream } from "../api/_zip";
 import { contentDisposition } from "../api/_disposition";
 import { isInternalKey, sha256Hex, timingSafeEqual } from "../api/_apikey";
+import { withUtf8Charset } from "../_contentType";
 
 const SHARES_PREFIX = "_$flaredrive$/shares/";
 const SHARE_COOKIE = "fd_share_code";
@@ -472,7 +473,10 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   headers.set("Cache-Control", "no-store");
   applyShareHardening(headers);
 
-  const contentType = object.httpMetadata?.contentType || "application/octet-stream";
+  const contentType = withUtf8Charset(
+    object.httpMetadata?.contentType || "application/octet-stream"
+  );
+  headers.set("Content-Type", contentType);
   // ?download=1 固定 attachment 直链下载；?raw=1 内联给落地页预览，
   // 非预览安全类型回退 attachment（octet-stream 等浏览器也不会内联渲染）
   const disposition =
@@ -547,5 +551,9 @@ export const onRequestHead: PagesFunction<ShareEnv> = async (context) => {
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);
+  headers.set(
+    "Content-Type",
+    withUtf8Charset(object.httpMetadata?.contentType || "application/octet-stream")
+  );
   return new Response(null, { headers });
 };
