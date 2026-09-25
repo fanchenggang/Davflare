@@ -273,6 +273,7 @@ describe("index sites 命令", () => {
     fs.mkdirSync(path.join(dir, "css"));
     fs.writeFileSync(path.join(dir, "css", "a.css"), "body{}");
     mocks.api.listSites.mockResolvedValue({ sitesHost: "sites.example.com", sites: [] });
+    mocks.api.listPage.mockResolvedValue({ items: [], nextCursor: null });
     mocks.api.uploadFile.mockResolvedValue(undefined);
     mocks.api.publishSite.mockResolvedValue({
       slug: "blog",
@@ -287,10 +288,53 @@ describe("index sites 命令", () => {
 
     expect(mocks.api.uploadFile).toHaveBeenCalledTimes(2);
     const stagingArg = mocks.api.publishSite.mock.calls[0][0] as string;
-    expect(stagingArg).toMatch(/^\.davflare-publish\//);
+    // 单层暂存目录：删掉它即不留任何父目录
+    expect(stagingArg).toMatch(/^\.davflare-publish-[0-9a-f-]{36}$/);
     expect(mocks.api.publishSite).toHaveBeenCalledWith(stagingArg, "blog");
     expect(mocks.api.remove).toHaveBeenCalledWith(`${stagingArg}/`, true);
+    // 旧版遗留的空 .davflare-publish/ 一并清理
+    expect(mocks.api.listPage).toHaveBeenCalledWith(".davflare-publish/", undefined, 1);
+    expect(mocks.api.remove).toHaveBeenCalledWith(".davflare-publish/", true);
     expect(console.log).toHaveBeenCalledWith("https://sites.example.com/blog/");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sites publish 不删除非空的旧版 .davflare-publish/（可能是并发发布的暂存）", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-sites-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "x");
+    mocks.api.listSites.mockResolvedValue({ sitesHost: null, sites: [] });
+    mocks.api.listPage.mockResolvedValue({
+      items: [{ key: ".davflare-publish/other/", name: "other", isDir: true, size: 0, uploaded: "" }],
+      nextCursor: null,
+    });
+    mocks.api.uploadFile.mockResolvedValue(undefined);
+    mocks.api.publishSite.mockResolvedValue({ slug: "blog", source: "s", copied: 1, sitesHost: null });
+    mocks.api.remove.mockResolvedValue(undefined);
+
+    await runCli("sites", "publish", dir, "--slug", "blog");
+    await vi.waitFor(() => expect(mocks.api.listPage).toHaveBeenCalled());
+
+    const removed = mocks.api.remove.mock.calls.map((call) => call[0]);
+    expect(removed).toHaveLength(1);
+    expect(removed[0]).toMatch(/^\.davflare-publish-[0-9a-f-]{36}\/$/);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sites publish 旧版 .davflare-publish/ 不存在（404）时静默跳过", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-sites-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "x");
+    mocks.api.listSites.mockResolvedValue({ sitesHost: "sites.example.com", sites: [] });
+    mocks.api.listPage.mockRejectedValue(new ApiError(404, "目录不存在"));
+    mocks.api.uploadFile.mockResolvedValue(undefined);
+    mocks.api.publishSite.mockResolvedValue({ slug: "blog", source: "s", copied: 1, sitesHost: "sites.example.com" });
+    mocks.api.remove.mockResolvedValue(undefined);
+
+    await runCli("sites", "publish", dir, "--slug", "blog");
+    await vi.waitFor(() => expect(console.log).toHaveBeenCalledWith("https://sites.example.com/blog/"));
+
+    expect(mocks.api.remove).toHaveBeenCalledTimes(1);
+    expect(exitSpy).not.toHaveBeenCalled();
     fs.rmSync(dir, { recursive: true, force: true });
   });
 

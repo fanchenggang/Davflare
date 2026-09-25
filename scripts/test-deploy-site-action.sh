@@ -48,6 +48,20 @@ grep -q "Davflare site published: https://sites.mock.test/demo-site/" "$TMP/out.
 grep -qx "url=https://sites.mock.test/demo-site/" "$TMP/github_output" && ok "sets url output" || bad "sets url output"
 grep -q "https://sites.mock.test/demo-site/" "$TMP/summary" && ok "writes step summary" || bad "writes step summary"
 no_key_leak "$GOOD_KEY" "success"
+LEFT="$(curl -s --noproxy '*' "$MOCK_URL/__mock/objects")"
+[ "$LEFT" = "[]" ] && ok "no staging leftover (.davflare-publish*) after publish" || bad "no staging leftover after publish (objects: $LEFT)"
+
+echo "== legacy empty .davflare-publish/ is cleaned; non-empty one is kept =="
+curl -s --noproxy '*' -X POST "$MOCK_URL/__mock/seed?key=.davflare-publish&dir=1" >/dev/null
+run INPUT_PATH="$TMP/dist" INPUT_SLUG="demo" INPUT_URL="$MOCK_URL" INPUT_API_KEY="$GOOD_KEY"
+LEFT="$(curl -s --noproxy '*' "$MOCK_URL/__mock/objects")"
+[ "$LEFT" = "[]" ] && ok "legacy empty .davflare-publish/ removed" || bad "legacy empty .davflare-publish/ removed (objects: $LEFT)"
+curl -s --noproxy '*' -X POST "$MOCK_URL/__mock/seed?key=.davflare-publish/other-job/index.html" >/dev/null
+run INPUT_PATH="$TMP/dist" INPUT_SLUG="demo" INPUT_URL="$MOCK_URL" INPUT_API_KEY="$GOOD_KEY"
+LEFT="$(curl -s --noproxy '*' "$MOCK_URL/__mock/objects")"
+[ "$LEFT" = '[".davflare-publish",".davflare-publish/other-job",".davflare-publish/other-job/index.html"]' ] \
+  && ok "non-empty legacy .davflare-publish/ kept (concurrent staging safe)" || bad "non-empty legacy kept (objects: $LEFT)"
+curl -s --noproxy '*' -X DELETE -H "Authorization: Bearer $GOOD_KEY" "$MOCK_URL/api/delete?path=.davflare-publish/" >/dev/null
 
 echo "== GitHub Actions mode: key only in ::add-mask:: =="
 run GITHUB_ACTIONS=true INPUT_PATH="$TMP/dist" INPUT_SLUG="demo" INPUT_URL="$MOCK_URL" INPUT_API_KEY="$GOOD_KEY"

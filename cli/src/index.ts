@@ -305,6 +305,24 @@ function sitePublicUrl(sitesHost: string | null | undefined, slug: string): stri
   return `https://${sitesHost.replace(/\/$/, "")}/${slug}/`;
 }
 
+/**
+ * 旧版本（≤ #115）暂存在 `.davflare-publish/<uuid>/`：上传时服务端 ensureFolders 会为父级建目录标记，
+ * 只删 `<uuid>/` 会在根目录留下空的 `.davflare-publish/`。现在改为单层 `.davflare-publish-<uuid>/`，
+ * 删一次即干净；并在发布成功后顺手清理旧版留下的空父目录（仅当其为空，避免误删并发发布的暂存）。
+ */
+const LEGACY_STAGING_ROOT = ".davflare-publish";
+
+async function removeLegacyStagingRoot(api: DavflareClient): Promise<void> {
+  try {
+    const page = await api.listPage(`${LEGACY_STAGING_ROOT}/`, undefined, 1);
+    if (page.items.length === 0 && !page.nextCursor) {
+      await api.remove(`${LEGACY_STAGING_ROOT}/`, true);
+    }
+  } catch {
+    // 不存在（404）或清理失败：忽略，不影响发布结果
+  }
+}
+
 const sitesCmd = program.command("sites").description("管理静态站点（list / publish / delete，走 /api/sites）");
 
 sitesCmd
@@ -350,7 +368,7 @@ sitesCmd
   .argument("<localDir>", "本地目录")
   .requiredOption("--slug <slug>", "站点 slug（[a-z0-9][a-z0-9-]{0,62}）")
   .action(async (localDir: string, options: { slug: string }) => {
-    const stagingPrefix = `.davflare-publish/${crypto.randomUUID()}`;
+    const stagingPrefix = `${LEGACY_STAGING_ROOT}-${crypto.randomUUID()}`;
     let staged = false;
     try {
       const slug = assertSiteSlug(options.slug);
@@ -386,6 +404,7 @@ sitesCmd
       } catch {
         console.error(`警告: 暂存目录 ${stagingPrefix}/ 清理失败，可稍后手动删除`);
       }
+      await removeLegacyStagingRoot(api);
       const url = sitePublicUrl(result.sitesHost, result.slug);
       console.error(`已发布 ${result.copied} 个文件 → sites/${result.slug}/`);
       if (url) console.log(url);

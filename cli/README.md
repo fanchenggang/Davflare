@@ -56,7 +56,7 @@ davflare sites publish ./dist --slug blog
 # → https://sites.example.com/blog/
 ```
 
-`sites publish` 会先用 `GET /api/sites` 预检密钥与服务地址：密钥无效/过期/吊销（401/403）时在上传前即失败，报 `Davflare API key rejected (HTTP 401: …)`，退出码 1。
+`sites publish` 先把文件上传到根目录临时的 `.davflare-publish-<uuid>/`，发布后（失败时同样）删除，不留痕迹；旧版本遗留的空 `.davflare-publish/` 会在下次发布成功后自动清理。它会先用 `GET /api/sites` 预检密钥与服务地址：密钥无效/过期/吊销（401/403）时在上传前即失败，报 `Davflare API key rejected (HTTP 401: …)`，退出码 1。
 
 在 GitHub Actions 里发布可直接用官方 action `uses: fanchenggang/Davflare@main`（封装本命令），见 [docs/sites.zh-CN.md](../docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) / [docs/sites.md](../docs/sites.md#github-action-deploy-to-davflare-site)。
 
