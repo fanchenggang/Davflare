@@ -10,8 +10,9 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
   addBookmark: (
     model: unknown,
     item: { id?: string; title?: string; url?: string; folder?: string; tags?: string[]; note?: string; added?: number }
-  ) => { model: BookmarkModel; added: boolean };
+  ) => { model: BookmarkModel; added: boolean; restored?: boolean };
   adoptRichFields: (htmlModel: unknown, jsonModel: unknown) => BookmarkModel;
+  duplicateGroups: (model: unknown) => Array<{ key: string; items: BookmarkRow[] }>;
   emptyModel: () => BookmarkModel;
   folderPaths: (model: unknown) => string[];
   isWebUrl: (url: unknown) => boolean;
@@ -25,10 +26,16 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
     html?: string;
     jsonText?: string | null;
   }) => BookmarkModel;
+  purgeExpiredTrash: (
+    model: unknown,
+    now: number,
+    maxAgeMs?: number
+  ) => { model: BookmarkModel; purged: number };
   restoreBookmarks: (
     model: unknown,
     entries: { bookmark: BookmarkRow; index: number }[]
   ) => BookmarkModel;
+  restoreFromTrash: (model: unknown, ids: string[]) => BookmarkModel;
   removeBookmark: (model: unknown, id: string) => BookmarkModel;
   removeBookmarks: (model: unknown, ids: string[]) => BookmarkModel;
   searchBookmarks: (
@@ -56,6 +63,7 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
     model: unknown,
     undo: unknown
   ) => { model: BookmarkModel; restored: number };
+  softDeleteBookmarks: (model: unknown, ids: string[], now?: number) => BookmarkModel;
   updateBookmark: (
     model: unknown,
     id: string,
@@ -667,5 +675,160 @@ describe("extension/bookmarks.js restoreBookmarks (round-2 undo delete)", () => 
     expect(
       Bookmarks.restoreBookmarks(model, [{ bookmark: null, index: 0 }] as never).bookmarks
     ).toHaveLength(3);
+  });
+});
+
+describe("extension/bookmarks.js trash (soft delete)", () => {
+  const base = () =>
+    Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "b1", url: "https://a.com", title: "A", folder: "Dev", tags: ["x"] },
+        { id: "b2", url: "https://b.com", title: "B", pinned: true, pinnedAt: 5 },
+      ],
+    });
+
+  test("normalizeModel keeps deleted/deletedAt and drops them when live", () => {
+    const model = Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "b1", url: "https://a.com", deleted: true, deletedAt: 123 },
+        { id: "b2", url: "https://b.com", deleted: false, deletedAt: 999 },
+      ],
+    });
+    expect(model.bookmarks[0]).toMatchObject({ deleted: true, deletedAt: 123 });
+    expect(model.bookmarks[1]).toMatchObject({ deleted: false, deletedAt: 0 });
+  });
+
+  test("softDeleteBookmarks stamps deletedAt once and keeps pinned state", () => {
+    const now = 1_000_000;
+    const trashed = Bookmarks.softDeleteBookmarks(base(), ["b1", "b2", "nope"], now);
+    expect(trashed.bookmarks[0]).toMatchObject({ deleted: true, deletedAt: now });
+    expect(trashed.bookmarks[1]).toMatchObject({ deleted: true, deletedAt: now, pinned: true });
+    // Re-deleting never refreshes the stamp.
+    const again = Bookmarks.softDeleteBookmarks(trashed, ["b1"], now + 5);
+    expect(again.bookmarks[0].deletedAt).toBe(now);
+  });
+
+  test("serializeHtml skips deleted rows so the Netscape export stays clean", () => {
+    const trashed = Bookmarks.softDeleteBookmarks(base(), ["b1"], 1_000);
+    const html = Bookmarks.serializeHtml(trashed);
+    expect(html).toContain("https://b.com");
+    expect(html).not.toContain("https://a.com");
+    // And the round-trip through parseHtml only sees live rows.
+    expect(Bookmarks.parseHtml(html).bookmarks).toHaveLength(1);
+  });
+
+  test("restoreFromTrash clears the marks", () => {
+    const now = 1_000_000;
+    const trashed = Bookmarks.softDeleteBookmarks(base(), ["b1"], now);
+    const restored = Bookmarks.restoreFromTrash(trashed, ["b1"]);
+    expect(restored.bookmarks[0]).toMatchObject({ deleted: false, deletedAt: 0 });
+  });
+
+  test("purgeExpiredTrash hard-removes only entries past the max age", () => {
+    const now = 30 * 24 * 3600 * 1000 + 10_000;
+    const model = Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "old", url: "https://old.com", deleted: true, deletedAt: 5_000 },
+        { id: "young", url: "https://young.com", deleted: true, deletedAt: now - 1000 },
+        { id: "live", url: "https://live.com" },
+      ],
+    });
+    const { model: next, purged } = Bookmarks.purgeExpiredTrash(model, now);
+    expect(purged).toBe(1);
+    expect(next.bookmarks.map((b) => b.id)).toEqual(["young", "live"]);
+    // Live rows are never touched regardless of age.
+    const noTrash = Bookmarks.purgeExpiredTrash(base(), now + 10 * 365 * 86_400_000);
+    expect(noTrash.purged).toBe(0);
+    expect(noTrash.model.bookmarks).toHaveLength(2);
+  });
+
+  test("addBookmark revives a trashed URL with refreshed fields", () => {
+    const now = 1_000_000;
+    let model = Bookmarks.softDeleteBookmarks(base(), ["b1"], now);
+    const result = Bookmarks.addBookmark(model, {
+      title: "A2",
+      url: "https://a.com/#frag",
+      folder: "New",
+      tags: ["y"],
+      note: "back",
+      added: now,
+    });
+    expect(result.added).toBe(true);
+    expect(result.restored).toBe(true);
+    expect(result.model.bookmarks).toHaveLength(2);
+    expect(result.model.bookmarks[0]).toMatchObject({
+      id: "b1",
+      title: "A2",
+      deleted: false,
+      deletedAt: 0,
+      folder: "New",
+      tags: ["y"],
+      note: "back",
+    });
+    // A live duplicate is still rejected as before.
+    expect(Bookmarks.addBookmark(result.model, { url: "https://a.com" }).added).toBe(false);
+  });
+
+  test("mergeModels never resurrects trashed base entries", () => {
+    const trashed = Bookmarks.softDeleteBookmarks(base(), ["b1"], 1_000);
+    const merged = Bookmarks.mergeModels(trashed, {
+      bookmarks: [{ id: "new", url: "https://a.com/", title: "Incoming" }],
+    });
+    expect(merged.bookmarks).toHaveLength(2);
+    expect(merged.bookmarks[0]).toMatchObject({ id: "b1", deleted: true });
+  });
+
+  test("adoptRichFields re-attaches deleted sidecar rows html cannot hold", () => {
+    const htmlModel = Bookmarks.parseHtml(
+      `<DL><p><DT><A HREF="https://b.com" ADD_DATE="1">B</A></DL><p>`
+    );
+    const jsonModel = Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "b2", url: "https://b.com", title: "B" },
+        { id: "b1", url: "https://a.com", title: "A", deleted: true, deletedAt: 55 },
+      ],
+    });
+    const merged = Bookmarks.adoptRichFields(htmlModel, jsonModel);
+    expect(merged.bookmarks).toHaveLength(2);
+    expect(merged.bookmarks[1]).toMatchObject({ id: "b1", deleted: true, deletedAt: 55 });
+  });
+
+  test("searchBookmarks and folderPaths ignore trashed rows", () => {
+    const model = Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "b1", url: "https://a.com", title: "Needle", folder: "Gone" },
+        { id: "b2", url: "https://b.com", title: "Hay", folder: "Kept" },
+      ],
+    });
+    const trashed = Bookmarks.softDeleteBookmarks(model, ["b1"], 1_000);
+    expect(Bookmarks.searchBookmarks(trashed, "needle")).toHaveLength(0);
+    expect(Bookmarks.searchBookmarks(trashed, "hay")).toHaveLength(1);
+    expect(Bookmarks.folderPaths(trashed)).toEqual(["Kept"]);
+  });
+});
+
+describe("extension/bookmarks.js duplicateGroups", () => {
+  test("groups by urlKey ignoring fragments and tracking params, oldest first", () => {
+    const model = Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "b1", url: "https://a.com/x?utm_source=rss", title: "Newest", added: 30 },
+        { id: "b2", url: "https://a.com/x", title: "Oldest", added: 10 },
+        { id: "b3", url: "https://a.com/x#top", title: "Middle", added: 20 },
+        { id: "b4", url: "https://unique.com", title: "Unique", added: 5 },
+      ],
+    });
+    const groups = Bookmarks.duplicateGroups(model);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].items.map((b) => b.id)).toEqual(["b2", "b3", "b1"]);
+  });
+
+  test("returns an empty list when every URL is unique and skips trash", () => {
+    const model = Bookmarks.normalizeModel({
+      bookmarks: [
+        { id: "b1", url: "https://a.com" },
+        { id: "b2", url: "https://a.com/x", deleted: true },
+      ],
+    });
+    expect(Bookmarks.duplicateGroups(model)).toEqual([]);
   });
 });

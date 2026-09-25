@@ -470,7 +470,8 @@ describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)
     expect(appJs).toContain("await deleteBookmarksWithUndo(ids)");
     // Old direct-delete call sites are gone from the library app.
     expect(appJs).not.toContain("Bookmarks.removeBookmark(state.model, item.id)");
-    expect(appJs).toContain("Bookmarks.restoreBookmarks(state.model, action)");
+    // Round-3 soft-delete + #126 generalized undo toast (ids → restoreFromTrash).
+    expect(appJs).toContain("Bookmarks.restoreFromTrash(state.model, action)");
   });
 
   test("undo toast ships markup, wiring, and styles", () => {
@@ -508,7 +509,9 @@ describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)
   });
 
   test("non-empty folders can be deleted with contents moving to Unfiled", () => {
+    // #126 undoable helper still takes `name`; tree rows call it with node.path.
     expect(appJs).toContain("Bookmarks.deleteFolderTree(state.model, name)");
+    expect(appJs).toContain("deleteFolderWithUndo(node.path)");
     expect(appJs).toContain("folderDeleteConfirmWithCount");
     expect(appJs).toContain("folderDeletedMoved");
   });
@@ -600,11 +603,11 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
     expect(zh(model, "Tree")).toBe("确定删除空文件夹「Tree」及其空的子文件夹？");
   });
 
-  test("delete handler no longer trusts the direct-only entry.count", () => {
-    const handler = sliceBlock("function folderNavItem(");
-    expect(handler).not.toContain("entry.count > 0");
-    expect(handler).toContain("folderDeleteMessage(state.model, entry.name)");
-    expect(handler).toContain("deleteFolderWithUndo(entry.name)");
+  test("delete handler no longer trusts the direct-only node.count", () => {
+    const handler = sliceBlock("function folderTreeItem(");
+    expect(handler).not.toContain("node.count > 0");
+    expect(handler).toContain("folderDeleteMessage(state.model, node.path)");
+    expect(handler).toContain("deleteFolderWithUndo(node.path)");
   });
 
   test("folder delete is undoable and restores subfolder bookmarks + declarations", () => {

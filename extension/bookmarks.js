@@ -42,6 +42,14 @@ var Bookmarks = (function () {
   function sanitizeBookmark(raw) {
     var src = raw && typeof raw === "object" ? raw : {};
     var added = typeof src.added === "number" && isFinite(src.added) ? src.added : 0;
+    // Soft delete (trash): JSON-sidecar-only flag. serializeHtml/buildTree
+    // skip deleted rows so the authoritative HTML stays browser-clean;
+    // optional fields — older readers just drop them, data never breaks.
+    var deleted = src.deleted === true;
+    var deletedAt =
+      typeof src.deletedAt === "number" && isFinite(src.deletedAt) && src.deletedAt > 0
+        ? src.deletedAt
+        : 0;
     return {
       id: asString(src.id) || makeId(),
       title: asString(src.title),
@@ -57,6 +65,8 @@ var Bookmarks = (function () {
         typeof src.pinnedAt === "number" && isFinite(src.pinnedAt) && src.pinnedAt > 0
           ? src.pinnedAt
           : 0,
+      deleted: deleted,
+      deletedAt: deleted ? deletedAt : 0,
     };
   }
 
@@ -380,6 +390,7 @@ var Bookmarks = (function () {
     }
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
+      if (item.deleted) continue; // trash never reaches the Netscape export
       var node = root;
       var folder = item.folder.replace(/^\/+|\/+$/g, "");
       if (folder) {
@@ -412,6 +423,7 @@ var Bookmarks = (function () {
     var norm = normalizeModel(model);
     var items = norm.bookmarks;
     for (var i = 0; i < items.length; i++) {
+      if (items[i].deleted) continue; // trashed rows don't offer their folder
       var folder = String(items[i].folder || "").trim().replace(/^\/+|\/+$/g, "");
       if (!folder) continue;
       markFolderPaths(seen, folder);
@@ -487,19 +499,37 @@ var Bookmarks = (function () {
     return -1;
   }
 
-  /** Add one bookmark; existing URL wins. Returns {model, added}. */
+  /**
+   * Add one bookmark; existing URL wins. A URL that only exists in the trash
+   * is revived in place (trash marks cleared, editable fields refreshed) —
+   * re-saving a deleted page is how users say "I want it back".
+   * Returns {model, added, restored?}.
+   */
   function addBookmark(model, item) {
     var next = normalizeModel(model);
     var key = urlKey(item && item.url);
     if (!key || !isWebUrl(item && item.url)) return { model: next, added: false };
-    if (indexOfUrl(next, key) !== -1) return { model: next, added: false };
     var clean = sanitizeBookmark(item);
     if (!clean.url) return { model: next, added: false };
+    var idx = indexOfUrl(next, key);
+    if (idx !== -1) {
+      var existing = next.bookmarks[idx];
+      if (!existing.deleted) return { model: next, added: false };
+      existing.deleted = false;
+      existing.deletedAt = 0;
+      existing.title = clean.title;
+      existing.note = clean.note;
+      existing.tags = clean.tags;
+      existing.folder = clean.folder;
+      if (clean.added) existing.added = clean.added;
+      return { model: next, added: true, restored: true };
+    }
     next.bookmarks.push(clean);
     return { model: next, added: true };
   }
 
-  /** Merge incoming into base by URL; base entries win on collision. */
+  /** Merge incoming into base by URL; base entries win on collision —
+   *  including trashed base entries, so imports never resurrect the trash. */
   function mergeModels(base, incoming) {
     var out = normalizeModel(base);
     var add = normalizeModel(incoming);
@@ -714,7 +744,8 @@ var Bookmarks = (function () {
     var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
     var n = 0;
     for (var i = 0; i < items.length; i++) {
-      if (items[i] && inFolderTree(items[i].folder, clean)) n++;
+      if (!items[i] || items[i].deleted) continue; // trash stays quiet for #126 confirms
+      if (inFolderTree(items[i].folder, clean)) n++;
     }
     return n;
   }
@@ -852,6 +883,20 @@ var Bookmarks = (function () {
     }
     if (Array.isArray(jsonModel.folders) && jsonModel.folders.length) {
       out.folders = sanitizeFolderList(out.folders.concat(jsonModel.folders));
+    }
+    // Deleted rows only live in the JSON sidecar (serializeHtml skips them),
+    // so html-wins membership would silently drop the trash. Re-attach every
+    // sidecar row that is deleted and absent from the parsed HTML.
+    var present = Object.create(null);
+    for (var k = 0; k < out.bookmarks.length; k++) {
+      present[urlKey(out.bookmarks[k].url)] = true;
+    }
+    for (var m = 0; m < jsonModel.bookmarks.length; m++) {
+      var b = jsonModel.bookmarks[m];
+      if (!b || !b.deleted) continue;
+      var bkey = urlKey(b.url);
+      if (!bkey || present[bkey]) continue;
+      out.bookmarks.push(sanitizeBookmark(b));
     }
     return out;
   }
@@ -1003,6 +1048,7 @@ var Bookmarks = (function () {
     var out = [];
     for (var i = 0; i < items.length && out.length < cap; i++) {
       var item = items[i];
+      if (item.deleted) continue; // omnibox must not surface the trash
       var hay = (
         item.title + "\n" + item.url + "\n" + item.tags.join(" ") + "\n" + item.folder
       ).toLowerCase();
@@ -1016,6 +1062,107 @@ var Bookmarks = (function () {
       if (hit) out.push(item);
     }
     return out;
+  }
+
+  /* ---------- trash (soft delete) & duplicates ---------- */
+
+  var TRASH_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+  /**
+   * Mark entries as deleted (trash) instead of dropping them. Pinned state
+   * survives so a restore brings the pin back; views exclude deleted rows.
+   */
+  function softDeleteBookmarks(model, ids, now) {
+    var next = normalizeModel(model);
+    var drop = idSet(ids);
+    if (!drop) return next;
+    var stamp = typeof now === "number" && isFinite(now) && now > 0 ? now : Date.now();
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var item = next.bookmarks[i];
+      if (!drop[item.id] || item.deleted) continue;
+      item.deleted = true;
+      item.deletedAt = stamp;
+    }
+    return next;
+  }
+
+  /** Clear the trash marks; unknown ids and live rows are ignored. */
+  function restoreFromTrash(model, ids) {
+    var next = normalizeModel(model);
+    var drop = idSet(ids);
+    if (!drop) return next;
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var item = next.bookmarks[i];
+      if (!drop[item.id]) continue;
+      item.deleted = false;
+      item.deletedAt = 0;
+    }
+    return next;
+  }
+
+  /**
+   * Hard-remove trashed entries older than maxAgeMs (default 30 days).
+   * Returns {model, purged} — purged counts the removed rows so the caller
+   * can surface a one-line notice. Live rows and young trash stay put.
+   */
+  function purgeExpiredTrash(model, now, maxAgeMs) {
+    var next = normalizeModel(model);
+    var ts = typeof now === "number" && isFinite(now) && now > 0 ? now : Date.now();
+    var age =
+      typeof maxAgeMs === "number" && isFinite(maxAgeMs) && maxAgeMs > 0
+        ? maxAgeMs
+        : TRASH_MAX_AGE_MS;
+    var kept = [];
+    var purged = 0;
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var item = next.bookmarks[i];
+      if (item.deleted && item.deletedAt && ts - item.deletedAt > age) {
+        purged++;
+        continue;
+      }
+      kept.push(item);
+    }
+    next.bookmarks = kept;
+    return { model: next, purged: purged };
+  }
+
+  /**
+   * Group live bookmarks sharing one urlKey (tracking params already
+   * stripped). Items inside a group sort oldest-first (the suggested
+   * keeper); groups sort by urlKey for stable display. Returns [] when
+   * every URL is unique.
+   */
+  function duplicateGroups(model) {
+    var norm = normalizeModel(model);
+    var byKey = Object.create(null);
+    var order = [];
+    for (var i = 0; i < norm.bookmarks.length; i++) {
+      var item = norm.bookmarks[i];
+      if (item.deleted) continue;
+      var key = urlKey(item.url);
+      if (!key) continue;
+      if (!byKey[key]) {
+        byKey[key] = [];
+        order.push(key);
+      }
+      byKey[key].push(item);
+    }
+    var groups = [];
+    for (var j = 0; j < order.length; j++) {
+      var list = byKey[order[j]];
+      if (list.length < 2) continue;
+      list.sort(function (a, b) {
+        var at = a && a.added ? a.added : 0;
+        var bt = b && b.added ? b.added : 0;
+        if (at !== bt) return at - bt;
+        return String(a.title || "").localeCompare(String(b.title || ""));
+      });
+      groups.push({ key: order[j], items: list });
+    }
+    groups.sort(function (a, b) {
+      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+    });
+    return groups;
   }
 
   function modelToJsonText(model) {
@@ -1044,6 +1191,7 @@ var Bookmarks = (function () {
     buildChromeWritePlan: buildChromeWritePlan,
     collectChromeWriteConflicts: collectChromeWriteConflicts,
     deleteFolderTree: deleteFolderTree,
+    duplicateGroups: duplicateGroups,
     folderTreeCount: folderTreeCount,
     hasSubfolders: hasSubfolders,
     restoreFolderTree: restoreFolderTree,
@@ -1060,15 +1208,18 @@ var Bookmarks = (function () {
     normalizeModel: normalizeModel,
     parseHtml: parseHtml,
     parseRemoteLibrary: parseRemoteLibrary,
+    purgeExpiredTrash: purgeExpiredTrash,
     removeBookmark: removeBookmark,
     removeBookmarks: removeBookmarks,
     removeFolder: removeFolder,
     renameFolder: renameFolder,
     restoreBookmarks: restoreBookmarks,
+    restoreFromTrash: restoreFromTrash,
     searchBookmarks: searchBookmarks,
     serializeHtml: serializeHtml,
     setBookmarkUrl: setBookmarkUrl,
     setPinned: setPinned,
+    softDeleteBookmarks: softDeleteBookmarks,
     sniffJsonImport: sniffJsonImport,
     updateBookmark: updateBookmark,
     urlKey: urlKey,

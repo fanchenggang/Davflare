@@ -72,16 +72,18 @@ select:focus-visible {
 
 button.ghost {
   background: transparent;
-  color: var(--orange-dark);
-  border: 1px solid var(--orange);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
 }
 
 button.ghost:hover {
   background: var(--orange-soft);
+  color: var(--orange-dark);
+  border-color: var(--orange);
 }
 
 :root[data-theme="dark"] button.ghost {
-  color: var(--orange-dark);
+  color: var(--text);
 }
 
 button.danger {
@@ -517,30 +519,40 @@ button.danger {
   margin-top: 14px;
 }
 
-/* ---------- cards ---------- */
+/* ---------- cards（ham_home 式紧凑卡 + 瀑布流） ---------- */
 
+/* JS 按容器宽度分桶成 N 个 .masonryCol，列内卡片随内容自适应高度 */
 .cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.masonryCol {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   overflow: hidden;
   transition: transform var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out), opacity var(--dur-fast) ease;
+    box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) ease;
 }
 
 .card:hover {
   transform: translateY(-2px);
+  border-color: var(--line-strong);
   box-shadow: var(--shadow-md);
 }
 
@@ -550,56 +562,74 @@ button.danger {
 
 .cardMain {
   display: block;
-  padding: 0 0 var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-2);
   color: inherit;
   text-decoration: none;
 }
 
-.cardCover {
-  position: relative;
+.cardHead {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--card-cover-h);
-  margin: 0 0 var(--space-3);
-  padding: var(--space-3);
-  background:
-    radial-gradient(120% 90% at 18% 0%, var(--orange-soft), transparent 55%),
-    radial-gradient(90% 70% at 88% 105%, var(--orange-faint), transparent 62%),
-    linear-gradient(180deg, var(--paper-soft), var(--paper));
-  border-bottom: 1px solid var(--line);
+  align-items: flex-start;
+  gap: 10px;
 }
 
-.cardCover .favicon {
-  width: var(--favicon-cover);
-  height: var(--favicon-cover);
-  border-radius: var(--radius-md);
-  font-size: 1.375rem;
+.cardHead .favicon {
   margin-bottom: 0;
-  box-shadow: var(--shadow);
-  background: var(--paper);
-  border: 1px solid var(--line);
+  flex: none;
+  width: var(--favicon-md);
+  height: var(--favicon-md);
+  border-radius: 8px;
+  font-size: 0.8125rem;
 }
 
-.cardCover .favicon img {
-  width: 30px;
-  height: 30px;
+.cardHead .favicon img {
+  width: 18px;
+  height: 18px;
 }
 
-/* 快照徽章整合进封面左下角：点击直接查看快照（绝对定位于卡片，避开 <a> 嵌套） */
-.chip.snap.onCover {
+.cardHead h3 {
+  margin: 1px 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 快照徽章：与 hover 操作条同层，避免与标题互抢空间 */
+.card .snapFloat {
   position: absolute;
-  left: 10px;
-  top: calc(var(--card-cover-h) - 30px);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  padding: 2px 8px;
-  font-size: 0.75rem;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
 }
 
-.chip.snap.onCover:hover {
-  border-color: var(--orange);
+.chip.snap {
+  background: var(--orange-soft);
+  color: var(--orange);
+}
+
+.cardMain .domain {
+  margin: 4px 0 0;
+  padding-left: 38px;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMain .note {
+  margin: var(--space-2) 0 0;
+  padding-left: 38px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .favicon {
@@ -690,12 +720,12 @@ button.danger {
   margin-left: auto;
 }
 
-/* 分类/标签行：独立于 meta,可换行不挤压 */
+/* 分类/标签行：独立于 meta,可换行不挤压；与标题左缘对齐 */
 .cardTags {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-4) 0 38px;
   margin-bottom: var(--space-2);
 }
 
@@ -757,18 +787,19 @@ button.danger {
   color: var(--err);
 }
 
-/* hover 快捷操作条：浮在封面下缘，回应悬停/键盘聚焦 */
+/* hover 快捷操作条：浮在卡片右上，回应悬停/键盘聚焦 */
 .cardActions {
   position: absolute;
-  top: calc(var(--card-cover-h) - 36px);
-  right: 10px;
+  top: 8px;
+  right: 8px;
   display: flex;
   gap: 4px;
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(-2px);
   transition: opacity var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
   pointer-events: none;
+  z-index: 3;
 }
 
 .card:hover .cardActions,
@@ -817,19 +848,15 @@ button.danger {
 
 .card.skel {
   border: 1px solid var(--line);
-}
-
-.skelCover {
-  height: var(--card-cover-h);
-  margin-bottom: var(--space-3);
-  border-bottom: 1px solid var(--line);
+  min-height: 148px;
 }
 
 .skelDot {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
+  width: var(--favicon-md);
+  height: var(--favicon-md);
+  border-radius: 8px;
   flex: none;
+  margin: 0 0 8px;
 }
 
 .skelLine {
@@ -846,9 +873,8 @@ button.danger {
   width: 45%;
 }
 
-.skelCover,
-.skelLine,
-.skelDot {
+.skelDot,
+.skelLine {
   background: linear-gradient(
     100deg,
     var(--paper-soft) 40%,
@@ -2004,4 +2030,149 @@ dialog textarea {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 1px 8px;
+}
+
+/* ---------- phase 3: sidebar folder tree（ham_home 式分类树） ---------- */
+
+.navTreeItem {
+  position: relative;
+}
+
+/* 缩进参考线：子层级左侧细线，提示树形归属 */
+.navTreeItem[data-depth]::before {
+  content: "";
+  position: absolute;
+  left: calc(-7px);
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--line);
+  display: none;
+}
+
+.navTreeItem[data-depth="1"]::before,
+.navTreeItem[data-depth="2"]::before,
+.navTreeItem[data-depth="3"]::before {
+  display: block;
+}
+
+.navItem .navChevron {
+  flex: none;
+  width: 14px;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navItem .navChevron.open {
+  transform: rotate(90deg);
+}
+
+.navItem .navLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- trash & duplicates views ---------- */
+
+.trashRow .edit,
+.trashRow .del {
+  visibility: visible;
+  font-size: 0.8125rem;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.trashWhen {
+  color: var(--muted);
+  font-size: 0.75rem;
+  flex: none;
+}
+
+.dupGroups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dupGroup {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.dupGroupHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-soft);
+}
+
+.dupGroupHead h3 {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.dupGroupHost {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dupRows {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+}
+
+.dupRow {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.dupRow:hover {
+  background: var(--orange-faint);
+}
+
+.dupRow time {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  flex: none;
+}
+
+.dupActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.dupActions button {
+  font-size: 0.8125rem;
+  padding: 6px 12px;
+}
+
+/* ---------- theme switch：View Transitions 圆形扩散（不支持则瞬切） ---------- */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
 }

@@ -47,6 +47,14 @@
             <span id="navPinnedText">Pinned</span>
             <span class="count" id="navPinnedCount">0</span>
           </button>
+          <button class="navItem" id="navDuplicates" type="button">
+            <span id="navDuplicatesText">Duplicates</span>
+            <span class="count" id="navDuplicatesCount">0</span>
+          </button>
+          <button class="navItem" id="navTrash" type="button">
+            <span id="navTrashText">Trash</span>
+            <span class="count" id="navTrashCount">0</span>
+          </button>
           <p class="navTitle" id="favoritesTitle">Favorites</p>
           <div id="favoritesNav" class="favoritesNav"></div>
           <p class="navTitle navTitleRow">
@@ -132,6 +140,29 @@
           </header>
           <div id="bannerDrive" class="banner hidden"></div>
           <div id="driveRoot" class="driveFrame"></div>
+        </div>
+
+        <div id="viewTrash" class="hidden">
+          <header class="topbar">
+            <span id="trashHint" class="topHint"></span>
+            <div class="spacer"></div>
+            <button id="trashRestoreSel" class="ghost" type="button" hidden>Restore selected</button>
+            <button id="trashEmpty" class="danger" type="button">Empty trash</button>
+          </header>
+          <div id="bannerTrash" class="banner hidden"></div>
+          <section id="trashList" class="rows"></section>
+          <div id="trashEmptyState" class="emptyState hidden"></div>
+        </div>
+
+        <div id="viewDuplicates" class="hidden">
+          <header class="topbar">
+            <span id="dupHint" class="topHint"></span>
+            <div class="spacer"></div>
+            <button id="dupKeepOldestAll" class="ghost" type="button">Keep oldest everywhere</button>
+          </header>
+          <div id="bannerDup" class="banner hidden"></div>
+          <section id="dupList" class="dupGroups"></section>
+          <div id="dupEmptyState" class="emptyState hidden"></div>
         </div>
 
         <div id="viewWorkspaces" class="hidden">

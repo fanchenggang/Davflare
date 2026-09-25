@@ -2,6 +2,14 @@ import { createRequire } from "module";
 
 const nodeRequire = createRequire(import.meta.url);
 
+type TreeNodeView = {
+  path: string;
+  label: string;
+  count: number;
+  total: number;
+  children: TreeNodeView[];
+};
+
 const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
   domainOf: (url: unknown) => string;
   fallbackLetter: (item: unknown) => string;
@@ -10,16 +18,26 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
     opts?: {
       query?: string;
       folder?: string | null;
+      folderPrefix?: string | null;
       tag?: string | null;
       since?: number;
       pinned?: boolean | null;
+      includeDeleted?: boolean;
     },
     pinyinTools?: { matchText: (text: unknown, query: string) => boolean } | null
   ) => Array<Record<string, unknown>>;
   formatDate: (ms: number, lang?: string) => string;
   formatBytes: (n: number) => string;
   formatRelative: (ms: number, now: number, lang?: string) => string;
+  formatWhen: (ms: number, now: number, lang?: string) => string;
   folderList: (model: unknown) => Array<{ name: string; count: number }>;
+  folderTree: (model: unknown) => {
+    path: string;
+    label: string;
+    count: number;
+    total: number;
+    children: TreeNodeView[];
+  };
   tagList: (model: unknown) => Array<{ name: string; count: number }>;
   orderPinnedFirst: (
     items: Array<Record<string, unknown>>
@@ -563,5 +581,101 @@ describe("extension/bookmarksView.js tagTiers (tag cloud)", () => {
   test("junk input yields an empty tier map", () => {
     expect(BookmarksView.tagTiers(null)).toEqual({});
     expect(BookmarksView.tagTiers([])).toEqual({});
+  });
+});
+
+describe("extension/bookmarksView.js trash-aware filtering", () => {
+  const model = modelWith([
+    { id: "1", title: "Live", url: "https://live.com", folder: "Dev", tags: ["a"] },
+    { id: "2", title: "Gone", url: "https://gone.com", folder: "Dev", tags: ["a"], deleted: true, deletedAt: 5 },
+  ]);
+
+  test("filterBookmarks excludes deleted rows unless includeDeleted", () => {
+    expect(BookmarksView.filterBookmarks(model, {}).map((b) => b.id)).toEqual(["1"]);
+    expect(
+      BookmarksView.filterBookmarks(model, { includeDeleted: true }).map((b) => b.id)
+    ).toEqual(["1", "2"]);
+  });
+
+  test("folderList and tagList skip deleted rows", () => {
+    expect(BookmarksView.folderList(model)).toEqual([{ name: "Dev", count: 1 }]);
+    expect(BookmarksView.tagList(model)).toEqual([{ name: "a", count: 1 }]);
+  });
+
+  test("folderPrefix matches the path and every descendant", () => {
+    const nested = modelWith([
+      { id: "1", folder: "Dev" },
+      { id: "2", folder: "Dev/Rust" },
+      { id: "3", folder: "Dev/Rust/Tools" },
+      { id: "4", folder: "DevOps" },
+      { id: "5", folder: "" },
+    ]);
+    const ids = (prefix: string) =>
+      BookmarksView.filterBookmarks(nested, { folderPrefix: prefix }).map((b) => b.id);
+    expect(ids("Dev")).toEqual(["1", "2", "3"]);
+    expect(ids("Dev/Rust")).toEqual(["2", "3"]);
+    // "DevOps" shares a string prefix but not a path segment.
+    expect(ids("DevOps")).toEqual(["4"]);
+    expect(ids("Nope")).toEqual([]);
+  });
+});
+
+describe("extension/bookmarksView.js folderTree", () => {
+  test("builds nested nodes with own and recursive counts, implying ancestors", () => {
+    const tree = BookmarksView.folderTree(
+      modelWith([
+        { folder: "" },
+        { folder: "Dev" },
+        { folder: "Dev/Rust" },
+        { folder: "Dev/Rust" },
+        { folder: "Art/Ink" },
+      ])
+    );
+    // Root = unfiled bucket with its own count only.
+    expect(tree.path).toBe("");
+    expect(tree.count).toBe(1);
+    expect(tree.children.map((c) => c.label)).toEqual(["Art", "Dev"]);
+    const dev = tree.children[1];
+    expect(dev).toMatchObject({ path: "Dev", count: 1, total: 3 });
+    const rust = dev.children[0];
+    expect(rust).toMatchObject({ path: "Dev/Rust", count: 2, total: 2 });
+    // Art itself is implied by Art/Ink with zero own bookmarks.
+    const art = tree.children[0];
+    expect(art).toMatchObject({ path: "Art", count: 0, total: 1 });
+    expect(art.children[0]).toMatchObject({ path: "Art/Ink", count: 1, total: 1 });
+  });
+
+  test("declared empty folders appear with zero counts and sort case-insensitively", () => {
+    const tree = BookmarksView.folderTree({
+      version: 1,
+      bookmarks: [{ folder: "apple" }],
+      folders: ["Zebra", "Zebra/nested"],
+    });
+    // Byte order would put "Zebra" first; base-sensitivity sorts it last.
+    expect(tree.children.map((c) => c.label)).toEqual(["apple", "Zebra"]);
+    expect(tree.children[1]).toMatchObject({ path: "Zebra", count: 0, total: 0 });
+    expect(tree.children[1].children[0].path).toBe("Zebra/nested");
+  });
+});
+
+describe("extension/bookmarksView.js formatWhen", () => {
+  const now = new Date(2026, 8, 25, 15, 0, 0).getTime(); // local Tue 2026-09-25 15:00
+
+  test("renders the relative ladder inside the same day", () => {
+    expect(BookmarksView.formatWhen(now - 30_000, now, "zh")).toBe("刚刚");
+    expect(BookmarksView.formatWhen(now - 5 * 60_000, now, "en")).toBe("5m ago");
+    expect(BookmarksView.formatWhen(now - 3 * 3_600_000, now, "zh")).toBe("3 小时前");
+    expect(BookmarksView.formatWhen(now - 90 * 60_000, now, "en")).toBe("1h ago");
+  });
+
+  test("calendar yesterday wins over the raw hour count, then the day ladder", () => {
+    expect(BookmarksView.formatWhen(now - 20 * 3_600_000, now, "zh")).toBe("昨天");
+    expect(BookmarksView.formatWhen(now - 20 * 3_600_000, now, "en")).toBe("yesterday");
+    expect(BookmarksView.formatWhen(now - 3 * 86_400_000, now, "zh")).toBe("3 天前");
+    expect(BookmarksView.formatWhen(now - 40 * 86_400_000, now, "en")).toBe("2026/08/16");
+  });
+
+  test("degenerate inputs fall back to a placeholder", () => {
+    expect(BookmarksView.formatWhen(0, now, "zh")).toBe("未知");
   });
 });

@@ -306,6 +306,29 @@ var COPY = {
       "No snapshots index yet (snapshots.json). Capturing a page will create it under your bookmark directory.",
     snapWriteFailPath:
       "Could not write the snapshot file. Check WebDAV is enabled and the bookmark directory is writable.",
+    navTrash: "Trash",
+    navDuplicates: "Duplicates",
+    trashHint: "Deleted bookmarks stay here for 30 days.",
+    trashRestore: "Restore",
+    trashRestoreSel: "Restore selected",
+    trashDeleteForever: "Delete forever",
+    trashDeleteForeverConfirm: "Permanently delete this bookmark? This cannot be undone.",
+    trashEmptyBtn: "Empty trash",
+    trashEmptyConfirm: "Permanently delete all {n} item(s) in the trash? This cannot be undone.",
+    trashRestored: "Restored {n} bookmark(s).",
+    trashEmptied: "Trash emptied.",
+    trashPurged: "Auto-purged {n} expired item(s).",
+    trashDeletedAgo: "Deleted {w}",
+    trashEmptyTitle: "Trash is empty",
+    trashEmptyDesc: "Deleted bookmarks land here first — restore them anytime within 30 days.",
+    trashPermanentHint: "Deleting here skips the trash permanently.",
+    dupHint: "{g} group(s) share the same URL.",
+    dupGroupTitle: "{n} copies of one URL",
+    dupKeep: "Keep selected, trash the rest",
+    dupKeepOldestAll: "Keep oldest everywhere",
+    dupKeepDone: "Kept 1, moved {n} duplicate(s) to the trash.",
+    dupEmptyTitle: "No duplicates",
+    dupEmptyDesc: "Every URL appears exactly once in the library.",
   },
   zh: {
     title: "Davflare 书签",
@@ -591,6 +614,29 @@ var COPY = {
       "还没有快照索引（snapshots.json）。捕获页面时会在书签目录下自动创建。",
     snapWriteFailPath:
       "无法写入快照文件。请确认 WebDAV 已开启，且书签目录可写。",
+    navTrash: "回收站",
+    navDuplicates: "重复项",
+    trashHint: "已删除的书签在回收站保留 30 天，到期自动清理。",
+    trashRestore: "恢复",
+    trashRestoreSel: "恢复所选",
+    trashDeleteForever: "彻底删除",
+    trashDeleteForeverConfirm: "彻底删除该书签？此操作不可撤销。",
+    trashEmptyBtn: "清空回收站",
+    trashEmptyConfirm: "彻底删除回收站中的全部 {n} 项？此操作不可撤销。",
+    trashRestored: "已恢复 {n} 个书签。",
+    trashEmptied: "回收站已清空。",
+    trashPurged: "已自动清理 {n} 个过期条目。",
+    trashDeletedAgo: "删除于 {w}",
+    trashEmptyTitle: "回收站是空的",
+    trashEmptyDesc: "删除的书签会先进入回收站，30 天内可随时恢复。",
+    trashPermanentHint: "这里的删除不可恢复。",
+    dupHint: "{g} 组书签共用同一 URL。",
+    dupGroupTitle: "同一 URL 的 {n} 个副本",
+    dupKeep: "保留所选，其余进回收站",
+    dupKeepOldestAll: "全部保留最早",
+    dupKeepDone: "已保留 1 条，{n} 条重复进入回收站。",
+    dupEmptyTitle: "没有重复书签",
+    dupEmptyDesc: "库中所有 URL 均唯一。",
   },
 };
 
@@ -607,6 +653,7 @@ var CACHE_KEY = "bookmarksCache";
 var THEME_KEY = "davflare-theme";
 var VIEW_KEY = "davflare-bookmarks-view";
 var SORT_KEY = "davflare-bookmarks-sort";
+var FOLDER_TREE_KEY = "davflare-folder-tree-expanded";
 var WS_FILE = "workspaces.json";
 var RULES_FILE = "tabGroups.json";
 
@@ -658,6 +705,9 @@ var appState = {
   wsSelected: {},
   snapshots: { version: 1, snapshots: [] },
   snapshotsEtag: null,
+  // 回收站勾选（trash id -> true）与重复项每组的保留选择（key -> id）。
+  trashSel: {},
+  dupKeep: {},
 };
 
 var editingBookmarkId = null;
@@ -723,9 +773,44 @@ function applyTheme(theme) {
   $("themeToggle").textContent = theme === "dark" ? "☀" : "☾";
 }
 
-function toggleTheme() {
+function toggleTheme(event) {
   var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  applyTheme(next);
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // ham_home 式圆形扩散换肤：View Transitions 可用且未降级时，从点击处
+  // 扩散新主题；不支持/ reduced-motion 时静默瞬切。
+  var doc = document;
+  if (!reduce && typeof doc.startViewTransition === "function") {
+    var x = 0;
+    var y = 0;
+    if (event && event.clientX != null) {
+      x = event.clientX;
+      y = event.clientY;
+    } else {
+      var btn = $("themeToggle");
+      if (btn) {
+        var rect = btn.getBoundingClientRect();
+        x = rect.left + rect.width / 2;
+        y = rect.top + rect.height / 2;
+      }
+    }
+    var radius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+    doc.startViewTransition(function () {
+      applyTheme(next);
+    });
+    doc.documentElement.animate(
+      { clipPath: ["circle(0px at " + x + "px " + y + "px)", "circle(" + radius + "px at " + x + "px " + y + "px)"] },
+      {
+        duration: 360,
+        easing: "ease-in-out",
+        pseudoElement: "::view-transition-new(root)",
+      }
+    );
+  } else {
+    applyTheme(next);
+  }
   try {
     localStorage.setItem(THEME_KEY, next);
   } catch (err) {
@@ -847,13 +932,19 @@ async function refresh() {
       return;
     }
     var model = Bookmarks.parseRemoteLibrary(res);
-    state.model = model;
+    // Trash housekeeping on every load: hard-remove entries older than 30d.
+    var purged = Bookmarks.purgeExpiredTrash(model, Date.now());
+    state.model = purged.model;
     state.etag = res.etag;
     state.bytes = computeBytes();
     state.syncedAt = Date.now();
     saveCache();
     hideBanner();
     renderAll();
+    if (purged.purged) {
+      flashStatus(fmt(t.trashPurged, { n: purged.purged }));
+      persist(); // keep the remote in sync with the purge; fire-and-forget
+    }
     // Phase 2: keep snapshot badges visible without opening the editor.
     loadSnapshots().then(function () {
       renderItems();
@@ -939,22 +1030,34 @@ function openSettings() {
 
 /* ---------- view switching ---------- */
 
-var VALID_VIEWS = ["bookmarks", "drive", "workspaces", "tabRules", "settings"];
+var VALID_VIEWS = ["bookmarks", "trash", "duplicates", "drive", "workspaces", "tabRules", "settings"];
+// Views that share the bookmarks sidebar (filters / tree / tags stay visible).
+var LIBRARY_VIEWS = ["bookmarks", "trash", "duplicates"];
 
 function switchView(view) {
   if (VALID_VIEWS.indexOf(view) === -1) view = "bookmarks";
   appState.view = view;
+  var library = LIBRARY_VIEWS.indexOf(view) !== -1;
   $("viewBookmarks").classList.toggle("hidden", view !== "bookmarks");
+  $("viewTrash").classList.toggle("hidden", view !== "trash");
+  $("viewDuplicates").classList.toggle("hidden", view !== "duplicates");
   $("viewDrive").classList.toggle("hidden", view !== "drive");
   $("viewWorkspaces").classList.toggle("hidden", view !== "workspaces");
   $("viewTabRules").classList.toggle("hidden", view !== "tabRules");
   $("viewSettings").classList.toggle("hidden", view !== "settings");
-  $("switchBookmarks").classList.toggle("active", view === "bookmarks");
+  $("switchBookmarks").classList.toggle("active", library);
   $("switchDrive").classList.toggle("active", view === "drive");
   $("switchWorkspaces").classList.toggle("active", view === "workspaces");
   $("switchTabRules").classList.toggle("active", view === "tabRules");
   $("switchSettings").classList.toggle("active", view === "settings");
-  $("bookmarksNav").classList.toggle("hidden", view !== "bookmarks");
+  $("bookmarksNav").classList.toggle("hidden", !library);
+  $("navTrash").classList.toggle("active", view === "trash");
+  $("navDuplicates").classList.toggle("active", view === "duplicates");
+  setCurrentAttr($("navTrash"), view === "trash");
+  setCurrentAttr($("navDuplicates"), view === "duplicates");
+  if (view === "trash") loadTrash();
+  if (view === "duplicates") loadDuplicates();
+  if (view === "bookmarks") renderItems(); // masonry 列数需按可见宽度重排
   if (view === "drive") loadDriveView();
   if (view === "workspaces") loadWorkspaces();
   if (view === "tabRules") loadTabRules();
@@ -1139,32 +1242,57 @@ function navButton(label, count, active, onClick) {
   return btn;
 }
 
+/** Library rows minus the trash — every nav count and filter works on these. */
+function liveBookmarks() {
+  var out = [];
+  for (var i = 0; i < state.model.bookmarks.length; i++) {
+    if (!state.model.bookmarks[i].deleted) out.push(state.model.bookmarks[i]);
+  }
+  return out;
+}
+
+function deletedBookmarks() {
+  var out = [];
+  for (var i = 0; i < state.model.bookmarks.length; i++) {
+    if (state.model.bookmarks[i].deleted) out.push(state.model.bookmarks[i]);
+  }
+  return out;
+}
+
+/** Apply a sidebar filter; trash/duplicates views jump back to bookmarks. */
+function applyLibraryFilter(filter) {
+  state.filter = filter;
+  if (appState.view !== "bookmarks") switchView("bookmarks");
+  renderAll();
+}
+
 function renderNav() {
-  var all = state.model.bookmarks.length;
+  var all = liveBookmarks().length;
   $("navAllCount").textContent = String(all);
   $("navAll").classList.toggle("active", state.filter.kind === "all");
   setCurrentAttr($("navAll"), state.filter.kind === "all");
 
   var pinnedCount = 0;
   for (var p = 0; p < state.model.bookmarks.length; p++) {
-    if (state.model.bookmarks[p].pinned) pinnedCount += 1;
+    if (state.model.bookmarks[p].pinned && !state.model.bookmarks[p].deleted) {
+      pinnedCount += 1;
+    }
   }
   $("navPinnedCount").textContent = String(pinnedCount);
   $("navPinned").classList.toggle("active", state.filter.kind === "pinned");
   setCurrentAttr($("navPinned"), state.filter.kind === "pinned");
+
+  var trashCount = 0;
+  for (var d = 0; d < state.model.bookmarks.length; d++) {
+    if (state.model.bookmarks[d].deleted) trashCount += 1;
+  }
+  $("navTrashCount").textContent = String(trashCount);
+  var dupCount = Bookmarks.duplicateGroups(state.model).length;
+  $("navDuplicatesCount").textContent = String(dupCount);
   ensurePinnedFavoriteStar();
   renderFavoritesNav();
 
-  var folderNav = $("folderNav");
-  folderNav.textContent = "";
-  var folders = BookmarksView.folderList(state.model);
-  for (var i = 0; i < folders.length; i++) {
-    (function (entry) {
-      var active = state.filter.kind === "folder" && state.filter.value === entry.name;
-      folderNav.appendChild(folderNavItem(entry, active));
-    })(folders[i]);
-  }
-  if (!folders.length) folderNav.appendChild(emptyHint());
+  renderFolderTreeNav();
 
   var tagNav = $("tagNav");
   tagNav.textContent = "";
@@ -1188,8 +1316,7 @@ function renderNav() {
         chip.title = entry.name + " · " + entry.count;
         chip.setAttribute("aria-pressed", String(active));
         chip.addEventListener("click", function () {
-          state.filter = { kind: "tag", value: entry.name };
-          renderAll();
+          applyLibraryFilter({ kind: "tag", value: entry.name });
         });
         wrap.appendChild(chip);
         wrap.appendChild(makeFavoriteStar("tag", entry.name));
@@ -1200,24 +1327,117 @@ function renderNav() {
 }
 
 /**
- * One folder row: the filter button plus a hover ⋯ menu (rename; delete —
- * contents move to Unfiled, undoable). The badge is the *direct* count, which
- * matches what clicking the row shows (the folder filter is exact-match);
- * delete uses the recursive count instead (#126). Unfiled ("") has no menu.
+ * HamHome 式分类树：未分类置顶，子文件夹按 / 层级缩进展开。父节点点击
+ * 用前缀筛选（含子文件夹），叶子精确；展开状态存 localStorage。
+ * 每行带 hover ⋯ 菜单（重命名；删除 — 内容移入未分类，可撤销）。
+ * 徽标：父节点用递归 total，叶子/未分类用 direct count；删除确认用
+ * folderTreeCount 递归计数（#126），不信任徽标。未分类 ("") 无菜单。
  */
-function folderNavItem(entry, active) {
-  var wrap = document.createElement("div");
-  wrap.className = "navItemWrap";
-  wireFolderDropTarget(wrap, entry.name);
-  wrap.appendChild(
-    navButton(folderLabel(entry.name), entry.count, active, function () {
-      state.filter = { kind: "folder", value: entry.name };
-      renderAll();
-    })
+function readExpandedFolders() {
+  try {
+    var parsed = JSON.parse(localStorage.getItem(FOLDER_TREE_KEY) || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch (err) {
+    /* corrupt map falls back to defaults */
+  }
+  return {};
+}
+
+function writeExpandedFolders(map) {
+  try {
+    localStorage.setItem(FOLDER_TREE_KEY, JSON.stringify(map));
+  } catch (err) {
+    /* private mode: expansion just won't persist */
+  }
+}
+
+function folderIsExpanded(node, depth, map) {
+  if (!node.children.length) return false;
+  if (Object.prototype.hasOwnProperty.call(map, node.path)) return !!map[node.path];
+  return depth === 0; // top-level folders start expanded, deeper ones collapsed
+}
+
+function renderFolderTreeNav() {
+  var folderNav = $("folderNav");
+  folderNav.textContent = "";
+  var tree = BookmarksView.folderTree(state.model);
+  var expanded = readExpandedFolders();
+  // The tree root is the unfiled bucket (path "") — render it as the first row.
+  folderNav.appendChild(
+    folderTreeItem({ path: "", label: "", count: tree.count, total: tree.count, children: [] }, 0, expanded)
   );
+  for (var i = 0; i < tree.children.length; i++) {
+    (function (child) {
+      appendFolderTreeLevel(folderNav, child, 0, expanded);
+    })(tree.children[i]);
+  }
+  if (!tree.children.length && !tree.count) folderNav.appendChild(emptyHint());
+}
+
+function appendFolderTreeLevel(container, node, depth, expanded) {
+  container.appendChild(folderTreeItem(node, depth, expanded));
+  if (!folderIsExpanded(node, depth, expanded)) return;
+  for (var i = 0; i < node.children.length; i++) {
+    (function (child) {
+      appendFolderTreeLevel(container, child, depth + 1, expanded);
+    })(node.children[i]);
+  }
+}
+
+/** One tree row: chevron (parents) + filter button + ★ + ⋯ menu, drag target. */
+function folderTreeItem(node, depth, expanded) {
+  var wrap = document.createElement("div");
+  wrap.className = "navItemWrap navTreeItem";
+  wrap.dataset.depth = String(depth);
+  wireFolderDropTarget(wrap, node.path);
+  if (depth > 0) wrap.style.marginLeft = depth * 14 + "px";
+
+  var active = state.filter.kind === "folder" && state.filter.value === node.path;
+  var btn = document.createElement("button");
+  btn.className = "navItem" + (active ? " active" : "");
+  btn.type = "button";
+  if (active) btn.setAttribute("aria-current", "true");
+
+  if (node.children.length) {
+    var isOpen = folderIsExpanded(node, depth, expanded);
+    var chev = document.createElement("span");
+    chev.className = "navChevron" + (isOpen ? " open" : "");
+    chev.setAttribute("aria-hidden", "true");
+    chev.textContent = "▸";
+    btn.appendChild(chev);
+  }
+  var label = document.createElement("span");
+  label.className = "navLabel";
+  label.textContent = folderLabel(node.path);
+  btn.appendChild(label);
+  var badge = document.createElement("span");
+  badge.className = "count";
+  // Parents show the recursive total (HamHome 式)，叶子/未分类与总数一致。
+  badge.textContent = String(node.children.length ? node.total : node.count);
+  btn.appendChild(badge);
+  btn.addEventListener("click", function () {
+    applyLibraryFilter({
+      kind: "folder",
+      value: node.path,
+      prefix: node.children.length > 0,
+    });
+  });
+  wrap.appendChild(btn);
+
+  // Chevron toggles expansion without touching the filter (parents only).
+  if (node.children.length) {
+    chev.addEventListener("click", function (event) {
+      event.stopPropagation();
+      var map = readExpandedFolders();
+      map[node.path] = !folderIsExpanded(node, depth, map);
+      writeExpandedFolders(map);
+      renderNav();
+    });
+  }
+
   wrap.classList.add("hasStar");
-  wrap.appendChild(makeFavoriteStar("folder", entry.name));
-  if (entry.name !== "") {
+  wrap.appendChild(makeFavoriteStar("folder", node.path));
+  if (node.path !== "") {
     var more = document.createElement("button");
     more.className = "navFolderMore menuToggle";
     more.type = "button";
@@ -1230,7 +1450,7 @@ function folderNavItem(entry, active) {
     menu.appendChild(
       iconButton("menuItem", t.folderRename, function () {
         closePopMenus();
-        openFolderDialog("rename", entry.name);
+        openFolderDialog("rename", node.path);
       })
     );
     // Delete works for non-empty folders too: contained bookmarks (direct
@@ -1238,8 +1458,8 @@ function folderNavItem(entry, active) {
     menu.appendChild(
       iconButton("menuItem", t.folderDelete, function () {
         closePopMenus();
-        confirmThen(folderDeleteMessage(state.model, entry.name), function () {
-          deleteFolderWithUndo(entry.name);
+        confirmThen(folderDeleteMessage(state.model, node.path), function () {
+          deleteFolderWithUndo(node.path);
         });
       })
     );
@@ -1454,9 +1674,13 @@ function wirePopMenus() {
 /* ---------- selection (#63) ---------- */
 
 function filteredItemsOrdered() {
+  var folderFilter =
+    state.filter.kind === "folder" ? state.filter.value : null;
   var filter = {
     query: state.query,
-    folder: state.filter.kind === "folder" ? state.filter.value : null,
+    // Sidebar tree parents pass prefix: true — include descendant folders.
+    folder: folderFilter != null && !state.filter.prefix ? folderFilter : null,
+    folderPrefix: folderFilter != null && state.filter.prefix ? folderFilter : null,
     tag: state.filter.kind === "tag" ? state.filter.value : null,
     pinned: state.filter.kind === "pinned" ? true : null,
     since: sinceMs(state.since, Date.now()),
@@ -1549,7 +1773,7 @@ async function moveBookmarksToFolder(ids, folder) {
   }
 }
 
-/* ---------- undo delete（删除后 6 秒内可一键撤销） ---------- */
+/* ---------- undo delete（进回收站 + 6 秒内可一键撤销） ---------- */
 
 var UNDO_MS = 6000;
 var pendingUndo = null; // { restore, timer } while the toast is up
@@ -1567,8 +1791,8 @@ function cancelPendingUndo() {
 }
 
 /**
- * Show the undo toast. `action` is either an array of removed-bookmark
- * entries (restoreBookmarks) or {message, restore} where restore() mutates
+ * Show the undo toast. `action` is either an array of soft-deleted bookmark
+ * ids (restoreFromTrash) or {message, restore} where restore() mutates
  * state.model and returns the status text to flash (folder delete, #126).
  */
 function showUndoToast(action) {
@@ -1578,7 +1802,8 @@ function showUndoToast(action) {
     ? {
         message: fmt(t.undoMsg, { n: action.length }),
         restore: function () {
-          state.model = Bookmarks.restoreBookmarks(state.model, action);
+          state.model = Bookmarks.restoreFromTrash(state.model, action);
+          if (appState.view === "trash") loadTrash();
           return t.added;
         },
       }
@@ -1604,25 +1829,304 @@ async function undoDelete() {
 
 /**
  * Delete bookmarks by ids with an undo toast. All delete entry points
- * (card menu / card action bar / list row / batch bar) funnel through here
- * so every delete is recoverable for UNDO_MS.
+ * (card menu / card action bar / list row / batch bar) funnel through here.
+ * Deletion is soft (trash): rows keep living in the JSON sidecar with a
+ * deletedAt stamp for 30 days, and the undo window becomes irrelevant to
+ * data safety — undo just restores instantly.
  */
 async function deleteBookmarksWithUndo(ids) {
-  var idMap = Object.create(null);
-  for (var k = 0; k < ids.length; k++) idMap[ids[k]] = true;
-  var entries = [];
-  for (var i = 0; i < state.model.bookmarks.length; i++) {
-    var item = state.model.bookmarks[i];
-    if (idMap[item.id]) entries.push({ bookmark: item, index: i });
-  }
-  if (!entries.length) return;
-  // A newer deletion supersedes the older toast: its window to undo is over.
+  if (!ids || !ids.length) return;
   cancelPendingUndo();
-  state.model = Bookmarks.removeBookmarks(state.model, ids);
+  state.model = Bookmarks.softDeleteBookmarks(state.model, ids, Date.now());
   clearSelection();
   renderAll();
-  showUndoToast(entries);
+  showUndoToast(ids);
   await persist();
+}
+
+/* ---------- trash view（回收站：恢复 / 彻底删除 / 清空） ---------- */
+
+function trashRows() {
+  var rows = deletedBookmarks();
+  rows.sort(function (a, b) {
+    return (b.deletedAt || 0) - (a.deletedAt || 0); // newest deletion first
+  });
+  return rows;
+}
+
+function loadTrash() {
+  var rows = trashRows();
+  var empty = $("trashEmptyState");
+  var list = $("trashList");
+  list.textContent = "";
+  $("trashHint").textContent = t.trashHint;
+  $("trashEmpty").textContent = t.trashEmptyBtn;
+  $("trashEmpty").disabled = !rows.length;
+  $("trashRestoreSel").hidden = true;
+
+  if (!rows.length) {
+    list.classList.add("hidden");
+    renderEmptyState(empty, {
+      title: t.trashEmptyTitle,
+      desc: t.trashEmptyDesc,
+    });
+    return;
+  }
+  empty.classList.add("hidden");
+  list.classList.remove("hidden");
+  for (var i = 0; i < rows.length; i++) {
+    list.appendChild(trashRow(rows[i]));
+  }
+  updateTrashActions();
+}
+
+function trashRow(item) {
+  var row = document.createElement("div");
+  row.className = "row trashRow";
+  var box = document.createElement("input");
+  box.type = "checkbox";
+  box.className = "pick";
+  box.checked = Boolean(appState.trashSel[item.id]);
+  box.setAttribute("aria-label", item.title || item.url);
+  box.addEventListener("change", function () {
+    if (box.checked) appState.trashSel[item.id] = true;
+    else delete appState.trashSel[item.id];
+    updateTrashActions();
+  });
+  row.appendChild(box);
+
+  var link = document.createElement("a");
+  link.className = "rowLink";
+  link.href = item.url;
+  link.target = "_blank";
+  link.rel = "noreferrer noopener";
+  link.appendChild(faviconNode(item));
+  var main = document.createElement("span");
+  main.className = "rowMain";
+  var title = document.createElement("span");
+  title.className = "rowTitle";
+  title.textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
+  var sub = document.createElement("span");
+  sub.className = "rowDomain";
+  var folder = item.folder ? folderLabel(item.folder) : "";
+  sub.textContent =
+    BookmarksView.domainOf(item.url) + (folder ? " · " + folder : "");
+  main.appendChild(title);
+  main.appendChild(sub);
+  link.appendChild(main);
+  row.appendChild(link);
+
+  var when = document.createElement("time");
+  when.className = "trashWhen";
+  var ago = BookmarksView.formatWhen(item.deletedAt, Date.now(), lang);
+  when.textContent = fmt(t.trashDeletedAgo, { w: ago });
+  when.title = BookmarksView.formatDate(item.deletedAt, lang);
+  row.appendChild(when);
+
+  row.appendChild(
+    iconButton("edit", t.trashRestore, function () {
+      restoreFromTrashIds([item.id]);
+    })
+  );
+  row.appendChild(
+    iconButton("del", t.trashDeleteForever, function () {
+      confirmThen(t.trashDeleteForeverConfirm, function () {
+        hardDeleteIds([item.id]);
+      });
+    })
+  );
+  return row;
+}
+
+function updateTrashActions() {
+  var picked = Object.keys(appState.trashSel).filter(function (id) {
+    return appState.trashSel[id];
+  });
+  var btn = $("trashRestoreSel");
+  btn.hidden = !picked.length;
+  btn.textContent = fmt(t.trashRestoreSel) + " (" + picked.length + ")";
+}
+
+async function restoreFromTrashIds(ids) {
+  state.model = Bookmarks.restoreFromTrash(state.model, ids);
+  for (var i = 0; i < ids.length; i++) delete appState.trashSel[ids[i]];
+  renderAll();
+  if (appState.view === "trash") loadTrash();
+  if (await persist()) flashStatus(fmt(t.trashRestored, { n: ids.length }));
+}
+
+/** Hard-remove (skip the trash) — the only irreversible path in the UI. */
+async function hardDeleteIds(ids) {
+  state.model = Bookmarks.removeBookmarks(state.model, ids);
+  for (var i = 0; i < ids.length; i++) delete appState.trashSel[ids[i]];
+  renderAll();
+  if (appState.view === "trash") loadTrash();
+  await persist();
+}
+
+async function restoreSelectedTrash() {
+  var ids = Object.keys(appState.trashSel).filter(function (id) {
+    return appState.trashSel[id];
+  });
+  if (!ids.length) return;
+  await restoreFromTrashIds(ids);
+}
+
+function emptyTrash() {
+  var ids = deletedBookmarks().map(function (item) {
+    return item.id;
+  });
+  if (!ids.length) return;
+  confirmThen(fmt(t.trashEmptyConfirm, { n: ids.length }), function () {
+    hardDeleteIds(ids).then(function () {
+      flashStatus(t.trashEmptied);
+    });
+  });
+}
+
+/* ---------- duplicates view（重复项：按 URL 分组清理） ---------- */
+
+function loadDuplicates() {
+  var groups = Bookmarks.duplicateGroups(state.model);
+  var list = $("dupList");
+  var empty = $("dupEmptyState");
+  list.textContent = "";
+  $("dupHint").textContent = fmt(t.dupHint, { g: groups.length });
+  $("dupKeepOldestAll").disabled = !groups.length;
+
+  if (!groups.length) {
+    list.classList.add("hidden");
+    renderEmptyState(empty, {
+      title: t.dupEmptyTitle,
+      desc: t.dupEmptyDesc,
+    });
+    return;
+  }
+  empty.classList.add("hidden");
+  list.classList.remove("hidden");
+  for (var i = 0; i < groups.length; i++) {
+    list.appendChild(duplicateGroupCard(groups[i]));
+  }
+}
+
+/**
+ * One group card: a radio row per copy (default keeper = oldest), plus a
+ * "keep selected, trash the rest" action. The selection lives in
+ * appState.dupKeep[key]; rows deleted here go to the trash (recoverable).
+ */
+function duplicateGroupCard(group) {
+  var card = document.createElement("article");
+  card.className = "dupGroup";
+
+  var head = document.createElement("header");
+  head.className = "dupGroupHead";
+  var title = document.createElement("h3");
+  title.textContent = fmt(t.dupGroupTitle, { n: group.items.length });
+  var host = document.createElement("span");
+  host.className = "dupGroupHost";
+  host.textContent = BookmarksView.domainOf(group.items[0].url) || group.key;
+  head.appendChild(title);
+  head.appendChild(host);
+  card.appendChild(head);
+
+  if (appState.dupKeep[group.key] == null) {
+    appState.dupKeep[group.key] = group.items[0].id;
+  }
+  var current = appState.dupKeep[group.key];
+  var stillThere = group.items.some(function (it) {
+    return it.id === current;
+  });
+  if (!stillThere) {
+    current = group.items[0].id;
+    appState.dupKeep[group.key] = current;
+  }
+
+  var rows = document.createElement("div");
+  rows.className = "dupRows";
+  for (var i = 0; i < group.items.length; i++) {
+    (function (item) {
+      var row = document.createElement("label");
+      row.className = "row dupRow";
+      var radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "dup-" + group.key;
+      radio.className = "pick";
+      radio.checked = item.id === current;
+      radio.addEventListener("change", function () {
+        appState.dupKeep[group.key] = item.id;
+      });
+      row.appendChild(radio);
+      var link = document.createElement("a");
+      link.className = "rowLink";
+      link.href = item.url;
+      link.target = "_blank";
+      link.rel = "noreferrer noopener";
+      link.appendChild(faviconNode(item));
+      var main = document.createElement("span");
+      main.className = "rowMain";
+      var rTitle = document.createElement("span");
+      rTitle.className = "rowTitle";
+      rTitle.textContent = item.title || item.url;
+      var rSub = document.createElement("span");
+      rSub.className = "rowDomain";
+      var folder = item.folder ? folderLabel(item.folder) : "";
+      rSub.textContent =
+        BookmarksView.domainOf(item.url) + (folder ? " · " + folder : "");
+      main.appendChild(rTitle);
+      main.appendChild(rSub);
+      link.appendChild(main);
+      row.appendChild(link);
+      var added = document.createElement("time");
+      added.textContent = BookmarksView.formatWhen(item.added, Date.now(), lang);
+      added.title = BookmarksView.formatDate(item.added, lang);
+      row.appendChild(added);
+      rows.appendChild(row);
+    })(group.items[i]);
+  }
+  card.appendChild(rows);
+
+  var actions = document.createElement("div");
+  actions.className = "dupActions";
+  var keepBtn = document.createElement("button");
+  keepBtn.type = "button";
+  keepBtn.className = "primary";
+  keepBtn.textContent = t.dupKeep;
+  keepBtn.addEventListener("click", function () {
+    var keepId = appState.dupKeep[group.key];
+    var others = group.items
+      .filter(function (it) {
+        return it.id !== keepId;
+      })
+      .map(function (it) {
+        return it.id;
+      });
+    if (!others.length) return;
+    deleteBookmarksWithUndo(others).then(function () {
+      delete appState.dupKeep[group.key];
+      if (appState.view === "duplicates") loadDuplicates();
+      flashStatus(fmt(t.dupKeepDone, { n: others.length }));
+    });
+  });
+  actions.appendChild(keepBtn);
+  card.appendChild(actions);
+  return card;
+}
+
+/** One-click cleanup: keep the oldest copy in every group, trash the rest. */
+async function keepOldestAllDuplicates() {
+  var groups = Bookmarks.duplicateGroups(state.model);
+  var allOthers = [];
+  for (var i = 0; i < groups.length; i++) {
+    for (var j = 1; j < groups[i].items.length; j++) {
+      allOthers.push(groups[i].items[j].id);
+    }
+  }
+  if (!allOthers.length) return;
+  var n = allOthers.length;
+  await deleteBookmarksWithUndo(allOthers);
+  appState.dupKeep = {};
+  if (appState.view === "duplicates") loadDuplicates();
+  flashStatus(fmt(t.dupKeepDone, { n: n }));
 }
 
 /** One checkbox driving multi-select; shift-click selects a filtered range. */
@@ -1821,21 +2325,14 @@ function cardNode(item) {
   link.rel = "noreferrer noopener";
   link.draggable = false; // 拖拽语义交给卡片级 move-to-folder
 
-  var cover = document.createElement("div");
-  cover.className = "cardCover";
-  cover.appendChild(faviconNode(item));
-  link.appendChild(cover);
-  // 快照徽章整合进封面左下角（点击直接查看快照）。
-  // 挂在卡片而非封面：封面在 <a> 内，button 嵌进链接属于无效嵌套。
-  var snapBadge = snapBadgeChip(item);
-  if (snapBadge) {
-    snapBadge.classList.add("onCover");
-    card.appendChild(snapBadge);
-  }
-
+  // ham_home 式紧凑卡头：favicon 与标题同行，无大封面条
+  var head = document.createElement("div");
+  head.className = "cardHead";
+  head.appendChild(faviconNode(item));
   var title = document.createElement("h3");
   title.textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
-  link.appendChild(title);
+  head.appendChild(title);
+  link.appendChild(head);
 
   var domain = document.createElement("p");
   domain.className = "domain";
@@ -1850,6 +2347,7 @@ function cardNode(item) {
   }
 
   card.appendChild(link);
+
   card.appendChild(cardActionBar(item));
 
   // HamHome 式信息层次：分类/标签独立一行可换行，meta 只留勾选、置顶、时间、菜单
@@ -1881,6 +2379,9 @@ function cardNode(item) {
   var meta = document.createElement("footer");
   meta.className = "cardMeta";
   meta.appendChild(pickBox(item));
+  // 快照徽章：与列表行一致放进 meta 行，点击直接查看快照
+  var snapBadge = snapBadgeChip(item);
+  if (snapBadge) meta.appendChild(snapBadge);
   if (item.pinned) {
     var pin = document.createElement("span");
     pin.className = "chip pin";
@@ -1889,7 +2390,8 @@ function cardNode(item) {
     meta.appendChild(pin);
   }
   var time = document.createElement("time");
-  time.textContent = BookmarksView.formatDate(item.added, lang);
+  time.textContent = BookmarksView.formatWhen(item.added, Date.now(), lang);
+  time.title = BookmarksView.formatDate(item.added, lang);
   meta.appendChild(time);
   meta.appendChild(cardMenuNode(item));
 
@@ -1951,7 +2453,8 @@ function rowNode(item) {
   }
   row.appendChild(chips);
   var time = document.createElement("time");
-  time.textContent = BookmarksView.formatDate(item.added, lang);
+  time.textContent = BookmarksView.formatWhen(item.added, Date.now(), lang);
+  time.title = BookmarksView.formatDate(item.added, lang);
   row.appendChild(time);
   // 不用 iconButton：需要随置顶状态变化的 title/aria-pressed
   var pinBtn = document.createElement("button");
@@ -2001,7 +2504,7 @@ function showSkeleton() {
       card.className = "card skel";
       card.setAttribute("aria-hidden", "true");
       card.innerHTML =
-        '<div class="skelCover"></div>' +
+        '<div class="skelDot"></div>' +
         '<div class="skelLine w70"></div>' +
         '<div class="skelLine w45"></div>';
       cards.appendChild(card);
@@ -2020,6 +2523,64 @@ function showSkeleton() {
   }
 }
 
+/* ---------- masonry（瀑布流：最短列优先 + 内容高度自适应） ---------- */
+
+var MASONRY_COL_WIDTH = 264;
+var MASONRY_GAP = 16;
+var masonryResizeTimer = null;
+
+function planMasonryColumns(width) {
+  if (!width) return 1;
+  return Math.max(1, Math.floor((width + MASONRY_GAP) / (MASONRY_COL_WIDTH + MASONRY_GAP)));
+}
+
+/**
+ * Card height estimate for shortest-column-first distribution (px). Real
+ * heights come from content; the ladder below only needs to be monotonic —
+ * notes add two lines, each ~3 tags add a wrap row.
+ */
+function estimateCardHeight(item) {
+  var base = 150;
+  if (item.note) base += 56;
+  var chips = (item.folder ? 1 : 0) + Math.min((item.tags || []).length, 4);
+  base += chips ? Math.ceil(chips / 3) * 26 : 0;
+  return base;
+}
+
+function renderMasonry(items) {
+  var cards = $("cards");
+  cards.textContent = "";
+  var width = cards.clientWidth || 0;
+  var colCount = planMasonryColumns(width);
+  var cols = [];
+  var heights = [];
+  for (var c = 0; c < colCount; c++) {
+    var col = document.createElement("div");
+    col.className = "masonryCol";
+    cards.appendChild(col);
+    cols.push(col);
+    heights.push(0);
+  }
+  for (var i = 0; i < items.length; i++) {
+    var idx = 0;
+    for (var h = 1; h < heights.length; h++) {
+      if (heights[h] < heights[idx]) idx = h;
+    }
+    var cardEl = cardNode(items[i]);
+    cardEl.dataset.idx = String(i); // 筛选序号，键盘导航按行优先行走
+    cols[idx].appendChild(cardEl);
+    heights[idx] += estimateCardHeight(items[i]);
+  }
+}
+
+function onMasonryResize() {
+  if (appState.view !== "bookmarks" || state.view !== "grid") return;
+  clearTimeout(masonryResizeTimer);
+  masonryResizeTimer = setTimeout(function () {
+    if (appState.view === "bookmarks" && state.view === "grid") renderItems();
+  }, 150);
+}
+
 function renderItems() {
   var items = filteredItemsOrdered();
 
@@ -2031,9 +2592,13 @@ function renderItems() {
   cards.classList.toggle("hidden", !isGrid);
   rows.classList.toggle("hidden", isGrid);
 
-  for (var i = 0; i < items.length; i++) {
-    if (isGrid) cards.appendChild(cardNode(items[i]));
-    else rows.appendChild(rowNode(items[i]));
+  if (isGrid) renderMasonry(items);
+  else {
+    for (var i = 0; i < items.length; i++) {
+      var rowEl = rowNode(items[i]);
+      rowEl.dataset.idx = String(i);
+      rows.appendChild(rowEl);
+    }
   }
 
   var selecting = selectedExistingIds().length > 0;
@@ -2042,7 +2607,7 @@ function renderItems() {
 
   var empty = $("emptyState");
   if (!items.length) {
-    if (state.model.bookmarks.length === 0) {
+    if (liveBookmarks().length === 0) {
       renderEmptyState(empty, {
         title: t.emptyTitle,
         desc: t.emptyDesc,
@@ -4529,6 +5094,8 @@ function applyCopy() {
   $("switchSettings").textContent = t.viewSettings;
   $("navAllText").textContent = t.navAll;
   $("navPinnedText").textContent = t.navPinned;
+  $("navTrashText").textContent = t.navTrash;
+  $("navDuplicatesText").textContent = t.navDuplicates;
   if ($("favoritesTitle")) $("favoritesTitle").textContent = t.favoritesTitle;
   $("folderTitle").textContent = t.folders;
   $("folderAddBtn").title = t.folderAdd;
@@ -4661,8 +5228,7 @@ function setView(view) {
 }
 
 function setFilterAll() {
-  state.filter = { kind: "all", value: "" };
-  renderAll();
+  applyLibraryFilter({ kind: "all", value: "" });
 }
 
 function wireEvents() {
@@ -4715,9 +5281,17 @@ function wireEvents() {
   }
   $("navAll").addEventListener("click", setFilterAll);
   $("navPinned").addEventListener("click", function () {
-    state.filter = { kind: "pinned", value: "" };
-    renderAll();
+    applyLibraryFilter({ kind: "pinned", value: "" });
   });
+  $("navTrash").addEventListener("click", function () {
+    switchView("trash");
+  });
+  $("navDuplicates").addEventListener("click", function () {
+    switchView("duplicates");
+  });
+  $("trashRestoreSel").addEventListener("click", restoreSelectedTrash);
+  $("trashEmpty").addEventListener("click", emptyTrash);
+  $("dupKeepOldestAll").addEventListener("click", keepOldestAllDuplicates);
   $("folderAddBtn").addEventListener("click", function () {
     openFolderDialog("new", "");
   });
@@ -4942,9 +5516,10 @@ function wireEvents() {
     }
     if (typing || dialogOpen) return;
     // Delete / Backspace removes the current selection (same confirm as the
-    // batch-bar button).
+    // batch-bar button). Library views without a bookmark selection
+    // (trash/duplicates manage their own picks) are left alone.
     if (event.key === "Delete" || event.key === "Backspace") {
-      var sel = selectedExistingIds();
+      var sel = appState.view === "bookmarks" ? selectedExistingIds() : [];
       if (sel.length) {
         event.preventDefault();
         submitBatchDelete();
@@ -4995,18 +5570,20 @@ function cyclePopMenuFocus(menu, dir) {
 
 /**
  * Move focus to the adjacent card/row's main link (roving within the
- * current grid/list). Home/End jump to the first/last item.
+ * current grid/list). Home/End jump to the first/last item. The walk order
+ * is dataset.idx (filteredItemsOrdered 顺序)——瀑布流把卡片分进各列后 DOM
+ * 顺序是列优先，键盘仍按行优先语义行走。
  */
-function focusAdjacentItem(from, dir, home, end) {  var node = from.closest(".card, .row");
-  if (!node || !node.parentElement) return;
-  var list = [];
-  var children = node.parentElement.children;
-  for (var i = 0; i < children.length; i++) {
-    var c = children[i];
-    if (c.classList && (c.classList.contains("card") || c.classList.contains("row"))) {
-      list.push(c);
-    }
-  }
+function focusAdjacentItem(from, dir, home, end) {
+  var node = from.closest(".card, .row");
+  if (!node) return;
+  var container = node.closest("#cards, #rows");
+  if (!container) return;
+  var nodes = container.querySelectorAll(".card:not(.skel), .row:not(.skel)");
+  var list = Array.prototype.slice.call(nodes);
+  list.sort(function (a, b) {
+    return Number(a.dataset.idx || 0) - Number(b.dataset.idx || 0);
+  });
   if (!list.length) return;
   var target = null;
   if (home) target = list[0];
@@ -5034,6 +5611,7 @@ warmBookmarksPermissionCache();
 loadSnapshots();
 initTheme();
 wireEvents();
+window.addEventListener("resize", onMasonryResize);
 renderFromCache();
 // 主页初始视图：显式 ?view= 优先；否则跟随「插件主页默认视图」设置
 // （resolveToolbarTarget 在未配置实例时指向 settings，保持先配置后使用）。

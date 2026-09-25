@@ -22,6 +22,7 @@ var BookmarksView = (function () {
     var order = [];
     var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
     for (var i = 0; i < items.length; i++) {
+      if (items[i].deleted) continue; // trashed rows keep their counts quiet
       var name = String(items[i].folder || "");
       if (!counts[name]) {
         counts[name] = 0;
@@ -51,6 +52,7 @@ var BookmarksView = (function () {
     var counts = Object.create(null);
     var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
     for (var i = 0; i < items.length; i++) {
+      if (items[i].deleted) continue;
       var tags = Array.isArray(items[i].tags) ? items[i].tags : [];
       for (var j = 0; j < tags.length; j++) {
         var tag = String(tags[j] || "").trim();
@@ -92,9 +94,13 @@ var BookmarksView = (function () {
   }
 
   /**
-   * opts: {query, folder, tag, since, pinned} — null/undefined filter means
-   * "any"; since is an epoch-ms lower bound on the bookmark's added time;
-   * pinned: true keeps only pinned bookmarks (issue #63 sidebar entry).
+   * opts: {query, folder, folderPrefix, tag, since, pinned, includeDeleted} —
+   * null/undefined filter means "any"; since is an epoch-ms lower bound on
+   * the bookmark's added time; pinned: true keeps only pinned bookmarks
+   * (issue #63 sidebar entry). Deleted (trash) rows are excluded unless
+   * includeDeleted is set — the trash view is the only caller that wants
+   * them. `folder` matches the exact path; `folderPrefix` also matches
+   * descendants ("Dev" → "Dev/Rust") for the sidebar tree parents.
    */
   function filterBookmarks(model, opts, pinyinTools) {
     var options = opts || {};
@@ -102,8 +108,13 @@ var BookmarksView = (function () {
     var out = [];
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
+      if (item.deleted && !options.includeDeleted) continue;
       if (typeof options.folder === "string" && String(item.folder || "") !== options.folder) {
         continue;
+      }
+      if (typeof options.folderPrefix === "string" && options.folderPrefix) {
+        var f = String(item.folder || "");
+        if (f !== options.folderPrefix && f.indexOf(options.folderPrefix + "/") !== 0) continue;
       }
       if (options.tag && (item.tags || []).indexOf(options.tag) === -1) continue;
       if (options.since && !(item.added >= options.since)) continue;
@@ -112,6 +123,90 @@ var BookmarksView = (function () {
       out.push(item);
     }
     return out;
+  }
+
+  /**
+   * HamHome-style folder tree for the sidebar. Nodes carry the exact-path
+   * bookmark count (`count`) and the recursive total including descendants
+   * (`total`); intermediate folders implied by deeper paths (bookmarks in
+   * "Dev/Rust" but none in "Dev") materialize with count 0. The root node is
+   * the unfiled bucket (path "") — it never has children by construction, so
+   * its own count is what the sidebar shows.
+   */
+  function folderTree(model) {
+    var root = { path: "", label: "", count: 0, total: 0, children: [] };
+    var byPath = Object.create(null);
+    byPath[""] = root;
+    function ensure(path) {
+      if (byPath[path]) return byPath[path];
+      var idx = path.lastIndexOf("/");
+      var parentPath = idx === -1 ? "" : path.slice(0, idx);
+      var label = idx === -1 ? path : path.slice(idx + 1);
+      var node = { path: path, label: label, count: 0, total: 0, children: [] };
+      byPath[path] = node;
+      ensure(parentPath).children.push(node);
+      return node;
+    }
+    // Declared (possibly empty) folders join so empty tree nodes exist.
+    var entries = folderList(model);
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i];
+      if (!entry.name) {
+        root.count += entry.count;
+        continue;
+      }
+      ensure(entry.name).count += entry.count;
+    }
+    function rollup(node) {
+      var total = node.count;
+      for (var c = 0; c < node.children.length; c++) total += rollup(node.children[c]);
+      node.total = total;
+      return total;
+    }
+    rollup(root);
+    function sortChildren(node) {
+      node.children.sort(function (a, b) {
+        return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+      });
+      for (var c = 0; c < node.children.length; c++) sortChildren(node.children[c]);
+    }
+    sortChildren(root);
+    return root;
+  }
+
+  /**
+   * Compact relative time for card/row footers: calendar-aware today and
+   * yesterday, then the "N unit ago" ladder, then a plain date after a
+   * month. `now` is injectable for tests.
+   */
+  function formatWhen(ms, now, lang) {
+    var target = typeof ms === "number" && isFinite(ms) && ms > 0 ? ms : 0;
+    if (!target) return lang === "zh" ? "未知" : "unknown";
+    var ts = typeof now === "number" && isFinite(now) && now > 0 ? now : Date.now();
+    var zh = lang === "zh";
+    var seconds = Math.max(0, Math.floor((ts - target) / 1000));
+    if (seconds < 60) return zh ? "刚刚" : "just now";
+    var minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return zh ? minutes + " 分钟前" : minutes + "m ago";
+    var d = new Date(target);
+    var n = new Date(ts);
+    var sameDay = function (a, b) {
+      return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+      );
+    };
+    if (sameDay(d, n)) return zh ? Math.floor(minutes / 60) + " 小时前" : Math.floor(minutes / 60) + "h ago";
+    var yesterday = new Date(ts - 24 * 60 * 60 * 1000);
+    if (sameDay(d, yesterday)) return zh ? "昨天" : "yesterday";
+    var days = Math.floor(seconds / (24 * 60 * 60));
+    if (days < 30) return zh ? days + " 天前" : days + "d ago";
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return (
+      d.getFullYear() + "/" + (m < 10 ? "0" + m : m) + "/" + (day < 10 ? "0" + day : day)
+    );
   }
 
   /**
@@ -481,7 +576,9 @@ var BookmarksView = (function () {
     formatDate: formatDate,
     formatBytes: formatBytes,
     formatRelative: formatRelative,
+    formatWhen: formatWhen,
     folderList: folderList,
+    folderTree: folderTree,
     matchesQuery: matchesQuery,
     normalizePresets: normalizePresets,
     normalizeFavorites: normalizeFavorites,
