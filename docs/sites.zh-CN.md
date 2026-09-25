@@ -23,7 +23,58 @@ sites/blog/index.html
 sites/blog/style.css
 ```
 
-然后打开 `https://sites.<你的域>/blog/`（或 `/blog/style.css`）。没有文件就是 404。目录 URL 找 `index.html`。不做 git 部署，不为每个站再建一个 Pages 项目。
+然后打开 `https://sites.<你的域>/blog/`（或 `/blog/style.css`）。没有文件就是 404。目录 URL 找 `index.html`。不为每个站再建一个 Pages 项目；从 CI 发布请用下方 [GitHub Action](#github-actiondeploy-to-davflare-site)。
+
+## GitHub Action（Deploy to Davflare Site）
+
+用官方 composite action 在 CI 里发布构建目录（仓库根目录 `action.yml`；运行时从 action 自身源码构建并调用 `davflare sites publish`，无需 npm 安装 CLI）。
+
+1. 在网盘网页端「API 密钥」里创建一把密钥。
+2. 在你的仓库 **Settings → Secrets and variables → Actions** 添加 `DAVFLARE_URL`（如 `https://drive.example.com`，带 `https://`）和 `DAVFLARE_API_KEY`。
+3. 添加 workflow：
+
+```yaml
+# .github/workflows/deploy-site.yml
+name: Deploy site
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci && npm run build        # 产出 dist/
+      - name: Deploy to Davflare Site
+        id: davflare
+        uses: fanchenggang/Davflare@main
+        with:
+          path: dist
+          slug: my-site
+          url: ${{ secrets.DAVFLARE_URL }}
+          api-key: ${{ secrets.DAVFLARE_API_KEY }}
+      - run: echo "Live at ${{ steps.davflare.outputs.url }}"
+```
+
+| 输入 | 必填 | 说明 |
+| --- | --- | --- |
+| `path` | 是 | 构建产物目录（相对工作区），如 `dist` |
+| `slug` | 是 | 站点 slug `[a-z0-9][a-z0-9-]{0,62}` → `https://<SITES_HOST>/<slug>/` |
+| `url` | 是 | Davflare 实例地址（放 Secret） |
+| `api-key` | 是 | Davflare API 密钥（放 Secret） |
+
+| 输出 | 说明 |
+| --- | --- |
+| `url` | 站点公开地址（同时打印在日志、notice 注解与 job summary；实例未配置 `SITES_HOST` 时为空并给出警告） |
+
+- **密钥安全：** 密钥只通过环境变量传给 CLI（不进命令行参数），先 `::add-mask::` 屏蔽，脚本不使用 `set -x`。
+- **明确失败：** 密钥错误/过期/吊销时在上传前即失败，报 `Davflare API key rejected (401)`；`path`/`slug`/`url`/`api-key` 为空、构建目录不存在或为空、slug 非法、实例不可达也都会带明确信息失败。
+- Runner 需 Node.js ≥ 18（GitHub 托管 runner 已预装）。语义同 `davflare sites publish`：同名文件覆盖，SPA / 访问密码 / 自定义域名配置保留。
+- 建议生产环境把 `@main` 换成固定 commit SHA。可选 README 徽章：`[![Deploy site](https://github.com/<owner>/<repo>/actions/workflows/deploy-site.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/deploy-site.yml)`。
+- 手动演示 workflow：[`docs/examples/deploy-site-demo.yml`](examples/deploy-site-demo.yml)——复制到 `.github/workflows/` 后在 **Actions → Deploy site demo → Run workflow** 触发（仅 `workflow_dispatch`；未配置上述两个 Secret 时只提示并跳过）。
 
 ## 管理 API 与界面
 

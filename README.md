@@ -33,7 +33,7 @@ Share (expiry + extract code):
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
 - API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (25 tools)
-- Static sites and image host on a separate hostname (`SITES_HOST`)
+- Static sites and image host on a separate hostname (`SITES_HOST`), plus a GitHub Action to deploy from CI
 - Owner Settings with five persistent feature switches
 - `davflare-cli`, optional Chrome MV3 extension, and agent layouts on R2
 - Chinese / English UI
@@ -56,6 +56,7 @@ Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs
 | WebDAV clients & limits | [docs/webdav.md](docs/webdav.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
 | Static sites & image host | [docs/sites.md](docs/sites.md) |
+| GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
 | Agent layouts (`pull` / `push`) | [docs/agents.md](docs/agents.md) |
 | CLI (`davflare-cli`) | [cli/README.md](cli/README.md) |
 | Chrome extension (install + bookmarks) | [extension/README.md](extension/README.md) |

@@ -1,0 +1,57 @@
+# 手动触发的演示：用官方 action 把一个小页面发布到 Davflare 静态站。
+# Manual demo of the "Deploy to Davflare Site" action. To enable it, copy this file to
+# .github/workflows/deploy-site-demo.yml, then add repository secrets DAVFLARE_URL and DAVFLARE_API_KEY.
+# 启用：复制到 .github/workflows/deploy-site-demo.yml，并添加仓库 Secrets DAVFLARE_URL（实例地址）与 DAVFLARE_API_KEY。
+# 未配置 Secrets 时 job 只打印提示并成功结束（不会让 CI 变红）；仅 workflow_dispatch 手动触发，不随 push 运行。
+name: Deploy site demo (Davflare Action)
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: Site slug to publish to
+        required: false
+        default: gha-demo
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.DAVFLARE_URL != '' && secrets.DAVFLARE_API_KEY != '' }}
+    steps:
+      - name: Skip (secrets not configured)
+        if: env.HAS_SECRETS != 'true'
+        run: echo "::notice title=Deploy site demo skipped::Add repository secrets DAVFLARE_URL and DAVFLARE_API_KEY (Settings → Secrets and variables → Actions), then re-run this workflow."
+
+      - name: Build demo site
+        if: env.HAS_SECRETS == 'true'
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          mkdir -p dist
+          cat > dist/index.html <<HTML
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>Davflare Action demo</title>
+          <h1>Deployed by the "Deploy to Davflare Site" action</h1>
+          <p>commit ${SHA:0:7} · $(date -u +%Y-%m-%dT%H:%M:%SZ)</p>
+          HTML
+
+      - name: Deploy to Davflare Site
+        if: env.HAS_SECRETS == 'true'
+        id: deploy
+        uses: fanchenggang/Davflare@main
+        with:
+          path: dist
+          slug: ${{ inputs.slug }}
+          url: ${{ secrets.DAVFLARE_URL }}
+          api-key: ${{ secrets.DAVFLARE_API_KEY }}
+
+      - name: Show site URL
+        if: env.HAS_SECRETS == 'true'
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.url }}
+        run: echo "Site URL => $SITE_URL"

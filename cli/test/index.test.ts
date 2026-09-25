@@ -214,6 +214,19 @@ describe("index 错误处理", () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it("401/403 ApiError 打印明确的「API key rejected」并 exit(1)", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    mocks.api.listPage.mockRejectedValue(new ApiError(401, "无效的 API 密钥"));
+
+    await runCli("ls");
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled());
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("错误: Davflare API key rejected (HTTP 401: 无效的 API 密钥)")
+    );
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it("sync 非法 direction 直接报错退出", async () => {
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
@@ -259,6 +272,7 @@ describe("index sites 命令", () => {
     fs.writeFileSync(path.join(dir, "index.html"), "<h1>hi</h1>");
     fs.mkdirSync(path.join(dir, "css"));
     fs.writeFileSync(path.join(dir, "css", "a.css"), "body{}");
+    mocks.api.listSites.mockResolvedValue({ sitesHost: "sites.example.com", sites: [] });
     mocks.api.uploadFile.mockResolvedValue(undefined);
     mocks.api.publishSite.mockResolvedValue({
       slug: "blog",
@@ -277,6 +291,38 @@ describe("index sites 命令", () => {
     expect(mocks.api.publishSite).toHaveBeenCalledWith(stagingArg, "blog");
     expect(mocks.api.remove).toHaveBeenCalledWith(`${stagingArg}/`, true);
     expect(console.log).toHaveBeenCalledWith("https://sites.example.com/blog/");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sites publish 密钥被拒：预检失败，不上传、不清理暂存，exit(1)", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-sites-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "x");
+    mocks.api.listSites.mockRejectedValue(new ApiError(403, "Forbidden"));
+
+    await runCli("sites", "publish", dir, "--slug", "blog");
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled());
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Davflare API key rejected (HTTP 403: Forbidden)")
+    );
+    expect(mocks.api.uploadFile).not.toHaveBeenCalled();
+    expect(mocks.api.remove).not.toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sites publish 服务地址返回非 JSON 时提示检查地址", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-sites-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "x");
+    mocks.api.listSites.mockRejectedValue(new SyntaxError("Unexpected token '<'"));
+
+    await runCli("sites", "publish", dir, "--slug", "blog");
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled());
+
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("请检查 DAVFLARE_SERVER"));
+    expect(mocks.api.uploadFile).not.toHaveBeenCalled();
     fs.rmSync(dir, { recursive: true, force: true });
   });
 

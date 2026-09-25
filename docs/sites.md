@@ -23,7 +23,58 @@ sites/blog/index.html
 sites/blog/style.css
 ```
 
-Then open `https://sites.<your-domain>/blog/` (or `/blog/style.css`). Missing files 404. Directory URLs resolve to `index.html`. No git deploy, no Pages project per site.
+Then open `https://sites.<your-domain>/blog/` (or `/blog/style.css`). Missing files 404. Directory URLs resolve to `index.html`. No Pages project per site; to publish from CI use the [GitHub Action](#github-action-deploy-to-davflare-site).
+
+## GitHub Action (Deploy to Davflare Site)
+
+Publish a build directory from CI with the official composite action (`action.yml` at the repo root; it builds and runs `davflare sites publish` from the action checkout — no npm install needed).
+
+1. In the drive web UI create an API key (**API keys**).
+2. In your repo: **Settings → Secrets and variables → Actions** → add `DAVFLARE_URL` (e.g. `https://drive.example.com`, include `https://`) and `DAVFLARE_API_KEY`.
+3. Add a workflow:
+
+```yaml
+# .github/workflows/deploy-site.yml
+name: Deploy site
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci && npm run build        # produces dist/
+      - name: Deploy to Davflare Site
+        id: davflare
+        uses: fanchenggang/Davflare@main
+        with:
+          path: dist
+          slug: my-site
+          url: ${{ secrets.DAVFLARE_URL }}
+          api-key: ${{ secrets.DAVFLARE_API_KEY }}
+      - run: echo "Live at ${{ steps.davflare.outputs.url }}"
+```
+
+| Input | Required | Description |
+| --- | --- | --- |
+| `path` | yes | Build output directory (relative to the workspace), e.g. `dist` |
+| `slug` | yes | Site slug `[a-z0-9][a-z0-9-]{0,62}` → `https://<SITES_HOST>/<slug>/` |
+| `url` | yes | Davflare instance URL (from a secret) |
+| `api-key` | yes | Davflare API key (from a secret) |
+
+| Output | Description |
+| --- | --- |
+| `url` | Public site URL (also printed in the log, as a notice and in the job summary; empty if the instance has no `SITES_HOST`) |
+
+- **Key safety:** the key is passed to the CLI only through an environment variable (never argv), registered with `::add-mask::`, and the script never uses `set -x`.
+- **Fails loudly:** a wrong/expired/revoked key fails the step with `Davflare API key rejected (401)` before anything is uploaded; empty `path`/`slug`/`url`/`api-key`, a missing or empty build directory, an invalid slug or an unreachable instance also fail with a clear message.
+- Requires Node.js ≥ 18 on the runner (preinstalled on GitHub-hosted runners). Same semantics as `davflare sites publish`: files with the same name are overwritten; the SPA flag / password / custom hostname config is kept.
+- Tip: pin a commit SHA instead of `@main` for reproducible builds. Optional README badge: `[![Deploy site](https://github.com/<owner>/<repo>/actions/workflows/deploy-site.yml/badge.svg)](https://github.com/<owner>/<repo>/actions/workflows/deploy-site.yml)`.
+- Manual demo workflow: [`docs/examples/deploy-site-demo.yml`](examples/deploy-site-demo.yml) — copy it to `.github/workflows/`, then **Actions → Deploy site demo → Run workflow** (`workflow_dispatch` only; skips with a notice when the two secrets are not set).
 
 ## Management API & UI
 
