@@ -2,7 +2,25 @@ import { Zip, ZipPassThrough } from "fflate";
 import { decodeRawPath } from "./_apikey";
 
 // 把选中键（文件或目录）打包为 zip 流。目录递归收齐后代，空目录写占位条目。
-// archive（会话 Basic + API Key）与 share（目录分享）共用。
+// archive（会话 Basic + API Key）与 share（目录分享）共用；MCP zip 经 archive 同样走这里。
+
+/** PKZIP APPNOTE 4.4.2.2：made-by 主机 3 = Unix。 */
+export const ZIP_OS_UNIX = 3;
+/** 外部属性高 16 位是 Unix mode：普通文件 0644；目录 0755 且带 MS-DOS 目录位 0x10。 */
+export const ZIP_FILE_ATTRS = ((0o100644 << 16) >>> 0);
+export const ZIP_DIR_ATTRS = (((0o040755 << 16) | 0x10) >>> 0);
+
+/**
+ * 统一创建 zip 条目（#119）：fflate 默认 made-by = 0（MS-DOS），Info-ZIP `unzip` 遇到 DOS 来源
+ * 会忽略 UTF-8 标志（bit 11）按 CP437 解码，中文名乱码。标记为 Unix 并给出 Unix 权限
+ * （否则 mode 为 0，解压出的文件无任何权限）。非 ASCII 文件名时 fflate 自动置 bit 11。
+ */
+export function createZipEntry(name: string): ZipPassThrough {
+  const entry = new ZipPassThrough(name);
+  entry.os = ZIP_OS_UNIX;
+  entry.attrs = name.endsWith("/") ? ZIP_DIR_ATTRS : ZIP_FILE_ATTRS;
+  return entry;
+}
 
 export async function listAllObjects(
   bucket: R2Bucket,
@@ -92,7 +110,7 @@ export async function buildZipStream(
       (async () => {
         try {
           for (const name of emptyDirNames) {
-            const entry = new ZipPassThrough(name);
+            const entry = createZipEntry(name);
             zip.add(entry);
             entry.push(new Uint8Array(0), true);
           }
@@ -100,7 +118,7 @@ export async function buildZipStream(
           for (const key of fileKeys) {
             const object = await bucket.get(key);
             if (!object || !("body" in object)) continue;
-            const entry = new ZipPassThrough(rel(key));
+            const entry = createZipEntry(rel(key));
             zip.add(entry);
             const reader = object.body.getReader();
             while (true) {

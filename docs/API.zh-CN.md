@@ -97,7 +97,7 @@ curl -X POST "https://<your-domain.com>/api/archive" \
 
 `GET /api/download` 的 `path` 是对象 key。**HTTP 200** 会流式返回文件（`Content-Type` 来自 R2，否则为 `application/octet-stream`，`Content-Disposition: attachment`）。`path` 缺失/为空，或指向目录/前缀文件夹，返回 **400**；对象不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。
 
-`GET /api/archive?path=` 把单个目录或文件打成 zip，鉴权与其它开放接口相同（Bearer / `X-Api-Key`，或网页 Basic 会话）。**HTTP 200** 流式返回 `application/zip`。目录键会剥掉文件夹前缀（与目录分享一致）。缺 path **400**；路径不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。`POST /api/archive` 传 `{ "keys": [...] }` 可多选打包（网页多选下载）；鉴权与内部路径规则相同。
+`GET /api/archive?path=` 把单个目录或文件打成 zip，鉴权与其它开放接口相同（Bearer / `X-Api-Key`，或网页 Basic 会话）。**HTTP 200** 流式返回 `application/zip`。目录键会剥掉文件夹前缀（与目录分享一致）。缺 path **400**；路径不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。`POST /api/archive` 传 `{ "keys": [...] }` 可多选打包（网页多选下载）；鉴权与内部路径规则相同。可选 `"base": "folder/"`（选中项所在文件夹）：条目路径改为相对该文件夹，zip 名为 `<文件夹名>.zip`；不传则保持完整路径、名为 `archive.zip`。zip 条目标记为 Unix 来源并使用 UTF-8 文件名（bit 11），Linux `unzip` 可正确显示中文名。
 
 脚本创建文件夹（父目录会自动创建）：
 

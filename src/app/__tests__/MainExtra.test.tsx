@@ -15,7 +15,8 @@ import {
   collectFilesFromDataTransfer,
   copyPaste,
   createFolder,
-  downloadArchive,
+  downloadFolderArchive,
+  downloadSelectionArchive,
   downloadFile,
   fetchFolderCounts,
   fetchPath,
@@ -47,7 +48,8 @@ vi.mock("../transfer", () => ({
   collectFilesFromDataTransfer: vi.fn(),
   copyPaste: vi.fn(),
   createFolder: vi.fn(),
-  downloadArchive: vi.fn(),
+  downloadFolderArchive: vi.fn(),
+  downloadSelectionArchive: vi.fn(),
   downloadFile: vi.fn(),
   fetchFolderCounts: vi.fn().mockResolvedValue({}),
   fetchPath: vi.fn(),
@@ -89,7 +91,8 @@ const mockMoveTrash = moveToTrash as unknown as Mock;
 const mockRestore = restoreTrash as unknown as Mock;
 const mockCollect = collectFilesFromDataTransfer as unknown as Mock;
 const mockDownload = downloadFile as unknown as Mock;
-const mockArchive = downloadArchive as unknown as Mock;
+const mockFolderArchive = downloadFolderArchive as unknown as Mock;
+const mockArchive = downloadSelectionArchive as unknown as Mock;
 const mockOpen = openFile as unknown as Mock;
 const mockCounts = fetchFolderCounts as unknown as Mock;
 
@@ -179,6 +182,8 @@ beforeEach(() => {
   mockDownload.mockResolvedValue(undefined);
   mockArchive.mockReset();
   mockArchive.mockResolvedValue(undefined);
+  mockFolderArchive.mockReset();
+  mockFolderArchive.mockResolvedValue(undefined);
   mockOpen.mockReset();
   mockOpen.mockResolvedValue(undefined);
   mockCounts.mockResolvedValue({});
@@ -283,7 +288,7 @@ describe("Main 上下文菜单动作", () => {
     // 下载目录 → archive
     fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "docs" })));
     fireEvent.click(screen.getByRole("menuitem", { name: strings.download }));
-    await waitFor(() => expect(mockArchive).toHaveBeenCalledWith(["docs"]));
+    await waitFor(() => expect(mockFolderArchive).toHaveBeenCalledWith("docs"));
     // open 目录 → navigate
     fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "docs" })));
     fireEvent.click(screen.getByRole("menuitem", { name: strings.open }));
@@ -436,8 +441,20 @@ describe("Main 多选工具栏", () => {
     fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "b.txt" })));
     const toolbar = document.querySelector(".MuiToolbar-root")!;
     fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.download }));
-    await waitFor(() => expect(mockArchive).toHaveBeenCalledWith(["a.txt", "b.txt"]));
+    // 根目录多选：cwd 为空 → archive.zip + 完整路径（由 downloadSelectionArchive 决定）
+    await waitFor(() => expect(mockArchive).toHaveBeenCalledWith(["a.txt", "b.txt"], ""));
     fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.close }));
+  });
+
+  test("多选单个文件夹 → 与右键下载一致走 downloadFolderArchive", async () => {
+    mockFetchPath.mockResolvedValue([file, file2, folder]);
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "docs" })));
+    const toolbar = document.querySelector(".MuiToolbar-root")!;
+    fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.download }));
+    await waitFor(() => expect(mockFolderArchive).toHaveBeenCalledWith("docs"));
+    expect(mockArchive).not.toHaveBeenCalled();
   });
 
   test("多选下载失败时错误提示", async () => {

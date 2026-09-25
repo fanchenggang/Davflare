@@ -26,7 +26,7 @@ import { NotifyFn } from "./app/notify";
 import { FileIconKind, fileIconKind } from "./app/preview";
 import { strings, translate } from "./app/strings";
 import { MOTION, warmShadow } from "./app/theme";
-import { downloadArchive, downloadFile } from "./app/transfer";
+import { downloadFile, downloadFolderArchive } from "./app/transfer";
 import { FileItem } from "./app/types";
 import {
   encodeKey,
@@ -122,7 +122,7 @@ function FileInfoSidebar({
 
   const handleDownload = () => {
     (isDirectory(shown)
-      ? downloadArchive([shown.key])
+      ? downloadFolderArchive(shown.key)
       : downloadFile(shown.key)
     ).catch((error) => onNotify(errorMessage(error), "error"));
   };

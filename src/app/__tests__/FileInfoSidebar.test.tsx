@@ -4,13 +4,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 import FileInfoSidebar from "../../FileInfoSidebar";
-import { downloadArchive, downloadFile } from "../transfer";
+import { downloadFile, downloadFolderArchive } from "../transfer";
 import { setLang, strings, translate } from "../strings";
 import { FileItem } from "../types";
 
 vi.mock("../transfer", () => ({
   downloadFile: vi.fn(),
-  downloadArchive: vi.fn(),
+  downloadFolderArchive: vi.fn(),
 }));
 
 vi.mock("../../AuthThumbnail", () => ({
@@ -19,7 +19,7 @@ vi.mock("../../AuthThumbnail", () => ({
 }));
 
 const mockDownload = downloadFile as unknown as Mock;
-const mockArchive = downloadArchive as unknown as Mock;
+const mockArchive = downloadFolderArchive as unknown as Mock;
 
 const file: FileItem = {
   key: "docs/pic file.png",
@@ -103,7 +103,7 @@ describe("FileInfoSidebar", () => {
     const { props } = renderSidebar(folder);
     expect(screen.getByText("—")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(strings.download));
-    await waitFor(() => expect(mockArchive).toHaveBeenCalledWith([folder.key]));
+    await waitFor(() => expect(mockArchive).toHaveBeenCalledWith(folder.key));
     expect(mockDownload).not.toHaveBeenCalled();
     expect(props.onClose).not.toHaveBeenCalled();
   });

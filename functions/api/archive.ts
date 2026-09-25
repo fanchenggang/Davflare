@@ -68,7 +68,9 @@ async function zipResponse(
 
 /**
  * Authenticated folder/file zip for Open API + web UI.
- * - POST { keys: string[] }: multi-select (session Basic or API key); no stripPrefix.
+ * - POST { keys: string[], base?: string }: multi-select (session Basic or API key).
+ *   Optional `base` (the folder the selection lives in) strips that prefix from entry paths
+ *   and names the zip `<base name>.zip`; without it entries keep full keys (unchanged behaviour).
  * - GET ?path=: single key (folder preferred); directories strip the folder prefix
  *   so zip roots at the folder name, matching directory shares.
  */
@@ -78,9 +80,11 @@ export const onRequestPost: PagesFunction<ArchiveEnv> = async (context) => {
   if (denied) return denied;
 
   let selectedKeys: string[];
+  let rawBase: unknown;
   try {
-    const body = (await request.json()) as { keys?: string[] };
+    const body = (await request.json()) as { keys?: string[]; base?: unknown };
     selectedKeys = body.keys ?? [];
+    rawBase = body.base;
   } catch {
     return new Response("Bad Request", { status: 400 });
   }
@@ -100,7 +104,18 @@ export const onRequestPost: PagesFunction<ArchiveEnv> = async (context) => {
     }
   }
 
-  return zipResponse(env.BUCKET, selectedKeys);
+  if (rawBase !== undefined && rawBase !== null && typeof rawBase !== "string") {
+    return new Response("Bad Request", { status: 400 });
+  }
+  const base = decodeRawPath(typeof rawBase === "string" ? rawBase : "").replace(/\/+$/, "");
+  if (base && isInternalKey(base)) {
+    return new Response("禁止访问内部目录", { status: 400 });
+  }
+
+  return zipResponse(env.BUCKET, selectedKeys, {
+    stripPrefix: base || undefined,
+    filename: base ? `${basename(base)}.zip` : "archive.zip",
+  });
 };
 
 export const onRequestGet: PagesFunction<ArchiveEnv> = async (context) => {

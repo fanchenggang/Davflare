@@ -172,14 +172,7 @@ export async function downloadFile(key: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export async function downloadArchive(keys: string[], name = "archive.zip") {
-  const res = await authFetch("/api/archive", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ keys }),
-  });
-  if (!res.ok) throw new Error((await res.text()) || translate("archiveFailed"));
-  const blob = await res.blob();
+function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -188,6 +181,43 @@ export async function downloadArchive(keys: string[], name = "archive.zip") {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** zip 下载名：`<文件夹名>.zip`，网盘根（空键）为 `archive.zip`；与 GET /api/archive 命名一致。 */
+export function archiveNameFor(folderKey: string): string {
+  const name = basename(folderKey);
+  return name ? `${name}.zip` : "archive.zip";
+}
+
+/**
+ * POST /api/archive 多选打包。`base`（选中项所在文件夹）会让服务端把条目路径改为相对该文件夹；
+ * 不传则条目为完整网盘路径（旧行为）。
+ */
+export async function downloadArchive(keys: string[], name = "archive.zip", base?: string) {
+  const res = await authFetch("/api/archive", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(base ? { keys, base } : { keys }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || translate("archiveFailed"));
+  saveBlob(await res.blob(), name);
+}
+
+/** 单个文件夹下载：与 `GET /api/archive?path=` 一致——`<文件夹名>.zip`，条目相对该文件夹。 */
+export async function downloadFolderArchive(folderKey: string) {
+  const key = folderKey.replace(/\/+$/, "");
+  const res = await authFetch(`/api/archive?path=${encodeURIComponent(`${key}/`)}`);
+  if (!res.ok) throw new Error((await res.text()) || translate("archiveFailed"));
+  saveBlob(await res.blob(), archiveNameFor(key));
+}
+
+/**
+ * 多选下载：选中全在当前文件夹 `cwd` 下时，zip 名为 `<cwd 名>.zip`（根目录为 archive.zip），
+ * 条目相对 `cwd`；跨文件夹（如全局搜索结果）时退回完整路径 + archive.zip。
+ */
+export async function downloadSelectionArchive(keys: string[], cwd: string) {
+  const base = cwd && keys.every((key) => key.startsWith(cwd)) ? cwd : "";
+  await downloadArchive(keys, archiveNameFor(base), base || undefined);
 }
 
 export async function copyPaste(source: string, target: string, move = false) {

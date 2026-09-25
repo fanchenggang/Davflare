@@ -42,6 +42,8 @@ vi.mock("../transfer", () => ({
   copyPaste: vi.fn(),
   createFolder: vi.fn(),
   downloadArchive: vi.fn(),
+  downloadFolderArchive: vi.fn(),
+  downloadSelectionArchive: vi.fn(),
   downloadFile: vi.fn(),
   fetchFolderCounts: vi.fn().mockResolvedValue({}),
   fetchPath: vi.fn(),

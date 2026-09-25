@@ -97,7 +97,7 @@ curl -X POST "https://<your-domain.com>/api/archive" \
 
 `GET /api/download` `path` is the object key. **HTTP 200** streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns **400**; unknown object **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected.
 
-`GET /api/archive?path=` zips one folder or file with the same Bearer / `X-Api-Key` (or web Basic session). **HTTP 200** streams `application/zip`. Folder keys strip the folder prefix inside the zip (same as directory shares). Missing path **400**; unknown path **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected. `POST /api/archive` with `{ "keys": [...] }` packs multiple selections (web UI multi-download); same auth and internal-key rules.
+`GET /api/archive?path=` zips one folder or file with the same Bearer / `X-Api-Key` (or web Basic session). **HTTP 200** streams `application/zip`. Folder keys strip the folder prefix inside the zip (same as directory shares). Missing path **400**; unknown path **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected. `POST /api/archive` with `{ "keys": [...] }` packs multiple selections (web UI multi-download); same auth and internal-key rules. Optional `"base": "folder/"` (the folder the selection lives in) makes entry paths relative to it and names the zip `<folder>.zip`; without it entries keep full keys and the name is `archive.zip`. Zip entries are marked as made on Unix with UTF-8 names (bit 11), so Linux `unzip` shows non-ASCII (e.g. Chinese) names correctly.
 
 Create folders from scripts (parents are auto-created):
 

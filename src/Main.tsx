@@ -41,7 +41,8 @@ import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings, translate } from "./app/strings";
 import {
   createFolder,
-  downloadArchive,
+  downloadFolderArchive,
+  downloadSelectionArchive,
   downloadFile,
   openFile,
   selectDirectoryFiles,
@@ -387,7 +388,7 @@ function Main({
           if (file.isDir) navigateFolder(file.key);
           else handleOpen(file.key);
         } else if (action === "download") {
-          if (file.isDir) await downloadArchive([file.key]);
+          if (file.isDir) await downloadFolderArchive(file.key);
           else await downloadFile(file.key);
         } else if (action === "details") {
           setDetailsFile(file);
@@ -469,7 +470,7 @@ function Main({
   const handleDownload = useCallback(
     (file: FileItem) => {
       (file.isDir
-        ? downloadArchive([file.key])
+        ? downloadFolderArchive(file.key)
         : downloadFile(file.key)
       ).catch((error) => onNotify(errorMessage(error), "error"));
     },
@@ -907,13 +908,16 @@ function Main({
         onDownload={async () => {
           if (!selectedKeys.length) return;
           try {
-            if (
-              selectedKeys.length === 1 &&
-              files.find((file) => file.key === selectedKeys[0])?.isDir === false
-            ) {
+            const single =
+              selectedKeys.length === 1
+                ? files.find((file) => file.key === selectedKeys[0])
+                : undefined;
+            if (single?.isDir === false) {
               await downloadFile(selectedKeys[0]);
+            } else if (single?.isDir) {
+              await downloadFolderArchive(single.key);
             } else {
-              await downloadArchive(selectedKeys);
+              await downloadSelectionArchive(selectedKeys, cwd);
             }
           } catch (error) {
             onNotify(errorMessage(error), "error");
