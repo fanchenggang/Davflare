@@ -46,7 +46,15 @@ var COPY = {
     settings: "Settings",
     edgeTitle: "In-page save panel",
     edgeDesc:
-      "Adds a floating save handle on this site. Only the site's origin is granted, and disabling revokes it.",
+      "Adds a floating save handle on this site. Only this site's origin is granted; disabling revokes that permission.",
+    edgeDescServer:
+      "This is your Davflare server. Disabling the panel keeps this site's permission (sync needs it).",
+    edgeRevoked: "Disabled, and this site's permission was revoked.",
+    edgeKeptServer: "Disabled. This site's permission stays because it is your Davflare server.",
+    edgeRevokeFailed:
+      "Disabled, but Chrome kept this site's permission — remove it under chrome://extensions → Davflare → Details.",
+    edgeShortcut: "Toggle shortcut: {key}",
+    edgeShortcutSet: "Set shortcut",
     edgeEnable: "Enable on this site",
     edgeDisable: "Disable on this site",
     edgeOn: "On",
@@ -85,7 +93,13 @@ var COPY = {
     home: "插件主页",
     settings: "设置",
     edgeTitle: "页面内收藏面板",
-    edgeDesc: "在本站点显示悬浮收藏把手，只授予该站点来源权限，停用即撤销。",
+    edgeDesc: "在本站点显示悬浮收藏把手。只授予该站点来源权限；停用时一并撤销该权限。",
+    edgeDescServer: "这是你配置的 Davflare 服务器站点：停用面板不会撤销该站点权限（同步需要它）。",
+    edgeRevoked: "已停用，并已撤销本站点权限。",
+    edgeKeptServer: "已停用。本站点是你的 Davflare 服务器，站点权限保留（同步需要）。",
+    edgeRevokeFailed: "已停用，但 Chrome 未撤销本站点权限，可在 chrome://extensions → Davflare → 详细信息 中移除。",
+    edgeShortcut: "面板快捷键：{key}",
+    edgeShortcutSet: "设置快捷键",
     edgeEnable: "在此站点启用",
     edgeDisable: "在此站点停用",
     edgeOn: "已启用",
@@ -473,7 +487,8 @@ function renderHeader() {
 
 /* ---------- in-page edge panel toggle (round 4) ---------- */
 
-var edge = { supported: false, pattern: "", enabled: false, granted: false };
+var edge = { supported: false, pattern: "", enabled: false, granted: false, serverSite: false };
+var EDGE_PENDING_KEY = "edgePanelPending";
 
 function sendEdge(message) {
   return new Promise(function (resolve) {
@@ -499,7 +514,7 @@ function renderEdgeSection() {
     btn.classList.add("hidden");
     return;
   }
-  $("edgeDesc").textContent = state.t.edgeDesc;
+  $("edgeDesc").textContent = edge.serverSite ? state.t.edgeDescServer : state.t.edgeDesc;
   btn.classList.remove("hidden");
   btn.textContent = edge.enabled ? state.t.edgeDisable : state.t.edgeEnable;
   stateEl.textContent = edge.enabled ? state.t.edgeOn : state.t.edgeOff;
@@ -512,13 +527,29 @@ async function refreshEdgeState() {
   edge.pattern = (reply && reply.pattern) || "";
   edge.enabled = Boolean(reply && reply.enabled);
   edge.granted = Boolean(reply && reply.granted);
+  edge.serverSite = Boolean(reply && reply.serverSite);
   renderEdgeSection();
+}
+
+function edgeTabId() {
+  return state.tab && typeof state.tab.id === "number" ? state.tab.id : undefined;
 }
 
 async function onEdgeToggle() {
   if (!edge.enabled) {
-    // permissions.request must run inside the click gesture — this await is
-    // deliberately the first thing that happens in the handler.
+    // #137: Chrome's permission prompt usually CLOSES this popup, so nothing
+    // after the await below may be needed for enabling to finish. Record the
+    // intent first (not awaited — the click gesture must reach
+    // permissions.request); background.js completes the job from
+    // chrome.permissions.onAdded.
+    var pending = {};
+    pending[EDGE_PENDING_KEY] = {
+      pattern: edge.pattern,
+      pageUrl: state.url,
+      tabId: edgeTabId(),
+      at: Date.now(),
+    };
+    chrome.storage.local.set(pending);
     var granted;
     try {
       granted = await chrome.permissions.request({ origins: [edge.pattern] });
@@ -526,6 +557,7 @@ async function onEdgeToggle() {
       granted = false;
     }
     if (!granted) {
+      chrome.storage.local.remove(EDGE_PENDING_KEY);
       $("edgeState").textContent = state.t.edgeDenied;
       $("edgeState").classList.remove("on");
       return;
@@ -533,23 +565,46 @@ async function onEdgeToggle() {
   }
   var btn = $("edgeToggleBtn");
   btn.disabled = true;
+  var wasEnabled = edge.enabled;
   var reply = await sendEdge(
-    edge.enabled
-      ? { type: "davflare-edge-disable", pageUrl: state.url }
-      : {
-          type: "davflare-edge-enable",
-          pageUrl: state.url,
-          tabId: state.tab && typeof state.tab.id === "number" ? state.tab.id : undefined,
-        }
+    wasEnabled
+      ? { type: "davflare-edge-disable", pageUrl: state.url, tabId: edgeTabId() }
+      : { type: "davflare-edge-enable", pageUrl: state.url, tabId: edgeTabId() }
   );
   btn.disabled = false;
   if (reply && reply.ok) {
-    edge.enabled = !edge.enabled;
+    edge.enabled = !wasEnabled;
     renderEdgeSection();
+    if (wasEnabled) $("edgeDesc").textContent = edgeDisableText(reply);
   } else {
     $("edgeState").textContent = state.t.edgeDenied;
     $("edgeState").classList.remove("on");
   }
+}
+
+/** Truthful outcome of a disable (#137): revoked / kept for the server / Chrome refused. */
+function edgeDisableText(reply) {
+  if (reply.keptForServer) return state.t.edgeKeptServer;
+  if (reply.revoked) return state.t.edgeRevoked;
+  return state.t.edgeRevokeFailed;
+}
+
+/** Panel shortcut line: Chrome does not bind a new suggested_key on an
+ *  in-place upgrade (or on a conflict), so show 「未设置」 + a way to set it. */
+function renderEdgeShortcut() {
+  var el = $("edgeShortcut");
+  var link = $("edgeShortcutSet");
+  if (!el || !chrome.commands || typeof chrome.commands.getAll !== "function") return;
+  chrome.commands.getAll(function (commands) {
+    var cmd = null;
+    for (var i = 0; i < (commands || []).length; i++) {
+      if (commands[i] && commands[i].name === "toggle-edge-panel") cmd = commands[i];
+    }
+    if (!cmd) return;
+    el.textContent = state.t.edgeShortcut.replace("{key}", cmd.shortcut || state.t.shortcutNone);
+    link.textContent = state.t.edgeShortcutSet;
+    link.classList.toggle("hidden", Boolean(cmd.shortcut));
+  });
 }
 
 /** Foot note showing the configurable quick-save shortcut (if any). */
@@ -593,6 +648,7 @@ async function init() {
     return;
   }
   refreshEdgeState();
+  renderEdgeShortcut();
 
   var cfg = await loadConfig();
   if (!cfg.instanceUrl) {
@@ -634,6 +690,9 @@ $("settingsBtn").addEventListener("click", function () {
 });
 $("edgeToggleBtn").addEventListener("click", function () {
   onEdgeToggle();
+});
+$("edgeShortcutSet").addEventListener("click", function () {
+  chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
 });
 
 init();

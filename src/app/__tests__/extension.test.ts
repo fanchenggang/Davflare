@@ -123,7 +123,7 @@ describe("Davflare Chrome extension / default package", () => {
     const bg = fs.readFileSync(path.join(extDir, "background.js"), "utf8");
     expect(bg).not.toContain("chrome.action.onClicked");
     // #71: conflict retry lives in quickSave.js; SW must import it.
-    expect(bg).toContain('importScripts("url.js", "bookmarks.js", "dav.js", "quickSave.js")');
+    expect(bg).toContain('importScripts("url.js", "bookmarks.js", "dav.js", "quickSave.js", "edgePerms.js")');
     expect(bg).toContain("DavflareQuickSave.saveBookmark");
     expect(fs.existsSync(path.join(extDir, "quickSave.js"))).toBe(true);
         // #73: savePage try/catch + return Promise from onClicked so MV3 SW stays alive
@@ -282,6 +282,7 @@ describe("Davflare Chrome extension / release zip", () => {
     expect(names).toContain("manifest.json");
     expect(names).toContain("background.js");
     expect(names).toContain("quickSave.js");
+    expect(names).toContain("edgePerms.js");
     expect(names).toContain("bookmarks.html");
     expect(names).toContain("bookmarks.css");
     expect(names).toContain("bookmarksApp.js");
@@ -369,7 +370,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.16");
+    expect(manifest.version).toBe("1.3.17");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -436,7 +437,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.16");
+    expect(manifest.version).toBe("1.3.17");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -696,8 +697,8 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
     document.body.innerHTML = "";
   });
 
-  test("manifest version is current (1.3.15, bumped again by #134)", () => {
-    expect(manifest.version).toBe("1.3.16");
+  test("manifest version is current (1.3.17, bumped again by #137)", () => {
+    expect(manifest.version).toBe("1.3.17");
   });
 });
 
@@ -729,8 +730,8 @@ describe("Davflare Chrome extension / #130 re-saving a trashed URL keeps the ori
     expect(quickJs).not.toContain("overwriteTitle");
   });
 
-  test("manifest version is current (1.3.16 after round 4)", () => {
-    expect(manifest.version).toBe("1.3.16");
+  test("manifest version is current (1.3.17 after #137)", () => {
+    expect(manifest.version).toBe("1.3.17");
   });
 });
 
@@ -761,7 +762,7 @@ describe("Davflare Chrome extension / round 4: edge panel + save link + polish",
     expect(bgJs).toContain('var MENU_SAVE_LINK = "davflare-save-link";');
     expect(bgJs).toContain('contexts: ["link"]');
     expect(bgJs).toContain("if (info.menuItemId === MENU_SAVE_LINK)");
-    expect(bgJs).toContain("async function saveLink(info)");
+    expect(bgJs).toContain("async function saveLink(info, tab)");
     expect(bgJs).toContain("info.linkUrl");
     // Shared save core: one implementation, two feedback surfaces.
     expect(bgJs).toContain("async function performSave(title, url, extra)");

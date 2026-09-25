@@ -1,6 +1,6 @@
 "use strict";
 
-importScripts("url.js", "bookmarks.js", "dav.js", "quickSave.js");
+importScripts("url.js", "bookmarks.js", "dav.js", "quickSave.js", "edgePerms.js");
 
 var MENU_SAVE = "davflare-save-page";
 var MENU_SAVE_LINK = "davflare-save-link";
@@ -11,6 +11,10 @@ var CACHE_KEY = "bookmarksCache";
    matches list mirrors the origins the user enabled from the popup. */
 var EDGE_SCRIPT_ID = "davflare-edge-panel";
 var EDGE_ORIGINS_KEY = "edgePanelOrigins";
+// #137: {pattern, pageUrl, tabId, at} written by the popup right before
+// permissions.request — the prompt closes the popup, so the background
+// finishes enabling from chrome.permissions.onAdded.
+var EDGE_PENDING_KEY = "edgePanelPending";
 
 var MESSAGES = {
   en: {
@@ -273,11 +277,50 @@ async function savePage(tab) {
   return saveToLibrary((tab && tab.title) || "", (tab && tab.url) || "");
 }
 
-/** Round 4: "Save link to Davflare" — title from the link text, url from href. */
-async function saveLink(info) {
+/**
+ * "Save link to Davflare". Chrome's OnClickData has no linkText (#137), so
+ * read the anchor text in the right-clicked frame: the menu click grants
+ * activeTab for that tab, and "scripting" is already in the manifest — no
+ * extra host permission. Falls back to linkText (other browsers), the
+ * selection, then the URL (DavflareEdgePerms.linkTitle).
+ */
+async function saveLink(info, tab) {
   var url = (info && info.linkUrl) || "";
-  var text = info && typeof info.linkText === "string" ? info.linkText.trim() : "";
-  return saveToLibrary(text || url, url);
+  var scraped = await scrapeLinkText(info, tab);
+  var title = DavflareEdgePerms.linkTitle({
+    scraped: scraped,
+    linkText: info && info.linkText,
+    selectionText: info && info.selectionText,
+    linkUrl: url,
+  });
+  return saveToLibrary(title, url);
+}
+
+var LINK_TEXT_TIMEOUT_MS = 1500;
+
+async function scrapeLinkText(info, tab) {
+  if (!info || !info.linkUrl || !tab || typeof tab.id !== "number") return "";
+  if (!chrome.scripting || typeof chrome.scripting.executeScript !== "function") return "";
+  var frameId = typeof info.frameId === "number" && info.frameId >= 0 ? info.frameId : 0;
+  var run = chrome.scripting
+    .executeScript({
+      target: { tabId: tab.id, frameIds: [frameId] },
+      func: DavflareEdgePerms.findLinkText,
+      args: [String(info.linkUrl), String(info.selectionText || "")],
+    })
+    .then(function (results) {
+      var first = results && results[0];
+      return first && typeof first.result === "string" ? first.result : "";
+    })
+    .catch(function () {
+      return ""; // cross-origin frame / restricted page → fall back
+    });
+  var timeout = new Promise(function (resolve) {
+    setTimeout(function () {
+      resolve("");
+    }, LINK_TEXT_TIMEOUT_MS);
+  });
+  return Promise.race([run, timeout]);
 }
 
 /**
@@ -425,7 +468,7 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
     return savePage(tab);
   }
   if (info.menuItemId === MENU_SAVE_LINK) {
-    return saveLink(info);
+    return saveLink(info, tab);
   }
 });
 
@@ -494,11 +537,23 @@ function edgePanelSupported() {
 }
 
 function originPatternOf(pageUrl) {
-  try {
-    return new URL(pageUrl).origin + "/*";
-  } catch (err) {
-    return "";
-  }
+  return DavflareEdgePerms.originPatternOf(pageUrl);
+}
+
+function storagePayload(key, value) {
+  var payload = {};
+  payload[key] = value;
+  return payload;
+}
+
+// enable / disable / permission events can race (popup message vs
+// permissions.onAdded); run them one at a time so the single dynamic
+// registration is never unregistered/registered concurrently.
+var edgeQueue = Promise.resolve();
+function serializeEdge(fn) {
+  var run = edgeQueue.then(fn, fn);
+  edgeQueue = run.catch(function () {});
+  return run;
 }
 
 async function readEdgeOrigins() {
@@ -565,24 +620,33 @@ async function isOriginGranted(pattern) {
   return false;
 }
 
-/** popup asks after its own permissions.request (the gesture lives there). */
-async function enableEdgePanel(pageUrl, tabId) {
+/**
+ * Enable after the origin was granted — called by the popup (when it
+ * survives the prompt), by permissions.onAdded (when it did not, #137) or
+ * by edgePanelState self-heal. Idempotent: a second call for an origin that
+ * is already enabled only re-syncs and never re-injects (re-injection would
+ * pop the panel open).
+ */
+function enableEdgePanel(pageUrl, tabId) {
+  return serializeEdge(function () {
+    return enableEdgePanelNow(pageUrl, tabId);
+  });
+}
+
+async function enableEdgePanelNow(pageUrl, tabId) {
   if (!edgePanelSupported()) return { ok: false, reason: "unsupported" };
   var pattern = originPatternOf(pageUrl);
   if (!pattern) return { ok: false, reason: "restricted" };
+  if (!(await isOriginGranted(pattern))) return { ok: false, reason: "denied" };
+  await clearEdgePending(pattern);
   var origins = await readEdgeOrigins();
-  if (origins.indexOf(pattern) === -1) origins.push(pattern);
-  await chrome.storage.local.set(
-    (function () {
-      var payload = {};
-      payload[EDGE_ORIGINS_KEY] = origins;
-      return payload;
-    })()
-  );
+  var added = origins.indexOf(pattern) === -1;
+  if (added) origins.push(pattern);
+  await chrome.storage.local.set(storagePayload(EDGE_ORIGINS_KEY, origins));
   await syncEdgeRegistration(origins);
   // Pages already open predate the registration — inject on demand so the
   // handle shows up without a reload.
-  if (typeof tabId === "number" && chrome.scripting.executeScript) {
+  if (added && typeof tabId === "number" && chrome.scripting.executeScript) {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
@@ -595,23 +659,104 @@ async function enableEdgePanel(pageUrl, tabId) {
   return { ok: true, origins: origins };
 }
 
-async function disableEdgePanel(pageUrl) {
+/**
+ * Disable: drop the origin from the registration, remove the panel from the
+ * open tab, and revoke the optional host permission (#137) — EXCEPT for the
+ * configured Davflare server origin, which WebDAV sync needs. The reply
+ * says which happened so the popup text stays truthful.
+ */
+function disableEdgePanel(pageUrl, tabId) {
+  return serializeEdge(function () {
+    return disableEdgePanelNow(pageUrl, tabId);
+  });
+}
+
+async function disableEdgePanelNow(pageUrl, tabId) {
   if (!edgePanelSupported()) return { ok: false, reason: "unsupported" };
   var pattern = originPatternOf(pageUrl);
   if (!pattern) return { ok: false, reason: "restricted" };
+  await clearEdgePending(pattern);
   var origins = await readEdgeOrigins();
   var next = origins.filter(function (o) {
     return o !== pattern;
   });
-  await chrome.storage.local.set(
-    (function () {
-      var payload = {};
-      payload[EDGE_ORIGINS_KEY] = next;
-      return payload;
-    })()
-  );
+  await chrome.storage.local.set(storagePayload(EDGE_ORIGINS_KEY, next));
   await syncEdgeRegistration(next);
-  return { ok: true, origins: next };
+  if (typeof tabId === "number" && chrome.tabs && chrome.tabs.sendMessage) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: "davflare-edge-remove" });
+    } catch (err) {
+      /* no panel in that tab */
+    }
+  }
+  var cfg = await loadConfig();
+  var keptForServer = DavflareEdgePerms.isProtectedPattern(pattern, cfg.instanceUrl);
+  var revoked = false;
+  if (!keptForServer && chrome.permissions && typeof chrome.permissions.remove === "function") {
+    try {
+      revoked = Boolean(await chrome.permissions.remove({ origins: [pattern] }));
+    } catch (err) {
+      revoked = false;
+    }
+  }
+  var stillGranted = await isOriginGranted(pattern);
+  return {
+    ok: true,
+    origins: next,
+    revoked: revoked && !stillGranted,
+    keptForServer: keptForServer,
+    stillGranted: stillGranted,
+  };
+}
+
+async function readEdgePending() {
+  var stored = await chrome.storage.local.get([EDGE_PENDING_KEY]);
+  return stored ? stored[EDGE_PENDING_KEY] || null : null;
+}
+
+async function clearEdgePending(pattern) {
+  var pending = await readEdgePending();
+  if (pending && (!pattern || pending.pattern === pattern)) {
+    await chrome.storage.local.remove(EDGE_PENDING_KEY);
+  }
+}
+
+/** #137: the grant arrived while the popup was closed by the prompt. */
+async function onEdgePermissionsAdded(perm) {
+  var added = perm && Array.isArray(perm.origins) ? perm.origins : [];
+  if (!added.length) return null;
+  var pending = await readEdgePending();
+  var pattern = DavflareEdgePerms.pendingMatch(pending, added, Date.now());
+  if (!pattern) return null;
+  return enableEdgePanel(pending.pageUrl, typeof pending.tabId === "number" ? pending.tabId : undefined);
+}
+
+/** Revoked elsewhere (chrome://extensions, toolbar site access): stop
+ *  listing / registering that origin so popup state matches reality. */
+async function onEdgePermissionsRemoved(perm) {
+  var removed = perm && Array.isArray(perm.origins) ? perm.origins : [];
+  if (!removed.length) return null;
+  return serializeEdge(async function () {
+    var origins = await readEdgeOrigins();
+    var next = origins.filter(function (o) {
+      return removed.indexOf(o) === -1;
+    });
+    if (next.length === origins.length) return null;
+    await chrome.storage.local.set(storagePayload(EDGE_ORIGINS_KEY, next));
+    await syncEdgeRegistration(next);
+    return next;
+  });
+}
+
+if (chrome.permissions && chrome.permissions.onAdded) {
+  chrome.permissions.onAdded.addListener(function (perm) {
+    return onEdgePermissionsAdded(perm).catch(function () {});
+  });
+}
+if (chrome.permissions && chrome.permissions.onRemoved) {
+  chrome.permissions.onRemoved.addListener(function (perm) {
+    return onEdgePermissionsRemoved(perm).catch(function () {});
+  });
 }
 
 /** State for the popup toggle row. */
@@ -626,9 +771,19 @@ async function edgePanelState(pageUrl) {
     configured: Boolean(cfg.instanceUrl),
   };
   if (!pattern) return state;
+  state.serverSite = DavflareEdgePerms.isProtectedPattern(pattern, cfg.instanceUrl);
   var origins = await readEdgeOrigins();
   state.enabled = origins.indexOf(pattern) !== -1;
   state.granted = await isOriginGranted(pattern);
+  // Self-heal (#137): granted with a fresh pending enable but onAdded never
+  // finished (service worker restarted mid-way) — finish it now.
+  if (!state.enabled && state.granted && state.supported) {
+    var pending = await readEdgePending();
+    if (DavflareEdgePerms.pendingMatch(pending, [pattern], Date.now())) {
+      var done = await enableEdgePanel(pageUrl, pending.tabId);
+      state.enabled = Boolean(done && done.ok);
+    }
+  }
   return state;
 }
 
@@ -762,7 +917,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return true;
   }
   if (msg.type === "davflare-edge-disable") {
-    disableEdgePanel(msg.pageUrl)
+    disableEdgePanel(msg.pageUrl, typeof msg.tabId === "number" ? msg.tabId : undefined)
       .then(sendResponse)
       .catch(function () {
         sendResponse({ ok: false, reason: "error" });

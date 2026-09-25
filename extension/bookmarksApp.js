@@ -303,6 +303,9 @@ var COPY = {
     shortcutEdgePanel: "Toggle in-page panel",
     shortcutNone: "Not set",
     shortcutsHint: "Change them any time at chrome://extensions/shortcuts.",
+    shortcutsOpen: "Open shortcut settings",
+    shortcutsUpgradeHint:
+      "Chrome does not bind shortcuts added by an update (or ones that clash). Set the missing ones yourself.",
     permBookmarksTitle: "Allow bookmark access?",
     permBookmarksBody:
       "Davflare needs Chrome’s “Read and change your bookmarks” permission to import or write back. Chrome should show a system prompt next — choose Allow. If no prompt appears (common in some unpacked Chromium builds), grant Bookmarks under chrome://extensions → Davflare → Details, then retry.",
@@ -609,6 +612,8 @@ var COPY = {
     shortcutEdgePanel: "页面内收藏面板",
     shortcutNone: "未设置",
     shortcutsHint: "随时在 chrome://extensions/shortcuts 修改。",
+    shortcutsOpen: "打开快捷键设置",
+    shortcutsUpgradeHint: "升级后新增或与其他扩展冲突的快捷键，Chrome 不会自动绑定，请手动设置显示「未设置」的项。",
     storageNote:
       "体积来自你 WebDAV 书签目录（本库在 R2/网盘上的占用）。快照 HTML 按索引里记录的 size 汇总。",
     storageRefresh: "刷新体积",
@@ -5294,6 +5299,8 @@ function applyCopy() {
   if ($("storageRefresh")) $("storageRefresh").textContent = t.storageRefresh;
   if ($("shortcutLegend")) $("shortcutLegend").textContent = t.shortcutLegend;
   if ($("shortcutsHint")) $("shortcutsHint").textContent = t.shortcutsHint;
+  if ($("shortcutsOpen")) $("shortcutsOpen").textContent = t.shortcutsOpen;
+  if ($("shortcutsUpgradeHint")) $("shortcutsUpgradeHint").textContent = t.shortcutsUpgradeHint;
 }
 
 /** Settings "Keyboard shortcuts" row (round 4): live values from Chrome so
@@ -5311,9 +5318,11 @@ function renderShortcuts() {
       { name: "toggle-edge-panel", label: t.shortcutEdgePanel },
     ];
     list.textContent = "";
+    var missing = false;
     for (var j = 0; j < rows.length; j++) {
       var cmd = byName[rows[j].name];
       if (!cmd) continue;
+      if (!cmd.shortcut) missing = true;
       var row = document.createElement("div");
       var dt = document.createElement("dt");
       var dd = document.createElement("dd");
@@ -5324,6 +5333,9 @@ function renderShortcuts() {
       row.appendChild(dd);
       list.appendChild(row);
     }
+    // #137: an in-place upgrade leaves new commands unbound — say why.
+    var upgrade = $("shortcutsUpgradeHint");
+    if (upgrade) upgrade.classList.toggle("hidden", !missing);
   });
 }
 
@@ -5373,6 +5385,12 @@ function wireEvents() {
   if ($("storageRefresh")) {
     $("storageRefresh").addEventListener("click", function () {
       refreshStoragePanel();
+    });
+  }
+  if ($("shortcutsOpen")) {
+    // chrome:// pages cannot be linked with <a href>; tabs.create can open them.
+    $("shortcutsOpen").addEventListener("click", function () {
+      chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
     });
   }
   wirePopMenus();

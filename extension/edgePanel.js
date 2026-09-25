@@ -444,9 +444,20 @@
     /* defaults to right */
   }
 
+  var removed = false; // this instance was taken down (#137); a re-enable injects a fresh one
   chrome.runtime.onMessage.addListener(function (msg) {
+    if (removed) return;
     if (msg && msg.type === "davflare-edge-toggle") {
       window.__davflareEdgePanelToggle();
+    }
+    // #137: disabled from the popup — take the panel off this page now
+    // instead of leaving it until the next reload.
+    if (msg && msg.type === "davflare-edge-remove") {
+      removed = true;
+      closePanel();
+      if (host.parentNode) host.parentNode.removeChild(host);
+      window.__davflareEdgePanelLoaded = false;
+      window.__davflareEdgePanelToggle = function () {};
     }
   });
 
