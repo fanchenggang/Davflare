@@ -364,7 +364,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.10");
+    expect(manifest.version).toBe("1.3.11");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -431,7 +431,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.10");
+    expect(manifest.version).toBe("1.3.11");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
