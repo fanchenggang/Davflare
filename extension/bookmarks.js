@@ -884,46 +884,86 @@ var Bookmarks = (function () {
    * html parse wins for membership/title/folder; the json sidecar donates
    * tags/note/id (and pin state, issue #63) for the same URL so rewrites
    * never drop rich fields. Declared folders are the union of both inputs.
+   *
+   * Issue #134: several bookmarks can share one urlKey (duplicates that
+   * differ by utm_ / #hash, or exact copies). Each JSON row donates to at
+   * most ONE html row, and rows are paired by best evidence first: live
+   * over trashed, exact URL, same folder, same ADD_DATE second, same title,
+   * then original order. So every duplicate keeps its own id, tags, note
+   * and pin across reloads instead of all inheriting the first row's.
+   * Trashed JSON rows that did not donate are re-attached (the trash).
    */
   function adoptRichFields(htmlModel, jsonModel) {
     var out = normalizeModel(htmlModel);
     if (!isValidModel(jsonModel)) return out;
-    var rich = Object.create(null);
-    for (var i = 0; i < jsonModel.bookmarks.length; i++) {
-      var b = jsonModel.bookmarks[i];
-      var key = urlKey(b.url);
-      if (key && !rich[key]) rich[key] = b;
+    var donors = jsonModel.bookmarks;
+    var byKey = Object.create(null);
+    for (var i = 0; i < donors.length; i++) {
+      var d = donors[i];
+      var key = d ? urlKey(d.url) : "";
+      if (!key) continue;
+      (byKey[key] = byKey[key] || []).push(i);
     }
+    // Candidate pairs within the same urlKey, scored.
+    var pairs = [];
     for (var j = 0; j < out.bookmarks.length; j++) {
       var item = out.bookmarks[j];
-      var donor = rich[urlKey(item.url)];
-      if (!donor) continue;
-      if (donor.id) item.id = donor.id;
-      if (donor.tags && donor.tags.length) item.tags = donor.tags.slice();
-      if (donor.note) item.note = donor.note;
-      if (donor.pinned) {
-        item.pinned = true;
-        if (donor.pinnedAt) item.pinnedAt = donor.pinnedAt;
+      var cands = byKey[urlKey(item.url)];
+      if (!cands) continue;
+      for (var c = 0; c < cands.length; c++) {
+        pairs.push({ h: j, d: cands[c], score: donorScore(item, donors[cands[c]]) });
       }
+    }
+    pairs.sort(function (a, b) {
+      return b.score - a.score || a.d - b.d || a.h - b.h;
+    });
+    var usedHtml = Object.create(null);
+    var usedDonor = Object.create(null);
+    for (var p = 0; p < pairs.length; p++) {
+      var pair = pairs[p];
+      if (usedHtml[pair.h] || usedDonor[pair.d]) continue;
+      usedHtml[pair.h] = true;
+      usedDonor[pair.d] = true;
+      adoptFrom(out.bookmarks[pair.h], donors[pair.d]);
     }
     if (Array.isArray(jsonModel.folders) && jsonModel.folders.length) {
       out.folders = sanitizeFolderList(out.folders.concat(jsonModel.folders));
     }
     // Deleted rows only live in the JSON sidecar (serializeHtml skips them),
     // so html-wins membership would silently drop the trash. Re-attach every
-    // sidecar row that is deleted and absent from the parsed HTML.
-    var present = Object.create(null);
-    for (var k = 0; k < out.bookmarks.length; k++) {
-      present[urlKey(out.bookmarks[k].url)] = true;
-    }
-    for (var m = 0; m < jsonModel.bookmarks.length; m++) {
-      var b = jsonModel.bookmarks[m];
-      if (!b || !b.deleted) continue;
-      var bkey = urlKey(b.url);
-      if (!bkey || present[bkey]) continue;
-      out.bookmarks.push(sanitizeBookmark(b));
+    // trashed sidecar row that did not donate to an html row — including a
+    // trashed duplicate whose live sibling (same urlKey) is in the html.
+    var ids = Object.create(null);
+    for (var k = 0; k < out.bookmarks.length; k++) ids[out.bookmarks[k].id] = true;
+    for (var m = 0; m < donors.length; m++) {
+      var b = donors[m];
+      if (!b || !b.deleted || usedDonor[m] || !urlKey(b.url)) continue;
+      var row = sanitizeBookmark(b);
+      while (ids[row.id]) row.id = makeId();
+      ids[row.id] = true;
+      out.bookmarks.push(row);
     }
     return out;
+  }
+
+  function donorScore(item, donor) {
+    var score = 0;
+    if (!donor.deleted) score += 16;
+    if (String(donor.url || "") === String(item.url || "")) score += 8;
+    if (sanitizeFolderPath(asString(donor.folder)) === String(item.folder || "")) score += 4;
+    if (Math.floor((donor.added || 0) / 1000) === Math.floor((item.added || 0) / 1000)) score += 2;
+    if (asString(donor.title) === String(item.title || "")) score += 1;
+    return score;
+  }
+
+  function adoptFrom(item, donor) {
+    if (donor.id) item.id = donor.id;
+    if (donor.tags && donor.tags.length) item.tags = donor.tags.slice();
+    if (donor.note) item.note = donor.note;
+    if (donor.pinned) {
+      item.pinned = true;
+      if (donor.pinnedAt) item.pinnedAt = donor.pinnedAt;
+    }
   }
 
   /**

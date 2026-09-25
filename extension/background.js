@@ -12,6 +12,7 @@ var MESSAGES = {
     errTitle: "Davflare — action failed",
     saveOk: "Bookmark saved to your library.",
     saveExists: "This page is already in your library.",
+    saveRestored: "Restored from the trash.",
     skipPage: "Only http(s) pages can be saved.",
     needConfig: "Configure your instance URL and WebDAV credentials in settings first.",
     modeTitle: "Default home view switched",
@@ -23,6 +24,7 @@ var MESSAGES = {
     errTitle: "Davflare — 操作失败",
     saveOk: "已收藏到书签库。",
     saveExists: "该页面已在书签库中。",
+    saveRestored: "已从回收站恢复。",
     skipPage: "只能收藏 http(s) 页面。",
     needConfig: "请先在设置里配置实例地址与 WebDAV 凭据。",
     modeTitle: "主页默认视图已切换",
@@ -227,7 +229,13 @@ async function savePage(tab) {
     );
 
     if (result.ok) {
-      okFeedback(result.status === "exists" ? copy.saveExists : copy.saveOk);
+      okFeedback(
+        result.status === "exists"
+          ? copy.saveExists
+          : result.status === "restored"
+            ? copy.saveRestored // revived from the trash (#130 follow-up)
+            : copy.saveOk
+      );
       return;
     }
     failFeedback(errorText(result.kind, result.message));

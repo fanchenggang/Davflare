@@ -41,7 +41,8 @@ var DavflareQuickSave = (function () {
    * @param {(res: object) => object} deps.parseRemote
    * @param {{title: string, url: string, added?: number}} page
    * @returns {Promise<
-   *   | { ok: true, status: "saved" | "exists" }
+   *   | { ok: true, status: "saved" | "restored" | "exists" }
+   *   ("restored" = the URL was revived from the trash, #130 follow-up)
    *   | { ok: false, kind: string }
    * >}
    */
@@ -78,7 +79,7 @@ var DavflareQuickSave = (function () {
         });
         if (putCached.ok) {
           await safeWriteCache(writeCache, early.model, putCached.etag || null);
-          return { ok: true, status: "saved" };
+          return { ok: true, status: early.restored ? "restored" : "saved" };
         }
         if (putCached.kind !== "conflict") {
           return { ok: false, kind: putCached.kind || "network" };
@@ -130,7 +131,7 @@ var DavflareQuickSave = (function () {
       });
       if (put.ok) {
         await safeWriteCache(writeCache, add.model, put.etag || null);
-        return { ok: true, status: "saved" };
+        return { ok: true, status: add.restored ? "restored" : "saved" };
       }
       if (put.kind !== "conflict") {
         return { ok: false, kind: put.kind || "network" };

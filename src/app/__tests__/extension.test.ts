@@ -364,7 +364,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.14");
+    expect(manifest.version).toBe("1.3.15");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -431,7 +431,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.14");
+    expect(manifest.version).toBe("1.3.15");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -691,8 +691,8 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
     document.body.innerHTML = "";
   });
 
-  test("manifest version is current (1.3.14, bumped again by #132)", () => {
-    expect(manifest.version).toBe("1.3.14");
+  test("manifest version is current (1.3.15, bumped again by #134)", () => {
+    expect(manifest.version).toBe("1.3.15");
   });
 });
 
@@ -724,7 +724,21 @@ describe("Davflare Chrome extension / #130 re-saving a trashed URL keeps the ori
     expect(quickJs).not.toContain("overwriteTitle");
   });
 
-  test("manifest version is current (1.3.14 after #132)", () => {
-    expect(manifest.version).toBe("1.3.14");
+  test("manifest version is current (1.3.15 after #134)", () => {
+    expect(manifest.version).toBe("1.3.15");
+  });
+});
+
+describe("Davflare Chrome extension / #134 + quick-save restored notification", () => {
+  const bgJs = fs.readFileSync(path.join(extDir, "background.js"), "utf8");
+  const quickJs = fs.readFileSync(path.join(extDir, "quickSave.js"), "utf8");
+
+  test("quick save reports status restored and the notification says 已从回收站恢复", () => {
+    expect(quickJs).toContain('status: early.restored ? "restored" : "saved"');
+    expect(quickJs).toContain('status: add.restored ? "restored" : "saved"');
+    expect(bgJs).toContain('saveRestored: "已从回收站恢复。"');
+    expect(bgJs).toContain('result.status === "restored"');
+    // Normal saves keep the old wording.
+    expect(bgJs).toContain('saveOk: "已收藏到书签库。"');
   });
 });

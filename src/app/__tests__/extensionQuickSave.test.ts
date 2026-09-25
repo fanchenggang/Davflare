@@ -365,7 +365,7 @@ describe("extension/quickSave.js revives trashed URLs without wiping fields (#13
       putSequence: [{ ok: true, etag: '"after"' }],
     });
     const result = await DavflareQuickSave.saveBookmark(harness.deps, page);
-    expect(result).toEqual({ ok: true, status: "saved" });
+    expect(result).toEqual({ ok: true, status: "restored" }); // notification: 已从回收站恢复
     const saved = (harness.getCache()!.model as { bookmarks: unknown[] }).bookmarks;
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject(expected);
@@ -382,8 +382,22 @@ describe("extension/quickSave.js revives trashed URLs without wiping fields (#13
       putSequence: [{ ok: true, etag: '"after"' }],
     });
     const result = await DavflareQuickSave.saveBookmark(harness.deps, page);
-    expect(result).toEqual({ ok: true, status: "saved" });
+    expect(result).toEqual({ ok: true, status: "restored" }); // notification: 已从回收站恢复
     const saved = (harness.getCache()!.model as { bookmarks: unknown[] }).bookmarks;
     expect(saved[0]).toMatchObject(expected);
+  });
+
+  test("a normal (non-trashed) save still reports status saved", async () => {
+    const harness = makeDeps({
+      cache: { model: trashedModel(), etag: '"c"' },
+      getSequence: [],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, {
+      title: "Fresh",
+      url: "https://example.com/brand-new",
+      added: 300,
+    });
+    expect(result).toEqual({ ok: true, status: "saved" });
   });
 });

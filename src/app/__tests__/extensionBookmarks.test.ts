@@ -372,6 +372,123 @@ describe("extension/bookmarks.js json sidecar", () => {
     });
   });
 
+  describe("#134 duplicates keep their own id / tags / note / pin across reloads", () => {
+    type Row = Record<string, unknown>;
+    /** One server round-trip exactly like the library load (html + json sidecar). */
+    const reload = (model: unknown) =>
+      Bookmarks.parseRemoteLibrary({
+        html: Bookmarks.serializeHtml(model),
+        jsonText: Bookmarks.modelToJsonText(model),
+      });
+    const pick = (rows: Row[]) =>
+      rows
+        .map((b) => [b.id, b.title, b.folder, b.tags, b.note, b.pinned, Boolean(b.deleted)])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+    test("the issue's node repro (via adoptRichFields)", () => {
+      const m = Bookmarks.normalizeModel({
+        bookmarks: [
+          { id: "old1", title: "Old", url: "https://example.com/d", added: 1000 },
+          {
+            id: "new2",
+            title: "New",
+            url: "https://example.com/d?utm_source=x",
+            folder: "F",
+            tags: ["t"],
+            note: "n",
+            pinned: true,
+            added: 2000,
+          },
+        ],
+      });
+      const r = Bookmarks.adoptRichFields(
+        Bookmarks.parseHtml(Bookmarks.serializeHtml(m)),
+        Bookmarks.modelFromJson(Bookmarks.modelToJsonText(m)).model
+      );
+      expect(pick(r.bookmarks)).toEqual([
+        ["new2", "New", "F", ["t"], "n", true, false],
+        ["old1", "Old", "", [], "", false, false],
+      ]);
+    });
+
+    test("three duplicates (utm / #hash / exact copies) survive repeated reloads with stable ids", () => {
+      const m = Bookmarks.normalizeModel({
+        bookmarks: [
+          { id: "d1", title: "Same", url: "https://dup.test/p", added: 1_000_000, tags: ["a"], note: "first" },
+          { id: "d2", title: "Same", url: "https://dup.test/p", added: 2_000_000, tags: ["b"], pinned: true, pinnedAt: 9 },
+          { id: "d3", title: "Hash", url: "https://dup.test/p#x", folder: "Deep/er", note: "third" },
+          { id: "d4", title: "Utm", url: "https://dup.test/p?utm_campaign=z", tags: ["c", "d"] },
+          { id: "solo", title: "Solo", url: "https://solo.test/", tags: ["s"] },
+        ],
+      });
+      const want = pick(m.bookmarks);
+      let cur = m;
+      for (let i = 0; i < 3; i++) {
+        cur = reload(cur);
+        expect(pick(cur.bookmarks)).toEqual(want);
+      }
+      // No id is shared by two rows.
+      expect(new Set(cur.bookmarks.map((b) => b.id)).size).toBe(cur.bookmarks.length);
+    });
+
+    test("exact copies in different folders pair by folder even when html order differs", () => {
+      // serializeHtml groups by folder, so html order != json order here.
+      const m = Bookmarks.normalizeModel({
+        bookmarks: [
+          { id: "z-root", title: "X", url: "https://x.test/", folder: "Zeta", tags: ["zeta"] },
+          { id: "a-root", title: "X", url: "https://x.test/", folder: "", tags: ["root"] },
+          { id: "m-mid", title: "X", url: "https://x.test/", folder: "Alpha", note: "alpha" },
+        ],
+      });
+      expect(pick(reload(m).bookmarks)).toEqual(pick(m.bookmarks));
+    });
+
+    test("a trashed duplicate whose live sibling is in the html stays in the trash", () => {
+      let m = Bookmarks.normalizeModel({
+        bookmarks: [
+          { id: "live", title: "Keep", url: "https://t.test/a", tags: ["k"] },
+          { id: "gone", title: "Dup", url: "https://t.test/a#dup", tags: ["g"], note: "trash me" },
+        ],
+      });
+      m = Bookmarks.softDeleteBookmarks(m, ["gone"], 123_000);
+      const back = reload(m);
+      expect(pick(back.bookmarks)).toEqual([
+        ["gone", "Dup", "", ["g"], "trash me", false, true],
+        ["live", "Keep", "", ["k"], "", false, false],
+      ]);
+      expect(back.bookmarks.find((b) => b.id === "gone")!.deletedAt).toBe(123_000);
+      // Undo from the trash still works by id after the reload.
+      const restored = Bookmarks.restoreFromTrash(back, ["gone"]);
+      expect(restored.bookmarks.filter((b) => !b.deleted)).toHaveLength(2);
+    });
+
+    test("html-wins membership: a URL live in html but only trashed in json is live (unchanged)", () => {
+      const htmlModel = Bookmarks.parseHtml(
+        `<DL><p><DT><A HREF="https://w.test/" ADD_DATE="1">W</A></DL><p>`
+      );
+      const jsonModel = Bookmarks.normalizeModel({
+        bookmarks: [{ id: "w1", url: "https://w.test/", tags: ["w"], deleted: true, deletedAt: 5 }],
+      });
+      const merged = Bookmarks.adoptRichFields(htmlModel, jsonModel);
+      expect(merged.bookmarks).toHaveLength(1);
+      expect(merged.bookmarks[0]).toMatchObject({ id: "w1", tags: ["w"], deleted: false });
+    });
+
+    test("an extra html copy with no json partner keeps a fresh id (no sharing)", () => {
+      const htmlModel = Bookmarks.parseHtml(
+        `<DL><p><DT><A HREF="https://e.test/" ADD_DATE="1">E</A>` +
+          `<DT><A HREF="https://e.test/" ADD_DATE="2">E2</A></DL><p>`
+      );
+      const jsonModel = Bookmarks.normalizeModel({
+        bookmarks: [{ id: "e1", url: "https://e.test/", title: "E", added: 1000, note: "one" }],
+      });
+      const merged = Bookmarks.adoptRichFields(htmlModel, jsonModel);
+      expect(merged.bookmarks.map((b) => b.id)[0]).toBe("e1");
+      expect(merged.bookmarks[1].id).not.toBe("e1");
+      expect(merged.bookmarks[1].note).toBe("");
+    });
+  });
+
   test("modelToJsonText / modelFromJson round-trip and reject garbage", () => {
     const model = Bookmarks.normalizeModel({
       bookmarks: [{ id: "b1", url: "https://a.com", title: "A", tags: ["t"] }],
