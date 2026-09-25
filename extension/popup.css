@@ -140,7 +140,8 @@ button.ghost:hover {
   margin-top: 4px;
 }
 
-#saveForm input {
+#saveForm input,
+#saveForm textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -148,6 +149,11 @@ button.ghost:hover {
   color: var(--text);
   font: inherit;
   padding: 7px 10px;
+}
+
+#saveForm textarea {
+  resize: vertical;
+  min-height: 3.2em;
 }
 
 .saveBtn {

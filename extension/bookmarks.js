@@ -122,6 +122,28 @@ var Bookmarks = (function () {
     );
   }
 
+  // Analytics parameters stripped before two URLs are compared, so a link
+  // saved with campaign tags dedupes against the clean one (round-2 #114).
+  var TRACK_PARAMS = [
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "utm_id", "fbclid", "gclid", "msclkid", "dclid", "twclid", "igshid",
+    "yclid", "mc_eid", "_hsenc", "_hsmi", "vero_id", "spm",
+  ];
+
+  function stripTrackingParams(u) {
+    var touched = false;
+    var names = [];
+    u.searchParams.forEach(function (value, name) {
+      if (TRACK_PARAMS.indexOf(name) !== -1) names.push(name);
+    });
+    for (var i = 0; i < names.length; i++) {
+      u.searchParams.delete(names[i]);
+      touched = true;
+    }
+    if (touched && u.searchParams.toString() === "") u.search = "";
+    return touched;
+  }
+
   function urlKey(url) {
     var s = String(url == null ? "" : url).trim();
     if (!s) return "";
@@ -129,6 +151,7 @@ var Bookmarks = (function () {
       var u = new URL(s);
       if (u.protocol === "http:" || u.protocol === "https:") {
         u.hash = "";
+        stripTrackingParams(u);
         return u.href;
       }
     } catch (err) {
@@ -642,6 +665,85 @@ var Bookmarks = (function () {
   }
 
   /**
+   * Change one bookmark's URL (edit dialog). Web URLs only; a URL that
+   * collides with another entry is rejected instead of silently merging.
+   */
+  function setBookmarkUrl(model, id, url) {
+    var next = normalizeModel(model);
+    var s = String(url == null ? "" : url).trim();
+    if (!isWebUrl(s)) return { model: next, ok: false, reason: "invalid" };
+    var key = urlKey(s);
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var other = next.bookmarks[i];
+      if (other.id !== id && urlKey(other.url) === key) {
+        return { model: next, ok: false, reason: "exists" };
+      }
+    }
+    for (var j = 0; j < next.bookmarks.length; j++) {
+      if (next.bookmarks[j].id === id) {
+        next.bookmarks[j].url = s;
+        return { model: next, ok: true };
+      }
+    }
+    return { model: next, ok: false, reason: "missing" };
+  }
+
+  /**
+   * Delete a folder (and every nested subfolder of it): declared folder
+   * entries under the path are dropped, and the bookmarks living there move
+   * to the root (unfiled) instead of being lost. Empty string is never a
+   * deletable folder. Returns { model, moved } for the status message.
+   */
+  function deleteFolderTree(model, path) {
+    var next = normalizeModel(model);
+    var clean = String(path == null ? "" : path).trim().replace(/^\/+|\/+$/g, "");
+    if (!clean) return { model: next, moved: 0 };
+    var prefix = clean + "/";
+    var moved = 0;
+    for (var i = 0; i < next.bookmarks.length; i++) {
+      var f = String(next.bookmarks[i].folder || "");
+      if (f === clean || f.indexOf(prefix) === 0) {
+        next.bookmarks[i].folder = "";
+        moved++;
+      }
+    }
+    next.folders = next.folders.filter(function (p) {
+      return p !== clean && p.indexOf(prefix) !== 0;
+    });
+    return { model: next, moved: moved };
+  }
+
+  /**
+   * Put previously removed bookmarks back at their original indexes (undo
+   * delete). Entries are applied in ascending index order; items whose id or
+   * URL already exists in the model are skipped so a restore after a remote
+   * reload can never create duplicates.
+   */
+  function restoreBookmarks(model, entries) {
+    var next = normalizeModel(model);
+    var list = Array.isArray(entries) ? entries.slice() : [];
+    list.sort(function (a, b) {
+      return (a && a.index ? a.index : 0) - (b && b.index ? b.index : 0);
+    });
+    for (var i = 0; i < list.length; i++) {
+      var entry = list[i] || {};
+      var item = sanitizeBookmark(entry.bookmark);
+      if (!item.url || !item.id) continue;
+      var clash = false;
+      for (var j = 0; j < next.bookmarks.length; j++) {
+        if (next.bookmarks[j].id === item.id || urlKey(next.bookmarks[j].url) === urlKey(item.url)) {
+          clash = true;
+          break;
+        }
+      }
+      if (clash) continue;
+      var idx = Math.max(0, Math.min(entry.index | 0, next.bookmarks.length));
+      next.bookmarks.splice(idx, 0, item);
+    }
+    return next;
+  }
+
+  /**
    * html parse wins for membership/title/folder; the json sidecar donates
    * tags/note/id (and pin state, issue #63) for the same URL so rewrites
    * never drop rich fields. Declared folders are the union of both inputs.
@@ -860,6 +962,7 @@ var Bookmarks = (function () {
     adjustTags: adjustTags,
     buildChromeWritePlan: buildChromeWritePlan,
     collectChromeWriteConflicts: collectChromeWriteConflicts,
+    deleteFolderTree: deleteFolderTree,
     emptyModel: emptyModel,
     folderPaths: folderPaths,
     importBackup: importBackup,
@@ -877,8 +980,10 @@ var Bookmarks = (function () {
     removeBookmarks: removeBookmarks,
     removeFolder: removeFolder,
     renameFolder: renameFolder,
+    restoreBookmarks: restoreBookmarks,
     searchBookmarks: searchBookmarks,
     serializeHtml: serializeHtml,
+    setBookmarkUrl: setBookmarkUrl,
     setPinned: setPinned,
     sniffJsonImport: sniffJsonImport,
     updateBookmark: updateBookmark,

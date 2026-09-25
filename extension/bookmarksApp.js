@@ -102,6 +102,16 @@ var COPY = {
     emptyRulesTitle: "No rules yet",
     cardEdit: "Edit",
     cardSnap: "Snapshot",
+    cardMove: "Move to folder…",
+    copyLink: "Copy link",
+    linkCopied: "Link copied.",
+    moveTitle: "Move to folder",
+    undoMsg: "Deleted {n} bookmark(s).",
+    undo: "Undo",
+    tagUrlInvalid: "Enter a valid http(s) URL that is not already saved.",
+    folderDeleteConfirmWithCount:
+      "Delete “{p}” and its subfolders? Bookmarks inside will move to Unfiled.",
+    folderDeletedMoved: "Folder deleted — {n} bookmark(s) moved to Unfiled.",
     errDisabled: "WebDAV is disabled on this instance (feature switch off).",
     errNotConfigured: "The server has no WebDAV credentials configured.",
     errUnauthorized: "Wrong WebDAV username or password. Update them in settings.",
@@ -382,6 +392,15 @@ var COPY = {
     emptyRulesTitle: "还没有规则",
     cardEdit: "编辑",
     cardSnap: "快照",
+    cardMove: "移动到文件夹…",
+    copyLink: "复制链接",
+    linkCopied: "链接已复制。",
+    moveTitle: "移动到文件夹",
+    undoMsg: "已删除 {n} 个书签。",
+    undo: "撤销",
+    tagUrlInvalid: "请输入有效的 http(s) 网址，且不能与其他书签重复。",
+    folderDeleteConfirmWithCount: "删除「{p}」及其子文件夹？其中的书签将移入「未分类」。",
+    folderDeletedMoved: "文件夹已删除，{n} 个书签移入「未分类」。",
     errDisabled: "该实例已关闭 WebDAV（功能开关）。",
     errNotConfigured: "服务端未配置 WebDAV 凭据。",
     errUnauthorized: "WebDAV 用户名或密码错误，请在设置中更新。",
@@ -1086,10 +1105,19 @@ function renderAll() {
   renderPresetSelect();
 }
 
+/** aria-current="true" mirrors the visual .active state for assistive tech. */
+function setCurrentAttr(el, active) {
+  if (!el) return;
+  if (active) el.setAttribute("aria-current", "true");
+  else el.removeAttribute("aria-current");
+}
+
 function navButton(label, count, active, onClick) {
   var btn = document.createElement("button");
   btn.className = "navItem" + (active ? " active" : "");
   btn.type = "button";
+  // Active state is currently only visual; expose it to AT as well.
+  if (active) btn.setAttribute("aria-current", "true");
   var span = document.createElement("span");
   span.textContent = label;
   btn.appendChild(span);
@@ -1108,6 +1136,7 @@ function renderNav() {
   var all = state.model.bookmarks.length;
   $("navAllCount").textContent = String(all);
   $("navAll").classList.toggle("active", state.filter.kind === "all");
+  setCurrentAttr($("navAll"), state.filter.kind === "all");
 
   var pinnedCount = 0;
   for (var p = 0; p < state.model.bookmarks.length; p++) {
@@ -1115,6 +1144,7 @@ function renderNav() {
   }
   $("navPinnedCount").textContent = String(pinnedCount);
   $("navPinned").classList.toggle("active", state.filter.kind === "pinned");
+  setCurrentAttr($("navPinned"), state.filter.kind === "pinned");
   ensurePinnedFavoriteStar();
   renderFavoritesNav();
 
@@ -1194,21 +1224,32 @@ function folderNavItem(entry, active) {
         openFolderDialog("rename", entry.name);
       })
     );
-    if (entry.count === 0) {
-      menu.appendChild(
-        iconButton("menuItem", t.folderDelete, function () {
-          closePopMenus();
-          confirmThen(fmt(t.folderDeleteConfirm, { p: entry.name }), function () {
-            state.model = Bookmarks.removeFolder(state.model, entry.name);
-            if (state.filter.kind === "folder" && state.filter.value === entry.name) {
-              state.filter = { kind: "all", value: "" };
-            }
-            renderAll();
-            persist();
+    // Delete works for non-empty folders too: contained bookmarks (direct
+    // and in subfolders) move to Unfiled via deleteFolderTree.
+    menu.appendChild(
+      iconButton("menuItem", t.folderDelete, function () {
+        closePopMenus();
+        var message =
+          entry.count > 0
+            ? fmt(t.folderDeleteConfirmWithCount, { p: entry.name })
+            : fmt(t.folderDeleteConfirm, { p: entry.name });
+        confirmThen(message, function () {
+          var res = Bookmarks.deleteFolderTree(state.model, entry.name);
+          state.model = res.model;
+          if (
+            state.filter.kind === "folder" &&
+            (state.filter.value === entry.name ||
+              String(state.filter.value).indexOf(entry.name + "/") === 0)
+          ) {
+            state.filter = { kind: "all", value: "" };
+          }
+          renderAll();
+          persist().then(function (ok) {
+            if (ok && res.moved) flashStatus(fmt(t.folderDeletedMoved, { n: res.moved }));
           });
-        })
-      );
-    }
+        });
+      })
+    );
     wrap.appendChild(more);
     wrap.appendChild(menu);
   }
@@ -1367,6 +1408,10 @@ function wirePopMenus() {
       if (!wasOpen) {
         menu.classList.add("open");
         toggle.setAttribute("aria-expanded", "true");
+        // Keyboard activation (detail 0) lands focus on the first item;
+        // mouse clicks keep the current focus. Esc hands focus back.
+        var first = menu.querySelector("button");
+        if (first && event.detail === 0) first.focus();
       }
       return;
     }
@@ -1472,6 +1517,68 @@ async function moveBookmarksToFolder(ids, folder) {
   }
 }
 
+/* ---------- undo delete（删除后 6 秒内可一键撤销） ---------- */
+
+var UNDO_MS = 6000;
+var pendingUndo = null; // { entries, timer } while the toast is up
+
+function hideUndoToast() {
+  var toast = $("undoToast");
+  if (toast) toast.classList.add("hidden");
+}
+
+function cancelPendingUndo() {
+  if (!pendingUndo) return;
+  clearTimeout(pendingUndo.timer);
+  pendingUndo = null;
+  hideUndoToast();
+}
+
+function showUndoToast(entries) {
+  var toast = $("undoToast");
+  if (!toast) return;
+  $("undoToastMsg").textContent = fmt(t.undoMsg, { n: entries.length });
+  $("undoBtn").textContent = t.undo;
+  toast.classList.remove("hidden");
+  if (pendingUndo) clearTimeout(pendingUndo.timer);
+  pendingUndo = {
+    entries: entries,
+    timer: setTimeout(cancelPendingUndo, UNDO_MS),
+  };
+}
+
+async function undoDelete() {
+  var undo = pendingUndo;
+  cancelPendingUndo();
+  if (!undo) return;
+  state.model = Bookmarks.restoreBookmarks(state.model, undo.entries);
+  renderAll();
+  if (await persist()) flashStatus(t.added);
+}
+
+/**
+ * Delete bookmarks by ids with an undo toast. All delete entry points
+ * (card menu / card action bar / list row / batch bar) funnel through here
+ * so every delete is recoverable for UNDO_MS.
+ */
+async function deleteBookmarksWithUndo(ids) {
+  var idMap = Object.create(null);
+  for (var k = 0; k < ids.length; k++) idMap[ids[k]] = true;
+  var entries = [];
+  for (var i = 0; i < state.model.bookmarks.length; i++) {
+    var item = state.model.bookmarks[i];
+    if (idMap[item.id]) entries.push({ bookmark: item, index: i });
+  }
+  if (!entries.length) return;
+  // A newer deletion supersedes the older toast: its window to undo is over.
+  cancelPendingUndo();
+  state.model = Bookmarks.removeBookmarks(state.model, ids);
+  clearSelection();
+  renderAll();
+  showUndoToast(entries);
+  await persist();
+}
+
 /** One checkbox driving multi-select; shift-click selects a filtered range. */
 function pickBox(item) {
   var box = document.createElement("input");
@@ -1544,6 +1651,7 @@ function cardMenuNode(item) {
   more.type = "button";
   more.setAttribute("aria-haspopup", "true");
   more.setAttribute("aria-expanded", "false");
+  more.setAttribute("aria-label", t.moreLabel);
   more.textContent = "⋯";
   var menu = document.createElement("div");
   menu.className = "popMenu";
@@ -1551,6 +1659,18 @@ function cardMenuNode(item) {
     iconButton("menuItem", t.cardEdit, function () {
       closePopMenus();
       openTagDialog(item);
+    })
+  );
+  menu.appendChild(
+    iconButton("menuItem", t.cardMove, function () {
+      closePopMenus();
+      openMoveDialog(item);
+    })
+  );
+  menu.appendChild(
+    iconButton("menuItem", t.copyLink, function () {
+      closePopMenus();
+      copyBookmarkLink(item);
     })
   );
   menu.appendChild(
@@ -1580,10 +1700,7 @@ function cardMenuNode(item) {
     iconButton("menuItem", t.deleteLabel, function () {
       closePopMenus();
       confirmThen(t.confirmDelete, function () {
-        state.model = Bookmarks.removeBookmark(state.model, item.id);
-        persist().then(function (ok) {
-          if (ok) flashStatus(t.deleted);
-        });
+        deleteBookmarksWithUndo([item.id]);
       });
     })
   );
@@ -1639,10 +1756,7 @@ function cardActionBar(item) {
   bar.appendChild(
     actBtn("del", "✕", t.deleteLabel, function () {
       confirmThen(t.confirmDelete, function () {
-        state.model = Bookmarks.removeBookmark(state.model, item.id);
-        persist().then(function (ok) {
-          if (ok) flashStatus(t.deleted);
-        });
+        deleteBookmarksWithUndo([item.id]);
       });
     })
   );
@@ -1815,10 +1929,7 @@ function rowNode(item) {
   row.appendChild(
     iconButton("del", "✕", function () {
       confirmThen(t.confirmDelete, function () {
-        state.model = Bookmarks.removeBookmark(state.model, item.id);
-        persist().then(function (ok) {
-          if (ok) flashStatus(t.deleted);
-        });
+        deleteBookmarksWithUndo([item.id]);
       });
     })
   );
@@ -1915,7 +2026,10 @@ function renderItems() {
     } else {
       renderEmptyState(empty, {
         title: t.emptyFilter,
-        actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
+        actions: [
+          { label: t.add, kind: "primary", onClick: openAddDialog },
+          { label: t.clearFilter, kind: "ghost", onClick: resetFilters },
+        ],
       });
     }
   } else {
@@ -2048,9 +2162,7 @@ function submitBatchDelete() {
   var ids = selectedExistingIds();
   if (!ids.length) return;
   confirmThen(fmt(t.batchDeleteConfirm, { n: ids.length }), async function () {
-    state.model = Bookmarks.removeBookmarks(state.model, ids);
-    clearSelection();
-    if (await persist()) flashStatus(t.deleted);
+    await deleteBookmarksWithUndo(ids);
   });
 }
 
@@ -3055,14 +3167,70 @@ function openAddDialog() {
   $("addUrl").focus();
 }
 
+/**
+ * "Move to folder" dialog for one bookmark: lists Unfiled plus every folder
+ * with its count; the current folder is marked. Picking a row delegates to
+ * moveBookmarksToFolder (render + persist + flash included).
+ */
+function openMoveDialog(item) {
+  editingBookmarkId = item.id;
+  $("moveTarget").textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
+  var list = $("moveFolderList");
+  list.textContent = "";
+  // folderList already includes the unfiled entry ("" path) — don't prepend it.
+  var entries = BookmarksView.folderList(state.model);
+  var current = String(item.folder || "");
+  for (var i = 0; i < entries.length; i++) {
+    (function (entry) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "moveItem" + (entry.name === current ? " current" : "");
+      btn.setAttribute("role", "option");
+      btn.setAttribute("aria-selected", entry.name === current ? "true" : "false");
+      var label = document.createElement("span");
+      label.textContent = folderLabel(entry.name);
+      btn.appendChild(label);
+      var badge = document.createElement("span");
+      badge.className = "count";
+      badge.textContent = String(entry.count);
+      btn.appendChild(badge);
+      btn.addEventListener("click", function () {
+        $("moveDialog").close();
+        moveBookmarksToFolder([item.id], entry.name);
+      });
+      list.appendChild(btn);
+    })(entries[i]);
+  }
+  $("moveDialog").showModal();
+  var first = list.querySelector("button");
+  if (first) first.focus();
+}
+
+function copyBookmarkLink(item) {
+  var url = String(item && item.url || "");
+  if (!url) return;
+  var flash = function () {
+    flashStatus(t.linkCopied);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(flash, function () {
+      /* clipboard denied — nothing to report */
+    });
+  }
+}
+
 function openTagDialog(item) {
   editingBookmarkId = item.id;
   tagDialogBookmark = item;
   $("tagTarget").textContent = item.title || BookmarksView.domainOf(item.url) || item.url;
+  $("tagTitleInput").value = item.title || "";
+  $("tagUrlInput").value = item.url || "";
+  $("tagError").textContent = "";
+  $("tagError").classList.add("hidden");
   $("tagInput").value = (Array.isArray(item.tags) ? item.tags : []).join(", ");
   $("noteInput").value = item.note || "";
   $("tagDialog").showModal();
-  $("tagInput").focus();
+  $("tagTitleInput").focus();
   loadSnapshots().then(renderSnapSection);
 }
 
@@ -3079,7 +3247,23 @@ async function submitTagForm(event) {
     $("tagDialog").close();
     return;
   }
+  // URL edits go through setBookmarkUrl: it rejects junk and URLs that
+  // collide with another entry (a silent merge would strand rich fields).
+  var nextUrl = $("tagUrlInput").value.trim();
+  if (Bookmarks.urlKey(nextUrl) !== Bookmarks.urlKey(item.url)) {
+    var moved = Bookmarks.setBookmarkUrl(state.model, item.id, nextUrl);
+    if (!moved.ok) {
+      var err = $("tagError");
+      err.textContent = moved.reason === "exists" ? t.exists : t.tagUrlInvalid;
+      err.classList.remove("hidden");
+      $("tagUrlInput").focus();
+      return;
+    }
+    state.model = moved.model;
+  }
+  var nextTitle = $("tagTitleInput").value.trim();
   state.model = Bookmarks.updateBookmark(state.model, editingBookmarkId, {
+    title: nextTitle || item.title,
     tags: $("tagInput").value.split(","),
     note: $("noteInput").value,
   });
@@ -4472,6 +4656,12 @@ function wireEvents() {
     });
   }
   wirePopMenus();
+  $("undoBtn").addEventListener("click", function () {
+    undoDelete();
+  });
+  $("moveCancel").addEventListener("click", function () {
+    $("moveDialog").close();
+  });
   // 侧栏「更多」菜单项执行后收起菜单
   var footMenuItems = document.querySelectorAll("#moreMenu button");
   for (var mi = 0; mi < footMenuItems.length; mi++) {
@@ -4684,12 +4874,101 @@ function wireEvents() {
       target &&
       (target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
-        target.isContentEditable);
-    if (event.key === "/" && !typing) {
+        target.isContentEditable ||
+        (target instanceof HTMLElement && target.tagName === "SELECT"));
+    var dialogOpen = Boolean(document.querySelector("dialog[open]"));
+    if (event.key === "/" && !typing && !dialogOpen) {
       event.preventDefault();
       $("search").focus();
+      return;
+    }
+    // Esc closes a card/folder ⋯ menu and hands focus back to its toggle
+    // (native <dialog> handles its own Esc).
+    if (event.key === "Escape") {
+      var openMenu = document.querySelector(".popMenu.open");
+      if (openMenu) {
+        event.preventDefault();
+        var toggle = openMenu.parentElement.querySelector(".menuToggle");
+        closePopMenus();
+        if (toggle) toggle.focus();
+      }
+      return;
+    }
+    if (typing || dialogOpen) return;
+    // Delete / Backspace removes the current selection (same confirm as the
+    // batch-bar button).
+    if (event.key === "Delete" || event.key === "Backspace") {
+      var sel = selectedExistingIds();
+      if (sel.length) {
+        event.preventDefault();
+        submitBatchDelete();
+      }
+      return;
+    }
+    // Arrow keys walk the keyboard focus between cards / list rows;
+    // Home/End jump to the first/last one. Inside an open ⋯ menu they
+    // cycle the menu items instead (menus live inside cards, so check
+    // that first).
+    var active = document.activeElement;
+    var inMenu = active && active.closest && active.closest(".popMenu.open");
+    if (inMenu && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      event.preventDefault();
+      cyclePopMenuFocus(inMenu, event.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    var isHome = event.key === "Home";
+    var isEnd = event.key === "End";
+    var dir =
+      event.key === "ArrowDown" || event.key === "ArrowRight"
+        ? 1
+        : event.key === "ArrowUp" || event.key === "ArrowLeft"
+          ? -1
+          : 0;
+    if (!dir && !isHome && !isEnd) return;
+    if (active && active.closest && active.closest(".card, .row")) {
+      event.preventDefault();
+      focusAdjacentItem(active, dir, isHome, isEnd);
     }
   });
+}
+
+/** Cycle keyboard focus across the buttons of an open ⋯ menu (wraps). */
+function cyclePopMenuFocus(menu, dir) {
+  var items = menu.querySelectorAll("button");
+  if (!items.length) return;
+  var idx = Array.prototype.indexOf.call(items, document.activeElement);
+  var next = idx + dir;
+  if (idx === -1) next = dir > 0 ? 0 : items.length - 1;
+  else if (next < 0) next = items.length - 1;
+  else if (next >= items.length) next = 0;
+  items[next].focus();
+}
+
+/**
+ * Move focus to the adjacent card/row's main link (roving within the
+ * current grid/list). Home/End jump to the first/last item.
+ */
+function focusAdjacentItem(from, dir, home, end) {  var node = from.closest(".card, .row");
+  if (!node || !node.parentElement) return;
+  var list = [];
+  var children = node.parentElement.children;
+  for (var i = 0; i < children.length; i++) {
+    var c = children[i];
+    if (c.classList && (c.classList.contains("card") || c.classList.contains("row"))) {
+      list.push(c);
+    }
+  }
+  if (!list.length) return;
+  var target = null;
+  if (home) target = list[0];
+  else if (end) target = list[list.length - 1];
+  else {
+    var idx = list.indexOf(node);
+    target = list[idx + dir];
+  }
+  if (!target || target === node) return;
+  var link = target.querySelector("a");
+  if (link) link.focus();
 }
 
 applyCopy();

@@ -21,6 +21,8 @@ var COPY = {
     folderLabel: "Folder",
     folderPlaceholder: "Root — pick or type a folder",
     tagsLabel: "Tags (comma separated)",
+    noteLabel: "Note (optional)",
+    viewInLibrary: "View in library",
     save: "Save",
     saving: "Saving…",
     saved: "Saved to your library.",
@@ -46,6 +48,8 @@ var COPY = {
     folderLabel: "分类",
     folderPlaceholder: "留空为根目录，可输入或选择",
     tagsLabel: "标签（逗号分隔）",
+    noteLabel: "备注（可选）",
+    viewInLibrary: "在书签库中查看",
     save: "收藏",
     saving: "收藏中…",
     saved: "已收藏到书签库。",
@@ -164,15 +168,9 @@ async function loadConfig() {
   };
 }
 
-async function openShell(view) {
+/** Reuse an open shell tab when possible, else open a new one, then close the popup. */
+async function focusOrCreateTab(target) {
   var base = chrome.runtime.getURL("bookmarks.html");
-  var resolved = view;
-  // 「插件主页」无显式 view：落到设置里的默认视图（含未配置 → settings）。
-  if (!resolved) {
-    var stored = await chrome.storage.sync.get(["instanceUrl", "toolbarMode"]);
-    resolved = resolveToolbarTarget(stored).action;
-  }
-  var target = base + "?view=" + encodeURIComponent(resolved);
   var tabs = await chrome.tabs.query({ url: base + "*" });
   if (tabs && tabs.length > 0) {
     var tab = tabs[0];
@@ -186,6 +184,30 @@ async function openShell(view) {
     await chrome.tabs.create({ url: target });
   }
   window.close();
+}
+
+async function openShell(view) {
+  var base = chrome.runtime.getURL("bookmarks.html");
+  var resolved = view;
+  // 「插件主页」无显式 view：落到设置里的默认视图（含未配置 → settings）。
+  if (!resolved) {
+    var stored = await chrome.storage.sync.get(["instanceUrl", "toolbarMode"]);
+    resolved = resolveToolbarTarget(stored).action;
+  }
+  await focusOrCreateTab(base + "?view=" + encodeURIComponent(resolved));
+}
+
+/** Deep-link into the library with this page's URL pre-filled in search. */
+function openInLibraryWithQuery() {
+  var base = chrome.runtime.getURL("bookmarks.html");
+  return focusOrCreateTab(base + "?q=" + encodeURIComponent(state.url));
+}
+
+/** The "view in library" jump shows whenever the page is already saved. */
+function updateViewBtn() {
+  var btn = $("viewBtn");
+  if (state.exists) btn.classList.remove("hidden");
+  else btn.classList.add("hidden");
 }
 
 function setSaveEnabled(enabled, label) {
@@ -252,6 +274,7 @@ async function applyLoadedModel(model, etag, options) {
   }
 
   showForm();
+  updateViewBtn();
   if (state.exists) {
     setStatus(state.t.exists, "ok");
     setSaveEnabled(false, state.t.exists);
@@ -328,6 +351,7 @@ async function saveCurrent(event) {
 
   var title = $("saveTitle").value.trim() || (state.tab && state.tab.title) || state.url;
   var folder = $("saveFolder").value.trim().replace(/^\/+|\/+$/g, "");
+  var note = $("saveNote").value.trim();
   var tags = $("saveTags")
     .value
     .split(",")
@@ -341,6 +365,7 @@ async function saveCurrent(event) {
     url: state.url,
     folder: folder,
     tags: tags,
+    note: note,
     added: Date.now(),
   });
   if (!add.added) {
@@ -376,6 +401,7 @@ async function saveCurrent(event) {
   writeCache(add.model, put.etag || null);
   setStatus(state.t.saved, "ok");
   setSaveEnabled(false, state.t.saved);
+  updateViewBtn();
   chrome.storage.local.set({ popupLastFolder: folder }, function () {
     void chrome.runtime.lastError;
   });
@@ -412,6 +438,8 @@ async function init() {
   $("folderLabel").textContent = t.folderLabel;
   $("saveFolder").placeholder = t.folderPlaceholder;
   $("tagsLabel").textContent = t.tagsLabel;
+  $("noteLabel").textContent = t.noteLabel;
+  $("viewBtn").textContent = t.viewInLibrary;
   $("homeBtn").textContent = t.home;
   $("settingsBtn").textContent = t.settings;
 
@@ -454,6 +482,9 @@ async function init() {
 }
 
 $("saveForm").addEventListener("submit", saveCurrent);
+$("viewBtn").addEventListener("click", function () {
+  openInLibraryWithQuery();
+});
 $("homeBtn").addEventListener("click", function () {
   openShell("");
 });

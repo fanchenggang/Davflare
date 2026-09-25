@@ -305,8 +305,30 @@ button.danger {
   white-space: nowrap;
 }
 
-.popMenu .menuItem:hover {
+.popMenu .menuItem:hover,
+.popMenu .menuItem:focus-visible {
   background: var(--orange-soft);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .popMenu {
+    transform-origin: top right;
+  }
+
+  .popMenu.open {
+    animation: popIn var(--dur-fast) var(--ease-out);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ---------- main ---------- */
@@ -1880,4 +1902,106 @@ dialog textarea {
 
 #storageSection .ghost {
   margin-top: 4px;
+}
+
+/* ---------- undo delete toast（底部居中，6 秒自动消失） ---------- */
+
+.undoToast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 90;
+  max-width: min(92vw, 480px);
+}
+
+.undoToast span {
+  font-size: 0.8125rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.undoToast .ghost {
+  flex: none;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .undoToast:not(.hidden) {
+    animation: toastIn var(--dur-base) var(--ease-out);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ---------- move-to-folder dialog ---------- */
+
+.moveList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 8px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px;
+  background: var(--paper-soft);
+}
+
+.moveItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.moveItem:hover,
+.moveItem:focus-visible {
+  background: var(--orange-soft);
+}
+
+.moveItem.current {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+.moveItem .count {
+  flex: none;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
 }

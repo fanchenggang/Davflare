@@ -3,13 +3,13 @@ import { createRequire } from "module";
 const nodeRequire = createRequire(import.meta.url);
 
 type BookmarkRow = Record<string, unknown>;
-type BookmarkModel = { version: number; bookmarks: BookmarkRow[] };
+type BookmarkModel = { version: number; bookmarks: BookmarkRow[]; folders?: string[] };
 
 const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
   MODEL_VERSION: number;
   addBookmark: (
     model: unknown,
-    item: { title?: string; url?: string; folder?: string; tags?: string[]; note?: string; added?: number }
+    item: { id?: string; title?: string; url?: string; folder?: string; tags?: string[]; note?: string; added?: number }
   ) => { model: BookmarkModel; added: boolean };
   adoptRichFields: (htmlModel: unknown, jsonModel: unknown) => BookmarkModel;
   emptyModel: () => BookmarkModel;
@@ -25,13 +25,24 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
     html?: string;
     jsonText?: string | null;
   }) => BookmarkModel;
+  restoreBookmarks: (
+    model: unknown,
+    entries: { bookmark: BookmarkRow; index: number }[]
+  ) => BookmarkModel;
   removeBookmark: (model: unknown, id: string) => BookmarkModel;
+  removeBookmarks: (model: unknown, ids: string[]) => BookmarkModel;
   searchBookmarks: (
     model: unknown,
     query: string,
     limit?: number
   ) => { title: string; url: string; folder: string; tags: string[] }[];
   serializeHtml: (model: unknown) => string;
+  setBookmarkUrl: (
+    model: unknown,
+    id: string,
+    url: unknown
+  ) => { model: BookmarkModel; ok: boolean; reason?: string };
+  deleteFolderTree: (model: unknown, path: unknown) => { model: BookmarkModel; moved: number };
   updateBookmark: (
     model: unknown,
     id: string,
@@ -234,6 +245,23 @@ describe("extension/bookmarks.js urlKey", () => {
     expect(Bookmarks.urlKey("http://a.com")).toBe(Bookmarks.urlKey("http://a.com/"));
     expect(Bookmarks.urlKey("https://a.com/x")).not.toBe(Bookmarks.urlKey("https://a.com/y"));
   });
+
+  test("strips tracking parameters so tagged and clean URLs dedupe together", () => {
+    expect(Bookmarks.urlKey("https://a.com/x?utm_source=n&utm_medium=r&id=2")).toBe(
+      Bookmarks.urlKey("https://a.com/x?id=2")
+    );
+    expect(Bookmarks.urlKey("https://a.com/x?fbclid=1")).toBe(Bookmarks.urlKey("https://a.com/x"));
+    expect(Bookmarks.urlKey("https://a.com/x?gclid=c&utm_id=9#top")).toBe(
+      Bookmarks.urlKey("https://a.com/x")
+    );
+    // Functional parameters survive; only the known tracker list is dropped.
+    expect(Bookmarks.urlKey("https://a.com/x?q=1")).toBe(Bookmarks.urlKey("https://a.com/x?q=1"));
+    expect(Bookmarks.urlKey("https://a.com/x?utm_source=n&q=1")).toBe(
+      Bookmarks.urlKey("https://a.com/x?q=1")
+    );
+    // Non-http URLs never go through parameter stripping.
+    expect(Bookmarks.urlKey("chrome://settings/?utm_source=x")).toBe("chrome://settings/?utm_source=x");
+  });
 });
 
 describe("extension/bookmarks.js addBookmark / merge / remove", () => {
@@ -408,5 +436,124 @@ describe("extension/bookmarks.js searchBookmarks (issue #62 omnibox)", () => {
     expect(Bookmarks.searchBookmarks(model, "")).toEqual([]);
     expect(Bookmarks.searchBookmarks(model, "   ")).toEqual([]);
     expect(Bookmarks.searchBookmarks(Bookmarks.emptyModel(), "rust")).toEqual([]);
+  });
+});
+
+describe("extension/bookmarks.js setBookmarkUrl (round-2 edit dialog)", () => {
+  function seeded() {
+    let model = Bookmarks.emptyModel();
+    model = Bookmarks.addBookmark(model, { id: "a", title: "A", url: "https://a.com/x", added: 1 })
+      .model;
+    model = Bookmarks.addBookmark(model, { id: "b", title: "B", url: "https://b.com", added: 2 })
+      .model;
+    return model;
+  }
+
+  test("changes the URL and keeps id and other rows intact", () => {
+    const res = Bookmarks.setBookmarkUrl(seeded(), "a", "https://c.com/y");
+    expect(res.ok).toBe(true);
+    const a = res.model.bookmarks.find((b) => b.id === "a");
+    expect(a && a.url).toBe("https://c.com/y");
+    expect(res.model.bookmarks).toHaveLength(2);
+  });
+
+  test("rejects non-web URLs and URLs colliding with another entry", () => {
+    const model = seeded();
+    expect(Bookmarks.setBookmarkUrl(model, "a", "javascript:alert(1)")).toMatchObject({
+      ok: false,
+      reason: "invalid",
+    });
+    expect(
+      Bookmarks.setBookmarkUrl(model, "a", "https://b.com/?utm_source=x")
+    ).toMatchObject({ ok: false, reason: "exists" });
+  });
+
+  test("reports missing ids without touching the model", () => {
+    const model = seeded();
+    const res = Bookmarks.setBookmarkUrl(model, "nope", "https://c.com");
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe("missing");
+    expect(res.model.bookmarks).toHaveLength(2);
+  });
+});
+
+describe("extension/bookmarks.js deleteFolderTree (round-2 folder delete)", () => {
+  function seeded() {
+    const model = {
+      version: Bookmarks.MODEL_VERSION,
+      bookmarks: [
+        { id: "1", title: "Dev", url: "https://a.com/1", folder: "Dev", added: 1 },
+        { id: "2", title: "Rust", url: "https://a.com/2", folder: "Dev/Rust", added: 2 },
+        { id: "3", title: "Root", url: "https://a.com/3", folder: "", added: 3 },
+      ],
+      folders: ["Dev", "Dev/Rust", "Other"],
+    };
+    return Bookmarks.normalizeModel(model);
+  }
+
+  test("moves direct and nested bookmarks to the root and clears declarations", () => {
+    const res = Bookmarks.deleteFolderTree(seeded(), "Dev");
+    expect(res.moved).toBe(2);
+    expect(
+      res.model.bookmarks.every((b) => b.id === "3" || b.folder === "")
+    ).toBe(true);
+    expect(res.model.folders).toEqual(["Other"]);
+  });
+
+  test("keeps unrelated folders and root bookmarks untouched", () => {
+    const res = Bookmarks.deleteFolderTree(seeded(), "Dev");
+    const root = res.model.bookmarks.find((b) => b.id === "3");
+    expect(root && root.folder).toBe("");
+    expect(res.model.folders).not.toContain("Dev");
+  });
+
+  test("an empty path is a no-op and an empty folder just disappears", () => {
+    expect(Bookmarks.deleteFolderTree(seeded(), "").moved).toBe(0);
+    expect(Bookmarks.deleteFolderTree(seeded(), null).moved).toBe(0);
+    const empty = Bookmarks.deleteFolderTree(seeded(), "Other");
+    expect(empty.moved).toBe(0);
+    expect(empty.model.folders).toEqual(["Dev", "Dev/Rust"]);
+  });
+});
+
+describe("extension/bookmarks.js restoreBookmarks (round-2 undo delete)", () => {
+  function seeded() {
+    let model = Bookmarks.emptyModel();
+    for (let i = 0; i < 3; i++) {
+      model = Bookmarks.addBookmark(model, {
+        id: `id${i}`,
+        title: `T${i}`,
+        url: `https://x.com/${i}`,
+        added: i + 1,
+      }).model;
+    }
+    return model;
+  }
+
+  test("puts entries back at their recorded indexes in order", () => {
+    const model = seeded();
+    const removed = model.bookmarks.map((b, i) => ({ bookmark: b, index: i }));
+    const shrunken = Bookmarks.removeBookmarks(model, ["id0", "id2"]);
+    const restored = Bookmarks.restoreBookmarks(shrunken, removed);
+    expect(restored.bookmarks.map((b) => b.id)).toEqual(["id0", "id1", "id2"]);
+  });
+
+  test("clamps out-of-range indexes and skips entries restored meanwhile", () => {
+    const model = seeded();
+    const a = model.bookmarks[0];
+    const shrunken = Bookmarks.removeBookmarks(model, ["id0"]);
+    // id0 returns, then a stale restore of the same entry is a no-op.
+    const first = Bookmarks.restoreBookmarks(shrunken, [{ bookmark: a, index: 0 }]);
+    expect(first.bookmarks.map((b) => b.id)).toEqual(["id0", "id1", "id2"]);
+    const again = Bookmarks.restoreBookmarks(first, [{ bookmark: a, index: 999 }]);
+    expect(again.bookmarks.map((b) => b.id)).toEqual(["id0", "id1", "id2"]);
+  });
+
+  test("ignores junk entries and empty input", () => {
+    const model = seeded();
+    expect(Bookmarks.restoreBookmarks(model, []).bookmarks).toHaveLength(3);
+    expect(
+      Bookmarks.restoreBookmarks(model, [{ bookmark: null, index: 0 }] as never).bookmarks
+    ).toHaveLength(3);
   });
 });

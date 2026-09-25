@@ -455,3 +455,83 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
     );
   });
 });
+
+describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)", () => {
+  const appJs = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const html = fs.readFileSync(path.join(extDir, "bookmarks.html"), "utf8");
+  const css = fs.readFileSync(path.join(extDir, "bookmarks.css"), "utf8");
+  const popupHtml = fs.readFileSync(path.join(extDir, "popup.html"), "utf8");
+  const popupJs = fs.readFileSync(path.join(extDir, "popup.js"), "utf8");
+  const popupCss = fs.readFileSync(path.join(extDir, "popup.css"), "utf8");
+
+  test("every delete path funnels through the undo-capable helper", () => {
+    expect(appJs).toContain("async function deleteBookmarksWithUndo(ids)");
+    expect(appJs).toContain("deleteBookmarksWithUndo([item.id])");
+    expect(appJs).toContain("await deleteBookmarksWithUndo(ids)");
+    // Old direct-delete call sites are gone from the library app.
+    expect(appJs).not.toContain("Bookmarks.removeBookmark(state.model, item.id)");
+    expect(appJs).toContain("Bookmarks.restoreBookmarks(state.model, undo.entries)");
+  });
+
+  test("undo toast ships markup, wiring, and styles", () => {
+    expect(html).toContain('id="undoToast"');
+    expect(html).toContain('id="undoBtn"');
+    expect(appJs).toContain('$("undoBtn").addEventListener("click"');
+    expect(css).toContain(".undoToast");
+    expect(css).toContain("@keyframes toastIn");
+    // Auto-dismiss timer + supersede semantics.
+    expect(appJs).toContain("UNDO_MS = 6000");
+    expect(appJs).toContain("cancelPendingUndo()");
+  });
+
+  test("keyboard: Esc closes menus, Delete removes the selection, arrows rove", () => {
+    expect(appJs).toContain('event.key === "Escape"');
+    expect(appJs).toContain('event.key === "Delete" || event.key === "Backspace"');
+    expect(appJs).toContain("function focusAdjacentItem(");
+    expect(appJs).toContain("function cyclePopMenuFocus(");
+  });
+
+  test("card menu gains move-to-folder + copy link, backed by a move dialog", () => {
+    expect(html).toContain('id="moveDialog"');
+    expect(html).toContain('id="moveFolderList"');
+    expect(appJs).toContain("function openMoveDialog(item)");
+    expect(appJs).toContain("t.cardMove");
+    expect(appJs).toContain("t.copyLink");
+    expect(appJs).toContain("navigator.clipboard.writeText");
+  });
+
+  test("edit dialog can retitle and re-URL with dedupe checks", () => {
+    expect(html).toContain('id="tagTitleInput"');
+    expect(html).toContain('id="tagUrlInput"');
+    expect(html).toContain('id="tagError"');
+    expect(appJs).toContain("Bookmarks.setBookmarkUrl(state.model, item.id, nextUrl)");
+  });
+
+  test("non-empty folders can be deleted with contents moving to Unfiled", () => {
+    expect(appJs).toContain("Bookmarks.deleteFolderTree(state.model, entry.name)");
+    expect(appJs).toContain("folderDeleteConfirmWithCount");
+    expect(appJs).toContain("folderDeletedMoved");
+  });
+
+  test("accessibility: aria-current nav, live sync status, labelled ⋯ button", () => {
+    expect(appJs).toContain("function setCurrentAttr(el, active)");
+    expect(appJs).toContain('btn.setAttribute("aria-current", "true")');
+    expect(html).toContain('id="syncInfo" role="status"');
+    expect(appJs).toContain('more.setAttribute("aria-label", t.moreLabel)');
+  });
+
+  test("search-empty state offers the add-bookmark action", () => {
+    expect(appJs).toContain("{ label: t.add, kind: \"primary\", onClick: openAddDialog }");
+  });
+
+  test("popup note field + view-in-library jump", () => {
+    expect(popupHtml).toContain('id="saveNote"');
+    expect(popupHtml).toContain('id="viewBtn"');
+    expect(popupJs).toContain('$("saveNote").value.trim()');
+    expect(popupJs).toContain("note: note,");
+    expect(popupJs).toContain("function openInLibraryWithQuery()");
+    expect(popupJs).toContain('base + "?q=" + encodeURIComponent(state.url)');
+    expect(popupJs).toContain("updateViewBtn()");
+    expect(popupCss).toContain("#saveForm textarea");
+  });
+});

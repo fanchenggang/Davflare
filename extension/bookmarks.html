@@ -61,7 +61,7 @@
         <footer class="sideFoot">
           <div class="syncRow">
             <span class="syncLabel" id="syncLabel">WebDAV</span>
-            <span class="syncInfo" id="syncInfo">…</span>
+            <span class="syncInfo" id="syncInfo" role="status">…</span>
           </div>
           <button id="addBtn" class="primary addMain" type="button">Add</button>
           <div class="footRow">
@@ -339,6 +339,11 @@
       <form id="tagForm" novalidate>
         <h2 id="tagDialogTitle">Edit bookmark</h2>
         <p id="tagTarget" class="dialogSubtitle"></p>
+        <label for="tagTitleInput" id="tagTitleLabel">Title</label>
+        <input id="tagTitleInput" type="text" spellcheck="false" />
+        <label for="tagUrlInput" id="tagUrlLabel">URL</label>
+        <input id="tagUrlInput" type="url" spellcheck="false" />
+        <p id="tagError" class="status err hidden"></p>
         <label for="tagInput" id="tagInputLabel">Tags (comma separated)</label>
         <input id="tagInput" type="text" spellcheck="false" placeholder="dev, docs" />
         <label for="noteInput" id="noteInputLabel">Note</label>
@@ -491,6 +496,22 @@
         <button id="confirmOk" class="danger" type="button">Delete</button>
       </menu>
     </dialog>
+
+    <dialog id="moveDialog">
+      <form id="moveForm" novalidate>
+        <h2 id="moveTitle">Move to folder</h2>
+        <p id="moveTarget" class="dialogSubtitle"></p>
+        <div id="moveFolderList" class="moveList"></div>
+        <menu>
+          <button id="moveCancel" class="ghost" type="button">Cancel</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <div id="undoToast" class="undoToast hidden" role="status">
+      <span id="undoToastMsg"></span>
+      <button id="undoBtn" class="ghost" type="button"></button>
+    </div>
 
     <script src="url.js"></script>
     <script src="bookmarks.js"></script>
