@@ -1607,6 +1607,7 @@ dialog textarea {
 }
 
 .tagCloudItem:hover .navTagStar,
+.tagCloudItem:focus-within .navTagStar,
 .tagCloudItem .navTagStar[aria-pressed="true"],
 .tagCloudItem .navTagStar:focus-visible {
   visibility: visible;

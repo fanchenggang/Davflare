@@ -1441,7 +1441,10 @@ function wireFolderDropTarget(wrap, folder) {
     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     wrap.classList.add("dragOver");
   });
-  wrap.addEventListener("dragleave", function () {
+  wrap.addEventListener("dragleave", function (event) {
+    // Moving onto the row's own button/star fires dragleave on the wrap;
+    // only clear the highlight when the pointer really leaves it.
+    if (event.relatedTarget && wrap.contains(event.relatedTarget)) return;
     wrap.classList.remove("dragOver");
   });
   wrap.addEventListener("drop", function (event) {
@@ -1455,6 +1458,13 @@ function wireFolderDropTarget(wrap, folder) {
 }
 
 async function moveBookmarksToFolder(ids, folder) {
+  // Dropping onto the folder the bookmarks already live in is a no-op:
+  // skip the PUT (and the misleading "Moved" toast).
+  var target = String(folder || "");
+  var needsMove = state.model.bookmarks.some(function (it) {
+    return ids.indexOf(it.id) !== -1 && String(it.folder || "") !== target;
+  });
+  if (!needsMove) return;
   state.model = Bookmarks.moveBookmarks(state.model, ids, folder);
   renderAll();
   if (await persist()) {
