@@ -97,7 +97,7 @@ curl -X POST "https://<your-domain.com>/api/archive" \
 
 `GET /api/download` `path` is the object key. **HTTP 200** streams the file (`Content-Type` from R2 or `application/octet-stream`, `Content-Disposition: attachment`). Missing/empty path or a directory/prefix folder returns **400**; unknown object **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected.
 
-`GET /api/archive?path=` zips one folder or file with the same Bearer / `X-Api-Key` (or web Basic session). **HTTP 200** streams `application/zip`. Folder keys strip the folder prefix inside the zip (same as directory shares). Missing path **400**; unknown path **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected. `POST /api/archive` with `{ "keys": [...] }` packs multiple selections (web UI multi-download); same auth and internal-key rules. Optional `"base": "folder/"` (the folder the selection lives in) makes entry paths relative to it and names the zip `<folder>.zip`; without it entries keep full keys and the name is `archive.zip`. Zip entries are marked as made on Unix with UTF-8 names (bit 11), so Linux `unzip` shows non-ASCII (e.g. Chinese) names correctly.
+`GET /api/archive?path=` zips one folder or file with the same Bearer / `X-Api-Key` (or web Basic session). **HTTP 200** streams `application/zip`. Folder keys strip the folder prefix inside the zip (same as directory shares). Missing path **400**; unknown path **404**; bad/expired key **401**. Internal `_$flaredrive$/` keys are rejected. `POST /api/archive` with `{ "keys": [...] }` packs multiple selections (web UI multi-download); same auth and internal-key rules. Optional `"base": "folder/"` (the folder the selection lives in) makes entry paths relative to it and names the zip `<folder>.zip`; without it entries keep full keys and the name is `archive.zip`. Zip entries are marked as made on Unix with UTF-8 names (bit 11), so Linux `unzip` shows non-ASCII (e.g. Chinese) names correctly. Entry times are each object's upload time, stored as an Info-ZIP extended timestamp (`0x5455`, UTC) so `unzip` / `zipinfo` / 7-Zip / macOS show local time; the legacy DOS time field is written in UTC (tools that ignore `0x5455`, e.g. Windows Explorer, show UTC).
 
 Create folders from scripts (parents are auto-created):
 
@@ -139,11 +139,11 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 ### Shares
 
-`POST /api/shares` accepts a folder key too — visiting the share link streams the whole tree as a zip download (extract code and expiry apply as usual). Share management (`GET`/`POST`/`DELETE /api/shares`) accepts **both** the web session (Basic) and an API key, so scripts and MCP can create/list/revoke shares.
+`POST /api/shares` accepts a folder key too. Like file shares, opening the plain link shows the landing page (marked "Folder (zip download)"); its download button — or `GET /share/<token>?download=1` directly — streams the whole tree as a zip rooted at the folder (extract code and expiry apply as usual). Share management (`GET`/`POST`/`DELETE /api/shares`) accepts **both** the web session (Basic) and an API key, so scripts and MCP can create/list/revoke shares.
 
 `GET /share/<token>` (no auth) returns a **server-rendered, zero-JS landing page** (light/dark via `prefers-color-scheme`, language via `Accept-Language`): file name, type, size, shared time, plus inline preview (`<img>` / `<video>` / `<audio>` / `<iframe>`) for preview-safe types. The download button points at `?download=1`. Query params on the same URL:
 
-- `?download=1` — raw bytes with `Content-Disposition: attachment`. **Scripts that used to download from the plain share link must switch to this** (folders stream the zip either way).
+- `?download=1` — raw bytes with `Content-Disposition: attachment`. **Scripts that used to download from the plain share link must switch to this** — for files *and* folders (a folder returns `application/zip`; `?raw=1` on a folder also returns the zip, since folders have no preview).
 - `?raw=1` — raw bytes inline (`Content-Disposition: inline`) for preview-safe types (image / video / audio / PDF / text); other types still download as an attachment. The response keeps the existing hardening — `Content-Security-Policy: sandbox`, `X-Content-Type-Options: nosniff` — and honors `Range` (video seeking / resumable downloads).
 
 Extract-code gating is unchanged and applies to the landing page and both params: the legacy `?code=` query keeps working, the form POST sets a Path-scoped `HttpOnly` cookie, and links rendered on the landing page inherit `?code=` so previews work from old-style links. Expired → **410**, revoked/missing → **404**, wrong code → **403** form.
@@ -237,7 +237,7 @@ Cursor (`mcp.json`):
 ### Expiring share from chat
 
 1. Ask the agent to call `share_create` on a file or folder path, with `expiresInHours=24` (optional `extractCode`).
-2. Forward the returned share `url` (path `/share/{token}`).
+2. Forward the returned share `url` (path `/share/{token}`) — it opens the landing page with a download button; for a direct download (e.g. `curl -OJ`) append `?download=1` (folders arrive as a zip).
 3. Manage with `share_list` / `share_revoke` (pass the `token`).
 
 ### Zip a folder from chat (pull back locally)

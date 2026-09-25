@@ -97,7 +97,7 @@ curl -X POST "https://<your-domain.com>/api/archive" \
 
 `GET /api/download` 的 `path` 是对象 key。**HTTP 200** 会流式返回文件（`Content-Type` 来自 R2，否则为 `application/octet-stream`，`Content-Disposition: attachment`）。`path` 缺失/为空，或指向目录/前缀文件夹，返回 **400**；对象不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。
 
-`GET /api/archive?path=` 把单个目录或文件打成 zip，鉴权与其它开放接口相同（Bearer / `X-Api-Key`，或网页 Basic 会话）。**HTTP 200** 流式返回 `application/zip`。目录键会剥掉文件夹前缀（与目录分享一致）。缺 path **400**；路径不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。`POST /api/archive` 传 `{ "keys": [...] }` 可多选打包（网页多选下载）；鉴权与内部路径规则相同。可选 `"base": "folder/"`（选中项所在文件夹）：条目路径改为相对该文件夹，zip 名为 `<文件夹名>.zip`；不传则保持完整路径、名为 `archive.zip`。zip 条目标记为 Unix 来源并使用 UTF-8 文件名（bit 11），Linux `unzip` 可正确显示中文名。
+`GET /api/archive?path=` 把单个目录或文件打成 zip，鉴权与其它开放接口相同（Bearer / `X-Api-Key`，或网页 Basic 会话）。**HTTP 200** 流式返回 `application/zip`。目录键会剥掉文件夹前缀（与目录分享一致）。缺 path **400**；路径不存在 **404**；密钥无效或过期 **401**。内部 `_$flaredrive$/` 路径会被拒绝。`POST /api/archive` 传 `{ "keys": [...] }` 可多选打包（网页多选下载）；鉴权与内部路径规则相同。可选 `"base": "folder/"`（选中项所在文件夹）：条目路径改为相对该文件夹，zip 名为 `<文件夹名>.zip`；不传则保持完整路径、名为 `archive.zip`。zip 条目标记为 Unix 来源并使用 UTF-8 文件名（bit 11），Linux `unzip` 可正确显示中文名。条目时间为各对象的上传时间，以 Info-ZIP 扩展时间戳（`0x5455`，UTC）写入，`unzip` / `zipinfo` / 7-Zip / macOS 会按本地时区显示；旧式 DOS 时间字段按 UTC 写入（不识别 `0x5455` 的工具，如 Windows 资源管理器，会显示 UTC 时间）。
 
 脚本创建文件夹（父目录会自动创建）：
 
@@ -139,11 +139,11 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 ### 分享
 
-`POST /api/shares` 也接受文件夹 key —— 打开分享链接会把整棵子树以 zip 流式下载（提取码和过期时间照常生效）。分享管理（GET/POST/DELETE /api/shares）同时接受网页会话（Basic）和 API key。
+`POST /api/shares` 也接受文件夹 key。与文件分享一致，直接打开链接显示落地页（标注「文件夹（zip 下载）」）；点页面上的下载按钮，或直接请求 `GET /share/<token>?download=1`，会把整棵子树以 zip 流式下载（以该文件夹为根；提取码和过期时间照常生效）。分享管理（GET/POST/DELETE /api/shares）同时接受网页会话（Basic）和 API key。
 
 `GET /share/<token>`（无需鉴权）默认返回**服务端渲染、零脚本的落地页**（`prefers-color-scheme` 亮暗双套，语言跟随 `Accept-Language`）：文件名、类型、大小、分享时间，可预览类型还带在线预览（`<img>` / `<video>` / `<audio>` / `<iframe>`）；页面里的下载按钮指向 `?download=1`。同一 URL 上的查询参数：
 
-- `?download=1` —— 原始字节 + `Content-Disposition: attachment`。**以前直接从分享链接下载的脚本必须改用这个参数**（文件夹两种方式都是 zip 流）。
+- `?download=1` —— 原始字节 + `Content-Disposition: attachment`。**以前直接从分享链接下载的脚本必须改用这个参数** —— 文件和文件夹都一样（文件夹返回 `application/zip`；文件夹没有预览，`?raw=1` 同样返回 zip）。
 - `?raw=1` —— 原始字节内联返回（`Content-Disposition: inline`），仅对可预览类型（图片/音视频/PDF/文本）；其他类型仍是附件下载。响应保留既有安全加固 —— `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` —— 并支持 `Range`（视频拖动/断点续传）。
 
 提取码门禁不变，对落地页与两个参数同样生效：旧式 `?code=` 查询参数继续可用，表单 POST 成功后种下 Path 限定的 `HttpOnly` cookie，落地页上渲染的链接会继承 `?code=`，旧式链接的预览同样能过门禁。过期 → **410**，撤销/不存在 → **404**，提取码错误 → **403** 表单。
@@ -225,7 +225,7 @@ Cursor（`mcp.json`）：
 ### 对话里发限时分享
 
 1. 让助手对某个文件/目录调用 `share_create`，并设 `expiresInHours=24`（可选 `extractCode`）。
-2. 把返回的分享 `url`（路径 `/share/{token}`）转发出去即可。
+2. 把返回的分享 `url`（路径 `/share/{token}`）转发出去即可 —— 打开是带下载按钮的落地页；要直接下载（如 `curl -OJ`）请在末尾加 `?download=1`（文件夹得到 zip）。
 3. 用 `share_list` / `share_revoke`（传入 `token`）查看与撤销。
 
 ### 对话里把某目录打成 zip 拉回本地
