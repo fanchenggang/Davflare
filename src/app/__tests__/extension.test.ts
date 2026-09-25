@@ -364,7 +364,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.13");
+    expect(manifest.version).toBe("1.3.14");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -431,7 +431,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.13");
+    expect(manifest.version).toBe("1.3.14");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -465,7 +465,7 @@ describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)
   const popupCss = fs.readFileSync(path.join(extDir, "popup.css"), "utf8");
 
   test("every delete path funnels through the undo-capable helper", () => {
-    expect(appJs).toContain("async function deleteBookmarksWithUndo(ids)");
+    expect(appJs).toContain("async function deleteBookmarksWithUndo(ids, doneMessage)");
     expect(appJs).toContain("deleteBookmarksWithUndo([item.id])");
     expect(appJs).toContain("await deleteBookmarksWithUndo(ids)");
     // Old direct-delete call sites are gone from the library app.
@@ -691,8 +691,8 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
     document.body.innerHTML = "";
   });
 
-  test("manifest version is current (1.3.13, bumped again by #130)", () => {
-    expect(manifest.version).toBe("1.3.13");
+  test("manifest version is current (1.3.14, bumped again by #132)", () => {
+    expect(manifest.version).toBe("1.3.14");
   });
 });
 
@@ -724,7 +724,7 @@ describe("Davflare Chrome extension / #130 re-saving a trashed URL keeps the ori
     expect(quickJs).not.toContain("overwriteTitle");
   });
 
-  test("manifest bumped to 1.3.13", () => {
-    expect(manifest.version).toBe("1.3.13");
+  test("manifest version is current (1.3.14 after #132)", () => {
+    expect(manifest.version).toBe("1.3.14");
   });
 });

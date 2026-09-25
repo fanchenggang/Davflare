@@ -327,6 +327,7 @@ var COPY = {
     dupKeep: "Keep selected, trash the rest",
     dupKeepOldestAll: "Keep oldest everywhere",
     dupKeepDone: "Kept 1, moved {n} duplicate(s) to the trash.",
+    dupKeepAllDone: "Kept the oldest in {g} group(s), moved {n} duplicate(s) to the trash.",
     dupEmptyTitle: "No duplicates",
     dupEmptyDesc: "Every URL appears exactly once in the library.",
   },
@@ -635,6 +636,7 @@ var COPY = {
     dupKeep: "保留所选，其余进回收站",
     dupKeepOldestAll: "全部保留最早",
     dupKeepDone: "已保留 1 条，{n} 条重复进入回收站。",
+    dupKeepAllDone: "已在 {g} 组中各保留最早 1 条，{n} 条重复进入回收站。",
     dupEmptyTitle: "没有重复书签",
     dupEmptyDesc: "库中所有 URL 均唯一。",
   },
@@ -1213,6 +1215,18 @@ function renderAll() {
   renderSyncInfo();
   // Keep preset dropdown + ✕ in sync whenever filters re-render (#84).
   renderPresetSelect();
+  renderActiveLibraryPanel();
+}
+
+/**
+ * #132: the trash and duplicates panels are derived from state.model too.
+ * Whenever the model re-renders (delete, undo, restore, remote refresh,
+ * live storage update) the open panel must follow, or it shows stale
+ * groups/rows until the user switches away and back.
+ */
+function renderActiveLibraryPanel() {
+  if (appState.view === "trash") loadTrash();
+  else if (appState.view === "duplicates") loadDuplicates();
 }
 
 /** aria-current="true" mirrors the visual .active state for assistive tech. */
@@ -1794,17 +1808,19 @@ function cancelPendingUndo() {
  * Show the undo toast. `action` is either an array of soft-deleted bookmark
  * ids (restoreFromTrash) or {message, restore} where restore() mutates
  * state.model and returns the status text to flash (folder delete, #126).
+ * `message` optionally overrides the generic "Deleted n" toast text (#132:
+ * duplicate cleanup says what it did). undoDelete re-renders via renderAll,
+ * which also refreshes an open trash / duplicates panel.
  */
-function showUndoToast(action) {
+function showUndoToast(action, message) {
   var toast = $("undoToast");
   if (!toast) return;
   var undo = Array.isArray(action)
     ? {
-        message: fmt(t.undoMsg, { n: action.length }),
+        message: message || fmt(t.undoMsg, { n: action.length }),
         restore: function () {
           state.model = Bookmarks.restoreFromTrash(state.model, action);
-          if (appState.view === "trash") loadTrash();
-          return t.added;
+          return fmt(t.trashRestored, { n: action.length });
         },
       }
     : action;
@@ -1816,6 +1832,7 @@ function showUndoToast(action) {
     restore: undo.restore,
     timer: setTimeout(cancelPendingUndo, UNDO_MS),
   };
+  return pendingUndo;
 }
 
 async function undoDelete() {
@@ -1834,14 +1851,16 @@ async function undoDelete() {
  * deletedAt stamp for 30 days, and the undo window becomes irrelevant to
  * data safety — undo just restores instantly.
  */
-async function deleteBookmarksWithUndo(ids) {
+async function deleteBookmarksWithUndo(ids, doneMessage) {
   if (!ids || !ids.length) return;
   cancelPendingUndo();
   state.model = Bookmarks.softDeleteBookmarks(state.model, ids, Date.now());
   clearSelection();
   renderAll();
-  showUndoToast(ids);
-  await persist();
+  var token = showUndoToast(ids, doneMessage);
+  var ok = await persist();
+  // Don't flash "moved to trash" after the user already hit Undo (#132).
+  if (ok && doneMessage && token && pendingUndo === token) flashStatus(doneMessage);
 }
 
 /* ---------- trash view（回收站：恢复 / 彻底删除 / 清空） ---------- */
@@ -1950,8 +1969,7 @@ function updateTrashActions() {
 async function restoreFromTrashIds(ids) {
   state.model = Bookmarks.restoreFromTrash(state.model, ids);
   for (var i = 0; i < ids.length; i++) delete appState.trashSel[ids[i]];
-  renderAll();
-  if (appState.view === "trash") loadTrash();
+  renderAll(); // also refreshes the open trash panel (#132)
   if (await persist()) flashStatus(fmt(t.trashRestored, { n: ids.length }));
 }
 
@@ -1959,8 +1977,7 @@ async function restoreFromTrashIds(ids) {
 async function hardDeleteIds(ids) {
   state.model = Bookmarks.removeBookmarks(state.model, ids);
   for (var i = 0; i < ids.length; i++) delete appState.trashSel[ids[i]];
-  renderAll();
-  if (appState.view === "trash") loadTrash();
+  renderAll(); // also refreshes the open trash panel (#132)
   await persist();
 }
 
@@ -2101,11 +2118,10 @@ function duplicateGroupCard(group) {
         return it.id;
       });
     if (!others.length) return;
-    deleteBookmarksWithUndo(others).then(function () {
-      delete appState.dupKeep[group.key];
-      if (appState.view === "duplicates") loadDuplicates();
-      flashStatus(fmt(t.dupKeepDone, { n: others.length }));
-    });
+    // The panel re-renders inside deleteBookmarksWithUndo (renderAll) and
+    // again on Undo, so the group disappears / comes back immediately.
+    delete appState.dupKeep[group.key];
+    deleteBookmarksWithUndo(others, fmt(t.dupKeepDone, { n: others.length }));
   });
   actions.appendChild(keepBtn);
   card.appendChild(actions);
@@ -2122,11 +2138,11 @@ async function keepOldestAllDuplicates() {
     }
   }
   if (!allOthers.length) return;
-  var n = allOthers.length;
-  await deleteBookmarksWithUndo(allOthers);
   appState.dupKeep = {};
-  if (appState.view === "duplicates") loadDuplicates();
-  flashStatus(fmt(t.dupKeepDone, { n: n }));
+  await deleteBookmarksWithUndo(
+    allOthers,
+    fmt(t.dupKeepAllDone, { g: groups.length, n: allOthers.length })
+  );
 }
 
 /** One checkbox driving multi-select; shift-click selects a filtered range. */
