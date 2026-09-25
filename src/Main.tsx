@@ -38,19 +38,15 @@ import { Route } from "./app/route";
 import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
 import { Z_INDEX, warmShadow } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
-import { strings, translate, useLang } from "./app/strings";
+import { strings, translate } from "./app/strings";
 import {
-  collectFilesFromDataTransfer,
-  copyPaste,
   createFolder,
   downloadArchive,
   downloadFile,
-  fetchPath,
   openFile,
   selectDirectoryFiles,
 } from "./app/transfer";
-import { moveToTrash, restoreTrash } from "./app/trash";
-import { transferKeys, useUploadInputs } from "./app/useUploadInputs";
+import { useUploadInputs } from "./app/useUploadInputs";
 import { useDragDropUpload } from "./app/useDragDropUpload";
 import { useFolderCounts } from "./app/useFolderCounts";
 import { useFolderListing } from "./app/useFolderListing";
@@ -59,8 +55,10 @@ import { useMultiSelect } from "./app/useMultiSelect";
 import { usePasteUpload } from "./app/usePasteUpload";
 import { useFeatures } from "./app/features";
 import { FileItem } from "./app/types";
-import { errorMessage, fileTypeCategory, formatListingSize, isDirectory, isJunkFileName } from "./app/utils";
+import { errorMessage } from "./app/utils";
 import { parentKey } from "./app/interaction";
+import { useFileOperations } from "./app/useFileOperations";
+import { useListingStats, useVisibleFiles } from "./app/useVisibleFiles";
 
 // 重组件按需加载：只有真正打开预览 / 进入对应 section 时才拉取对应 chunk
 const PreviewDialog = lazy(() => import("./PreviewDialog"));
@@ -242,69 +240,16 @@ function Main({
     previousActive.current = activeUploads;
   }, [activeUploads, loadListing]);
 
-  const sortedFiles = useMemo(() => {
-    const items = [...files];
-    items.sort((a, b) => {
-      const aDir = isDirectory(a) ? 0 : 1;
-      const bDir = isDirectory(b) ? 0 : 1;
-      if (aDir !== bDir) return aDir - bDir;
+  const { visibleFiles } = useVisibleFiles({
+    files,
+    sort,
+    showHidden,
+    typeFilter,
+    debouncedSearch,
+    searchScope,
+  });
 
-      let compare = 0;
-      if (sort.field === "size") {
-        compare = a.size - b.size;
-      } else if (sort.field === "date") {
-        compare = new Date(a.uploaded).getTime() - new Date(b.uploaded).getTime();
-      } else {
-        compare = a.name.localeCompare(b.name, undefined, { numeric: true });
-      }
-      return sort.order === "asc" ? compare : -compare;
-    });
-    return items;
-  }, [files, sort]);
-
-  const visibleFiles = useMemo(() => {
-    let items = sortedFiles;
-    if (!showHidden) {
-      items = items.filter((file) => !isJunkFileName(file.name));
-    }
-    if (typeFilter !== "all") {
-      items = items.filter((file) => {
-        if (file.isDir) return true;
-        return fileTypeCategory(file) === typeFilter;
-      });
-    }
-    if (debouncedSearch && searchScope === "folder") {
-      const q = debouncedSearch.toLowerCase();
-      items = items.filter(
-        (file) =>
-          file.name.toLowerCase().includes(q) ||
-          file.key.toLowerCase().includes(q)
-      );
-    }
-    return items;
-  }, [debouncedSearch, searchScope, showHidden, sortedFiles, typeFilter]);
-
-  const lang = useLang();
-  const listingStats = useMemo(() => {
-    let folders = 0;
-    let fileCount = 0;
-    let bytes = 0;
-    for (const file of visibleFiles) {
-      if (file.isDir) {
-        folders += 1;
-      } else {
-        fileCount += 1;
-        bytes += file.size || 0;
-      }
-    }
-    return translate("listingStats", {
-      folders,
-      files: fileCount,
-      size: formatListingSize(bytes),
-    });
-    // lang 入参让语言切换时重算翻译结果（useMemo 否则缓存旧语言文案）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleFiles, lang]);
+  const listingStats = useListingStats(visibleFiles);
 
   const {
     selectedKeys,
@@ -474,167 +419,30 @@ function Main({
     [copyToClipboard, cutToClipboard, handleOpen, navigateFolder, onNotify]
   );
 
-  const handleRenameSubmit = async (name: string) => {
-    if (!renameTarget) return;
-    const parent = renameTarget.key.slice(
-      0,
-      renameTarget.key.length - renameTarget.name.length
-    );
-    const target = `${parent}${name}`;
-    const source = renameTarget.key;
-    const runRename = async () => {
-      await copyPaste(source, target, true);
-    };
-    try {
-      await runRename();
-      onNotify(translate("renameDone"), "success");
-    } catch (error) {
-      onNotify(errorMessage(error), "error", {
-        duration: 8000,
-        action: { label: strings.retry, onClick: () => runRename().catch(() => {}) },
-      });
-    } finally {
-      setRenameTarget(null);
-      await loadListing();
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!confirmDelete) return;
-    const targets = confirmDelete;
-    const runDelete = async () => {
-      return moveToTrash(targets);
-    };
-    try {
-      const result = await runDelete();
-      const trashIds = result.results.map((item) => item.id);
-      onNotify(translate("movedToTrashCount", { count: trashIds.length }), "success", {
-        duration: 7000,
-        action: trashIds.length
-          ? {
-              label: strings.undo,
-              onClick: () => {
-                restoreTrash(trashIds)
-                  .then(() => {
-                    onNotify(translate("undoDeleteDone"), "success");
-                  })
-                  .catch((error) =>
-                    onNotify(errorMessage(error), "error")
-                  )
-                  .finally(() => loadListing());
-              },
-            }
-          : undefined,
-      });
-    } catch (error) {
-      onNotify(errorMessage(error), "error", {
-        action: {
-          label: strings.retry,
-          onClick: () => runDelete().then(() => loadListing()).catch(() => {}),
-        },
-      });
-    } finally {
-      setConfirmDelete(null);
-      setSelectedKeys([]);
-      setFocusedKey(null);
-      setPreviewFile(null);
-      await loadListing();
-    }
-  };
-
-  const handlePaste = async () => {
-    if (!clipboard || route.kind !== "folder") return;
-    const runPaste = async () => {
-      await transferKeys(clipboard.keys, cwd, clipboard.mode);
-      if (clipboard.mode === "cut") clearClipboard();
-    };
-    try {
-      await runPaste();
-      onNotify(translate("pasteDone"), "success");
-    } catch (error) {
-      onNotify(errorMessage(error), "error", {
-        duration: 8000,
-        action: { label: strings.retry, onClick: () => runPaste().catch(() => {}) },
-      });
-    } finally {
-      await loadListing();
-    }
-  };
-
-  const handleMove = async (destination: string) => {
-    if (!moveTarget?.length) return;
-    const keys = moveTarget;
-    const runMove = async () => {
-      await transferKeys(keys, destination, "cut");
-    };
-    try {
-      await runMove();
-      setSelectedKeys([]);
-      onNotify(translate("moveDone"), "success");
-    } catch (error) {
-      onNotify(errorMessage(error), "error", {
-        action: {
-          label: strings.retry,
-          onClick: () => runMove().then(() => loadListing()).catch(() => {}),
-        },
-      });
-    } finally {
-      setMoveTarget(null);
-      await loadListing();
-    }
-  };
-
-  const handleDropOnFolder = async (
-    folder: FileItem,
-    dataTransfer: DataTransfer
-  ) => {
-    const internalKey = dataTransfer.getData("application/x-flaredrive");
-    if (internalKey) {
-      // 新格式为选中组 JSON 数组；旧格式为纯 key（解析失败时回退单键）
-      let keys: string[] = [internalKey];
-      if (internalKey.trim().startsWith("[")) {
-        try {
-          const parsed = JSON.parse(internalKey) as unknown[];
-          keys = parsed.map(String);
-        } catch {
-          keys = [internalKey];
-        }
-      }
-      // 不能把目标文件夹自身或其子项拖进它自己
-      keys = keys.filter(
-        (key) => key !== folder.key && !key.startsWith(`${folder.key}/`)
-      );
-      if (!keys.length) return;
-      const destination = `${folder.key}/`;
-      const runMove = async () => {
-        await transferKeys(keys, destination, "cut");
-      };
-      try {
-        await runMove();
-        setSelectedKeys([]);
-        await loadListing();
-      } catch (error) {
-        onNotify(errorMessage(error), "error", {
-          action: {
-            label: strings.retry,
-            onClick: () => runMove().then(() => loadListing()).catch(() => {}),
-          },
-        });
-      }
-      return;
-    }
-
-    const droppedFiles = await collectFilesFromDataTransfer(dataTransfer);
-    if (!droppedFiles.length) return;
-    const dest = `${folder.key.replace(/\/$/, "")}/`;
-    let taken: Set<string> = new Set();
-    try {
-      taken = new Set((await fetchPath(dest)).map((item) => item.name));
-    } catch {
-      taken = new Set();
-    }
-    enqueueToDir(droppedFiles, dest, taken);
-  };
+  const {
+    handleRenameSubmit,
+    handleConfirmDelete,
+    handlePaste,
+    handleMove,
+    handleDropOnFolder,
+  } = useFileOperations({
+    folderActive: route.kind === "folder",
+    cwd,
+    clipboard,
+    renameTarget,
+    confirmDelete,
+    moveTarget,
+    onNotify,
+    loadListing,
+    clearClipboard,
+    setSelectedKeys,
+    setFocusedKey,
+    setPreviewFile,
+    setMoveTarget,
+    setConfirmDelete,
+    setRenameTarget,
+    enqueueToDir,
+  });
 
   const openFilePicker = useCallback(() => {
     const input = document.createElement("input");

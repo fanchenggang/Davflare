@@ -84,15 +84,20 @@ function cloneApiRequest(
   url: URL,
   init?: { body?: BodyInit; headers?: Record<string, string> }
 ) {
-  const headers = new Headers(original.headers);
-  headers.delete("content-length");
+  // 以普通对象透传头部：Headers 实例在部分运行时（jsdom）会被特殊过滤，
+  // 记录初始化语义在 undici/Workers 之间一致，且覆盖写入更可控。
+  const headers: Record<string, string> = {};
+  original.headers.forEach((value, key) => {
+    if (key === "content-length") return;
+    headers[key.toLowerCase()] = value;
+  });
   if (init?.headers) {
     for (const [key, value] of Object.entries(init.headers)) {
-      headers.set(key, value);
+      headers[key.toLowerCase()] = value;
     }
   }
   const hasBody = init?.body !== undefined && method !== "GET" && method !== "HEAD";
-  if (!hasBody) headers.delete("content-type");
+  if (!hasBody) delete headers["content-type"];
   return new Request(url.toString(), {
     method,
     headers,

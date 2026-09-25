@@ -20,7 +20,10 @@ function basename(key: string) {
 }
 
 function attachmentDisposition(filename: string) {
-  const fallback = filename.replace(/["\\\r\n]/g, "_") || "archive.zip";
+  // filename= 只能承载 Latin-1（Headers ByteString 校验，非 ASCII 会抛异常），
+  // 非 ASCII 字符统一替换为 "_"，原始名由 filename*（RFC 5987）承载。
+  const fallback =
+    filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_") || "archive.zip";
   const encoded = encodeURIComponent(filename || "archive.zip").replace(
     /['()]/g,
     (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`

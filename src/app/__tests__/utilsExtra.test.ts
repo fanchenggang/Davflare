@@ -3,7 +3,9 @@ import {
   formatDateTime,
   formatListingSize,
   humanReadableSpeed,
+  errorMessage,
 } from "../utils";
+import { setLang } from "../strings";
 
 describe("utils / humanReadableSpeed", () => {
   test("有效速度带 /s，无效返回空串", () => {
@@ -44,5 +46,15 @@ describe("utils / fileTypeCategory", () => {
     expect(fileTypeCategory({ isDir: false, name: "n.pdf", size: 0, uploaded: "", contentType: "application/pdf", key: "n.pdf" })).toBe("doc");
     expect(fileTypeCategory({ isDir: false, name: "n.md", size: 0, uploaded: "", contentType: "", key: "n.md" })).toBe("doc");
     expect(fileTypeCategory({ isDir: false, name: "n.bin", size: 0, uploaded: "", contentType: "application/octet-stream", key: "n.bin" })).toBe("other");
+  });
+});
+
+describe("utils / errorMessage", () => {
+  test("Error 取 message；status 对象取状态码；其他兜底", () => {
+    expect(errorMessage(new Error("boom"))).toBe("boom");
+    setLang("zh");
+    expect(errorMessage({ status: 507 })).toBe("操作失败（HTTP 507），请重试");
+    expect(errorMessage("weird")).toBe("操作失败，请重试");
+    expect(errorMessage(new Error(""))).toBe("操作失败，请重试");
   });
 });

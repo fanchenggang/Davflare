@@ -30,6 +30,10 @@ export default defineConfig({
         "src/index.jsx",
         "src/app/testUtils.ts",
         "src/app/testInMemoryBucket.ts",
+        // 纯类型文件（无可执行语句），v8 无法产生覆盖数据
+        "src/app/types.ts",
+        "src/app/notify.ts",
+        "functions/webdav/davTypes.ts",
       ],
       // 阈值 = v8 provider 实测值 - 0.5 棘轮（istanbul 与 v8 口径不同，
       // 不能沿用 jest 字段里的旧数字；分组聚合以 coverage-final.json 汇总为准，
@@ -37,24 +41,34 @@ export default defineConfig({
       //   global      84.55 / 84.01 / 81.46 / 84.55
       //   src/**      96.81 / 88.96 / 85.83 / 96.81
       //   functions   65.77 / 76.10 / 72.72 / 65.77
+      // 2026-09 补 functions/api 端点直测（apiListStat/apiMutations/
+      // apiDownloadSearchCounts/apiKeysConfig/apiImagesSites/mcpEndpoint）：
+      //   global      93.8060 / 84.7413 / 89.6016 / 93.8060
+      //   src/**      96.6025 / 88.5115 / 85.8220 / 96.6025
+      //   functions   89.5880 / 80.6063 / 96.4481 / 89.5880
+      // 2026-09 二轮：大文件拆分（_mcp/webdav 协议层/Main/transfer/strings）
+      // + _setup/webdav 工具层/mcp pull-push 直测（apiSetup/webdavHelpers 等）：
+      //   global      94.8433 / 86.2098 / 90.3382 / 94.8433
+      //   src/**      96.7529 / 88.7599 / 85.9492 / 96.7529
+      //   functions   91.9428 / 83.5253 / 98.3607 / 91.9428
       thresholds: {
         global: {
-          statements: 84.05,
-          branches: 83.51,
-          functions: 80.96,
-          lines: 84.05,
+          statements: 94.34,
+          branches: 85.7,
+          functions: 89.83,
+          lines: 94.34,
         },
         "src/**": {
-          statements: 96.31,
-          branches: 88.46,
-          functions: 85.33,
-          lines: 96.31,
+          statements: 96.25,
+          branches: 88.25,
+          functions: 85.44,
+          lines: 96.25,
         },
         "functions/**": {
-          statements: 65.27,
-          branches: 75.6,
-          functions: 72.22,
-          lines: 65.27,
+          statements: 91.44,
+          branches: 83.02,
+          functions: 97.86,
+          lines: 91.44,
         },
       },
     },
