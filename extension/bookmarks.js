@@ -501,11 +501,17 @@ var Bookmarks = (function () {
 
   /**
    * Add one bookmark; existing URL wins. A URL that only exists in the trash
-   * is revived in place (trash marks cleared, editable fields refreshed) —
-   * re-saving a deleted page is how users say "I want it back".
+   * is revived in place — re-saving a deleted page is how users say "I want
+   * it back". Issue #130: reviving restores the *original* entry: only the
+   * trash marks are cleared; id, pinned, folder, tags, note and the original
+   * added time survive. An incoming field only wins when it is non-empty
+   * (folder / note string, tags array) — i.e. the user explicitly chose a new
+   * value. Title: callers usually send a fallback (tab title / domain), so
+   * the original title is kept unless options.overwriteTitle is set (the
+   * user typed it) or the original is empty.
    * Returns {model, added, restored?}.
    */
-  function addBookmark(model, item) {
+  function addBookmark(model, item, options) {
     var next = normalizeModel(model);
     var key = urlKey(item && item.url);
     if (!key || !isWebUrl(item && item.url)) return { model: next, added: false };
@@ -515,17 +521,36 @@ var Bookmarks = (function () {
     if (idx !== -1) {
       var existing = next.bookmarks[idx];
       if (!existing.deleted) return { model: next, added: false };
-      existing.deleted = false;
-      existing.deletedAt = 0;
-      existing.title = clean.title;
-      existing.note = clean.note;
-      existing.tags = clean.tags;
-      existing.folder = clean.folder;
-      if (clean.added) existing.added = clean.added;
+      reviveInPlace(existing, clean, options);
       return { model: next, added: true, restored: true };
     }
     next.bookmarks.push(clean);
     return { model: next, added: true };
+  }
+
+  /** #130: clear trash marks; keep original fields unless incoming is non-empty. */
+  function reviveInPlace(existing, clean, options) {
+    var opts = options || {};
+    existing.deleted = false;
+    existing.deletedAt = 0;
+    if (clean.title && (opts.overwriteTitle === true || !existing.title)) {
+      existing.title = clean.title;
+    }
+    if (clean.folder) existing.folder = clean.folder;
+    if (clean.tags.length) existing.tags = clean.tags;
+    if (clean.note) existing.note = clean.note;
+    if (!existing.added && clean.added) existing.added = clean.added;
+  }
+
+  /** The trashed entry a re-save of `url` would revive (#130), or null. */
+  function trashedByUrl(model, url) {
+    var key = urlKey(url);
+    var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
+    if (!key) return null;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && urlKey(items[i].url) === key) return items[i].deleted === true ? items[i] : null;
+    }
+    return null;
   }
 
   /** Merge incoming into base by URL; base entries win on collision —
@@ -1185,6 +1210,7 @@ var Bookmarks = (function () {
   return {
     MODEL_VERSION: MODEL_VERSION,
     addBookmark: addBookmark,
+    trashedByUrl: trashedByUrl,
     addFolder: addFolder,
     adoptRichFields: adoptRichFields,
     adjustTags: adjustTags,

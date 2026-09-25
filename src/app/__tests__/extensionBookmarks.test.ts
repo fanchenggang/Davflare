@@ -9,8 +9,10 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
   MODEL_VERSION: number;
   addBookmark: (
     model: unknown,
-    item: { id?: string; title?: string; url?: string; folder?: string; tags?: string[]; note?: string; added?: number }
+    item: { id?: string; title?: string; url?: string; folder?: string; tags?: string[]; note?: string; added?: number },
+    options?: { overwriteTitle?: boolean }
   ) => { model: BookmarkModel; added: boolean; restored?: boolean };
+  trashedByUrl: (model: unknown, url: unknown) => BookmarkRow | null;
   adoptRichFields: (htmlModel: unknown, jsonModel: unknown) => BookmarkModel;
   duplicateGroups: (model: unknown) => Array<{ key: string; items: BookmarkRow[] }>;
   emptyModel: () => BookmarkModel;
@@ -742,17 +744,21 @@ describe("extension/bookmarks.js trash (soft delete)", () => {
     expect(noTrash.model.bookmarks).toHaveLength(2);
   });
 
-  test("addBookmark revives a trashed URL with refreshed fields", () => {
+  test("addBookmark revives a trashed URL; explicit new values win", () => {
     const now = 1_000_000;
     let model = Bookmarks.softDeleteBookmarks(base(), ["b1"], now);
-    const result = Bookmarks.addBookmark(model, {
-      title: "A2",
-      url: "https://a.com/#frag",
-      folder: "New",
-      tags: ["y"],
-      note: "back",
-      added: now,
-    });
+    const result = Bookmarks.addBookmark(
+      model,
+      {
+        title: "A2",
+        url: "https://a.com/#frag",
+        folder: "New",
+        tags: ["y"],
+        note: "back",
+        added: now,
+      },
+      { overwriteTitle: true }
+    );
     expect(result.added).toBe(true);
     expect(result.restored).toBe(true);
     expect(result.model.bookmarks).toHaveLength(2);
@@ -767,6 +773,132 @@ describe("extension/bookmarks.js trash (soft delete)", () => {
     });
     // A live duplicate is still rejected as before.
     expect(Bookmarks.addBookmark(result.model, { url: "https://a.com" }).added).toBe(false);
+  });
+
+  describe("#130 revive keeps the original entry", () => {
+    // The issue's minimal repro.
+    const orig = () =>
+      Bookmarks.softDeleteBookmarks(
+        Bookmarks.normalizeModel({
+          bookmarks: [
+            {
+              id: "x1",
+              title: "Orig",
+              url: "https://example.com/a",
+              folder: "Work",
+              tags: ["t1"],
+              note: "keepme",
+              added: 1,
+              pinned: true,
+              pinnedAt: 7,
+            },
+          ],
+        }),
+        ["x1"],
+        100
+      );
+
+    test("add dialog / quick save (title+url+added only) keep folder, tags, note, added, title", () => {
+      const res = Bookmarks.addBookmark(orig(), {
+        title: "New title",
+        url: "https://example.com/a",
+        added: 200,
+      });
+      expect(res).toMatchObject({ added: true, restored: true });
+      expect(res.model.bookmarks).toHaveLength(1);
+      expect(res.model.bookmarks[0]).toEqual({
+        id: "x1",
+        title: "Orig",
+        url: "https://example.com/a",
+        folder: "Work",
+        tags: ["t1"],
+        note: "keepme",
+        added: 1,
+        pinned: true,
+        pinnedAt: 7,
+        deleted: false,
+        deletedAt: 0,
+      });
+    });
+
+    test("empty strings / empty tag arrays never wipe the originals (popup with blank fields)", () => {
+      const res = Bookmarks.addBookmark(
+        orig(),
+        { title: "", url: "https://example.com/a", folder: "  ", tags: [], note: "", added: 300 },
+        { overwriteTitle: true }
+      );
+      expect(res.model.bookmarks[0]).toMatchObject({
+        title: "Orig",
+        folder: "Work",
+        tags: ["t1"],
+        note: "keepme",
+        added: 1,
+        deleted: false,
+      });
+    });
+
+    test("non-empty incoming folder / tags / note override one by one", () => {
+      const onlyFolder = Bookmarks.addBookmark(orig(), {
+        url: "https://example.com/a",
+        folder: "Later",
+      }).model.bookmarks[0];
+      expect(onlyFolder).toMatchObject({ folder: "Later", tags: ["t1"], note: "keepme", added: 1 });
+      const onlyTags = Bookmarks.addBookmark(orig(), {
+        url: "https://example.com/a",
+        tags: ["n1", "n2"],
+      }).model.bookmarks[0];
+      expect(onlyTags).toMatchObject({ folder: "Work", tags: ["n1", "n2"], note: "keepme" });
+      const onlyNote = Bookmarks.addBookmark(orig(), {
+        url: "https://example.com/a",
+        note: "fresh",
+      }).model.bookmarks[0];
+      expect(onlyNote).toMatchObject({ folder: "Work", tags: ["t1"], note: "fresh" });
+    });
+
+    test("title: typed title wins only with overwriteTitle; empty original title is filled", () => {
+      const typed = Bookmarks.addBookmark(
+        orig(),
+        { title: "Typed", url: "https://example.com/a" },
+        { overwriteTitle: true }
+      ).model.bookmarks[0];
+      expect(typed.title).toBe("Typed");
+      const untitled = Bookmarks.softDeleteBookmarks(
+        Bookmarks.normalizeModel({ bookmarks: [{ id: "u", url: "https://u.com", added: 5 }] }),
+        ["u"],
+        9
+      );
+      const filled = Bookmarks.addBookmark(untitled, { title: "Page", url: "https://u.com", added: 50 })
+        .model.bookmarks[0];
+      expect(filled).toMatchObject({ title: "Page", added: 5, deleted: false });
+    });
+
+    test("an entry without an added time takes the new one", () => {
+      const noTime = Bookmarks.softDeleteBookmarks(
+        Bookmarks.normalizeModel({ bookmarks: [{ id: "n", url: "https://n.com", folder: "F" }] }),
+        ["n"],
+        9
+      );
+      const res = Bookmarks.addBookmark(noTime, { url: "https://n.com", added: 42 });
+      expect(res.model.bookmarks[0]).toMatchObject({ added: 42, folder: "F" });
+    });
+
+    test("trashedByUrl finds the entry a re-save would revive (and only trashed ones)", () => {
+      expect(Bookmarks.trashedByUrl(orig(), "https://example.com/a#x")).toMatchObject({ id: "x1" });
+      expect(Bookmarks.trashedByUrl(base(), "https://a.com")).toBeNull();
+      expect(Bookmarks.trashedByUrl(orig(), "https://other.com")).toBeNull();
+      expect(Bookmarks.trashedByUrl(orig(), "not a url")).toBeNull();
+      expect(Bookmarks.trashedByUrl(null, "https://example.com/a")).toBeNull();
+    });
+
+    test("restoreFromTrash and mergeModels are unaffected", () => {
+      const back = Bookmarks.restoreFromTrash(orig(), ["x1"]).bookmarks[0];
+      expect(back).toMatchObject({ folder: "Work", tags: ["t1"], note: "keepme", added: 1, deleted: false });
+      const merged = Bookmarks.mergeModels(orig(), {
+        bookmarks: [{ id: "imp", url: "https://example.com/a", title: "Imported", folder: "" }],
+      });
+      expect(merged.bookmarks).toHaveLength(1);
+      expect(merged.bookmarks[0]).toMatchObject({ id: "x1", deleted: true, folder: "Work" });
+    });
   });
 
   test("mergeModels never resurrects trashed base entries", () => {

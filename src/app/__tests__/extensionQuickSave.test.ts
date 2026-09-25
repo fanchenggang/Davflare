@@ -324,3 +324,66 @@ describe("extension/quickSave.js (#71 If-Match conflict retry / #73 cache harden
   });
 
 });
+
+describe("extension/quickSave.js revives trashed URLs without wiping fields (#130)", () => {
+  const Bm = nodeRequire("../../../extension/bookmarks.js");
+  const trashedModel = () =>
+    Bm.softDeleteBookmarks(
+      Bm.normalizeModel({
+        bookmarks: [
+          {
+            id: "x1",
+            title: "Orig",
+            url: "https://example.com/a",
+            folder: "Work",
+            tags: ["t1"],
+            note: "keepme",
+            added: 1,
+            pinned: true,
+          },
+        ],
+      }),
+      ["x1"],
+      100
+    );
+  const page = { title: "Tab title", url: "https://example.com/a", added: 200 };
+  const expected = {
+    id: "x1",
+    title: "Orig",
+    folder: "Work",
+    tags: ["t1"],
+    note: "keepme",
+    added: 1,
+    pinned: true,
+    deleted: false,
+  };
+
+  test("cached fast path (context menu / shortcut)", async () => {
+    const harness = makeDeps({
+      cache: { model: trashedModel(), etag: '"c"' },
+      getSequence: [],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, page);
+    expect(result).toEqual({ ok: true, status: "saved" });
+    const saved = (harness.getCache()!.model as { bookmarks: unknown[] }).bookmarks;
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject(expected);
+    // The revived row is back in the authoritative HTML.
+    expect(harness.puts[0].html).toContain("https://example.com/a");
+  });
+
+  test("remote GET path (no cache)", async () => {
+    const harness = makeDeps({
+      cache: null,
+      getSequence: [
+        { ok: true, html: "", jsonText: Bm.modelToJsonText(trashedModel()), etag: '"e1"' },
+      ],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, page);
+    expect(result).toEqual({ ok: true, status: "saved" });
+    const saved = (harness.getCache()!.model as { bookmarks: unknown[] }).bookmarks;
+    expect(saved[0]).toMatchObject(expected);
+  });
+});

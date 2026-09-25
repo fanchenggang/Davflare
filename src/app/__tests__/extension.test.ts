@@ -364,7 +364,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.12");
+    expect(manifest.version).toBe("1.3.13");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -431,7 +431,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.12");
+    expect(manifest.version).toBe("1.3.13");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -691,7 +691,40 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
     document.body.innerHTML = "";
   });
 
-  test("manifest bumped to 1.3.12", () => {
-    expect(manifest.version).toBe("1.3.12");
+  test("manifest version is current (1.3.13, bumped again by #130)", () => {
+    expect(manifest.version).toBe("1.3.13");
+  });
+});
+
+describe("Davflare Chrome extension / #130 re-saving a trashed URL keeps the original entry", () => {
+  const appJs = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const popupJs = fs.readFileSync(path.join(extDir, "popup.js"), "utf8");
+  const quickJs = fs.readFileSync(path.join(extDir, "quickSave.js"), "utf8");
+  const manifest = JSON.parse(fs.readFileSync(path.join(extDir, "manifest.json"), "utf8"));
+
+  test("library add dialog only overwrites the title when one was typed", () => {
+    expect(appJs).toContain('var typedTitle = $("addTitleInput").value.trim();');
+    expect(appJs).toContain("{ overwriteTitle: Boolean(typedTitle) }");
+    expect(appJs).toContain("add.restored ? fmt(t.trashRestored, { n: 1 }) : t.added");
+  });
+
+  test("popup: trashed URL is not 'already saved', form is prefilled from the trashed entry", () => {
+    expect(popupJs).toContain("var trashed = Bookmarks.trashedByUrl(model, state.url);");
+    expect(popupJs).toContain("!trashed &&");
+    expect(popupJs).toContain('$("saveFolder").value = trashed.folder || ""');
+    expect(popupJs).toContain('$("saveTags").value = (trashed.tags || []).join(", ")');
+    expect(popupJs).toContain('$("saveNote").value = trashed.note || ""');
+    expect(popupJs).toContain("{ overwriteTitle: true }");
+    expect(popupJs).toContain("state.trashed ? state.t.inTrash");
+    expect(popupJs).toContain("add.restored ? state.t.restored : state.t.saved");
+  });
+
+  test("quick save (context menu / shortcut) never forces the page title over the original", () => {
+    expect(quickJs).toContain("Bookmarks.addBookmark(");
+    expect(quickJs).not.toContain("overwriteTitle");
+  });
+
+  test("manifest bumped to 1.3.13", () => {
+    expect(manifest.version).toBe("1.3.13");
   });
 });

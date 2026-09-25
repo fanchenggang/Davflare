@@ -27,6 +27,8 @@ var COPY = {
     saving: "Saving…",
     saved: "Saved to your library.",
     exists: "This page is already in your library.",
+    inTrash: "This page is in the trash — saving restores it with its folder, tags and note.",
+    restored: "Restored from the trash.",
     skipPage: "Only http(s) pages can be saved.",
     needConfig: "Configure your instance URL and WebDAV credentials in settings first.",
     goSettings: "Open settings",
@@ -54,6 +56,8 @@ var COPY = {
     saving: "收藏中…",
     saved: "已收藏到书签库。",
     exists: "该页面已在书签库中。",
+    inTrash: "该页面在回收站中，收藏后将恢复原书签（保留分类、标签和备注）。",
+    restored: "已从回收站恢复。",
     skipPage: "只能收藏 http(s) 页面。",
     needConfig: "请先在「设置」里配置实例地址与 WebDAV 凭据。",
     goSettings: "去设置",
@@ -89,6 +93,7 @@ var state = {
   model: null,
   etag: null,
   exists: false,
+  trashed: false,
   ready: false,
   syncing: false,
 };
@@ -254,18 +259,29 @@ async function applyLoadedModel(model, etag, options) {
     datalist.appendChild(opt);
   }
 
+  // #130: a URL that only lives in the trash is not "already saved" —
+  // saving revives it. Prefill the form with the original entry so what
+  // the user sees is what gets restored (not the last-used folder).
+  var trashed = Bookmarks.trashedByUrl(model, state.url);
   var key = Bookmarks.urlKey(state.url);
+  state.trashed = Boolean(trashed);
   state.exists = Boolean(
     key &&
+      !trashed &&
       model.bookmarks.some(function (b) {
         return Bookmarks.urlKey(b.url) === key;
       })
   );
 
   if (opts.prefillTitle && !$("saveTitle").value) {
-    $("saveTitle").value = (state.tab && state.tab.title) || state.url;
+    $("saveTitle").value =
+      (trashed && trashed.title) || (state.tab && state.tab.title) || state.url;
   }
-  if (opts.prefillFolder && !$("saveFolder").value) {
+  if (opts.prefillFolder && trashed) {
+    if (!$("saveFolder").value) $("saveFolder").value = trashed.folder || "";
+    if (!$("saveTags").value) $("saveTags").value = (trashed.tags || []).join(", ");
+    if (!$("saveNote").value) $("saveNote").value = trashed.note || "";
+  } else if (opts.prefillFolder && !$("saveFolder").value) {
     var stored = await chrome.storage.local.get([LAST_FOLDER_KEY]);
     var last = stored && typeof stored[LAST_FOLDER_KEY] === "string" ? stored[LAST_FOLDER_KEY] : "";
     if (Bookmarks.folderPaths(model).indexOf(last) !== -1) {
@@ -282,7 +298,7 @@ async function applyLoadedModel(model, etag, options) {
   } else {
     state.ready = true;
     setSaveEnabled(true, state.t.save);
-    if (!state.syncing) setStatus("");
+    if (!state.syncing) setStatus(state.trashed ? state.t.inTrash : "");
   }
 }
 
@@ -360,14 +376,20 @@ async function saveCurrent(event) {
     })
     .filter(Boolean);
 
-  var add = Bookmarks.addBookmark(state.model, {
-    title: title,
-    url: state.url,
-    folder: folder,
-    tags: tags,
-    note: note,
-    added: Date.now(),
-  });
+  // The popup form shows the title the user will get (prefilled from the
+  // trashed entry on revive, #130), so its value wins.
+  var add = Bookmarks.addBookmark(
+    state.model,
+    {
+      title: title,
+      url: state.url,
+      folder: folder,
+      tags: tags,
+      note: note,
+      added: Date.now(),
+    },
+    { overwriteTitle: true }
+  );
   if (!add.added) {
     state.exists = true;
     setStatus(state.t.exists, "ok");
@@ -398,8 +420,9 @@ async function saveCurrent(event) {
   state.model = add.model;
   state.etag = put.etag || null;
   state.exists = true;
+  state.trashed = false;
   writeCache(add.model, put.etag || null);
-  setStatus(state.t.saved, "ok");
+  setStatus(add.restored ? state.t.restored : state.t.saved, "ok");
   setSaveEnabled(false, state.t.saved);
   updateViewBtn();
   chrome.storage.local.set({ popupLastFolder: folder }, function () {

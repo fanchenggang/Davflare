@@ -3892,8 +3892,15 @@ async function submitAdd(event) {
     $("addError").textContent = t.invalidUrl;
     return;
   }
-  var title = $("addTitleInput").value.trim() || BookmarksView.domainOf(url) || url;
-  var add = Bookmarks.addBookmark(state.model, { title: title, url: url, added: Date.now() });
+  var typedTitle = $("addTitleInput").value.trim();
+  var title = typedTitle || BookmarksView.domainOf(url) || url;
+  // #130: re-adding a trashed URL revives the original entry (folder, tags,
+  // note, added time kept); a title only replaces the old one when typed.
+  var add = Bookmarks.addBookmark(
+    state.model,
+    { title: title, url: url, added: Date.now() },
+    { overwriteTitle: Boolean(typedTitle) }
+  );
   if (!add.added) {
     $("addError").textContent = t.exists;
     return;
@@ -3904,7 +3911,7 @@ async function submitAdd(event) {
   $("addUrl").value = "";
   $("addTitleInput").value = "";
   var ok = await persist();
-  if (ok) flashStatus(t.added);
+  if (ok) flashStatus(add.restored ? fmt(t.trashRestored, { n: 1 }) : t.added);
 }
 
 async function importChromeBookmarks() {
