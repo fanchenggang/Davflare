@@ -110,8 +110,11 @@ var COPY = {
     undo: "Undo",
     tagUrlInvalid: "Enter a valid http(s) URL that is not already saved.",
     folderDeleteConfirmWithCount:
-      "Delete “{p}” and its subfolders? Bookmarks inside will move to Unfiled.",
+      "Delete “{p}” and its subfolders? {n} bookmark(s) inside (subfolders included) will move to Unfiled.",
+    folderDeleteConfirmEmptyTree: "Delete the empty folder “{p}” and its empty subfolders?",
     folderDeletedMoved: "Folder deleted — {n} bookmark(s) moved to Unfiled.",
+    folderDeleted: "Folder deleted.",
+    folderRestored: "Folder restored.",
     errDisabled: "WebDAV is disabled on this instance (feature switch off).",
     errNotConfigured: "The server has no WebDAV credentials configured.",
     errUnauthorized: "Wrong WebDAV username or password. Update them in settings.",
@@ -399,8 +402,12 @@ var COPY = {
     undoMsg: "已删除 {n} 个书签。",
     undo: "撤销",
     tagUrlInvalid: "请输入有效的 http(s) 网址，且不能与其他书签重复。",
-    folderDeleteConfirmWithCount: "删除「{p}」及其子文件夹？其中的书签将移入「未分类」。",
+    folderDeleteConfirmWithCount:
+      "删除「{p}」及其子文件夹？其中共 {n} 个书签（含子文件夹）将移入「未分类」。",
+    folderDeleteConfirmEmptyTree: "确定删除空文件夹「{p}」及其空的子文件夹？",
     folderDeletedMoved: "文件夹已删除，{n} 个书签移入「未分类」。",
+    folderDeleted: "文件夹已删除。",
+    folderRestored: "文件夹已恢复。",
     errDisabled: "该实例已关闭 WebDAV（功能开关）。",
     errNotConfigured: "服务端未配置 WebDAV 凭据。",
     errUnauthorized: "WebDAV 用户名或密码错误，请在设置中更新。",
@@ -1193,8 +1200,10 @@ function renderNav() {
 }
 
 /**
- * One folder row: the filter button plus a hover ⋯ menu (rename; delete for
- * declared empty folders). The unfiled entry ("" path) has no menu.
+ * One folder row: the filter button plus a hover ⋯ menu (rename; delete —
+ * contents move to Unfiled, undoable). The badge is the *direct* count, which
+ * matches what clicking the row shows (the folder filter is exact-match);
+ * delete uses the recursive count instead (#126). Unfiled ("") has no menu.
  */
 function folderNavItem(entry, active) {
   var wrap = document.createElement("div");
@@ -1229,24 +1238,8 @@ function folderNavItem(entry, active) {
     menu.appendChild(
       iconButton("menuItem", t.folderDelete, function () {
         closePopMenus();
-        var message =
-          entry.count > 0
-            ? fmt(t.folderDeleteConfirmWithCount, { p: entry.name })
-            : fmt(t.folderDeleteConfirm, { p: entry.name });
-        confirmThen(message, function () {
-          var res = Bookmarks.deleteFolderTree(state.model, entry.name);
-          state.model = res.model;
-          if (
-            state.filter.kind === "folder" &&
-            (state.filter.value === entry.name ||
-              String(state.filter.value).indexOf(entry.name + "/") === 0)
-          ) {
-            state.filter = { kind: "all", value: "" };
-          }
-          renderAll();
-          persist().then(function (ok) {
-            if (ok && res.moved) flashStatus(fmt(t.folderDeletedMoved, { n: res.moved }));
-          });
+        confirmThen(folderDeleteMessage(state.model, entry.name), function () {
+          deleteFolderWithUndo(entry.name);
         });
       })
     );
@@ -1254,6 +1247,45 @@ function folderNavItem(entry, active) {
     wrap.appendChild(menu);
   }
   return wrap;
+}
+
+/**
+ * Issue #126: the delete confirm must describe what deleteFolderTree will
+ * really do. entry.count (sidebar) is direct-only, so count recursively —
+ * a folder whose bookmarks all live in subfolders is *not* empty.
+ */
+function folderDeleteMessage(model, name) {
+  var total = Bookmarks.folderTreeCount(model, name);
+  if (total > 0) return fmt(t.folderDeleteConfirmWithCount, { p: name, n: total });
+  if (Bookmarks.hasSubfolders(model, name)) return fmt(t.folderDeleteConfirmEmptyTree, { p: name });
+  return fmt(t.folderDeleteConfirm, { p: name });
+}
+
+/**
+ * Delete a folder tree with the same 6 s undo toast as bookmark deletes.
+ * The toast reports the recursive moved count; Undo puts every moved
+ * bookmark back into its original (sub)folder and re-declares the removed
+ * folders (restoreFolderTree).
+ */
+function deleteFolderWithUndo(name) {
+  cancelPendingUndo();
+  var res = Bookmarks.deleteFolderTree(state.model, name);
+  state.model = res.model;
+  if (
+    state.filter.kind === "folder" &&
+    (state.filter.value === name || String(state.filter.value).indexOf(name + "/") === 0)
+  ) {
+    state.filter = { kind: "all", value: "" };
+  }
+  renderAll();
+  showUndoToast({
+    message: res.moved ? fmt(t.folderDeletedMoved, { n: res.moved }) : t.folderDeleted,
+    restore: function () {
+      state.model = Bookmarks.restoreFolderTree(state.model, res.undo).model;
+      return t.folderRestored;
+    },
+  });
+  return persist();
 }
 
 function emptyHint() {
@@ -1520,7 +1552,7 @@ async function moveBookmarksToFolder(ids, folder) {
 /* ---------- undo delete（删除后 6 秒内可一键撤销） ---------- */
 
 var UNDO_MS = 6000;
-var pendingUndo = null; // { entries, timer } while the toast is up
+var pendingUndo = null; // { restore, timer } while the toast is up
 
 function hideUndoToast() {
   var toast = $("undoToast");
@@ -1534,15 +1566,29 @@ function cancelPendingUndo() {
   hideUndoToast();
 }
 
-function showUndoToast(entries) {
+/**
+ * Show the undo toast. `action` is either an array of removed-bookmark
+ * entries (restoreBookmarks) or {message, restore} where restore() mutates
+ * state.model and returns the status text to flash (folder delete, #126).
+ */
+function showUndoToast(action) {
   var toast = $("undoToast");
   if (!toast) return;
-  $("undoToastMsg").textContent = fmt(t.undoMsg, { n: entries.length });
+  var undo = Array.isArray(action)
+    ? {
+        message: fmt(t.undoMsg, { n: action.length }),
+        restore: function () {
+          state.model = Bookmarks.restoreBookmarks(state.model, action);
+          return t.added;
+        },
+      }
+    : action;
+  $("undoToastMsg").textContent = undo.message;
   $("undoBtn").textContent = t.undo;
   toast.classList.remove("hidden");
   if (pendingUndo) clearTimeout(pendingUndo.timer);
   pendingUndo = {
-    entries: entries,
+    restore: undo.restore,
     timer: setTimeout(cancelPendingUndo, UNDO_MS),
   };
 }
@@ -1551,9 +1597,9 @@ async function undoDelete() {
   var undo = pendingUndo;
   cancelPendingUndo();
   if (!undo) return;
-  state.model = Bookmarks.restoreBookmarks(state.model, undo.entries);
+  var done = undo.restore();
   renderAll();
-  if (await persist()) flashStatus(t.added);
+  if (await persist()) flashStatus(done);
 }
 
 /**
@@ -4910,10 +4956,13 @@ function wireEvents() {
     // cycle the menu items instead (menus live inside cards, so check
     // that first).
     var active = document.activeElement;
-    var inMenu = active && active.closest && active.closest(".popMenu.open");
-    if (inMenu && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    // Any open ⋯ menu owns ArrowUp/Down — also when it was opened with the
+    // mouse and focus is still on its toggle (or on <body>): the first
+    // press moves focus to the first/last item instead of walking cards.
+    var openPop = document.querySelector(".popMenu.open");
+    if (openPop && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
-      cyclePopMenuFocus(inMenu, event.key === "ArrowDown" ? 1 : -1);
+      cyclePopMenuFocus(openPop, event.key === "ArrowDown" ? 1 : -1);
       return;
     }
     var isHome = event.key === "Home";

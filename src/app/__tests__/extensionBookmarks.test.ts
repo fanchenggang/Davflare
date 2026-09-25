@@ -42,7 +42,20 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
     id: string,
     url: unknown
   ) => { model: BookmarkModel; ok: boolean; reason?: string };
-  deleteFolderTree: (model: unknown, path: unknown) => { model: BookmarkModel; moved: number };
+  deleteFolderTree: (
+    model: unknown,
+    path: unknown
+  ) => {
+    model: BookmarkModel;
+    moved: number;
+    undo: { moves: { id: string; folder: string }[]; folders: string[] };
+  };
+  folderTreeCount: (model: unknown, path: unknown) => number;
+  hasSubfolders: (model: unknown, path: unknown) => boolean;
+  restoreFolderTree: (
+    model: unknown,
+    undo: unknown
+  ) => { model: BookmarkModel; restored: number };
   updateBookmark: (
     model: unknown,
     id: string,
@@ -513,6 +526,105 @@ describe("extension/bookmarks.js deleteFolderTree (round-2 folder delete)", () =
     const empty = Bookmarks.deleteFolderTree(seeded(), "Other");
     expect(empty.moved).toBe(0);
     expect(empty.model.folders).toEqual(["Dev", "Dev/Rust"]);
+  });
+});
+
+describe("extension/bookmarks.js recursive folder count + folder-delete undo (#126)", () => {
+  // Issue #126 repro: QA125P has no direct bookmarks, QA125P/sub has two.
+  function seeded() {
+    return Bookmarks.normalizeModel({
+      version: Bookmarks.MODEL_VERSION,
+      bookmarks: [
+        { id: "a", title: "A", url: "https://q.com/a", folder: "QA125P/sub", added: 1 },
+        { id: "b", title: "B", url: "https://q.com/b", folder: "QA125P/sub", added: 2 },
+        { id: "c", title: "C", url: "https://q.com/c", folder: "QA125Px", added: 3 },
+        { id: "d", title: "D", url: "https://q.com/d", folder: "", added: 4 },
+      ],
+      folders: ["QA125P", "QA125P/sub", "QA125P/empty", "Keep"],
+    });
+  }
+
+  test("folderTreeCount counts subfolder bookmarks, not sibling prefixes", () => {
+    const model = seeded();
+    expect(Bookmarks.folderTreeCount(model, "QA125P")).toBe(2);
+    expect(Bookmarks.folderTreeCount(model, "/QA125P/")).toBe(2);
+    expect(Bookmarks.folderTreeCount(model, "QA125P/sub")).toBe(2);
+    expect(Bookmarks.folderTreeCount(model, "QA125P/empty")).toBe(0);
+    // "QA125Px" shares the string prefix but is not a subfolder.
+    expect(Bookmarks.folderTreeCount(model, "QA125Px")).toBe(1);
+    expect(Bookmarks.folderTreeCount(model, "")).toBe(0);
+    expect(Bookmarks.folderTreeCount(null, "QA125P")).toBe(0);
+  });
+
+  test("folderTreeCount equals what deleteFolderTree actually moves", () => {
+    for (const path of ["QA125P", "QA125P/sub", "QA125P/empty", "QA125Px", "Keep"]) {
+      expect(Bookmarks.deleteFolderTree(seeded(), path).moved).toBe(
+        Bookmarks.folderTreeCount(seeded(), path)
+      );
+    }
+  });
+
+  test("hasSubfolders sees declared and bookmark-implied subfolders", () => {
+    const model = seeded();
+    expect(Bookmarks.hasSubfolders(model, "QA125P")).toBe(true);
+    expect(Bookmarks.hasSubfolders(model, "QA125P/sub")).toBe(false);
+    expect(Bookmarks.hasSubfolders(model, "Keep")).toBe(false);
+    expect(Bookmarks.hasSubfolders(model, "")).toBe(false);
+    const implied = Bookmarks.normalizeModel({
+      version: Bookmarks.MODEL_VERSION,
+      bookmarks: [{ id: "x", url: "https://x.com", folder: "P/deep/er" }],
+      folders: [],
+    });
+    expect(Bookmarks.hasSubfolders(implied, "P")).toBe(true);
+  });
+
+  test("deleteFolderTree returns an undo snapshot of moves and removed declarations", () => {
+    const res = Bookmarks.deleteFolderTree(seeded(), "QA125P");
+    expect(res.moved).toBe(2);
+    expect(res.undo.moves).toEqual([
+      { id: "a", folder: "QA125P/sub" },
+      { id: "b", folder: "QA125P/sub" },
+    ]);
+    expect(res.undo.folders.slice().sort()).toEqual(["QA125P", "QA125P/empty", "QA125P/sub"]);
+    expect(res.model.folders).toEqual(["Keep"]);
+    expect(res.model.bookmarks.filter((b) => b.folder === "").map((b) => b.id).sort()).toEqual([
+      "a",
+      "b",
+      "d",
+    ]);
+  });
+
+  test("restoreFolderTree puts subfolder bookmarks and the subfolders back", () => {
+    const before = seeded();
+    const res = Bookmarks.deleteFolderTree(before, "QA125P");
+    const back = Bookmarks.restoreFolderTree(res.model, res.undo);
+    expect(back.restored).toBe(2);
+    expect(back.model.bookmarks).toEqual(before.bookmarks);
+    expect(back.model.folders!.slice().sort()).toEqual(before.folders!.slice().sort());
+  });
+
+  test("restoreFolderTree leaves bookmarks moved or deleted meanwhile alone", () => {
+    const res = Bookmarks.deleteFolderTree(seeded(), "QA125P");
+    let model = Bookmarks.removeBookmark(res.model, "a");
+    model = Bookmarks.normalizeModel({
+      ...model,
+      bookmarks: model.bookmarks.map((b) => (b.id === "b" ? { ...b, folder: "Keep" } : b)),
+    });
+    const back = Bookmarks.restoreFolderTree(model, res.undo);
+    expect(back.restored).toBe(0);
+    expect(back.model.bookmarks.find((b) => b.id === "a")).toBeUndefined();
+    expect(back.model.bookmarks.find((b) => b.id === "b")!.folder).toBe("Keep");
+    // Declarations still come back (no duplicates if one was re-created).
+    const again = Bookmarks.restoreFolderTree(back.model, res.undo);
+    expect(again.model.folders!.filter((f) => f === "QA125P")).toHaveLength(1);
+  });
+
+  test("restoreFolderTree tolerates junk snapshots", () => {
+    const model = seeded();
+    expect(Bookmarks.restoreFolderTree(model, null).model.bookmarks).toEqual(model.bookmarks);
+    expect(Bookmarks.restoreFolderTree(model, { moves: "x", folders: 3 }).restored).toBe(0);
+    const empty = Bookmarks.deleteFolderTree(model, "");
+    expect(empty.undo).toEqual({ moves: [], folders: [] });
   });
 });
 

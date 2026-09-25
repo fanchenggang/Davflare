@@ -364,7 +364,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.11");
+    expect(manifest.version).toBe("1.3.12");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -431,7 +431,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.11");
+    expect(manifest.version).toBe("1.3.12");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -470,7 +470,7 @@ describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)
     expect(appJs).toContain("await deleteBookmarksWithUndo(ids)");
     // Old direct-delete call sites are gone from the library app.
     expect(appJs).not.toContain("Bookmarks.removeBookmark(state.model, item.id)");
-    expect(appJs).toContain("Bookmarks.restoreBookmarks(state.model, undo.entries)");
+    expect(appJs).toContain("Bookmarks.restoreBookmarks(state.model, action)");
   });
 
   test("undo toast ships markup, wiring, and styles", () => {
@@ -508,7 +508,7 @@ describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)
   });
 
   test("non-empty folders can be deleted with contents moving to Unfiled", () => {
-    expect(appJs).toContain("Bookmarks.deleteFolderTree(state.model, entry.name)");
+    expect(appJs).toContain("Bookmarks.deleteFolderTree(state.model, name)");
     expect(appJs).toContain("folderDeleteConfirmWithCount");
     expect(appJs).toContain("folderDeletedMoved");
   });
@@ -533,5 +533,162 @@ describe("Davflare Chrome extension / round-2 library UX (undo, keyboard, menus)
     expect(popupJs).toContain('base + "?q=" + encodeURIComponent(state.url)');
     expect(popupJs).toContain("updateViewBtn()");
     expect(popupCss).toContain("#saveForm textarea");
+  });
+});
+
+describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows + 1.3.12", () => {
+  const appJs = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const manifest = JSON.parse(fs.readFileSync(path.join(extDir, "manifest.json"), "utf8"));
+  const Bookmarks = nodeRequire("../../../extension/bookmarks.js");
+
+  /** Slice `start` … its matching close brace out of appJs (skips strings). */
+  function sliceBlock(start: string): string {
+    const at = appJs.indexOf(start);
+    if (at < 0) throw new Error(`missing: ${start}`);
+    let i = appJs.indexOf("{", at);
+    let depth = 0;
+    let quote = "";
+    for (; i < appJs.length; i++) {
+      const ch = appJs[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = "";
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+      else if (ch === "{") depth++;
+      else if (ch === "}" && --depth === 0) return appJs.slice(at, i + 1);
+    }
+    throw new Error(`unterminated: ${start}`);
+  }
+
+  /** EN / ZH copy for one key, read from the shipped string tables. */
+  function copy(key: string): { en: string; zh: string } {
+    const re = new RegExp(`\\b${key}:\\s*"((?:[^"\\\\]|\\\\.)*)"`, "g");
+    const hits = Array.from(appJs.matchAll(re)).map((m) => m[1]);
+    expect(hits).toHaveLength(2);
+    return { en: hits[0], zh: hits[1] };
+  }
+
+  function messageFn(lang: "en" | "zh") {
+    const keys = ["folderDeleteConfirmWithCount", "folderDeleteConfirmEmptyTree", "folderDeleteConfirm"];
+    const t: Record<string, string> = {};
+    for (const k of keys) t[k] = copy(k)[lang];
+    const src = `${sliceBlock("function fmt(")}\n${sliceBlock("function folderDeleteMessage(")}\nreturn folderDeleteMessage;`;
+    return new Function("Bookmarks", "t", src)(Bookmarks, t) as (model: unknown, name: string) => string;
+  }
+
+  // #126 repro: QA125P has no direct bookmarks; QA125P/sub holds two.
+  const model = Bookmarks.normalizeModel({
+    version: Bookmarks.MODEL_VERSION,
+    bookmarks: [
+      { id: "a", url: "https://q.com/a", folder: "QA125P/sub" },
+      { id: "b", url: "https://q.com/b", folder: "QA125P/sub" },
+    ],
+    folders: ["QA125P", "QA125P/sub", "Solo", "Tree", "Tree/leaf"],
+  });
+
+  test("confirm uses the recursive count — a folder with only nested bookmarks is not 'empty'", () => {
+    const zh = messageFn("zh");
+    const en = messageFn("en");
+    expect(zh(model, "QA125P")).toBe("删除「QA125P」及其子文件夹？其中共 2 个书签（含子文件夹）将移入「未分类」。");
+    expect(zh(model, "QA125P")).not.toContain("空文件夹");
+    expect(en(model, "QA125P")).toContain("2 bookmark(s)");
+    expect(en(model, "QA125P")).not.toContain("empty");
+    // Truly empty folders keep the empty wording; empty trees say so.
+    expect(zh(model, "Solo")).toBe("确定删除空文件夹「Solo」？");
+    expect(zh(model, "Tree")).toBe("确定删除空文件夹「Tree」及其空的子文件夹？");
+  });
+
+  test("delete handler no longer trusts the direct-only entry.count", () => {
+    const handler = sliceBlock("function folderNavItem(");
+    expect(handler).not.toContain("entry.count > 0");
+    expect(handler).toContain("folderDeleteMessage(state.model, entry.name)");
+    expect(handler).toContain("deleteFolderWithUndo(entry.name)");
+  });
+
+  test("folder delete is undoable and restores subfolder bookmarks + declarations", () => {
+    const fn = sliceBlock("function deleteFolderWithUndo(");
+    expect(fn).toContain("Bookmarks.deleteFolderTree(state.model, name)");
+    expect(fn).toContain("showUndoToast({");
+    expect(fn).toContain("fmt(t.folderDeletedMoved, { n: res.moved })");
+    expect(fn).toContain("Bookmarks.restoreFolderTree(state.model, res.undo)");
+    const undo = sliceBlock("async function undoDelete(");
+    expect(undo).toContain("undo.restore()");
+    // Toast count == moved count == what the dialog promised.
+    const res = Bookmarks.deleteFolderTree(model, "QA125P");
+    expect(res.moved).toBe(Bookmarks.folderTreeCount(model, "QA125P"));
+    const back = Bookmarks.restoreFolderTree(res.model, res.undo).model;
+    expect(back.bookmarks.map((b: { folder: string }) => b.folder)).toEqual(["QA125P/sub", "QA125P/sub"]);
+    expect(back.folders).toEqual(expect.arrayContaining(["QA125P", "QA125P/sub"]));
+  });
+
+  test("ArrowDown/ArrowUp enter a mouse-opened ⋯ menu (focus still on the toggle)", () => {
+    document.body.innerHTML = `
+      <div class="card"><div class="wrap">
+        <button class="menuToggle" id="tog">⋯</button>
+        <div class="popMenu open"><button id="m1">A</button><button id="m2">B</button><button id="m3">C</button></div>
+      </div></div>`;
+    const listeners: ((e: KeyboardEvent) => void)[] = [];
+    const fakeDoc = {
+      addEventListener: (type: string, fn: (e: KeyboardEvent) => void) => {
+        if (type === "keydown") listeners.push(fn);
+      },
+      querySelector: (s: string) => document.querySelector(s),
+      get activeElement() {
+        return document.activeElement;
+      },
+    };
+    const moved: string[] = [];
+    const src = `${sliceBlock("function cyclePopMenuFocus(")}\n${sliceBlock('document.addEventListener("keydown", function (event)')});`;
+    new Function(
+      "document",
+      "$",
+      "selectedExistingIds",
+      "submitBatchDelete",
+      "closePopMenus",
+      "focusAdjacentItem",
+      "HTMLElement",
+      src
+    )(
+      fakeDoc,
+      () => null,
+      () => [],
+      () => undefined,
+      () => undefined,
+      () => moved.push("card"),
+      HTMLElement
+    );
+    expect(listeners).toHaveLength(1);
+    const press = (key: string) => {
+      const ev = new KeyboardEvent("keydown", { key, cancelable: true });
+      Object.defineProperty(ev, "target", { value: document.activeElement });
+      listeners[0](ev);
+      return ev;
+    };
+    (document.getElementById("tog") as HTMLButtonElement).focus();
+    const ev = press("ArrowDown");
+    expect(ev.defaultPrevented).toBe(true);
+    expect(document.activeElement && document.activeElement.id).toBe("m1");
+    press("ArrowDown");
+    expect(document.activeElement && document.activeElement.id).toBe("m2");
+    (document.getElementById("tog") as HTMLButtonElement).focus();
+    press("ArrowUp");
+    expect(document.activeElement && document.activeElement.id).toBe("m3");
+    // Focus on <body> (menu opened by mouse, nothing focused) works too.
+    (document.activeElement as HTMLElement).blur();
+    press("ArrowDown");
+    expect(document.activeElement && document.activeElement.id).toBe("m1");
+    expect(moved).toEqual([]); // never walked the card grid while the menu is open
+    // Menu closed → arrows rove cards again.
+    document.querySelector(".popMenu")!.classList.remove("open");
+    (document.getElementById("tog") as HTMLButtonElement).focus();
+    press("ArrowDown");
+    expect(moved).toEqual(["card"]);
+    document.body.innerHTML = "";
+  });
+
+  test("manifest bumped to 1.3.12", () => {
+    expect(manifest.version).toBe("1.3.12");
   });
 });

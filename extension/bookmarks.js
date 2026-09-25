@@ -694,23 +694,104 @@ var Bookmarks = (function () {
    * to the root (unfiled) instead of being lost. Empty string is never a
    * deletable folder. Returns { model, moved } for the status message.
    */
+  function cleanFolderPath(path) {
+    return String(path == null ? "" : path).trim().replace(/^\/+|\/+$/g, "");
+  }
+
+  function inFolderTree(folder, clean) {
+    var f = String(folder || "");
+    return f === clean || f.indexOf(clean + "/") === 0;
+  }
+
+  /**
+   * Issue #126: bookmarks inside a folder *and all its subfolders* — what
+   * deleteFolderTree would actually move. The sidebar count (folderList) is
+   * direct-only, so the delete confirm must use this instead.
+   */
+  function folderTreeCount(model, path) {
+    var clean = cleanFolderPath(path);
+    if (!clean) return 0;
+    var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
+    var n = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && inFolderTree(items[i].folder, clean)) n++;
+    }
+    return n;
+  }
+
+  /** Any subfolder (declared or implied by a bookmark) strictly below `path`. */
+  function hasSubfolders(model, path) {
+    var clean = cleanFolderPath(path);
+    if (!clean) return false;
+    var prefix = clean + "/";
+    var declared = model && Array.isArray(model.folders) ? model.folders : [];
+    for (var i = 0; i < declared.length; i++) {
+      if (String(declared[i]).indexOf(prefix) === 0) return true;
+    }
+    var items = model && Array.isArray(model.bookmarks) ? model.bookmarks : [];
+    for (var j = 0; j < items.length; j++) {
+      if (items[j] && String(items[j].folder || "").indexOf(prefix) === 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Delete a folder tree: every bookmark in the folder or a subfolder moves
+   * to Unfiled ("") and the declared folders under it disappear. Returns
+   * `undo` — {moves:[{id, folder}], folders:[...]} — for restoreFolderTree.
+   */
   function deleteFolderTree(model, path) {
     var next = normalizeModel(model);
-    var clean = String(path == null ? "" : path).trim().replace(/^\/+|\/+$/g, "");
-    if (!clean) return { model: next, moved: 0 };
+    var clean = cleanFolderPath(path);
+    if (!clean) return { model: next, moved: 0, undo: { moves: [], folders: [] } };
     var prefix = clean + "/";
-    var moved = 0;
+    var moves = [];
     for (var i = 0; i < next.bookmarks.length; i++) {
       var f = String(next.bookmarks[i].folder || "");
       if (f === clean || f.indexOf(prefix) === 0) {
+        moves.push({ id: next.bookmarks[i].id, folder: f });
         next.bookmarks[i].folder = "";
-        moved++;
       }
     }
+    var removed = [];
     next.folders = next.folders.filter(function (p) {
-      return p !== clean && p.indexOf(prefix) !== 0;
+      var hit = p === clean || p.indexOf(prefix) === 0;
+      if (hit) removed.push(p);
+      return !hit;
     });
-    return { model: next, moved: moved };
+    return { model: next, moved: moves.length, undo: { moves: moves, folders: removed } };
+  }
+
+  /**
+   * Undo deleteFolderTree: bookmarks that are still in Unfiled go back to
+   * their original (sub)folder and the removed folder declarations return.
+   * Bookmarks deleted or moved elsewhere in the meantime are left alone.
+   * Returns {model, restored}.
+   */
+  function restoreFolderTree(model, undo) {
+    var next = normalizeModel(model);
+    var moves = undo && Array.isArray(undo.moves) ? undo.moves : [];
+    var byId = Object.create(null);
+    for (var i = 0; i < moves.length; i++) {
+      var m = moves[i];
+      if (m && m.id) byId[m.id] = cleanFolderPath(m.folder);
+    }
+    var restored = 0;
+    for (var j = 0; j < next.bookmarks.length; j++) {
+      var b = next.bookmarks[j];
+      if (Object.prototype.hasOwnProperty.call(byId, b.id) && String(b.folder || "") === "") {
+        b.folder = byId[b.id];
+        restored++;
+      }
+    }
+    var folders = undo && Array.isArray(undo.folders) ? undo.folders : [];
+    var extra = [];
+    for (var k = 0; k < folders.length; k++) {
+      var p = cleanFolderPath(folders[k]);
+      if (p && next.folders.indexOf(p) === -1 && extra.indexOf(p) === -1) extra.push(p);
+    }
+    if (extra.length) next = normalizeModel({ version: next.version, bookmarks: next.bookmarks, folders: next.folders.concat(extra) });
+    return { model: next, restored: restored };
   }
 
   /**
@@ -963,6 +1044,9 @@ var Bookmarks = (function () {
     buildChromeWritePlan: buildChromeWritePlan,
     collectChromeWriteConflicts: collectChromeWriteConflicts,
     deleteFolderTree: deleteFolderTree,
+    folderTreeCount: folderTreeCount,
+    hasSubfolders: hasSubfolders,
+    restoreFolderTree: restoreFolderTree,
     emptyModel: emptyModel,
     folderPaths: folderPaths,
     importBackup: importBackup,
