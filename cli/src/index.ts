@@ -26,8 +26,18 @@ function client(): DavflareClient {
   return new DavflareClient(config.server, config.key);
 }
 
+/** 401/403：密钥无效/过期/吊销/功能关闭。固定英文前缀便于 CI（GitHub Action）识别并给出明确报错。 */
+function authErrorMessage(error: ApiError): string {
+  return (
+    `Davflare API key rejected (HTTP ${error.status}: ${error.message}) — ` +
+    "检查 DAVFLARE_KEY / API 密钥是否正确、未过期或被吊销，以及服务地址是否指向正确的实例"
+  );
+}
+
 function fail(error: unknown): never {
-  if (error instanceof ConfigError || error instanceof ApiError) {
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+    console.error(`错误: ${authErrorMessage(error)}`);
+  } else if (error instanceof ConfigError || error instanceof ApiError) {
     console.error(`错误: ${error.message}`);
   } else {
     console.error(`错误: ${(error as Error)?.message ?? error}`);
@@ -341,6 +351,7 @@ sitesCmd
   .requiredOption("--slug <slug>", "站点 slug（[a-z0-9][a-z0-9-]{0,62}）")
   .action(async (localDir: string, options: { slug: string }) => {
     const stagingPrefix = `.davflare-publish/${crypto.randomUUID()}`;
+    let staged = false;
     try {
       const slug = assertSiteSlug(options.slug);
       const root = path.resolve(localDir);
@@ -352,7 +363,17 @@ sitesCmd
         throw new Error("本地目录没有可发布的文件");
       }
       const api = client();
+      // 预检：先用 GET /api/sites 校验密钥与服务地址，密钥错误时在上传前快速失败。
+      try {
+        await api.listSites();
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          throw new Error("服务地址未返回 Davflare API 响应（/api/sites 不是 JSON），请检查 DAVFLARE_SERVER");
+        }
+        throw error;
+      }
       console.error(`上传 ${files.length} 个文件到暂存 ${stagingPrefix}/ …`);
+      staged = true;
       for (const entry of files) {
         const localPath = path.join(root, ...entry.path.split("/"));
         const progress = makeProgressBar(`上传 ${entry.path}`);
@@ -370,10 +391,12 @@ sitesCmd
       if (url) console.log(url);
       else console.error("未配置 SITES_HOST，公开地址不可用");
     } catch (error) {
-      try {
-        await client().remove(`${stagingPrefix}/`, true);
-      } catch {
-        // best-effort cleanup
+      if (staged) {
+        try {
+          await client().remove(`${stagingPrefix}/`, true);
+        } catch {
+          // best-effort cleanup
+        }
       }
       fail(error);
     }

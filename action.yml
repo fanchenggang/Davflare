@@ -1,0 +1,40 @@
+name: Deploy to Davflare Site
+description: Publish a static build directory (e.g. dist/) to a Davflare static site (sites/{slug}/) via davflare-cli.
+author: fanchenggang
+
+branding:
+  icon: upload-cloud
+  color: orange
+
+inputs:
+  path:
+    description: Build output directory to publish (relative to the workspace), e.g. dist
+    required: true
+  slug:
+    description: "Site slug, [a-z0-9][a-z0-9-]{0,62}; the site is served at https://<SITES_HOST>/<slug>/"
+    required: true
+  url:
+    description: "Davflare instance URL, e.g. https://drive.example.com (store it in a secret such as DAVFLARE_URL)"
+    required: true
+  api-key:
+    description: "Davflare API key (create one under API keys in the web UI; always pass it from a secret such as DAVFLARE_API_KEY)"
+    required: true
+
+outputs:
+  url:
+    description: Public URL of the published site (empty if the instance has no SITES_HOST)
+    value: ${{ steps.publish.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - id: publish
+      shell: bash
+      # Inputs go through env (never interpolated into the script); the key never reaches argv.
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_SLUG: ${{ inputs.slug }}
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
+        DAVFLARE_ACTION_PATH: ${{ github.action_path }}
+      run: bash "$DAVFLARE_ACTION_PATH/scripts/deploy-site-action.sh"

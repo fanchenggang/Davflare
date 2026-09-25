@@ -33,7 +33,7 @@
 - 回收站，保留天数可配（`TRASH_RETENTION_DAYS`）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端）
 - API Key 支持脚本上传 / 下载 / 同步，远程 MCP 在 `/mcp`（25 个工具）
-- 静态站点与图床走单独域名（`SITES_HOST`）
+- 静态站点与图床走单独域名（`SITES_HOST`），并提供 GitHub Action 从 CI 一步发布
 - 拥有者设置页五个持久化功能开关
 - `davflare-cli`、可选 Chrome MV3 扩展，以及 R2 上的 Agent 目录约定
 - 中 / 英界面
@@ -56,6 +56,7 @@
 | WebDAV 客户端与限制 | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) |
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | 静态站点与图床 | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) |
+| GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
 | Agent 目录（`pull` / `push`） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) |
 | 命令行（`davflare-cli`） | [cli/README.md](cli/README.md) |
 | Chrome 扩展（安装 + 书签） | [extension/README.zh-CN.md](extension/README.zh-CN.md) |
