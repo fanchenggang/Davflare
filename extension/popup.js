@@ -44,6 +44,17 @@ var COPY = {
     errOther: "The instance returned an unexpected response.",
     home: "Open Davflare",
     settings: "Settings",
+    edgeTitle: "In-page save panel",
+    edgeDesc:
+      "Adds a floating save handle on this site. Only the site's origin is granted, and disabling revokes it.",
+    edgeEnable: "Enable on this site",
+    edgeDisable: "Disable on this site",
+    edgeOn: "On",
+    edgeOff: "Off",
+    edgeUnsupported: "Needs a newer Chrome (scripting registration unavailable).",
+    edgeDenied: "Origin permission was denied.",
+    shortcutNone: "not set",
+    shortcutFormat: "{key} saves this page",
   },
   zh: {
     titleLabel: "标题",
@@ -73,6 +84,16 @@ var COPY = {
     errOther: "实例返回了未预期的响应。",
     home: "插件主页",
     settings: "设置",
+    edgeTitle: "页面内收藏面板",
+    edgeDesc: "在本站点显示悬浮收藏把手，只授予该站点来源权限，停用即撤销。",
+    edgeEnable: "在此站点启用",
+    edgeDisable: "在此站点停用",
+    edgeOn: "已启用",
+    edgeOff: "未启用",
+    edgeUnsupported: "需要较新版本的 Chrome（不支持动态注册脚本）。",
+    edgeDenied: "未授权该站点来源。",
+    shortcutNone: "未设置",
+    shortcutFormat: "{key} 快速收藏此页",
   },
 };
 
@@ -450,6 +471,101 @@ function renderHeader() {
   $("pageUrl").textContent = state.url;
 }
 
+/* ---------- in-page edge panel toggle (round 4) ---------- */
+
+var edge = { supported: false, pattern: "", enabled: false, granted: false };
+
+function sendEdge(message) {
+  return new Promise(function (resolve) {
+    try {
+      chrome.runtime.sendMessage(message, function (reply) {
+        void chrome.runtime.lastError;
+        resolve(reply || null);
+      });
+    } catch (err) {
+      resolve(null);
+    }
+  });
+}
+
+function renderEdgeSection() {
+  $("edgeSection").classList.remove("hidden");
+  $("edgeTitle").textContent = state.t.edgeTitle;
+  var stateEl = $("edgeState");
+  var btn = $("edgeToggleBtn");
+  if (!edge.supported) {
+    $("edgeDesc").textContent = state.t.edgeUnsupported;
+    stateEl.textContent = "";
+    btn.classList.add("hidden");
+    return;
+  }
+  $("edgeDesc").textContent = state.t.edgeDesc;
+  btn.classList.remove("hidden");
+  btn.textContent = edge.enabled ? state.t.edgeDisable : state.t.edgeEnable;
+  stateEl.textContent = edge.enabled ? state.t.edgeOn : state.t.edgeOff;
+  stateEl.classList.toggle("on", edge.enabled);
+}
+
+async function refreshEdgeState() {
+  var reply = await sendEdge({ type: "davflare-edge-state", pageUrl: state.url });
+  edge.supported = Boolean(reply && reply.supported);
+  edge.pattern = (reply && reply.pattern) || "";
+  edge.enabled = Boolean(reply && reply.enabled);
+  edge.granted = Boolean(reply && reply.granted);
+  renderEdgeSection();
+}
+
+async function onEdgeToggle() {
+  if (!edge.enabled) {
+    // permissions.request must run inside the click gesture — this await is
+    // deliberately the first thing that happens in the handler.
+    var granted;
+    try {
+      granted = await chrome.permissions.request({ origins: [edge.pattern] });
+    } catch (err) {
+      granted = false;
+    }
+    if (!granted) {
+      $("edgeState").textContent = state.t.edgeDenied;
+      $("edgeState").classList.remove("on");
+      return;
+    }
+  }
+  var btn = $("edgeToggleBtn");
+  btn.disabled = true;
+  var reply = await sendEdge(
+    edge.enabled
+      ? { type: "davflare-edge-disable", pageUrl: state.url }
+      : {
+          type: "davflare-edge-enable",
+          pageUrl: state.url,
+          tabId: state.tab && typeof state.tab.id === "number" ? state.tab.id : undefined,
+        }
+  );
+  btn.disabled = false;
+  if (reply && reply.ok) {
+    edge.enabled = !edge.enabled;
+    renderEdgeSection();
+  } else {
+    $("edgeState").textContent = state.t.edgeDenied;
+    $("edgeState").classList.remove("on");
+  }
+}
+
+/** Foot note showing the configurable quick-save shortcut (if any). */
+function renderShortcutHint() {
+  if (!chrome.commands || typeof chrome.commands.getAll !== "function") return;
+  chrome.commands.getAll(function (commands) {
+    var save = null;
+    for (var i = 0; i < (commands || []).length; i++) {
+      if (commands[i] && commands[i].name === "save-current-page") save = commands[i];
+    }
+    if (!save) return;
+    var key = save.shortcut || state.t.shortcutNone;
+    $("shortcutHint").textContent = state.t.shortcutFormat.replace("{key}", key);
+  });
+}
+
 async function init() {
   applyTheme();
   state.lang = pickLang();
@@ -470,11 +586,13 @@ async function init() {
   state.tab = tabs && tabs[0] ? tabs[0] : null;
   state.url = (state.tab && state.tab.url) || "";
   renderHeader();
+  renderShortcutHint();
 
   if (!Bookmarks.isWebUrl(state.url)) {
     showNotice(t.skipPage);
     return;
   }
+  refreshEdgeState();
 
   var cfg = await loadConfig();
   if (!cfg.instanceUrl) {
@@ -513,6 +631,9 @@ $("homeBtn").addEventListener("click", function () {
 });
 $("settingsBtn").addEventListener("click", function () {
   openShell("settings");
+});
+$("edgeToggleBtn").addEventListener("click", function () {
+  onEdgeToggle();
 });
 
 init();

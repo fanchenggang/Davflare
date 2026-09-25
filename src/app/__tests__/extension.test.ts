@@ -90,10 +90,15 @@ describe("Davflare Chrome extension / default package", () => {
     );
     expect(manifest.background).toEqual({ service_worker: "background.js" });
     // #62 P1：快捷键快藏 + omnibox 检索已藏书签。
+    // Round 4: toggle-edge-panel drives the in-page save panel.
     expect(manifest.commands).toEqual({
       "save-current-page": {
         suggested_key: { default: "Alt+Shift+S", mac: "Alt+Shift+S" },
         description: "Save the current page to Davflare",
+      },
+      "toggle-edge-panel": {
+        suggested_key: { default: "Alt+Shift+P", mac: "Alt+Shift+P" },
+        description: "Toggle the in-page Davflare save panel",
       },
     });
     expect(manifest.omnibox).toEqual({ keyword: "df" });
@@ -364,7 +369,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.15");
+    expect(manifest.version).toBe("1.3.16");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -431,7 +436,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.15");
+    expect(manifest.version).toBe("1.3.16");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -692,7 +697,7 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
   });
 
   test("manifest version is current (1.3.15, bumped again by #134)", () => {
-    expect(manifest.version).toBe("1.3.15");
+    expect(manifest.version).toBe("1.3.16");
   });
 });
 
@@ -724,8 +729,8 @@ describe("Davflare Chrome extension / #130 re-saving a trashed URL keeps the ori
     expect(quickJs).not.toContain("overwriteTitle");
   });
 
-  test("manifest version is current (1.3.15 after #134)", () => {
-    expect(manifest.version).toBe("1.3.15");
+  test("manifest version is current (1.3.16 after round 4)", () => {
+    expect(manifest.version).toBe("1.3.16");
   });
 });
 
@@ -740,5 +745,88 @@ describe("Davflare Chrome extension / #134 + quick-save restored notification", 
     expect(bgJs).toContain('result.status === "restored"');
     // Normal saves keep the old wording.
     expect(bgJs).toContain('saveOk: "已收藏到书签库。"');
+  });
+});
+
+describe("Davflare Chrome extension / round 4: edge panel + save link + polish", () => {
+  const bgJs = fs.readFileSync(path.join(extDir, "background.js"), "utf8");
+  const popupHtml = fs.readFileSync(path.join(extDir, "popup.html"), "utf8");
+  const popupJs = fs.readFileSync(path.join(extDir, "popup.js"), "utf8");
+  const popupCss = fs.readFileSync(path.join(extDir, "popup.css"), "utf8");
+  const appJs = fs.readFileSync(path.join(extDir, "bookmarksApp.js"), "utf8");
+  const css = fs.readFileSync(path.join(extDir, "bookmarks.css"), "utf8");
+  const edgePanelJs = fs.readFileSync(path.join(extDir, "edgePanel.js"), "utf8");
+
+  test("background registers a link context menu wired to saveLink", () => {
+    expect(bgJs).toContain('var MENU_SAVE_LINK = "davflare-save-link";');
+    expect(bgJs).toContain('contexts: ["link"]');
+    expect(bgJs).toContain("if (info.menuItemId === MENU_SAVE_LINK)");
+    expect(bgJs).toContain("async function saveLink(info)");
+    expect(bgJs).toContain("info.linkUrl");
+    // Shared save core: one implementation, two feedback surfaces.
+    expect(bgJs).toContain("async function performSave(title, url, extra)");
+    expect(bgJs).toContain("async function saveToLibrary(title, url)");
+  });
+
+  test("background manages the dynamic edge-panel registration + message router", () => {
+    expect(bgJs).toContain('var EDGE_SCRIPT_ID = "davflare-edge-panel";');
+    expect(bgJs).toContain('var EDGE_ORIGINS_KEY = "edgePanelOrigins";');
+    expect(bgJs).toContain("chrome.scripting.registerContentScripts");
+    expect(bgJs).toContain("persistAcrossSessions: true");
+    expect(bgJs).toContain("chrome.runtime.onMessage.addListener");
+    expect(bgJs).toContain('"davflare-edge-save"');
+    expect(bgJs).toContain('"davflare-edge-meta"');
+    expect(bgJs).toContain('"davflare-edge-enable"');
+    expect(bgJs).toContain('"davflare-edge-disable"');
+    expect(bgJs).toContain('"davflare-edge-state"');
+    expect(bgJs).toContain('if (command === "toggle-edge-panel") return toggleEdgePanel();');
+    // Trash-revive prefill for the panel (#130 semantics).
+    expect(bgJs).toContain("Bookmarks.trashedByUrl(model, pageUrl)");
+    // onInstalled/onStartup re-sync the registration idempotently.
+    expect(bgJs).toContain("ensureEdgeRegistration()");
+  });
+
+  test("edgePanel.js ships a shadow-DOM panel talking to the service worker", () => {
+    expect(fs.existsSync(path.join(extDir, "edgePanel.js"))).toBe(true);
+    expect(edgePanelJs).toContain("attachShadow({ mode: \"closed\" })");
+    expect(edgePanelJs).toContain("z-index:2147483647");
+    expect(edgePanelJs).toContain("type: \"davflare-edge-save\"");
+    expect(edgePanelJs).toContain("type: \"davflare-edge-meta\"");
+    expect(edgePanelJs).toContain('"davflare-edge-toggle"');
+    expect(edgePanelJs).toContain("prefers-color-scheme:dark");
+    expect(edgePanelJs).toContain("prefers-reduced-motion:reduce");
+    expect(edgePanelJs).toContain("popupLastFolder");
+    expect(edgePanelJs).toContain("edgePanelSide");
+  });
+
+  test("popup hosts the per-site enable/disable toggle", () => {
+    expect(popupHtml).toContain('id="edgeSection"');
+    expect(popupHtml).toContain('id="edgeToggleBtn"');
+    expect(popupJs).toContain("chrome.permissions.request({ origins: [edge.pattern] })");
+    expect(popupJs).toContain('"davflare-edge-state"');
+    expect(popupJs).toContain('"davflare-edge-enable"');
+    expect(popupJs).toContain('"davflare-edge-disable"');
+    expect(popupJs).toContain("edgeTitle:");
+  });
+
+  test("appearance polish: sticky topbar, per-scene empty art, row hover, shortcut rows", () => {
+    // Sticky frosted topbar (solid fallback declared before color-mix).
+    expect(css).toMatch(/\.topbar \{[^}]*position: sticky/s);
+    expect(css).toContain("backdrop-filter: blur(12px)");
+    expect(css).toContain("color-mix(in srgb, var(--paper) 82%, transparent)");
+    // Rows lift like cards (round 4).
+    expect(css).toMatch(/\.row:hover \{[^}]*translateY\(-1px\)/s);
+    // Per-scene empty-state art + plumbing.
+    expect(appJs).toContain("function emptyArt(kind)");
+    expect(appJs).toContain('art: "trash"');
+    expect(appJs).toContain('art: "duplicates"');
+    expect(appJs).toContain('art: "search"');
+    expect(appJs).toContain('art: "library"');
+    // Settings shortcuts row reads live chrome.commands values.
+    expect(appJs).toContain("function renderShortcuts()");
+    expect(popupHtml).toContain('id="shortcutHint"');
+    expect(popupJs).toContain("chrome.commands.getAll");
+    // Popup scrollbars mirror the library shell.
+    expect(popupCss).toContain("::-webkit-scrollbar-thumb");
   });
 });

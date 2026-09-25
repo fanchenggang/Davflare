@@ -39,7 +39,11 @@ var DavflareQuickSave = (function () {
    * @param {() => Promise<{model: object, etag?: string}|null>} deps.readCache
    * @param {(model: object, etag: string|null) => Promise<void>} deps.writeCache
    * @param {(res: object) => object} deps.parseRemote
-   * @param {{title: string, url: string, added?: number}} page
+   * @param {{title: string, url: string, added?: number,
+   *          folder?: string, tags?: string[], note?: string}} page
+   *   folder/tags/note are optional (edge-panel round 4); addBookmark's #130
+   *   revive semantics decide whether they land — non-empty incoming wins on
+   *   a trash revive, otherwise the original entry is restored untouched.
    * @returns {Promise<
    *   | { ok: true, status: "saved" | "restored" | "exists" }
    *   ("restored" = the URL was revived from the trash, #130 follow-up)
@@ -55,17 +59,23 @@ var DavflareQuickSave = (function () {
     var title = page.title || "";
     var url = page.url || "";
     var added = typeof page.added === "number" ? page.added : Date.now();
+    // Optional edge-panel fields (round 4); junk values are normalized away
+    // by sanitizeBookmark inside addBookmark.
+    var entry = {
+      title: title,
+      url: url,
+      added: added,
+      folder: typeof page.folder === "string" ? page.folder : "",
+      tags: Array.isArray(page.tags) ? page.tags : [],
+      note: typeof page.note === "string" ? page.note : "",
+    };
 
     var cache = await readCache();
     var cachedModel = cache && cache.model ? Bookmarks.normalizeModel(cache.model) : null;
     var cachedEtag = cache && cache.etag ? cache.etag : null;
 
     if (cachedModel) {
-      var early = Bookmarks.addBookmark(cachedModel, {
-        title: title,
-        url: url,
-        added: added,
-      });
+      var early = Bookmarks.addBookmark(cachedModel, entry);
       if (!early.added) {
         return { ok: true, status: "exists" };
       }
@@ -115,11 +125,7 @@ var DavflareQuickSave = (function () {
       // If-Match from bookmarksCache. Best-effort: never block the PUT (#73).
       await safeWriteCache(writeCache, model, res.etag || null);
 
-      var add = Bookmarks.addBookmark(model, {
-        title: title,
-        url: url,
-        added: added,
-      });
+      var add = Bookmarks.addBookmark(model, entry);
       if (!add.added) {
         return { ok: true, status: "exists" };
       }

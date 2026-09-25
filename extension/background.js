@@ -3,8 +3,14 @@
 importScripts("url.js", "bookmarks.js", "dav.js", "quickSave.js");
 
 var MENU_SAVE = "davflare-save-page";
+var MENU_SAVE_LINK = "davflare-save-link";
 var MENU_MODE = "davflare-toggle-mode";
 var CACHE_KEY = "bookmarksCache";
+
+/* Edge panel (round 4): one dynamic content-script registration whose
+   matches list mirrors the origins the user enabled from the popup. */
+var EDGE_SCRIPT_ID = "davflare-edge-panel";
+var EDGE_ORIGINS_KEY = "edgePanelOrigins";
 
 var MESSAGES = {
   en: {
@@ -18,6 +24,10 @@ var MESSAGES = {
     modeTitle: "Default home view switched",
     modeDrive: "The home page will open your drive.",
     modeBookmarks: "The home page will open your bookmark library.",
+    edgeNeedEnable:
+      "Enable the in-page save panel for this site from the popup first.",
+    edgeUnsupported: "The in-page save panel needs a newer Chrome.",
+    edgeUnavailable: "This page cannot host the save panel.",
   },
   zh: {
     appTitle: "Davflare",
@@ -30,6 +40,9 @@ var MESSAGES = {
     modeTitle: "主页默认视图已切换",
     modeDrive: "插件主页将打开网盘。",
     modeBookmarks: "插件主页将打开书签库。",
+    edgeNeedEnable: "请先在弹窗里为本站点启用页面内收藏面板。",
+    edgeUnsupported: "页面内收藏面板需要较新版本的 Chrome。",
+    edgeUnavailable: "当前页面无法使用收藏面板。",
   },
 };
 
@@ -185,6 +198,47 @@ async function toggleDefaultMode() {
 }
 
 /**
+ * Pure save core shared by the context menus, the shortcut fallback and the
+ * in-page edge panel (round 4). Validation results and quickSave outcomes all
+ * come back as {ok, …}; callers decide how to present them. No badge /
+ * notification side effects here so the edge panel can show its own result.
+ */
+async function performSave(title, url, extra) {
+  if (!Bookmarks.isWebUrl(url)) return { ok: false, kind: "skipPage" };
+  var cfg = await loadConfig();
+  if (!cfg.instanceUrl) return { ok: false, kind: "needConfig" };
+  var page = { title: title || "", url: url, added: Date.now() };
+  if (extra) {
+    if (typeof extra.folder === "string" && extra.folder) page.folder = extra.folder;
+    if (Array.isArray(extra.tags) && extra.tags.length) page.tags = extra.tags;
+    if (typeof extra.note === "string" && extra.note) page.note = extra.note;
+  }
+  return DavflareQuickSave.saveBookmark(
+    {
+      client: DavflareDav.createDavClient(cfg),
+      Bookmarks: Bookmarks,
+      readCache: readBookmarksCache,
+      writeCache: writeBookmarksCache,
+      parseRemote: parseRemoteLibrary,
+    },
+    page
+  );
+}
+
+/** Human-readable one-liner for a performSave result (both feedback paths). */
+function describeResult(result) {
+  var copy = t();
+  if (result.ok) {
+    if (result.status === "exists") return copy.saveExists;
+    if (result.status === "restored") return copy.saveRestored; // trash revive (#130)
+    return copy.saveOk;
+  }
+  if (result.kind === "skipPage") return copy.skipPage;
+  if (result.kind === "needConfig") return copy.needConfig;
+  return errorText(result.kind, result.message);
+}
+
+/**
  * Context-menu / fallback quick-save (#68 / #71 / #73).
  *
  * MV3 service workers are killed if the click listener does not return the
@@ -200,49 +254,30 @@ async function toggleDefaultMode() {
  * #75: unexpected copy includes err.message; parseRemote prefers JSON so the
  * SW never needs DOMParser for a normal Davflare library GET.
  */
-async function savePage(tab) {
-  var copy = t();
+async function saveToLibrary(title, url) {
   flashBadge("…");
   try {
-    var url = (tab && tab.url) || "";
-    var title = (tab && tab.title) || "";
-    if (!Bookmarks.isWebUrl(url)) {
-      failFeedback(copy.skipPage);
-      return;
-    }
-
-    var cfg = await loadConfig();
-    if (!cfg.instanceUrl) {
-      failFeedback(copy.needConfig);
-      return;
-    }
-
-    var result = await DavflareQuickSave.saveBookmark(
-      {
-        client: DavflareDav.createDavClient(cfg),
-        Bookmarks: Bookmarks,
-        readCache: readBookmarksCache,
-        writeCache: writeBookmarksCache,
-        parseRemote: parseRemoteLibrary,
-      },
-      { title: title, url: url, added: Date.now() }
-    );
-
+    var result = await performSave(title, url);
     if (result.ok) {
-      okFeedback(
-        result.status === "exists"
-          ? copy.saveExists
-          : result.status === "restored"
-            ? copy.saveRestored // revived from the trash (#130 follow-up)
-            : copy.saveOk
-      );
+      okFeedback(describeResult(result));
       return;
     }
-    failFeedback(errorText(result.kind, result.message));
+    failFeedback(describeResult(result));
   } catch (err) {
     var detail = err && err.message ? String(err.message) : String(err || "");
     failFeedback(errorText("unexpected", detail));
   }
+}
+
+async function savePage(tab) {
+  return saveToLibrary((tab && tab.title) || "", (tab && tab.url) || "");
+}
+
+/** Round 4: "Save link to Davflare" — title from the link text, url from href. */
+async function saveLink(info) {
+  var url = (info && info.linkUrl) || "";
+  var text = info && typeof info.linkText === "string" ? info.linkText.trim() : "";
+  return saveToLibrary(text || url, url);
 }
 
 /**
@@ -266,6 +301,7 @@ async function quickSaveCurrentPage() {
 
 chrome.commands.onCommand.addListener(function (command) {
   if (command === "save-current-page") return quickSaveCurrentPage();
+  if (command === "toggle-edge-panel") return toggleEdgePanel();
 });
 
 /* ---------- omnibox (#62 P1): "df <query>" searches the cached library ---------- */
@@ -388,6 +424,9 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (info.menuItemId === MENU_SAVE) {
     return savePage(tab);
   }
+  if (info.menuItemId === MENU_SAVE_LINK) {
+    return saveLink(info);
+  }
 });
 
 function ensureContextMenus() {
@@ -406,6 +445,16 @@ function ensureContextMenus() {
     );
     chrome.contextMenus.create(
       {
+        id: MENU_SAVE_LINK,
+        title: zh ? "收藏链接到 Davflare" : "Save link to Davflare",
+        contexts: ["link"],
+      },
+      function () {
+        void chrome.runtime.lastError;
+      }
+    );
+    chrome.contextMenus.create(
+      {
         id: MENU_MODE,
         title: zh ? "切换插件主页默认视图" : "Switch default home view",
         contexts: ["action"],
@@ -417,5 +466,315 @@ function ensureContextMenus() {
   });
 }
 
-chrome.runtime.onInstalled.addListener(ensureContextMenus);
-chrome.runtime.onStartup.addListener(ensureContextMenus);
+chrome.runtime.onInstalled.addListener(function () {
+  ensureContextMenus();
+  ensureEdgeRegistration();
+});
+chrome.runtime.onStartup.addListener(function () {
+  ensureContextMenus();
+  ensureEdgeRegistration();
+});
+
+/* ---------- in-page edge save panel (round 4) ----------
+ *
+ * Permission model: nothing is injected until the user enables a site from
+ * the popup. Enabling requests the optional host permission for that origin
+ * (inside the popup click gesture) and registers ONE dynamic content script
+ * whose matches list mirrors chrome.storage.local.edgePanelOrigins.
+ * Disabling re-registers without the origin (unregisters entirely when the
+ * list empties) — revocation is real, not a UI hint.
+ */
+
+function edgePanelSupported() {
+  return Boolean(
+    chrome.scripting &&
+      typeof chrome.scripting.registerContentScripts === "function" &&
+      typeof chrome.scripting.getRegisteredContentScripts === "function"
+  );
+}
+
+function originPatternOf(pageUrl) {
+  try {
+    return new URL(pageUrl).origin + "/*";
+  } catch (err) {
+    return "";
+  }
+}
+
+async function readEdgeOrigins() {
+  var stored = await chrome.storage.local.get([EDGE_ORIGINS_KEY]);
+  var list = stored && stored[EDGE_ORIGINS_KEY];
+  if (!Array.isArray(list)) return [];
+  return list.filter(function (o) {
+    return typeof o === "string" && o.indexOf("http") === 0;
+  });
+}
+
+/** Idempotently make the registration match `origins` (replace-on-change). */
+async function syncEdgeRegistration(origins) {
+  if (!edgePanelSupported()) return { supported: false };
+  var registered = [];
+  try {
+    registered = await chrome.scripting.getRegisteredContentScripts({
+      ids: [EDGE_SCRIPT_ID],
+    });
+  } catch (err) {
+    registered = [];
+  }
+  if (registered && registered.length) {
+    try {
+      await chrome.scripting.unregisterContentScripts({ ids: [EDGE_SCRIPT_ID] });
+    } catch (err) {
+      /* fall through — register below is the source of truth */
+    }
+  }
+  if (origins.length) {
+    await chrome.scripting.registerContentScripts([
+      {
+        id: EDGE_SCRIPT_ID,
+        matches: origins.slice(),
+        js: ["edgePanel.js"],
+        runAt: "document_idle",
+        persistAcrossSessions: true,
+      },
+    ]);
+  }
+  return { supported: true };
+}
+
+/** onInstalled / onStartup — Chrome persists dynamic registrations across
+ *  restarts, but re-sync defensively; a stale registration with origins the
+ *  user no longer lists is corrected here too. Never throw into startup. */
+async function ensureEdgeRegistration() {
+  try {
+    var origins = await readEdgeOrigins();
+    await syncEdgeRegistration(origins);
+  } catch (err) {
+    /* best-effort */
+  }
+}
+
+async function isOriginGranted(pattern) {
+  if (chrome.permissions && typeof chrome.permissions.contains === "function") {
+    try {
+      return await chrome.permissions.contains({ origins: [pattern] });
+    } catch (err) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/** popup asks after its own permissions.request (the gesture lives there). */
+async function enableEdgePanel(pageUrl, tabId) {
+  if (!edgePanelSupported()) return { ok: false, reason: "unsupported" };
+  var pattern = originPatternOf(pageUrl);
+  if (!pattern) return { ok: false, reason: "restricted" };
+  var origins = await readEdgeOrigins();
+  if (origins.indexOf(pattern) === -1) origins.push(pattern);
+  await chrome.storage.local.set(
+    (function () {
+      var payload = {};
+      payload[EDGE_ORIGINS_KEY] = origins;
+      return payload;
+    })()
+  );
+  await syncEdgeRegistration(origins);
+  // Pages already open predate the registration — inject on demand so the
+  // handle shows up without a reload.
+  if (typeof tabId === "number" && chrome.scripting.executeScript) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ["edgePanel.js"],
+      });
+    } catch (err) {
+      /* restricted page or navigation raced the inject — panel appears next load */
+    }
+  }
+  return { ok: true, origins: origins };
+}
+
+async function disableEdgePanel(pageUrl) {
+  if (!edgePanelSupported()) return { ok: false, reason: "unsupported" };
+  var pattern = originPatternOf(pageUrl);
+  if (!pattern) return { ok: false, reason: "restricted" };
+  var origins = await readEdgeOrigins();
+  var next = origins.filter(function (o) {
+    return o !== pattern;
+  });
+  await chrome.storage.local.set(
+    (function () {
+      var payload = {};
+      payload[EDGE_ORIGINS_KEY] = next;
+      return payload;
+    })()
+  );
+  await syncEdgeRegistration(next);
+  return { ok: true, origins: next };
+}
+
+/** State for the popup toggle row. */
+async function edgePanelState(pageUrl) {
+  var pattern = originPatternOf(pageUrl || "");
+  var cfg = await loadConfig();
+  var state = {
+    supported: edgePanelSupported(),
+    pattern: pattern,
+    enabled: false,
+    granted: false,
+    configured: Boolean(cfg.instanceUrl),
+  };
+  if (!pattern) return state;
+  var origins = await readEdgeOrigins();
+  state.enabled = origins.indexOf(pattern) !== -1;
+  state.granted = await isOriginGranted(pattern);
+  return state;
+}
+
+/** Shortcut handler: toggle the panel on the active tab when its origin is
+ *  enabled; otherwise point the user at the popup. Tabs loaded before the
+ *  registration (or before a Chrome restart rebuilt it) get an on-demand
+ *  executeScript fallback before the toggle message. */
+async function toggleEdgePanel() {
+  var copy = t();
+  if (!edgePanelSupported()) {
+    notify(copy.appTitle, copy.edgeUnsupported);
+    return;
+  }
+  var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  var tab = tabs && tabs[0];
+  if (!tab || !tab.url) return;
+  var pattern = originPatternOf(tab.url);
+  var origins = await readEdgeOrigins();
+  if (!pattern || origins.indexOf(pattern) === -1) {
+    notify(copy.appTitle, copy.edgeNeedEnable);
+    return;
+  }
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "davflare-edge-toggle" });
+  } catch (err) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["edgePanel.js"],
+      });
+      await chrome.tabs.sendMessage(tab.id, { type: "davflare-edge-toggle" });
+    } catch (err2) {
+      notify(copy.errTitle, copy.edgeUnavailable);
+    }
+  }
+}
+
+/** Library snapshot for the panel's datalists, plus trash-revive prefill
+ *  (#130) so the panel behaves like the popup when the URL is trashed. */
+async function edgePanelMeta(pageUrl) {
+  var cfg = await loadConfig();
+  var cache = await readBookmarksCache();
+  var model = cache && cache.model ? Bookmarks.normalizeModel(cache.model) : null;
+  var folders = model ? Bookmarks.folderPaths(model) : [];
+  var seen = {};
+  var tags = [];
+  if (model) {
+    for (var i = 0; i < model.bookmarks.length; i++) {
+      var list = model.bookmarks[i] && model.bookmarks[i].tags;
+      if (!Array.isArray(list)) continue;
+      for (var j = 0; j < list.length; j++) {
+        var tag = list[j];
+        if (tag && !seen[tag]) {
+          seen[tag] = true;
+          tags.push(tag);
+        }
+      }
+    }
+  }
+  tags.sort(function (a, b) {
+    return a.localeCompare(b, undefined, { sensitivity: "base" });
+  });
+  var trashed = model && pageUrl ? Bookmarks.trashedByUrl(model, pageUrl) : null;
+  return {
+    ok: true,
+    configured: Boolean(cfg.instanceUrl),
+    folders: folders,
+    tags: tags,
+    trashed: trashed
+      ? {
+          title: trashed.title || "",
+          folder: trashed.folder || "",
+          tags: Array.isArray(trashed.tags) ? trashed.tags.slice() : [],
+          note: trashed.note || "",
+        }
+      : null,
+  };
+}
+
+// Messages from the popup and the edge panel. Returning true keeps the
+// sendResponse channel open for the async work (MV3 requirement).
+chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+  if (!msg || typeof msg.type !== "string") return;
+  if (msg.type === "davflare-edge-save") {
+    performSave(String(msg.title || ""), String(msg.url || ""), {
+      folder: typeof msg.folder === "string" ? msg.folder : "",
+      tags: Array.isArray(msg.tags) ? msg.tags : [],
+      note: typeof msg.note === "string" ? msg.note : "",
+    })
+      .then(function (result) {
+        // The panel renders `message`; badge/notification stay silent so the
+        // in-page panel is the single feedback surface.
+        sendResponse({
+          ok: Boolean(result.ok),
+          status: result.status || "",
+          kind: result.kind || "",
+          message: describeResult(result),
+        });
+      })
+      .catch(function (err) {
+        sendResponse({
+          ok: false,
+          kind: "unexpected",
+          message: errorText("unexpected", err && err.message ? err.message : ""),
+        });
+      });
+    return true;
+  }
+  if (msg.type === "davflare-edge-meta") {
+    edgePanelMeta(typeof msg.url === "string" ? msg.url : "")
+      .then(function (meta) {
+        sendResponse(meta);
+      })
+      .catch(function () {
+        sendResponse({
+          ok: false,
+          configured: false,
+          folders: [],
+          tags: [],
+          trashed: null,
+        });
+      });
+    return true;
+  }
+  if (msg.type === "davflare-edge-enable") {
+    enableEdgePanel(msg.pageUrl, typeof msg.tabId === "number" ? msg.tabId : undefined)
+      .then(sendResponse)
+      .catch(function () {
+        sendResponse({ ok: false, reason: "error" });
+      });
+    return true;
+  }
+  if (msg.type === "davflare-edge-disable") {
+    disableEdgePanel(msg.pageUrl)
+      .then(sendResponse)
+      .catch(function () {
+        sendResponse({ ok: false, reason: "error" });
+      });
+    return true;
+  }
+  if (msg.type === "davflare-edge-state") {
+    edgePanelState(msg.pageUrl)
+      .then(sendResponse)
+      .catch(function () {
+        sendResponse({ supported: false, enabled: false, granted: false });
+      });
+    return true;
+  }
+});

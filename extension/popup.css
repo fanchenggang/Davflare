@@ -189,3 +189,89 @@ button.ghost:hover {
   flex: 1;
   font-weight: 600;
 }
+
+/* ---------- in-page edge panel toggle (round 4) ---------- */
+
+.edgeSection {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edgeSection.hidden {
+  display: none;
+}
+
+.edgeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.edgeTitle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.edgeState {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+.edgeState.on {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.edgeDesc {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.edgeBtn {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* configurable shortcut foot note (round 4) */
+
+.shortcutHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.shortcutHint:empty {
+  display: none;
+}
+
+/* subtle themed scrollbars (popup mirrors the library shell) */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 5px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+}

@@ -298,6 +298,11 @@ var COPY = {
     storageDone: "Storage sizes updated.",
     storageFailed: "Could not read some library files.",
     storagePath: "Path: {p}",
+    shortcutLegend: "Keyboard shortcuts",
+    shortcutSavePage: "Save current page",
+    shortcutEdgePanel: "Toggle in-page panel",
+    shortcutNone: "Not set",
+    shortcutsHint: "Change them any time at chrome://extensions/shortcuts.",
     permBookmarksTitle: "Allow bookmark access?",
     permBookmarksBody:
       "Davflare needs Chrome’s “Read and change your bookmarks” permission to import or write back. Chrome should show a system prompt next — choose Allow. If no prompt appears (common in some unpacked Chromium builds), grant Bookmarks under chrome://extensions → Davflare → Details, then retry.",
@@ -599,6 +604,11 @@ var COPY = {
     storageTabRules: "Tab 分组规则",
     storageSnaps: "快照（索引 + HTML）",
     storageTotal: "合计（估计）",
+    shortcutLegend: "键盘快捷键",
+    shortcutSavePage: "快速收藏此页",
+    shortcutEdgePanel: "页面内收藏面板",
+    shortcutNone: "未设置",
+    shortcutsHint: "随时在 chrome://extensions/shortcuts 修改。",
     storageNote:
       "体积来自你 WebDAV 书签目录（本库在 R2/网盘上的占用）。快照 HTML 按索引里记录的 size 汇总。",
     storageRefresh: "刷新体积",
@@ -1531,8 +1541,8 @@ function emptyHint() {
 
 /* ---------- structured empty states（书签库/工作区/Tab 分组共用） ---------- */
 
-// 静态插画常量（无用户输入），颜色走主题变量
-var EMPTY_ART_SVG =
+// 静态插画常量（无用户输入），颜色走主题变量；round 4 起分场景绘制
+var EMPTY_ART_LIBRARY =
   '<svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
   '<rect x="14" y="10" width="68" height="76" rx="10" fill="var(--orange-soft)"/>' +
   '<path d="M34 22h28v52l-14-10-14 10V22z" fill="var(--orange)" opacity="0.85"/>' +
@@ -1540,10 +1550,45 @@ var EMPTY_ART_SVG =
   '<path d="M64 57v14M57 64h14" stroke="var(--orange)" stroke-width="3" stroke-linecap="round"/>' +
   "</svg>";
 
+var EMPTY_ART_SEARCH =
+  '<svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<rect x="14" y="10" width="68" height="76" rx="10" fill="var(--orange-soft)"/>' +
+  '<path d="M26 30h44M26 42h30M26 54h20" stroke="var(--orange)" stroke-width="4" stroke-linecap="round" opacity="0.45"/>' +
+  '<circle cx="58" cy="56" r="14" fill="var(--paper)" stroke="var(--orange)" stroke-width="4"/>' +
+  '<path d="M68 66l10 10" stroke="var(--orange)" stroke-width="4" stroke-linecap="round"/>' +
+  "</svg>";
+
+var EMPTY_ART_TRASH =
+  '<svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<circle cx="48" cy="50" r="34" fill="var(--orange-soft)"/>' +
+  '<path d="M30 34h36" stroke="var(--orange)" stroke-width="4" stroke-linecap="round"/>' +
+  '<path d="M40 34v-4a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v4" stroke="var(--orange)" stroke-width="4" stroke-linecap="round"/>' +
+  '<path d="M34 34h28l-3 34a6 6 0 0 1-6 6h-10a6 6 0 0 1-6-6l-3-34z" fill="var(--paper)" stroke="var(--orange)" stroke-width="4" stroke-linejoin="round"/>' +
+  '<path d="M43 44v20M53 44v20" stroke="var(--orange)" stroke-width="4" stroke-linecap="round" opacity="0.7"/>' +
+  "</svg>";
+
+var EMPTY_ART_DUPLICATES =
+  '<svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+  '<rect x="16" y="14" width="44" height="58" rx="8" fill="var(--orange-soft)" stroke="var(--orange)" stroke-width="3"/>' +
+  '<rect x="36" y="26" width="44" height="58" rx="8" fill="var(--paper)" stroke="var(--orange)" stroke-width="3"/>' +
+  '<path d="M46 44h24M46 56h24M46 68h14" stroke="var(--orange)" stroke-width="4" stroke-linecap="round" opacity="0.75"/>' +
+  "</svg>";
+
+var EMPTY_ARTS = {
+  library: EMPTY_ART_LIBRARY,
+  search: EMPTY_ART_SEARCH,
+  trash: EMPTY_ART_TRASH,
+  duplicates: EMPTY_ART_DUPLICATES,
+};
+
+function emptyArt(kind) {
+  return EMPTY_ARTS[kind] || EMPTY_ARTS.library;
+}
+
 function renderEmptyState(container, opts) {
   container.textContent = "";
   var art = document.createElement("div");
-  art.innerHTML = EMPTY_ART_SVG;
+  art.innerHTML = emptyArt(opts.art);
   container.appendChild(art);
   var title = document.createElement("h3");
   title.textContent = opts.title;
@@ -1886,6 +1931,7 @@ function loadTrash() {
   if (!rows.length) {
     list.classList.add("hidden");
     renderEmptyState(empty, {
+      art: "trash",
       title: t.trashEmptyTitle,
       desc: t.trashEmptyDesc,
     });
@@ -2014,6 +2060,7 @@ function loadDuplicates() {
   if (!groups.length) {
     list.classList.add("hidden");
     renderEmptyState(empty, {
+      art: "duplicates",
       title: t.dupEmptyTitle,
       desc: t.dupEmptyDesc,
     });
@@ -2625,6 +2672,7 @@ function renderItems() {
   if (!items.length) {
     if (liveBookmarks().length === 0) {
       renderEmptyState(empty, {
+        art: "library",
         title: t.emptyTitle,
         desc: t.emptyDesc,
         actions: [
@@ -2634,24 +2682,28 @@ function renderItems() {
       });
     } else if (state.filter.kind === "folder") {
       renderEmptyState(empty, {
+        art: "search",
         title: t.emptyFolderTitle,
         desc: t.emptyFilter,
         actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
       });
     } else if (state.filter.kind === "tag") {
       renderEmptyState(empty, {
+        art: "search",
         title: t.emptyTagTitle,
         desc: t.emptyFilter,
         actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
       });
     } else if (state.filter.kind === "pinned") {
       renderEmptyState(empty, {
+        art: "search",
         title: t.emptyPinnedTitle,
         desc: t.emptyFilter,
         actions: [{ label: t.clearFilter, kind: "ghost", onClick: resetFilters }],
       });
     } else {
       renderEmptyState(empty, {
+        art: "search",
         title: t.emptyFilter,
         actions: [
           { label: t.add, kind: "primary", onClick: openAddDialog },
@@ -5240,6 +5292,39 @@ function applyCopy() {
   if ($("storageTotalLabel")) $("storageTotalLabel").textContent = t.storageTotal;
   if ($("storageNote")) $("storageNote").textContent = t.storageNote;
   if ($("storageRefresh")) $("storageRefresh").textContent = t.storageRefresh;
+  if ($("shortcutLegend")) $("shortcutLegend").textContent = t.shortcutLegend;
+  if ($("shortcutsHint")) $("shortcutsHint").textContent = t.shortcutsHint;
+}
+
+/** Settings "Keyboard shortcuts" row (round 4): live values from Chrome so
+ *  users can see (and learn) what is actually configured. */
+function renderShortcuts() {
+  var list = $("shortcutList");
+  if (!list || !chrome.commands || typeof chrome.commands.getAll !== "function") return;
+  chrome.commands.getAll(function (commands) {
+    var byName = {};
+    for (var i = 0; i < (commands || []).length; i++) {
+      if (commands[i] && commands[i].name) byName[commands[i].name] = commands[i];
+    }
+    var rows = [
+      { name: "save-current-page", label: t.shortcutSavePage },
+      { name: "toggle-edge-panel", label: t.shortcutEdgePanel },
+    ];
+    list.textContent = "";
+    for (var j = 0; j < rows.length; j++) {
+      var cmd = byName[rows[j].name];
+      if (!cmd) continue;
+      var row = document.createElement("div");
+      var dt = document.createElement("dt");
+      var dd = document.createElement("dd");
+      dt.textContent = rows[j].label;
+      dd.textContent = cmd.shortcut || t.shortcutNone;
+      if (!cmd.shortcut) dd.classList.add("shortcutMissing");
+      row.appendChild(dt);
+      row.appendChild(dd);
+      list.appendChild(row);
+    }
+  });
 }
 
 function setView(view) {
@@ -5632,6 +5717,7 @@ loadFavorites().then(function () {
 });
 warmBookmarksPermissionCache();
 loadSnapshots();
+renderShortcuts();
 initTheme();
 wireEvents();
 window.addEventListener("resize", onMasonryResize);

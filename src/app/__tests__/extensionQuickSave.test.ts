@@ -20,7 +20,14 @@ const Bookmarks = nodeRequire("../../../extension/bookmarks.js") as {
 const DavflareQuickSave = nodeRequire("../../../extension/quickSave.js") as {
   saveBookmark: (
     deps: Record<string, unknown>,
-    page: { title: string; url: string; added?: number }
+    page: {
+      title: string;
+      url: string;
+      added?: number;
+      folder?: string;
+      tags?: string[];
+      note?: string;
+    }
   ) => Promise<{ ok: boolean; status?: string; kind?: string; message?: string }>;
 };
 
@@ -399,5 +406,159 @@ describe("extension/quickSave.js revives trashed URLs without wiping fields (#13
       added: 300,
     });
     expect(result).toEqual({ ok: true, status: "saved" });
+  });
+});
+
+describe("extension/quickSave.js passes edge-panel folder/tags/note (round 4)", () => {
+  const page = {
+    title: "Edge Save",
+    url: "https://example.com/edge",
+    added: 400,
+    folder: "Work/Deep",
+    tags: ["rust", "web"],
+    note: "from the edge panel",
+  };
+
+  test("fields land on a fresh save (cached fast path)", async () => {
+    const harness = makeDeps({
+      cache: {
+        model: Bookmarks.normalizeModel(Bookmarks.emptyModel()),
+        etag: '"c"',
+      },
+      getSequence: [],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, page);
+    expect(result).toEqual({ ok: true, status: "saved" });
+    const saved = (harness.getCache()!.model as { bookmarks: Array<Record<string, unknown>> })
+      .bookmarks;
+    expect(saved[0]).toMatchObject({
+      title: "Edge Save",
+      folder: "Work/Deep",
+      tags: ["rust", "web"],
+      note: "from the edge panel",
+    });
+    // Authoritative HTML carries the folder hierarchy (nested <H3>, not the
+    // slash-joined path).
+    expect(harness.puts[0].html).toContain(">Work</H3>");
+    expect(harness.puts[0].html).toContain(">Deep</H3>");
+  });
+
+  test("fields land via the remote GET path (no cache)", async () => {
+    const harness = makeDeps({
+      cache: null,
+      getSequence: [
+        { ok: true, html: "", jsonText: Bookmarks.modelToJsonText(Bookmarks.emptyModel()), etag: '"e1"' },
+      ],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, page);
+    expect(result).toEqual({ ok: true, status: "saved" });
+    const saved = (harness.getCache()!.model as { bookmarks: Array<Record<string, unknown>> })
+      .bookmarks;
+    expect(saved[0]).toMatchObject({ folder: "Work/Deep", tags: ["rust", "web"], note: "from the edge panel" });
+  });
+
+  test("omitted fields behave exactly as before", async () => {
+    const harness = makeDeps({
+      cache: {
+        model: Bookmarks.normalizeModel(Bookmarks.emptyModel()),
+        etag: '"c"',
+      },
+      getSequence: [],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, {
+      title: "Plain",
+      url: "https://example.com/plain",
+      added: 500,
+    });
+    expect(result).toEqual({ ok: true, status: "saved" });
+    const saved = (harness.getCache()!.model as { bookmarks: Array<Record<string, unknown>> })
+      .bookmarks;
+    expect(saved[0]).toMatchObject({ folder: "", tags: [], note: "" });
+  });
+
+  test("trash revive keeps original metadata when the panel sends nothing", async () => {
+    const Bm = nodeRequire("../../../extension/bookmarks.js") as typeof Bookmarks & {
+      softDeleteBookmarks: (model: unknown, ids: string[], now: number) => unknown;
+    };
+    const trashed = Bm.softDeleteBookmarks(
+      Bm.normalizeModel({
+        bookmarks: [
+          {
+            id: "x1",
+            title: "Orig",
+            url: "https://example.com/a",
+            folder: "Work",
+            tags: ["t1"],
+            note: "keepme",
+            added: 1,
+          },
+        ],
+      }),
+      ["x1"],
+      100
+    );
+    const harness = makeDeps({
+      cache: { model: trashed, etag: '"c"' },
+      getSequence: [],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, {
+      title: "Tab title",
+      url: "https://example.com/a",
+      added: 200,
+    });
+    expect(result).toEqual({ ok: true, status: "restored" });
+    const saved = (harness.getCache()!.model as { bookmarks: Array<Record<string, unknown>> })
+      .bookmarks;
+    expect(saved[0]).toMatchObject({
+      title: "Orig",
+      folder: "Work",
+      tags: ["t1"],
+      note: "keepme",
+      deleted: false,
+    });
+  });
+
+  test("trash revive with explicit new values applies them (#130 non-empty wins)", async () => {
+    const Bm = nodeRequire("../../../extension/bookmarks.js") as typeof Bookmarks & {
+      softDeleteBookmarks: (model: unknown, ids: string[], now: number) => unknown;
+    };
+    const trashed = Bm.softDeleteBookmarks(
+      Bm.normalizeModel({
+        bookmarks: [
+          {
+            id: "x1",
+            title: "Orig",
+            url: "https://example.com/a",
+            folder: "Work",
+            tags: ["t1"],
+            note: "keepme",
+            added: 1,
+          },
+        ],
+      }),
+      ["x1"],
+      100
+    );
+    const harness = makeDeps({
+      cache: { model: trashed, etag: '"c"' },
+      getSequence: [],
+      putSequence: [{ ok: true, etag: '"after"' }],
+    });
+    const result = await DavflareQuickSave.saveBookmark(harness.deps, {
+      title: "Tab title",
+      url: "https://example.com/a",
+      added: 200,
+      folder: "New",
+      tags: ["n1"],
+      note: "replaced",
+    });
+    expect(result).toEqual({ ok: true, status: "restored" });
+    const saved = (harness.getCache()!.model as { bookmarks: Array<Record<string, unknown>> })
+      .bookmarks;
+    expect(saved[0]).toMatchObject({ folder: "New", tags: ["n1"], note: "replaced" });
   });
 });
