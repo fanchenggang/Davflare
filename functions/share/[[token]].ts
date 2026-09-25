@@ -3,6 +3,7 @@ interface ShareEnv {
 }
 
 import { buildZipStream } from "../api/_zip";
+import { contentDisposition } from "../api/_disposition";
 import { isInternalKey, sha256Hex, timingSafeEqual } from "../api/_apikey";
 
 const SHARES_PREFIX = "_$flaredrive$/shares/";
@@ -440,10 +441,7 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
     headers.set("Content-Type", "application/zip");
     headers.set("Cache-Control", "no-store");
     applyShareHardening(headers);
-    headers.set(
-      "Content-Disposition",
-      `attachment; filename*=UTF-8''${encodeURIComponent(name)}.zip`
-    );
+    headers.set("Content-Disposition", contentDisposition(`${name}.zip`, "attachment", "download.zip"));
     return new Response(stream, { headers });
   }
 
@@ -479,10 +477,8 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   // 非预览安全类型回退 attachment（octet-stream 等浏览器也不会内联渲染）
   const disposition =
     wantsDownload || !inlineContentType(contentType) ? "attachment" : "inline";
-  headers.set(
-    "Content-Disposition",
-    `${disposition}; filename*=UTF-8''${encodeURIComponent(name)}`
-  );
+  // 与 /api/download、/api/archive 同一 helper：ASCII filename= 回退 + filename*（老版 curl -OJ 不再存成 token）
+  headers.set("Content-Disposition", contentDisposition(name, disposition, "download"));
 
   // Range 支持（视频拖动/断点续传）：R2 返回部分对象时给出 206 与正确的
   // Content-Range/Content-Length，覆盖 writeHttpMetadata 写入的全量 Content-Length。

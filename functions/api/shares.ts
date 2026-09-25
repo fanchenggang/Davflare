@@ -96,7 +96,9 @@ export const onRequestPost: PagesFunction<SharesEnv> = async (context) => {
     return new Response("Bad Request", { status: 400 });
   }
 
-  const key = String(body.key || "").trim();
+  // 与 /api/archive 一致接受目录的尾斜杠写法（"文件夹/"）：去掉首尾斜杠后按规范键存储，
+  // 文件键不受影响；内部前缀校验放在归一化之后（"_$flaredrive$/" → "_$flaredrive$" 仍被拒）。
+  const key = String(body.key || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
   if (!key) return new Response("Bad Request", { status: 400 });
   if (isInternalKey(key)) return new Response("Bad Request", { status: 400 });
 

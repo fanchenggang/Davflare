@@ -1,3 +1,4 @@
+import { contentDisposition } from "./_disposition";
 import {
   authorizeApiKey,
   decodeRawPath,
@@ -18,15 +19,7 @@ function basename(key: string) {
 }
 
 function attachmentDisposition(filename: string) {
-  // filename= 只能承载 Latin-1（Headers ByteString 校验，非 ASCII 会抛异常），
-  // 非 ASCII 字符统一替换为 "_"，原始名由 filename*（RFC 5987）承载。
-  const fallback =
-    filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_") || "download";
-  const encoded = encodeURIComponent(filename || "download").replace(
-    /['()]/g,
-    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
-  );
-  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+  return contentDisposition(filename, "attachment", "download");
 }
 
 function normalizeObjectKey(raw: string | null): string | Response {

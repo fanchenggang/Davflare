@@ -638,3 +638,86 @@ describe("share directory (zip download)", () => {
     expect(head.headers.get("Content-Type")).toBe("application/zip");
   });
 });
+
+describe("shares: trailing-slash folder keys (与 /api/archive 一致)", () => {
+  async function create(bucket: InMemoryBucket, key: string) {
+    return sharesCreate(makeContext(jsonRequest("/api/shares", "POST", { key }), sharesEnv(bucket)));
+  }
+
+  test("'资料/' 与 '资料' 都能创建目录分享，存储规范键（无尾斜杠）", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seedDir("资料");
+    bucket.seed([{ key: "资料/测试文件.txt", body: "你好" }, { key: "虚拟/a.txt", body: "A" }]);
+    for (const [input, expected] of [
+      ["资料/", "资料"],
+      ["资料", "资料"],
+      ["/资料//", "资料"],
+      ["虚拟/", "虚拟"], // 无标记对象、仅前缀的目录
+    ]) {
+      const response = await create(bucket, input);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { token: string; key: string; name: string; isDir: boolean };
+      expect(body).toMatchObject({ key: expected, name: expected, isDir: true });
+      const stored = await (await bucket.asBucket().get(`_$flaredrive$/shares/${body.token}.json`))!.json<{ key: string }>();
+      expect(stored.key).toBe(expected);
+      // 分享链接可用：?download=1 返回以该目录为根的 zip
+      const zip = await callShareGet(bucket, body.token, "?download=1");
+      expect(zip.headers.get("Content-Type")).toBe("application/zip");
+    }
+  });
+
+  test("文件键不受影响；文件键加尾斜杠不会误判", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([{ key: "docs/report.txt", body: "R" }]);
+    const ok = await create(bucket, "docs/report.txt");
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { key: string; isDir: boolean })).toMatchObject({ key: "docs/report.txt", isDir: false });
+    const missing = await create(bucket, "docs/nope/");
+    expect(missing.status).toBe(404);
+  });
+
+  test("内部前缀与空键在归一化后仍被拒绝", async () => {
+    const bucket = new InMemoryBucket();
+    for (const key of ["_$flaredrive$/", "_$flaredrive$", "/_$flaredrive$/shares/", "wrap/_$flaredrive$/", "/", "//"]) {
+      const response = await create(bucket, key);
+      expect(response.status).toBe(400);
+    }
+  });
+});
+
+describe("share downloads: Content-Disposition 带 ASCII 回退 + filename*", () => {
+  test("中文目录 zip：filename 回退 + filename*=UTF-8 编码，不抛异常", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seedDir("资料");
+    bucket.seed([{ key: "资料/a.txt", body: "A" }]);
+    seedShare(bucket, "zh", { key: "资料", name: "资料", isDir: true, expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" });
+    const response = await callShareGet(bucket, "zh", "?download=1");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Disposition")).toBe(
+      `attachment; filename="__.zip"; filename*=UTF-8''${encodeURIComponent("资料.zip")}`
+    );
+  });
+
+  test("中文文件 ?download=1 / ?raw=1 同样带回退名；ASCII 名原样回退", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([
+      { key: "资料/测试 文件(1).txt", body: "T", contentType: "text/plain" },
+      { key: "docs/report.txt", body: "R", contentType: "text/plain" },
+    ]);
+    seedShare(bucket, "zhf", { key: "资料/测试 文件(1).txt", name: "测试 文件(1).txt", isDir: false, expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" });
+    seedShare(bucket, "asc", { key: "docs/report.txt", name: "report.txt", isDir: false, expiresAt: null, createdAt: "2026-01-01T00:00:00.000Z" });
+
+    const zh = await callShareGet(bucket, "zhf", "?download=1");
+    expect(zh.status).toBe(200);
+    expect(zh.headers.get("Content-Disposition")).toBe(
+      "attachment; filename=\"__ __(1).txt\"; filename*=UTF-8''%E6%B5%8B%E8%AF%95%20%E6%96%87%E4%BB%B6%281%29.txt"
+    );
+    const raw = await callShareGet(bucket, "zhf", "?raw=1");
+    expect(raw.headers.get("Content-Disposition")).toMatch(/^inline; filename="__ __\(1\)\.txt"; filename\*=UTF-8''/);
+
+    const ascii = await callShareGet(bucket, "asc", "?download=1");
+    expect(ascii.headers.get("Content-Disposition")).toBe(
+      "attachment; filename=\"report.txt\"; filename*=UTF-8''report.txt"
+    );
+  });
+});
