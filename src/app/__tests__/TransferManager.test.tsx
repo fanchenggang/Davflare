@@ -54,7 +54,7 @@ describe("TransferManager", () => {
   test("empty queue copy", () => {
     mockQueue.mockReturnValue([]);
     render(<TransferManager open onClose={vi.fn()} />);
-    expect(screen.getByText(strings.noUploadTasks)).toBeInTheDocument();
+    expect(screen.getByText(strings.noTransferTasks)).toBeInTheDocument();
   });
 
   test("failed task retry and cancel", () => {
@@ -77,6 +77,28 @@ describe("TransferManager", () => {
     expect(actions.retry).toHaveBeenCalledWith("t1");
     fireEvent.click(screen.getByText(strings.delete));
     expect(actions.cancel).toHaveBeenCalledWith("t1");
+  });
+
+  test("download task shows downloading state without pause", () => {
+    const download: TransferTask = {
+      id: "d1",
+      type: "download",
+      status: "in-progress",
+      name: "docs.zip",
+      basedir: "",
+      remoteKey: "/api/archive",
+      downloadUrl: "/api/archive",
+      saveAs: "docs.zip",
+      loaded: 30,
+      total: 0,
+    };
+    mockQueue.mockReturnValue([download]);
+    render(<TransferManager open onClose={vi.fn()} />);
+    expect(screen.getByText("docs.zip")).toBeInTheDocument();
+    expect(screen.getByText(/下载中/)).toBeInTheDocument();
+    // 下载不支持暂停；未知总量只展示已下载字节数
+    expect(screen.queryByText(strings.pause)).not.toBeInTheDocument();
+    expect(screen.getByText(/已下载/)).toBeInTheDocument();
   });
 
   test("pending task can pause or cancel", () => {

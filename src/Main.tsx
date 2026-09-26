@@ -869,6 +869,7 @@ function Main({
               setConfirmDelete([previewFile.key]);
             }
           }}
+          onSaved={loadListing}
         />
       </Suspense>
 

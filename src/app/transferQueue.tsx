@@ -9,8 +9,9 @@ import React, {
 } from "react";
 
 import { translate } from "./strings";
-import { processTransferTask } from "./transfer";
-import { TransferTask } from "./types";
+import { processTransferTask, registerDownloadDispatcher } from "./transfer";
+import { processDownloadTask } from "./downloadTransfer";
+import { DownloadRequest, TransferTask } from "./types";
 
 const CONCURRENCY = 2;
 const AUTO_RETRY_MAX = 1;
@@ -23,6 +24,7 @@ interface EnqueueRequest {
 
 interface TransferQueueActions {
   enqueue: (...requests: EnqueueRequest[]) => void;
+  enqueueDownload: (request: DownloadRequest) => void;
   pause: (id: string) => void;
   resume: (id: string) => void;
   retry: (id: string) => void;
@@ -38,6 +40,7 @@ const TransferQueueContext = createContext<TransferTask[]>([]);
 const TransferQueueGlobalPausedContext = createContext(false);
 const TransferQueueActionsContext = createContext<TransferQueueActions>({
   enqueue: () => {},
+  enqueueDownload: () => {},
   pause: () => {},
   resume: () => {},
   retry: () => {},
@@ -122,6 +125,27 @@ export function TransferQueueProvider({
     commitTasks((tasks) => [...tasks, ...newTasks]);
   };
 
+  // 下载任务：total 未知（zip 流式打包）时保持 0，processDownloadTask
+  // 会在拿到 Content-Length 后修正；无 uploadId，失败重试自动从头下载。
+  const enqueueDownload = (request: DownloadRequest) => {
+    commitTasks((tasks) => [
+      ...tasks,
+      {
+        id: createId(),
+        type: "download",
+        status: "pending",
+        name: request.name,
+        basedir: "",
+        remoteKey: request.downloadUrl,
+        downloadUrl: request.downloadUrl,
+        saveAs: request.name,
+        downloadInit: request.init,
+        loaded: 0,
+        total: 0,
+      },
+    ]);
+  };
+
   const startTask = (task: TransferTask) => {
     if (runningRef.current.has(task.id)) return;
 
@@ -134,7 +158,9 @@ export function TransferQueueProvider({
     updateTask(task.id, { status: "in-progress", error: undefined });
 
     const latest = tasksRef.current.find((item) => item.id === task.id) ?? task;
-    processTransferTask({
+    const runTask =
+      latest.type === "download" ? processDownloadTask : processTransferTask;
+    runTask({
       task: latest,
       signal: controller.signal,
       onTaskProgress: ({ loaded, total }) => {
@@ -209,9 +235,19 @@ export function TransferQueueProvider({
     }
   }, [transferTasks]);
 
+  // 下载入口（transfer.ts 的 download* 函数）经 dispatcher 转到本队列；
+  // 经 ref 转发避免闭包捕获过期的 enqueueDownload。
+  const enqueueDownloadRef = useRef(enqueueDownload);
+  enqueueDownloadRef.current = enqueueDownload;
+  useEffect(() => {
+    registerDownloadDispatcher((request) => enqueueDownloadRef.current(request));
+    return () => registerDownloadDispatcher(null);
+  }, []);
+
   const actions = useMemo<TransferQueueActions>(
     () => ({
       enqueue,
+      enqueueDownload,
       pause: (id) => {
         pausedIdsRef.current.add(id);
         const controller = controllersRef.current.get(id);

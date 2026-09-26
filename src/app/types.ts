@@ -10,6 +10,14 @@ export interface FileItem {
 
 export type TransferType = "upload" | "download";
 
+/** 下载任务入队请求：downloadUrl 为带鉴权可 fetch 的地址，name 为保存文件名；
+ * 归档打包（POST /api/archive）额外携带 method/body */
+export interface DownloadRequest {
+  name: string;
+  downloadUrl: string;
+  init?: { method?: string; body?: string };
+}
+
 export type TransferStatus =
   | "pending"
   | "in-progress"
@@ -36,6 +44,10 @@ export interface TransferTask {
   uploadId?: string;
   uploadedParts?: UploadPart[];
   error?: string;
+  /** 下载任务（type === "download"）：请求地址与保存文件名 */
+  downloadUrl?: string;
+  saveAs?: string;
+  downloadInit?: { method?: string; body?: string };
 }
 
 export interface ShareInfo {

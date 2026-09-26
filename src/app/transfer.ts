@@ -1,9 +1,27 @@
 import { authFetch } from "./auth";
-import { FileItem } from "./types";
+import { DownloadRequest, FileItem } from "./types";
 import { basename, encodeKey } from "./utils";
 import { translate } from "./strings";
 
 import { WEBDAV_ENDPOINT } from "./uploadTransfer";
+
+// 下载入队桥：TransferQueueProvider 挂载后注册 enqueueDownload 实现。
+// 注册前（单测/极端兜底）download* 函数退回直连下载，行为与旧版一致。
+let downloadDispatcher: ((request: DownloadRequest) => void) | null = null;
+
+export function registerDownloadDispatcher(
+  dispatcher: ((request: DownloadRequest) => void) | null
+) {
+  downloadDispatcher = dispatcher;
+}
+
+function enqueueOrRun(request: DownloadRequest, legacy: () => Promise<void>) {
+  if (downloadDispatcher) {
+    downloadDispatcher(request);
+    return;
+  }
+  return legacy();
+}
 
 function decodeHrefSegment(segment: string) {
   try {
@@ -159,20 +177,14 @@ export async function openFile(key: string) {
 }
 
 export async function downloadFile(key: string) {
-  const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
-  if (!res.ok) throw new Error(translate("downloadFailed"));
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = basename(key) || "download";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const name = basename(key) || "download";
+  return enqueueOrRun(
+    { name, downloadUrl: `${WEBDAV_ENDPOINT}${encodeKey(key)}` },
+    () => legacyDownloadFile(key, name)
+  );
 }
 
-function saveBlob(blob: Blob, name: string) {
+export function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -181,6 +193,13 @@ function saveBlob(blob: Blob, name: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** 未注册队列时的直连下载（与入队后的 processDownloadTask 保存逻辑一致）。 */
+async function legacyDownloadFile(key: string, name: string) {
+  const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
+  if (!res.ok) throw new Error(translate("downloadFailed"));
+  saveBlob(await res.blob(), name);
 }
 
 /** zip 下载名：`<文件夹名>.zip`，网盘根（空键）为 `archive.zip`；与 GET /api/archive 命名一致。 */
@@ -194,6 +213,20 @@ export function archiveNameFor(folderKey: string): string {
  * 不传则条目为完整网盘路径（旧行为）。
  */
 export async function downloadArchive(keys: string[], name = "archive.zip", base?: string) {
+  return enqueueOrRun(
+    {
+      name,
+      downloadUrl: "/api/archive",
+      init: {
+        method: "POST",
+        body: JSON.stringify(base ? { keys, base } : { keys }),
+      },
+    },
+    () => legacyDownloadArchive(keys, name, base)
+  );
+}
+
+async function legacyDownloadArchive(keys: string[], name: string, base?: string) {
   const res = await authFetch("/api/archive", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -206,6 +239,16 @@ export async function downloadArchive(keys: string[], name = "archive.zip", base
 /** 单个文件夹下载：与 `GET /api/archive?path=` 一致——`<文件夹名>.zip`，条目相对该文件夹。 */
 export async function downloadFolderArchive(folderKey: string) {
   const key = folderKey.replace(/\/+$/, "");
+  return enqueueOrRun(
+    {
+      name: archiveNameFor(key),
+      downloadUrl: `/api/archive?path=${encodeURIComponent(`${key}/`)}`,
+    },
+    () => legacyDownloadFolderArchive(key)
+  );
+}
+
+async function legacyDownloadFolderArchive(key: string) {
   const res = await authFetch(`/api/archive?path=${encodeURIComponent(`${key}/`)}`);
   if (!res.ok) throw new Error((await res.text()) || translate("archiveFailed"));
   saveBlob(await res.blob(), archiveNameFor(key));
@@ -217,7 +260,7 @@ export async function downloadFolderArchive(folderKey: string) {
  */
 export async function downloadSelectionArchive(keys: string[], cwd: string) {
   const base = cwd && keys.every((key) => key.startsWith(cwd)) ? cwd : "";
-  await downloadArchive(keys, archiveNameFor(base), base || undefined);
+  return downloadArchive(keys, archiveNameFor(base), base || undefined);
 }
 
 export async function copyPaste(source: string, target: string, move = false) {
