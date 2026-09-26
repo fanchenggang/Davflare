@@ -1,6 +1,7 @@
 // WebDAV 方法实现与请求分发；工具层在 davUtil/davXml/davLock，类型在 davTypes。
 import { utf8ToBase64 } from "../api/_apikey";
 import { withUtf8Charset } from "../_contentType";
+import { acceptListingLang, renderListingPage, type ListingEntry } from "./listingPage";
 import {
   DAV_ENDPOINT,
   DAV_ENDPOINT_WITH_SLASH,
@@ -105,25 +106,38 @@ async function handleGet({
       return new Response("Not Found", { status: 404 });
     }
 
-    let page = "";
-    let prefix = path;
-    if (path !== "") {
-      page += `<a href="${escapeXml(getResourceHref(getParentPath(path), true))}">..</a><br>`;
-      prefix = `${path}/`;
-    }
-
-    for await (const object of listAll(bucket, path === "" ? undefined : prefix)) {
+    const prefix = path === "" ? undefined : `${path}/`;
+    const entries: ListingEntry[] = [];
+    for await (const object of listAll(bucket, prefix)) {
       if (object.key === path) {
         continue;
       }
-      const href = getResourceHref(object.key, object.isCollection === true);
-      const name =
-        object.httpMetadata?.contentDisposition ??
-        object.key.slice(prefix.length);
-      page += `<a href="${escapeXml(href)}">${escapeXml(name)}</a><br>`;
+      entries.push({
+        name:
+          object.httpMetadata?.contentDisposition ??
+          object.key.slice(prefix?.length ?? 0),
+        href: getResourceHref(object.key, object.isCollection === true),
+        isCollection: object.isCollection === true,
+        size: object.isCollection ? null : object.size,
+        uploaded: object.isCollection ? null : object.uploaded,
+        contentType:
+          object.httpMetadata?.contentType ?? "application/octet-stream",
+      });
     }
+    // 目录优先、各自按名称排序，贴近文件管理器的浏览习惯
+    entries.sort((a, b) =>
+      a.isCollection !== b.isCollection
+        ? a.isCollection
+          ? -1
+          : 1
+        : a.name.localeCompare(b.name),
+    );
 
-    const pageSource = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>FlareDrive</title><style>*{box-sizing:border-box;}body{padding:10px;font-family:'Segoe UI','Circular','Roboto','Lato','Helvetica Neue','Arial Rounded MT Bold','sans-serif';}a{display:inline-block;width:100%;color:#000;text-decoration:none;padding:5px 10px;cursor:pointer;border-radius:5px;}a:hover{background-color:#60C590;color:white;}a[href="../"]{background-color:#cbd5e1;}</style></head><body><h1>FlareDrive</h1><div>${page}</div></body></html>`;
+    const pageSource = renderListingPage({
+      lang: acceptListingLang(request),
+      path,
+      entries,
+    });
     return new Response(pageSource, {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },

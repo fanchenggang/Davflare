@@ -1,13 +1,17 @@
 import React, { useState } from "react";
 import { strings, translate } from "./app/strings";
 import {
+  Alert,
+  Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle,
+  Stack,
   TextField,
+  Typography,
 } from "@mui/material";
 import { authFetch, useAuth, utf8ToBase64 } from "./app/auth";
 
@@ -43,13 +47,35 @@ function LoginDialog() {
   };
 
   return (
-    <Dialog open fullWidth maxWidth="xs">
-      <DialogTitle>{strings.loginTitle}</DialogTitle>
+    <Dialog open fullWidth maxWidth="xs" aria-label={strings.loginTitle}>
       <form onSubmit={handleSubmit}>
-        <DialogContent>
-          <DialogContentText sx={{ marginBottom: 2 }}>
-            {strings.loginHint}
-          </DialogContentText>
+        <DialogContent sx={{ pt: { xs: 4, sm: 5 } }}>
+          <Box
+            sx={{
+              display: "grid",
+              justifyItems: "center",
+              gap: 0.75,
+              mb: 3,
+              textAlign: "center",
+            }}
+          >
+            <Box
+              component="img"
+              src="/favicon.png"
+              alt=""
+              sx={{ width: 46, height: 46, mb: 1 }}
+            />
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{ fontWeight: 700, letterSpacing: "-0.03em", color: "primary.main" }}
+            >
+              Davflare
+            </Typography>
+            <DialogContentText sx={{ maxWidth: 300 }}>
+              {strings.loginHint}
+            </DialogContentText>
+          </Box>
           <TextField
             autoFocus
             fullWidth
@@ -67,14 +93,28 @@ function LoginDialog() {
             margin="dense"
           />
           {error && (
-            <DialogContentText color="error" sx={{ marginTop: 1 }}>
+            <Alert severity="error" variant="outlined" sx={{ marginTop: 2 }}>
               {error}
-            </DialogContentText>
+            </Alert>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button type="submit" variant="contained" disabled={submitting}>
-            {submitting ? strings.loading : strings.login}
+        <DialogActions sx={{ px: 3, pb: { xs: 3, sm: 4 }, pt: 0 }}>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            fullWidth
+            disableElevation
+            disabled={submitting}
+          >
+            {submitting ? (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CircularProgress size={16} color="inherit" />
+                <span>{strings.loading}</span>
+              </Stack>
+            ) : (
+              strings.login
+            )}
           </Button>
         </DialogActions>
       </form>
