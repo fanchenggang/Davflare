@@ -317,6 +317,20 @@ var BookmarksView = (function () {
     return tiers;
   }
 
+  /**
+   * popMenu 弹出方向判定：锚点上方放不下菜单（含与锚点的间距余量）时
+   * 返回 true，调用方给菜单加 .flip 改为向下弹出。纯数值函数便于单测
+   * （jsdom 无布局，rect 由调用方在真实浏览器里测量）。
+   */
+  function popMenuFlipNeeded(anchorTop, menuHeight, viewportHeight, gap) {
+    var margin = typeof gap === "number" ? gap : 12;
+    var need = (typeof menuHeight === "number" ? menuHeight : 0) + margin;
+    if (need <= margin) return false;
+    var space = typeof viewportHeight === "number" ? viewportHeight : Infinity;
+    var above = typeof anchorTop === "number" ? anchorTop : 0;
+    return above < need && space - above >= need;
+  }
+
   function formatBytes(n) {
     var value = typeof n === "number" && isFinite(n) && n > 0 ? n : 0;
     if (value < 1024) return value + " B";
@@ -593,6 +607,7 @@ var BookmarksView = (function () {
     SORT_KEYS: SORT_KEYS,
     tagList: tagList,
     tagTiers: tagTiers,
+    popMenuFlipNeeded: popMenuFlipNeeded,
   };
 })();
 

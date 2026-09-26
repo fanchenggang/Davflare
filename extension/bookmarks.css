@@ -281,13 +281,29 @@ button.danger {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-lg);
   padding: 4px;
   z-index: 60;
 }
 
 .popMenu.open {
   display: flex;
+}
+
+/* 上方放不下（首行卡片）时向下弹出：JS 打开时按实际空间加 .flip。
+   双类/ID 写法是为了压过 .cardMenuWrap .popMenu 与 #moreMenu 的 bottom 定位
+   （相同/更高特异性且声明在后，普通 .popMenu.flip 压不过它们）。 */
+.popMenu.popMenu.flip,
+.popMenu#moreMenu.flip {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+/* ⋯ 菜单从按钮上方弹出，.card 的 overflow:hidden 会把超出卡片顶部的部分裁掉；
+   打开菜单时放开裁剪并抬高该卡片层级，避免菜单被相邻卡片盖住。 */
+.card:has(.popMenu.open) {
+  overflow: visible;
+  z-index: 6;
 }
 
 #moreMenu {
@@ -312,9 +328,24 @@ button.danger {
   background: var(--orange-soft);
 }
 
+/* 破坏性动作（删除）单独标红，与普通项区分 */
+.popMenu .menuItem.danger {
+  color: var(--err);
+}
+
+.popMenu .menuItem.danger:hover,
+.popMenu .menuItem.danger:focus-visible {
+  background: var(--err-soft);
+  color: var(--err);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .popMenu {
     transform-origin: top right;
+  }
+
+  .popMenu.flip {
+    transform-origin: bottom right;
   }
 
   .popMenu.open {
@@ -764,6 +795,12 @@ button.danger {
 }
 
 .cardMore:hover {
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+}
+
+/* 菜单展开期间按钮保持激活态，让「谁在弹出」一目了然 */
+.cardMore[aria-expanded="true"] {
   background: var(--orange-soft);
   color: var(--orange-dark);
 }

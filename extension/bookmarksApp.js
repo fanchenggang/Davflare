@@ -1705,7 +1705,7 @@ function iconButton(label, text, onClick) {
 function closePopMenus() {
   var open = document.querySelectorAll(".popMenu.open");
   for (var i = 0; i < open.length; i++) {
-    open[i].classList.remove("open");
+    open[i].classList.remove("open", "flip");
     var toggle = open[i].parentElement.querySelector(".menuToggle");
     if (toggle) toggle.setAttribute("aria-expanded", "false");
   }
@@ -1724,6 +1724,16 @@ function wirePopMenus() {
       if (!wasOpen) {
         menu.classList.add("open");
         toggle.setAttribute("aria-expanded", "true");
+        // 首行卡片上方放不下菜单时向下弹出（.flip），避免被视口顶部裁掉
+        if (
+          BookmarksView.popMenuFlipNeeded(
+            toggle.getBoundingClientRect().top,
+            menu.getBoundingClientRect().height,
+            window.innerHeight
+          )
+        ) {
+          menu.classList.add("flip");
+        }
         // Keyboard activation (detail 0) lands focus on the first item;
         // mouse clicks keep the current focus. Esc hands focus back.
         var first = menu.querySelector("button");
@@ -1733,6 +1743,8 @@ function wirePopMenus() {
     }
     if (!target.closest(".popMenu")) closePopMenus();
   });
+  // 窗口尺寸变化后弹层定位失效，直接收起最稳妥
+  window.addEventListener("resize", closePopMenus);
 }
 
 /* ---------- selection (#63) ---------- */
@@ -2315,7 +2327,7 @@ function cardMenuNode(item) {
     })
   );
   menu.appendChild(
-    iconButton("menuItem", t.deleteLabel, function () {
+    iconButton("menuItem danger", t.deleteLabel, function () {
       closePopMenus();
       confirmThen(t.confirmDelete, function () {
         deleteBookmarksWithUndo([item.id]);
