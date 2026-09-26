@@ -106,6 +106,9 @@ body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify
 .card { background: #fff; border-radius: 16px; padding: 32px 28px; width: min(92vw, 520px);
   box-shadow: 0 8px 24px rgba(26, 23, 20, .08); }
 h1 { font-size: 1.2rem; margin: 10px 0 6px; word-break: break-all; line-height: 1.45; }
+.bmark { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: .95rem;
+  letter-spacing: -.02em; color: #f38020; margin-bottom: 14px; }
+.bmark img { width: 20px; height: 20px; display: block; }
 .badge { display: inline-block; font-size: .78rem; font-weight: 600; color: #c45f10;
   background: rgba(243, 128, 32, .12); border-radius: 999px; padding: 3px 10px; }
 p { color: rgba(26, 23, 20, .64); font-size: .9rem; margin: 0 0 16px; }
@@ -132,6 +135,7 @@ button:hover, .btn:hover { background: #d96e12; }
   body { background: #171310; color: #f1ece5; }
   .card { background: #211c17; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
   .badge { color: #ff9a45; background: rgba(243, 128, 32, .2); }
+  .bmark { color: #ff9a45; }
   p, .meta dt { color: rgba(241, 236, 229, .66); }
   input { border-color: rgba(255, 255, 255, .18); }
   .preview iframe { background: #171310; }
@@ -236,10 +240,12 @@ function renderLandingPage(options: LandingPage) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${name} · ${t.title}</title>
+  <link rel="icon" href="/favicon.png" />
   <style>${PAGE_CSS}</style>
 </head>
 <body>
   <main class="card">
+    <header class="bmark"><img src="/favicon.png" alt="" width="20" height="20">Davflare</header>
     <span class="badge">${escapeHtml(badge)}</span>
     <h1>${name}</h1>
     <dl class="meta">
@@ -264,11 +270,13 @@ function extractForm(error: string | undefined, action: string, lang: Lang) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${t.formTitle}</title>
+  <title>${t.formTitle} · Davflare</title>
+  <link rel="icon" href="/favicon.png" />
   <style>${PAGE_CSS}</style>
 </head>
 <body>
   <form class="card" method="post" action="${escapeHtml(action)}">
+    <header class="bmark"><img src="/favicon.png" alt="" width="20" height="20">Davflare</header>
     <h1>${t.formTitle}</h1>
     ${message}
     <input name="code" type="text" maxlength="32" autocomplete="off" placeholder="${t.formPlaceholder}" autofocus />

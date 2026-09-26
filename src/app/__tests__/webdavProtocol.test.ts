@@ -407,11 +407,44 @@ describe("webdav GET / HEAD", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("text/html");
     const html = await response.text();
-    expect(html).toContain("FlareDrive");
+    expect(html).toContain("Davflare");
     expect(html).toContain('href="/webdav/docs/a.txt"');
     expect(html).toContain('href="/webdav/"');
+    // 暖纸感列表页：面包屑当前段、文件大小与日期列
+    expect(html).toContain('class="cur"');
+    expect(html).toContain("1 B");
+    expect(html).toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
+  test("directory listing sorts folders first and labels empty folder", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seedDir("docs");
+    bucket.seedDir("docs/sub");
+    bucket.seed([
+      { key: "docs/z-file.txt", body: "Z" },
+      { key: "docs/a-note.txt", body: "N" },
+    ]);
+    const response = await call(
+      req("/webdav/docs/", "GET", { Authorization: AUTH }),
+      makeEnv(bucket)
+    );
+    const html = await response.text();
+    // 目录 sub 在两个文件之前，文件间按名称排序
+    const subIndex = html.indexOf('href="/webdav/docs/sub/"');
+    const aIndex = html.indexOf("a-note.txt");
+    const zIndex = html.indexOf("z-file.txt");
+    expect(subIndex).toBeGreaterThan(-1);
+    expect(subIndex).toBeLessThan(aIndex);
+    expect(aIndex).toBeLessThan(zIndex);
+    // seedDir 创建目录标记；listAll 跳过标记自身后无条目，页面显示空态
+    bucket.seedDir("empty");
+    const emptyResponse = await call(
+      req("/webdav/empty/", "GET", { Authorization: AUTH }),
+      makeEnv(bucket)
+    );
+    const emptyHtml = await emptyResponse.text();
+    expect(emptyHtml).toContain("This folder is empty");
+  });
   test("If-None-Match hit returns 304 with ETag", async () => {
     const bucket = new InMemoryBucket();
     bucket.seed([{ key: "a.txt", body: "A" }]);

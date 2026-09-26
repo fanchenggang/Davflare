@@ -105,6 +105,116 @@ describe("PreviewDialog", () => {
     );
     expect(screen.queryByText(strings.share)).not.toBeInTheDocument();
   });
+
+  function textResponse(text: string, etag: string | null) {
+    const bytes = new TextEncoder().encode(text);
+    return {
+      ok: true,
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === "etag" ? etag : null,
+      },
+      body: {
+        getReader: () => {
+          let done = false;
+          return {
+            read: async () => {
+              if (done) return { done: true, value: undefined };
+              done = true;
+              return { done: false, value: bytes };
+            },
+            cancel: async () => {},
+          };
+        },
+      },
+    };
+  }
+
+  test("text edit saves via PUT with If-Match and refreshes", async () => {
+    mockAuthFetch
+      .mockResolvedValueOnce(textResponse("hello", '"v1"'))
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: (name: string) => (name.toLowerCase() === "etag" ? '"v2"' : null) },
+      });
+    const onSaved = vi.fn();
+    const onNotify = vi.fn();
+    render(
+      <PreviewDialog
+        file={textFile}
+        onClose={vi.fn()}
+        onNotify={onNotify}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onSaved={onSaved}
+      />
+    );
+    await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
+    fireEvent.click(screen.getByText(strings.previewEdit));
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "hello world" } });
+    fireEvent.click(screen.getByText(strings.save));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const [putUrl, putInit] = mockAuthFetch.mock.calls[1];
+    expect(putUrl).toBe("/webdav/notes.txt");
+    expect(putInit.method).toBe("PUT");
+    expect(putInit.headers).toEqual({ "If-Match": '"v1"' });
+    expect(putInit.body).toBe("hello world");
+    expect(onNotify).toHaveBeenCalledWith(strings.previewSavedToast, "success");
+  });
+
+  test("save conflict (412) keeps editing state", async () => {
+    mockAuthFetch
+      .mockResolvedValueOnce(textResponse("hello", '"v1"'))
+      .mockResolvedValueOnce({ ok: false, status: 412, headers: { get: () => null } });
+    const onNotify = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <PreviewDialog
+        file={textFile}
+        onClose={onClose}
+        onNotify={onNotify}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
+    fireEvent.click(screen.getByText(strings.previewEdit));
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "local edit" } });
+    fireEvent.click(screen.getByText(strings.save));
+    await waitFor(() => expect(onNotify).toHaveBeenCalledWith(strings.previewConflictToast, "error"));
+    // 编辑态保留，内容未被覆盖
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test("closing with unsaved edits asks for discard confirmation", async () => {
+    mockAuthFetch.mockResolvedValueOnce(textResponse("hello", '"v1"'));
+    const onClose = vi.fn();
+    render(
+      <PreviewDialog
+        file={textFile}
+        onClose={onClose}
+        onNotify={vi.fn()}
+        onShare={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+    await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
+    fireEvent.click(screen.getByText(strings.previewEdit));
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "dirty" } });
+    // 编辑态没有「关闭」按钮，「取消」在有未保存修改时走确认
+    fireEvent.click(screen.getByText(strings.cancel));
+    expect(await screen.findByText(strings.previewDiscardTitle)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText(strings.previewDiscardConfirm));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
 });
 
 

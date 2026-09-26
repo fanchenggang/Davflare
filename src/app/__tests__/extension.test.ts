@@ -370,7 +370,7 @@ describe("Davflare Chrome extension / #107 snapshot capture + bookmarks perm", (
   ) as { version: string };
 
   test("manifest bumped for snapshot/perm hotfix", () => {
-    expect(manifest.version).toBe("1.3.17");
+    expect(manifest.version).toBe("1.3.18");
   });
 
   test("capture requests page host permission before tabs.create / executeScript", () => {
@@ -437,7 +437,7 @@ describe("Davflare Chrome extension / #112 snapshot index first-create 412", () 
   ) as { version: string };
 
   test("manifest bumped for snapshot index create hotfix", () => {
-    expect(manifest.version).toBe("1.3.17");
+    expect(manifest.version).toBe("1.3.18");
   });
 
   test("putFile refuses If-Match * / junk (would 412 on missing object)", () => {
@@ -697,8 +697,8 @@ describe("Davflare Chrome extension / #126 folder delete count + ⋯ menu arrows
     document.body.innerHTML = "";
   });
 
-  test("manifest version is current (1.3.17, bumped again by #137)", () => {
-    expect(manifest.version).toBe("1.3.17");
+  test("manifest version is current (1.3.18, bumped by #141 menu clip fix)", () => {
+    expect(manifest.version).toBe("1.3.18");
   });
 });
 
@@ -730,8 +730,8 @@ describe("Davflare Chrome extension / #130 re-saving a trashed URL keeps the ori
     expect(quickJs).not.toContain("overwriteTitle");
   });
 
-  test("manifest version is current (1.3.17 after #137)", () => {
-    expect(manifest.version).toBe("1.3.17");
+  test("manifest version is current (1.3.18 after #141)", () => {
+    expect(manifest.version).toBe("1.3.18");
   });
 });
 

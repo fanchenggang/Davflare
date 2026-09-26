@@ -11,6 +11,7 @@ import {
 
 vi.mock("../transfer", () => ({
   processTransferTask: vi.fn(),
+  registerDownloadDispatcher: vi.fn(),
 }));
 
 // vi.mock 已替换模块实现；这里只借用其类型拿到 mock 断言能力

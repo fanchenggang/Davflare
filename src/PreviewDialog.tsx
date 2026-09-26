@@ -22,7 +22,10 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import RotateRightIcon from "@mui/icons-material/RotateRight";
 import DownloadIcon from "@mui/icons-material/Download";
 import EditIcon from "@mui/icons-material/Edit";
+import EditNoteIcon from "@mui/icons-material/EditNote";
 import ShareIcon from "@mui/icons-material/Share";
+
+import ConfirmDialog from "./ConfirmDialog";
 
 import { authFetch } from "./app/auth";
 import {
@@ -52,6 +55,8 @@ import { encodeKey, errorMessage, humanReadableSize } from "./app/utils";
 
 const LINE_NUMBER_CAP = 2000;
 const HIGHLIGHT_MAX_BYTES = 1024 * 1024;
+// 在线编辑上限：文本预览本身允许 2MB，编辑再保守一档（>1MB 建议走下载+本机编辑）
+const EDIT_MAX_BYTES = 1024 * 1024;
 
 // 亮暗两套 token 配色（对 surface.code 背景均满足可读性）
 const TOKEN_COLORS = {
@@ -185,6 +190,7 @@ function PreviewDialog({
   onShare,
   onRename,
   onDelete,
+  onSaved,
 }: {
   file: FileItem | null;
   siblings?: FileItem[];
@@ -194,6 +200,8 @@ function PreviewDialog({
   onShare: () => void;
   onRename: () => void;
   onDelete: () => void;
+  /** 文本编辑保存成功后回调（刷新文件列表的大小/时间） */
+  onSaved?: () => void;
 }) {
   const isPhone = useMediaQuery("(max-width:600px)");
   const [url, setUrl] = useState<string | null>(null);
@@ -216,6 +224,13 @@ function PreviewDialog({
   const [tooLarge, setTooLarge] = useState(false);
   const [largeSize, setLargeSize] = useState(0);
   const [jsonError, setJsonError] = useState(false);
+  // —— 文本在线编辑 ——
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // 加载/保存响应中的 ETag，保存时作 If-Match 做冲突检测
+  const etagRef = useRef<string | null>(null);
 
   const index = file
     ? siblings.findIndex((item) => item.key === file.key)
@@ -243,6 +258,11 @@ function PreviewDialog({
       setJsonError(false);
       setRotation(0);
       setRate(1);
+      setEditing(false);
+      setDraft("");
+      setSaving(false);
+      setConfirmDiscard(false);
+      etagRef.current = null;
       return;
     }
     let objectUrl: string | null = null;
@@ -258,6 +278,11 @@ function PreviewDialog({
     setOffset({ x: 0, y: 0 });
     setRotation(0);
     setRate(1);
+    setEditing(false);
+    setDraft("");
+    setSaving(false);
+    setConfirmDiscard(false);
+    etagRef.current = null;
 
     const media = isMediaPreviewable(file);
     const asText = !media && isTextPreviewable(file);
@@ -276,6 +301,7 @@ function PreviewDialog({
         });
         if (!response.ok) throw new Error(translate("openFileFailed"));
         if (asText) {
+          etagRef.current = response.headers.get("ETag");
           const result = await readResponseTextCapped(response);
           if (canceled) return;
           if (!result.ok) {
@@ -374,9 +400,72 @@ function PreviewDialog({
   };
 
   const closePreview = () => {
+    // 编辑中有未保存修改：先确认放弃，不直接关闭
+    if (editing && draft !== text) {
+      setConfirmDiscard(true);
+      return;
+    }
     onClose();
     const active = document.activeElement;
     if (active instanceof HTMLElement) active.blur();
+  };
+
+  // —— 文本在线编辑 ——
+  const canEdit =
+    text != null && !tooLarge && (file?.size ?? Infinity) <= EDIT_MAX_BYTES;
+
+  const startEdit = () => {
+    if (text == null) return;
+    setDraft(text);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    if (draft === text) {
+      setEditing(false);
+      return;
+    }
+    setConfirmDiscard(true);
+  };
+
+  const finishClose = () => {
+    setConfirmDiscard(false);
+    setEditing(false);
+    onClose();
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+  };
+
+  const saveEdit = async () => {
+    if (!file || text == null || saving) return;
+    setSaving(true);
+    try {
+      const response = await authFetch("/webdav/" + encodeKey(file.key), {
+        method: "PUT",
+        // If-Match 冲突检测：他人已改动时服务端返回 412，本地修改不被覆盖
+        headers: etagRef.current ? { "If-Match": etagRef.current } : undefined,
+        body: draft,
+      });
+      if (response.status === 412 || response.status === 409) {
+        onNotify(translate("previewConflictToast"), "error");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error((await response.text()) || translate("previewSaveFailed"));
+      }
+      // PUT 响应带新 ETag，下次保存可直接续用
+      const nextEtag = response.headers.get("ETag");
+      if (nextEtag) etagRef.current = nextEtag;
+      // JSON 预览展示的是格式化后的文本，保存所见即所得（格式化版本写回）
+      setText(draft);
+      setEditing(false);
+      onNotify(translate("previewSavedToast"), "success");
+      onSaved?.();
+    } catch (error) {
+      onNotify(errorMessage(error), "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const contentType = mimeType(file?.contentType);
@@ -608,12 +697,44 @@ function PreviewDialog({
           </Box>
         ) : text != null ? (
           <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            {jsonError && (
+            {jsonError && !editing && (
               <Alert severity="warning" sx={{ borderRadius: 0 }}>
                 {strings.jsonParseFailed}
               </Alert>
             )}
-            <TextPane text={text} highlightLang={highlightLang} />
+            {editing ? (
+              <Box
+                component="textarea"
+                aria-label={strings.renameTitle}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+                    event.preventDefault();
+                    saveEdit();
+                  }
+                }}
+                spellCheck={false}
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  width: "100%",
+                  resize: "none",
+                  border: "none",
+                  outline: "none",
+                  backgroundColor: "surface.code",
+                  color: "surface.codeText",
+                  fontFamily:
+                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                  fontSize: 13,
+                  lineHeight: 1.65,
+                  padding: 2,
+                  tabSize: 2,
+                }}
+              />
+            ) : (
+              <TextPane text={text} highlightLang={highlightLang} />
+            )}
           </Box>
         ) : url ? (
           isImage ? (
@@ -701,56 +822,85 @@ function PreviewDialog({
         ) : null}
       </DialogContent>
       <DialogActions sx={{ flexWrap: "wrap", gap: 0.5, px: 2, py: 1.25 }}>
-        {showPager && (
+        {editing ? (
           <>
-            <Button disabled={!hasPrev} onClick={() => goSibling(-1)}>
-              {strings.prevFile}
-            </Button>
-            <Button disabled={!hasNext} onClick={() => goSibling(1)}>
-              {strings.nextFile}
-            </Button>
-          </>
-        )}
-        {url && isImage && (
-          <>
-            <Tooltip title={strings.rotate}>
-              <Button onClick={() => setRotation((prev) => (prev + 90) % 360)}>
-                <RotateRightIcon />
-              </Button>
-            </Tooltip>
-            {/* 当前显示比例，点击复位为 100% */}
+            <Button onClick={cancelEdit}>{strings.cancel}</Button>
             <Button
-              size="small"
-              variant={zoom !== 1 || rotFit !== 1 ? "outlined" : "text"}
-              onClick={() => {
-                setZoom(1);
-                setOffset({ x: 0, y: 0 });
-              }}
-              sx={{ minWidth: 64, fontVariantNumeric: "tabular-nums" }}
+              variant="contained"
+              disableElevation
+              disabled={saving || draft === text}
+              onClick={saveEdit}
             >
-              {Math.round(zoom * rotFit * 100)}%
+              {saving ? strings.loading : strings.save}
             </Button>
           </>
+        ) : (
+          <>
+            {showPager && (
+              <>
+                <Button disabled={!hasPrev} onClick={() => goSibling(-1)}>
+                  {strings.prevFile}
+                </Button>
+                <Button disabled={!hasNext} onClick={() => goSibling(1)}>
+                  {strings.nextFile}
+                </Button>
+              </>
+            )}
+            {url && isImage && (
+              <>
+                <Tooltip title={strings.rotate}>
+                  <Button onClick={() => setRotation((prev) => (prev + 90) % 360)}>
+                    <RotateRightIcon />
+                  </Button>
+                </Tooltip>
+                {/* 当前显示比例，点击复位为 100% */}
+                <Button
+                  size="small"
+                  variant={zoom !== 1 || rotFit !== 1 ? "outlined" : "text"}
+                  onClick={() => {
+                    setZoom(1);
+                    setOffset({ x: 0, y: 0 });
+                  }}
+                  sx={{ minWidth: 64, fontVariantNumeric: "tabular-nums" }}
+                >
+                  {Math.round(zoom * rotFit * 100)}%
+                </Button>
+              </>
+            )}
+            {text != null && (
+              <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>
+                {strings.copyAll}
+              </Button>
+            )}
+            {canEdit && (
+              <Button startIcon={<EditNoteIcon />} onClick={startEdit}>
+                {translate("previewEdit")}
+              </Button>
+            )}
+            <Button startIcon={<ShareIcon />} onClick={onShare}>
+              {strings.share}
+            </Button>
+            <Button startIcon={<EditIcon />} onClick={onRename}>
+              {strings.rename}
+            </Button>
+            <Button color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
+              {strings.delete}
+            </Button>
+            <Button startIcon={<DownloadIcon />} onClick={download}>
+              {strings.download}
+            </Button>
+            <Button onClick={closePreview}>{strings.close}</Button>
+          </>
         )}
-        {text != null && (
-          <Button startIcon={<ContentCopyIcon />} onClick={copyAll}>
-            {strings.copyAll}
-          </Button>
-        )}
-        <Button startIcon={<ShareIcon />} onClick={onShare}>
-          {strings.share}
-        </Button>
-        <Button startIcon={<EditIcon />} onClick={onRename}>
-          {strings.rename}
-        </Button>
-        <Button color="error" startIcon={<DeleteIcon />} onClick={onDelete}>
-          {strings.delete}
-        </Button>
-        <Button startIcon={<DownloadIcon />} onClick={download}>
-          {strings.download}
-        </Button>
-        <Button onClick={closePreview}>{strings.close}</Button>
       </DialogActions>
+      <ConfirmDialog
+        open={confirmDiscard}
+        title={translate("previewDiscardTitle")}
+        message={translate("previewDiscardMessage")}
+        confirmText={translate("previewDiscardConfirm")}
+        onClose={() => setConfirmDiscard(false)}
+        onConfirm={finishClose}
+      />
     </Dialog>
   );
 }

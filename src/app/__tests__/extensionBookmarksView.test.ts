@@ -90,6 +90,12 @@ const BookmarksView = nodeRequire("../../../extension/bookmarksView.js") as {
     total: number;
   };
   sumSnapshotSizes: (model: unknown) => number;
+  popMenuFlipNeeded: (
+    anchorTop: number,
+    menuHeight: number,
+    viewportHeight: number,
+    gap?: number
+  ) => boolean;
 };
 
 function modelWith(bookmarks: Array<Record<string, unknown>>) {
@@ -677,5 +683,26 @@ describe("extension/bookmarksView.js formatWhen", () => {
 
   test("degenerate inputs fall back to a placeholder", () => {
     expect(BookmarksView.formatWhen(0, now, "zh")).toBe("未知");
+  });
+});
+
+describe("extension/bookmarksView.js popMenuFlipNeeded", () => {
+  test("keeps upward pop when there is enough room above the anchor", () => {
+    // 锚点在 y=400，菜单 220px + 12px 间距 = 232 需求，上方空间充足
+    expect(BookmarksView.popMenuFlipNeeded(400, 220, 800)).toBe(false);
+  });
+
+  test("flips downward for first-row anchors that cannot fit the menu above", () => {
+    // 首行卡片锚点 y=120，上方 120 < 232 → 向下翻转
+    expect(BookmarksView.popMenuFlipNeeded(120, 220, 800)).toBe(true);
+  });
+
+  test("keeps upward when neither side fits (flipping would not help)", () => {
+    // 视口只有 300 高、锚点 y=120：下方 180 也不够 232，翻转无意义
+    expect(BookmarksView.popMenuFlipNeeded(120, 220, 300)).toBe(false);
+  });
+
+  test("zero-height menu never flips", () => {
+    expect(BookmarksView.popMenuFlipNeeded(0, 0, 800)).toBe(false);
   });
 });

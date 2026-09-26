@@ -26,11 +26,13 @@ import { TransferTask } from "./app/types";
 import { strings, translate } from "./app/strings";
 import { formatEta, humanReadableSize, humanReadableSpeed } from "./app/utils";
 
-function statusLabel(status: TransferTask["status"], resumable: boolean) {
-  switch (status) {
+function statusLabel(task: TransferTask) {
+  const resumable = Boolean(task.uploadId);
+  switch (task.status) {
     case "pending":
       return translate("statusPending");
     case "in-progress":
+      if (task.type === "download") return translate("statusDownloading");
       return resumable
         ? translate("statusMultipartUploading")
         : translate("statusUploading");
@@ -43,7 +45,7 @@ function statusLabel(status: TransferTask["status"], resumable: boolean) {
     case "canceled":
       return translate("statusCanceled");
     default:
-      return status;
+      return task.status;
   }
 }
 
@@ -63,19 +65,17 @@ function TransferManager({
   const transferQueue = useTransferQueue();
   const globalPaused = useTransferQueueGlobalPaused();
   const actions = useTransferQueueActions();
-  const uploads = transferQueue.filter((task) => task.type === "upload");
+  const tasks = transferQueue;
   const [, setTick] = useState(0);
-  const uploadsRef = useRef(uploads);
-  uploadsRef.current = uploads;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   const speedRef = useRef<Map<string, SpeedSample>>(new Map());
 
-  const total = uploads.reduce((sum, task) => sum + task.total, 0);
-  const loaded = uploads.reduce((sum, task) => sum + task.loaded, 0);
-
-  const activeCount = uploads.filter(
-    (task) => task.status === "pending" || task.status === "in-progress"
-  ).length;
-  const pausedCount = uploads.filter((task) => task.status === "paused").length;
+  // zip 归档为流式打包（无 Content-Length），按任务是否有总量分开汇总：
+  // 总进度只统计有总量的任务，未知总量的在任务行内以已下载字节数呈现。
+  const sizedTasks = tasks.filter((task) => task.total > 0);
+  const total = sizedTasks.reduce((sum, task) => sum + task.total, 0);
+  const loaded = sizedTasks.reduce((sum, task) => sum + task.loaded, 0);
 
   // 每 700ms 采样一次进度差估算速度（EMA 平滑），供单任务与整体 ETA 展示
   useEffect(() => {
@@ -84,7 +84,7 @@ function TransferManager({
       const now = Date.now();
       let changed = false;
       const seen = new Set<string>();
-      for (const task of uploadsRef.current) {
+      for (const task of tasksRef.current) {
         if (task.status !== "in-progress") continue;
         seen.add(task.id);
         const prev = speedRef.current.get(task.id);
@@ -121,7 +121,7 @@ function TransferManager({
   const speedOf = (task: TransferTask) =>
     speedRef.current.get(task.id)?.speed ?? 0;
 
-  const overallSpeed = uploads
+  const overallSpeed = tasks
     .filter((task) => task.status === "in-progress")
     .reduce((sum, task) => sum + speedOf(task), 0);
   const overallEta =
@@ -138,28 +138,31 @@ function TransferManager({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{strings.transfers}</DialogTitle>
       <DialogContent sx={{ padding: 0 }}>
-        {uploads.length === 0 ? (
+        {tasks.length === 0 ? (
           <Typography
             textAlign="center"
             color="text.secondary"
             sx={{ padding: 3 }}
           >
-            {strings.noUploadTasks}
+            {strings.noTransferTasks}
           </Typography>
         ) : (
           <Stack spacing={2} sx={{ padding: 2 }}>
             <LinearProgress
-              variant="determinate"
-              value={total > 0 ? (loaded / total) * 100 : 0}
+              variant={total > 0 ? "determinate" : "indeterminate"}
+              value={total > 0 ? (loaded / total) * 100 : undefined}
             />
             <Typography variant="body2" color="text.secondary">
-              {translate("overallProgress")}：{humanReadableSize(loaded)} / {humanReadableSize(total)}
+              {total > 0
+                ? `${translate("overallProgress")}：${humanReadableSize(loaded)} / ${humanReadableSize(total)}`
+                : translate("transferInProgress")}
               {overallSpeed > 0 && taskStatusText(overallSpeed, overallEta)}
             </Typography>
             <Stack spacing={2}>
-              {uploads.map((task) => {
-                const resumable = Boolean(task.uploadId);
+              {tasks.map((task) => {
                 const speed = humanReadableSpeed(speedOf(task));
+                const unknownSize =
+                  task.total === 0 && task.status === "in-progress";
                 return (
                   <Stack
                     key={task.id}
@@ -186,14 +189,20 @@ function TransferManager({
                       </Typography>
                     </Stack>
                     <Typography variant="caption" color="text.secondary">
-                      {humanReadableSize(task.loaded)} / {humanReadableSize(task.total)}
+                      {task.total > 0
+                        ? `${humanReadableSize(task.loaded)} / ${humanReadableSize(task.total)}`
+                        : translate("downloadedSoFar", {
+                            size: humanReadableSize(task.loaded),
+                          })}
                       {speed ? ` · ${speed}` : ""}
                       {taskEtaText(task)}
                       {" · "}
-                      {statusLabel(task.status, resumable)}
+                      {statusLabel(task)}
                     </Typography>
                     <LinearProgress
-                      variant="determinate"
+                      variant={
+                        unknownSize ? "indeterminate" : "determinate"
+                      }
                       value={
                         task.total > 0 ? (task.loaded / task.total) * 100 : 0
                       }
@@ -214,18 +223,19 @@ function TransferManager({
                           {strings.retry}
                         </Button>
                       )}
-                      {(task.status === "pending" ||
-                        task.status === "in-progress") && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<PauseIcon />}
-                          onClick={() => actions.pause(task.id)}
-                        >
-                          {strings.pause}
-                        </Button>
-                      )}
-                      {task.status === "paused" && (
+                      {task.type === "upload" &&
+                        (task.status === "pending" ||
+                          task.status === "in-progress") && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<PauseIcon />}
+                            onClick={() => actions.pause(task.id)}
+                          >
+                            {strings.pause}
+                          </Button>
+                        )}
+                      {task.type === "upload" && task.status === "paused" && (
                         <Button
                           size="small"
                           variant="contained"
@@ -255,11 +265,20 @@ function TransferManager({
         )}
       </DialogContent>
       <DialogActions>
-        {uploads.length > 0 && (
+        {tasks.some((task) => task.type === "upload") && (
           <Button
             startIcon={globalPaused ? <ResumeAllIcon /> : <PauseAllIcon />}
             onClick={globalPaused ? actions.resumeAll : actions.pauseAll}
-            disabled={!globalPaused && activeCount === 0 && pausedCount === 0}
+            disabled={
+              !globalPaused &&
+              !tasks.some(
+                (task) =>
+                  task.type === "upload" &&
+                  (task.status === "pending" ||
+                    task.status === "in-progress" ||
+                    task.status === "paused")
+              )
+            }
           >
             {globalPaused ? strings.resumedAll : strings.pausedAll}
           </Button>
