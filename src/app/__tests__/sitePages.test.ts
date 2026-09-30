@@ -3,7 +3,11 @@ import {
   ALBUM_MAX_BYTES,
   ALBUM_MAX_IMAGES,
   NAV_MAX_LINKS,
+  albumNameCandidate,
   allocateAlbumNames,
+  isRasterFileName,
+  pageLang,
+  safeJson,
   checkAlbumLimits,
   isSafeManifestRel,
   parseAlbumManifest,
@@ -164,5 +168,50 @@ describe("site pages / album html and names", () => {
     expect(() => renderAlbumPage({ lang: "en", title: "a", images })).toThrow(
       /album image limit exceeded/
     );
+  });
+});
+
+describe("site pages / helpers edge cases", () => {
+  test("albumNameCandidate rejects reserved names and traversal", () => {
+    expect(albumNameCandidate("index.html", 1)).toBeNull();
+    expect(albumNameCandidate(".davflare-album.json", 1)).toBeNull();
+    expect(albumNameCandidate("notes.txt", 1)).toBeNull();
+    expect(albumNameCandidate("ok.jpg", 0)).toBeNull();
+    expect(albumNameCandidate("ok.jpg", 1)).toBe("ok.jpg");
+    expect(albumNameCandidate("ok.jpg", 2)).toBe("ok-2.jpg");
+    expect(isRasterFileName("x.avif")).toBe(true);
+    expect(isRasterFileName("x.txt")).toBe(false);
+    expect(pageLang("zh")).toBe("zh");
+    expect(pageLang("en")).toBe("en");
+    expect(pageLang("nope")).toBe("en");
+    expect(safeJson({ a: "</script>" })).toContain("\\u003c");
+  });
+
+  test("parseNavPayload clips and skips empty hrefs", () => {
+    const ok = parseNavPayload({
+      lang: "zh",
+      title: "x".repeat(300),
+      groups: [
+        {
+          name: " ",
+          links: [
+            { title: " ", href: "   " },
+            { title: "ok", href: "https://ex.test/a" },
+          ],
+        },
+      ],
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.count).toBe(1);
+      expect(ok.title.length).toBe(200);
+      expect(ok.groups[0].name.length).toBeGreaterThan(0);
+    }
+  });
+
+  test("renderAlbumPage empty gallery still has lightbox chrome", () => {
+    const html = renderAlbumPage({ lang: "en", title: "empty", images: [] });
+    expect(html).toContain("No images");
+    expect(html).toContain("id=\"lightbox\"");
   });
 });

@@ -108,3 +108,60 @@ describe("PublishAlbumDialog", () => {
     await waitFor(() => expect(screen.getByText("boom")).toBeInTheDocument());
   });
 });
+
+  test("shows no-host tip when SITES_HOST is missing", async () => {
+    vi.mocked(publishAlbumSite).mockResolvedValue({
+      slug: "cover",
+      kind: "album",
+      copied: 1,
+      bytes: 10,
+      sitesHost: null,
+    });
+    const onNotify = vi.fn();
+    render(
+      <PublishAlbumDialog
+        open
+        images={[image("cover.jpg")]}
+        ignoredCount={0}
+        onClose={vi.fn()}
+        onNotify={onNotify}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteSubmit }));
+    await waitFor(() =>
+      expect(screen.getByText(translate("publishSiteNoHost", { slug: "cover" }))).toBeInTheDocument()
+    );
+    expect(onNotify).toHaveBeenCalledWith(translate("publishSiteNoHost", { slug: "cover" }), "info");
+  });
+
+  test("clipboard failure uses publishAlbumFailed notify", async () => {
+    vi.mocked(publishAlbumSite).mockResolvedValue({
+      slug: "cover",
+      kind: "album",
+      copied: 1,
+      bytes: 10,
+      sitesHost: "sites.example.com",
+    });
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+    const onNotify = vi.fn();
+    render(
+      <PublishAlbumDialog
+        open
+        images={[image("cover.jpg")]}
+        ignoredCount={0}
+        onClose={vi.fn()}
+        onNotify={onNotify}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteSubmit }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: strings.publishSiteCopyUrl })).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: strings.publishSiteCopyUrl }));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(translate("publishAlbumFailed"), "error")
+    );
+  });
+

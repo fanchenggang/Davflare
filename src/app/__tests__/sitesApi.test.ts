@@ -469,6 +469,39 @@ describe("sites API album publish", () => {
     expect(bucket.rawText("pics/small.jpg")).toBe("S");
   });
 
+  
+  test("rejects bad album shapes and feature-off without writing", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([{ key: "pics/a.jpg", body: "A", contentType: "image/jpeg" }]);
+    const bad = await onRequestPost(
+      makeContext(post({ slug: "album", album: "nope" }), makeEnv(bucket))
+    );
+    expect(bad.status).toBe(400);
+    expect(await bad.text()).toBe("bad album");
+
+    const badFiles = await onRequestPost(
+      makeContext(post({ slug: "album", album: { files: [1, 2] } }), makeEnv(bucket))
+    );
+    expect(badFiles.status).toBe(400);
+    expect(await badFiles.text()).toBe("bad album");
+
+    bucket.seed([
+      {
+        key: CONFIG_KEY,
+        body: JSON.stringify({ ...DEFAULT_FEATURE_FLAGS, sites: false }),
+        contentType: "application/json",
+      },
+    ]);
+    const off = await onRequestPost(
+      makeContext(
+        post({ slug: "album", album: { files: ["pics/a.jpg"] } }),
+        makeEnv(bucket)
+      )
+    );
+    expect(off.status).toBe(404);
+    expect(bucket.has("sites/album/index.html")).toBe(false);
+  });
+
   test("rejects a selection with no raster images and does not create the site", async () => {
     const bucket = new InMemoryBucket();
     bucket.seed([{ key: "pics/notes.txt", body: "x" }]);
