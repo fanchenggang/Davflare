@@ -706,3 +706,32 @@ describe("extension/bookmarksView.js popMenuFlipNeeded", () => {
     expect(BookmarksView.popMenuFlipNeeded(0, 0, 800)).toBe(false);
   });
 });
+
+describe("extension/bookmarksView.js nav groups", () => {
+  const view = BookmarksView as typeof BookmarksView & {
+    NAV_LINK_LIMIT: number;
+    navGroupsFromBookmarks: (
+      items: Array<Record<string, unknown>>,
+      unfiled?: string
+    ) => Array<{ name: string; links: Array<{ title: string; href: string }> }>;
+    navLinkCount: (groups: unknown) => number;
+  };
+
+  test("groups the current set by folder and skips rows without a url", () => {
+    const groups = view.navGroupsFromBookmarks(
+      [
+        { title: "<Home>", url: "https://ex.test", folder: "" },
+        { title: "", url: "https://ex.test/b", folder: "Dev" },
+        { title: "skip", url: "", folder: "Dev" },
+        { title: "gone", url: "https://ex.test/x", folder: "Dev", deleted: true },
+      ],
+      "未分类"
+    );
+    expect(groups).toEqual([
+      { name: "未分类", links: [{ title: "<Home>", href: "https://ex.test" }] },
+      { name: "Dev", links: [{ title: "https://ex.test/b", href: "https://ex.test/b" }] },
+    ]);
+    expect(view.navLinkCount(groups)).toBe(2);
+    expect(view.NAV_LINK_LIMIT).toBe(1000);
+  });
+});

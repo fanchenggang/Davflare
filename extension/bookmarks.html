@@ -105,6 +105,7 @@
               </div>
             </div>
             <div class="topbarActions">
+              <button id="publishNavBtn" class="ghost" type="button">Publish as nav</button>
               <button id="selAllBtn" class="ghost" type="button">Select all</button>
               <button id="libRefresh" class="ghost" type="button" title="Reload">Reload</button>
               <div class="viewToggle" role="group" aria-label="View">
@@ -120,6 +121,7 @@
             <button id="batchMove" class="ghost" type="button">Move</button>
             <button id="batchTags" class="ghost" type="button">Tags</button>
             <button id="batchPin" class="ghost" type="button">Pin</button>
+            <button id="batchPublishNav" class="ghost" type="button">Publish as nav</button>
             <button id="batchDelete" class="danger" type="button">Delete</button>
             <span class="spacer"></span>
             <button id="batchCancel" class="ghost" type="button" title="Clear selection">✕</button>
@@ -526,6 +528,30 @@
           <button id="chromeConflictCancel" class="ghost" type="button">Cancel</button>
           <button id="chromeConflictSkip" class="ghost" type="button">Skip conflicts</button>
           <button id="chromeConflictOverwrite" class="primary" type="button">Update matching</button>
+        </menu>
+      </form>
+    </dialog>
+
+
+    <dialog id="navDialog">
+      <form id="navForm" novalidate>
+        <h2 id="navDialogTitle">Publish as nav site</h2>
+        <p id="navSummary" class="dialogSubtitle"></p>
+        <label for="navSlug" id="navSlugLabel">Site slug</label>
+        <input id="navSlug" type="text" spellcheck="false" autocapitalize="off" />
+        <p id="navSlugHint" class="hint"></p>
+        <p id="navError" class="status err"></p>
+        <div id="navSuccess" class="hidden">
+          <label for="navUrl" id="navUrlLabel">Site URL</label>
+          <input id="navUrl" type="text" readonly spellcheck="false" />
+          <div class="snapActions">
+            <button id="navCopy" class="primary" type="button">Copy URL</button>
+            <a id="navOpen" class="ghost" target="_blank" rel="noopener noreferrer">Open site</a>
+          </div>
+        </div>
+        <menu>
+          <button id="navCancel" class="ghost" type="button">Cancel</button>
+          <button id="navSubmit" class="primary" type="submit">Publish</button>
         </menu>
       </form>
     </dialog>

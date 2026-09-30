@@ -15,12 +15,26 @@ import {
   siteConfigKey,
 } from "../_sites";
 import {
+  ALBUM_MANIFEST_NAME,
+  albumNameCandidate,
+  checkAlbumLimits,
+  isSafeManifestRel,
+  pageLabel,
+  pageLang,
+  parseAlbumManifest,
+  parseNavPayload,
+  rasterExtension,
+  renderAlbumPage,
+  renderNavPage,
+} from "../sitePages";
+import {
   copyObject,
   isCollectionObject,
   isSessionOrKeyAuthorized,
   jsonResponse,
   listDescendants,
   normalizeDirKey,
+  normalizeFileKey,
   resolveAsDirectory,
   textResponse,
 } from "./_apikey";
@@ -88,6 +102,173 @@ async function saveSiteConfig(bucket: R2Bucket, config: SiteConfig): Promise<voi
   });
 }
 
+
+async function publishNav(
+  env: SitesApiEnv,
+  slug: string,
+  nav: unknown
+): Promise<Response> {
+  const flags = await loadFeatureFlags(env.BUCKET);
+  if (!flags.sites) return featureDisabledResponse();
+  const parsed = parseNavPayload(nav);
+  if (!parsed.ok) return textResponse(parsed.error, 400);
+  const html = renderNavPage({
+    lang: parsed.lang,
+    title: parsed.title,
+    groups: parsed.groups,
+  });
+  await env.BUCKET.put(`${SITES_PREFIX}${slug}/index.html`, html, {
+    httpMetadata: { contentType: "text/html; charset=utf-8" },
+  });
+  return jsonResponse({
+    slug,
+    kind: "nav",
+    copied: 1,
+    count: parsed.count,
+    sitesHost: normalizeSitesHost(env.SITES_HOST) || null,
+  });
+}
+
+async function publishAlbum(
+  env: SitesApiEnv,
+  slug: string,
+  album: unknown
+): Promise<Response> {
+  const flags = await loadFeatureFlags(env.BUCKET);
+  if (!flags.sites) return featureDisabledResponse();
+  if (album === null || typeof album !== "object" || Array.isArray(album)) {
+    return textResponse("bad album", 400);
+  }
+  const body = album as { lang?: unknown; title?: string; files?: unknown };
+  if (!Array.isArray(body.files)) return textResponse("bad album", 400);
+  if (body.files.length > 5000) return textResponse("bad album", 400);
+
+  const lang = pageLang(body.lang);
+  const titleRaw = typeof body.title === "string" ? body.title.trim() : "";
+  const title = (titleRaw || pageLabel(lang, "siteAlbumHeading")).slice(0, 200);
+
+  const seen = new Set<string>();
+  const rasters: Array<{ key: string; name: string }> = [];
+  for (const item of body.files) {
+    if (typeof item !== "string") return textResponse("bad album", 400);
+    const key = normalizeFileKey(item);
+    if (key instanceof Response) return key;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const base = key.split("/").pop() || "";
+    if (!rasterExtension(base)) continue;
+    rasters.push({ key, name: base });
+  }
+
+  const limited = checkAlbumLimits(rasters.length, 0);
+  if (!limited.ok && limited.error.startsWith("album image limit exceeded")) {
+    return textResponse(limited.error, 400);
+  }
+  if (!limited.ok && limited.error === "no album images") {
+    return textResponse(limited.error, 400);
+  }
+
+  let bytes = 0;
+  const sized: Array<{ key: string; name: string; size: number }> = [];
+  for (const file of rasters) {
+    const head = await env.BUCKET.head(file.key);
+    if (head === null) return textResponse("album file not found", 404);
+    if (isCollectionObject(head)) continue;
+    bytes += head.size;
+    sized.push({ ...file, size: head.size });
+    const after = checkAlbumLimits(sized.length, bytes);
+    if (!after.ok && after.error.startsWith("album size limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+    if (!after.ok && after.error.startsWith("album image limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+  }
+  const finalLimits = checkAlbumLimits(sized.length, bytes);
+  if (!finalLimits.ok) return textResponse(finalLimits.error, 400);
+
+  const prefix = `${SITES_PREFIX}${slug}/`;
+  const manifestKey = `${prefix}${ALBUM_MANIFEST_NAME}`;
+  const indexKey = `${prefix}index.html`;
+  const manifestObject = await env.BUCKET.get(manifestKey);
+  const oldRels = manifestObject ? parseAlbumManifest(await manifestObject.text()) : [];
+  const manifestKeys = new Set<string>();
+  for (const rel of oldRels) {
+    if (!isSafeManifestRel(rel)) continue;
+    manifestKeys.add(`${prefix}${rel}`);
+  }
+
+  const used = new Set<string>();
+  const planned: Array<{ key: string; name: string; size: number }> = [];
+  for (const file of sized) {
+    let chosen: string | null = null;
+    for (let attempt = 1; attempt <= 10000; attempt += 1) {
+      const candidate = albumNameCandidate(file.name, attempt);
+      if (!candidate) continue;
+      if (used.has(candidate.toLowerCase())) continue;
+      const dest = `${prefix}${candidate}`;
+      const head = await env.BUCKET.head(dest);
+      if (head !== null && !manifestKeys.has(dest)) continue;
+      chosen = candidate;
+      break;
+    }
+    if (!chosen) return textResponse("bad album", 400);
+    used.add(chosen.toLowerCase());
+    planned.push({ key: file.key, name: chosen, size: file.size });
+  }
+
+  const sourceKeys = new Set(planned.map((file) => file.key));
+  const newKeys = new Set<string>([indexKey, manifestKey]);
+  for (const file of planned) newKeys.add(`${prefix}${file.name}`);
+
+  for (const rel of oldRels) {
+    if (!isSafeManifestRel(rel)) continue;
+    const key = `${prefix}${rel}`;
+    if (!key.startsWith(prefix)) continue;
+    if (sourceKeys.has(key)) continue;
+    await env.BUCKET.delete(key);
+  }
+
+  const images: Array<{ name: string; src: string }> = [];
+  for (const file of planned) {
+    const dest = `${prefix}${file.name}`;
+    const error = await copyObject(env.BUCKET, file.key, dest, { overwrite: true });
+    if (error) return error;
+    images.push({ name: file.name, src: encodeURIComponent(file.name) });
+  }
+
+  const html = renderAlbumPage({ lang, title, images });
+  await env.BUCKET.put(indexKey, html, {
+    httpMetadata: { contentType: "text/html; charset=utf-8" },
+  });
+  const manifestFiles = [
+    ...planned.map((file) => file.name),
+    "index.html",
+    ALBUM_MANIFEST_NAME,
+  ];
+  await env.BUCKET.put(
+    manifestKey,
+    JSON.stringify({ version: 1, kind: "album", files: manifestFiles }),
+    { httpMetadata: { contentType: "application/json; charset=utf-8" } }
+  );
+
+  for (const rel of oldRels) {
+    if (!isSafeManifestRel(rel)) continue;
+    const key = `${prefix}${rel}`;
+    if (!key.startsWith(prefix)) continue;
+    if (newKeys.has(key)) continue;
+    await env.BUCKET.delete(key);
+  }
+
+  return jsonResponse({
+    slug,
+    kind: "album",
+    copied: planned.length,
+    bytes,
+    sitesHost: normalizeSitesHost(env.SITES_HOST) || null,
+  });
+}
+
 export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
   if (!(await isSessionOrKeyAuthorized(
@@ -147,6 +328,8 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     source?: string;
     password?: string | null;
     hostname?: string | null;
+    nav?: unknown;
+    album?: unknown;
   };
   try {
     body = await request.json();
@@ -197,6 +380,13 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
       copied,
       sitesHost: normalizeSitesHost(env.SITES_HOST) || null,
     });
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "nav")) {
+    return publishNav(env, slug, body.nav);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "album")) {
+    return publishAlbum(env, slug, body.album);
   }
 
   // 只允许给已存在的站点改配置：前缀下至少要有一个对象

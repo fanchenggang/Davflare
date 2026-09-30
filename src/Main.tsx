@@ -24,6 +24,7 @@ import MultiSelectToolbar from "./MultiSelectToolbar";
 import PathBar, { SearchScope } from "./PathBar";
 import RenameDialog from "./RenameDialog";
 import PublishSiteDialog from "./PublishSiteDialog";
+import PublishAlbumDialog from "./PublishAlbumDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
@@ -39,6 +40,11 @@ import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "
 import { Z_INDEX, warmShadow } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings, translate } from "./app/strings";
+import {
+  albumPublishBlockReason,
+  isRasterFileName,
+  partitionRasterFiles,
+} from "./app/sites";
 import {
   createFolder,
   downloadFolderArchive,
@@ -131,6 +137,10 @@ function Main({
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null);
   const [publishTarget, setPublishTarget] = useState<FileItem | null>(null);
+  const [albumTarget, setAlbumTarget] = useState<{
+    images: FileItem[];
+    ignored: number;
+  } | null>(null);
   const [detailsFile, setDetailsFile] = useState<FileItem | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
@@ -813,6 +823,14 @@ function Main({
         onNotify={onNotify}
       />
 
+      <PublishAlbumDialog
+        open={Boolean(albumTarget)}
+        images={albumTarget?.images ?? []}
+        ignoredCount={albumTarget?.ignored ?? 0}
+        onClose={() => setAlbumTarget(null)}
+        onNotify={onNotify}
+      />
+
       {dropActive && route.kind === "folder" && (
         <Box
           sx={{
@@ -957,6 +975,28 @@ function Main({
             return;
           }
           setPublishTarget(file);
+        }}
+        canPublishAlbum={
+          flags.sites &&
+          selectedKeys.some((key) => {
+            const file = files.find((item) => item.key === key);
+            return Boolean(file && !file.isDir && isRasterFileName(file.name));
+          })
+        }
+        onPublishAlbum={() => {
+          const selected = selectedKeys
+            .map((key) => files.find((item) => item.key === key))
+            .filter((item): item is FileItem => Boolean(item));
+          const { images, ignored } = partitionRasterFiles(selected);
+          const reason = albumPublishBlockReason(images);
+          if (reason) {
+            onNotify(reason, "error");
+            return;
+          }
+          setAlbumTarget({
+            images,
+            ignored: ignored + (selectedKeys.length - selected.length),
+          });
         }}
       />
     </Box>

@@ -565,6 +565,46 @@ var BookmarksView = (function () {
     };
   }
 
+  var NAV_LINK_LIMIT = 1000;
+
+  /**
+   * Group bookmarks by folder (the library's real category). Empty folder
+   * becomes unfiledLabel. Skips rows without a URL. Order follows input.
+   */
+  function navGroupsFromBookmarks(items, unfiledLabel) {
+    var list = Array.isArray(items) ? items : [];
+    var order = [];
+    var map = Object.create(null);
+    var fallback = unfiledLabel || "Unfiled";
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      if (!item || item.deleted) continue;
+      var href = String(item.url || "").trim();
+      if (!href) continue;
+      var folder = String(item.folder || "");
+      var name = folder || fallback;
+      if (!map[name]) {
+        map[name] = [];
+        order.push(name);
+      }
+      var title = String(item.title || "").trim() || href;
+      map[name].push({ title: title, href: href });
+    }
+    return order.map(function (name) {
+      return { name: name, links: map[name] };
+    });
+  }
+
+  function navLinkCount(groups) {
+    var list = Array.isArray(groups) ? groups : [];
+    var count = 0;
+    for (var i = 0; i < list.length; i++) {
+      var links = list[i] && list[i].links;
+      if (Array.isArray(links)) count += links.length;
+    }
+    return count;
+  }
+
   /** Sum snapshot HTML sizes recorded in the snapshots index. */
   function sumSnapshotSizes(model) {
     var list = [];
@@ -601,6 +641,9 @@ var BookmarksView = (function () {
     toggleFavorite: toggleFavorite,
     summarizeStorage: summarizeStorage,
     sumSnapshotSizes: sumSnapshotSizes,
+    NAV_LINK_LIMIT: NAV_LINK_LIMIT,
+    navGroupsFromBookmarks: navGroupsFromBookmarks,
+    navLinkCount: navLinkCount,
     orderPinnedFirst: orderPinnedFirst,
     presetFilterLabel: presetFilterLabel,
     sortItems: sortItems,

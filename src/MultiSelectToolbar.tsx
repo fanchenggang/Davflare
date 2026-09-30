@@ -14,6 +14,7 @@ import {
   SelectAll as SelectAllIcon,
   Share as ShareIcon,
   Language as PublishIcon,
+  PhotoLibrary as AlbumIcon,
 } from "@mui/icons-material";
 
 function ActionButton({
@@ -56,6 +57,8 @@ function MultiSelectToolbar({
   onMove,
   onPublish,
   canPublish = false,
+  onPublishAlbum,
+  canPublishAlbum = false,
 }: {
   selectedKeys: string[];
   onClose: () => void;
@@ -69,6 +72,8 @@ function MultiSelectToolbar({
   onMove: () => void;
   onPublish?: () => void;
   canPublish?: boolean;
+  onPublishAlbum?: () => void;
+  canPublishAlbum?: boolean;
 }) {
   const count = selectedKeys.length;
 
@@ -141,6 +146,14 @@ function MultiSelectToolbar({
             label={strings.publishAsSite}
             disabled={!canPublish}
             onClick={onPublish}
+          />
+        ) : null}
+        {onPublishAlbum ? (
+          <ActionButton
+            icon={<AlbumIcon />}
+            label={strings.publishAsAlbum}
+            disabled={!canPublishAlbum}
+            onClick={onPublishAlbum}
           />
         ) : null}
         <ActionButton

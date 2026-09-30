@@ -1,5 +1,16 @@
 import { authFetch } from "./auth";
 import { translate } from "./strings";
+import type { Lang } from "./strings";
+import {
+  ALBUM_MAX_BYTES,
+  ALBUM_MAX_IMAGES,
+  checkAlbumLimits,
+  isRasterFileName,
+} from "../../functions/sitePages";
+import { FileItem } from "./types";
+import { humanReadableSize } from "./utils";
+
+export { ALBUM_MAX_BYTES, ALBUM_MAX_IMAGES, isRasterFileName };
 
 export interface SiteStats {
   objects: number;
@@ -134,6 +145,100 @@ export async function publishSite(
   });
   if (!response.ok) {
     throw new Error((await response.text()) || translate("publishSiteFailed"));
+  }
+  return response.json();
+}
+
+export interface PublishGeneratedResult {
+  slug: string;
+  kind: "nav" | "album";
+  copied: number;
+  sitesHost: string | null;
+  count?: number;
+  bytes?: number;
+}
+
+export interface NavPublishGroup {
+  name: string;
+  links: Array<{ title: string; href: string }>;
+}
+
+/** 书签数据生成导航页并写入 sites/{slug}/index.html（不拷贝网盘文件夹）。 */
+export async function publishNavSite(
+  slug: string,
+  nav: { lang?: Lang; title?: string; groups: NavPublishGroup[] }
+): Promise<PublishGeneratedResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const response = await authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ slug: normalizedSlug, nav }),
+  });
+  if (!response.ok) {
+    throw new Error((await response.text()) || translate("publishSiteFailed"));
+  }
+  return response.json();
+}
+
+export function partitionRasterFiles(files: FileItem[]): {
+  images: FileItem[];
+  ignored: number;
+} {
+  const images: FileItem[] = [];
+  let ignored = 0;
+  for (const file of files) {
+    if (!file || file.isDir || !isRasterFileName(file.name)) ignored += 1;
+    else images.push(file);
+  }
+  return { images, ignored };
+}
+
+export function albumSelectionBytes(files: FileItem[]): number {
+  return files.reduce((sum, file) => sum + (Number.isFinite(file.size) ? file.size : 0), 0);
+}
+
+/** 客户端预检。超限返回可展示的原因；通过返回 null。 */
+export function albumPublishBlockReason(images: FileItem[]): string | null {
+  const bytes = albumSelectionBytes(images);
+  const verdict = checkAlbumLimits(images.length, bytes);
+  if (verdict.ok) return null;
+  if (verdict.error === "no album images") return translate("publishAlbumNoImages");
+  if (verdict.error.startsWith("album image limit exceeded")) {
+    return translate("publishAlbumTooMany", { count: images.length, max: ALBUM_MAX_IMAGES });
+  }
+  if (verdict.error.startsWith("album size limit exceeded")) {
+    return translate("publishAlbumTooLarge", {
+      size: humanReadableSize(bytes),
+      max: humanReadableSize(ALBUM_MAX_BYTES),
+    });
+  }
+  return translate("publishAlbumFailed");
+}
+
+/** 把选中的光栅图片复制进 sites/{slug}/ 并生成相册首页。 */
+export async function publishAlbumSite(
+  slug: string,
+  files: string[],
+  options?: { lang?: Lang; title?: string }
+): Promise<PublishGeneratedResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const response = await authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      slug: normalizedSlug,
+      album: { lang: options?.lang, title: options?.title, files },
+    }),
+  });
+  if (!response.ok) {
+    const text = (await response.text()) || translate("publishAlbumFailed");
+    throw new Error(text);
   }
   return response.json();
 }

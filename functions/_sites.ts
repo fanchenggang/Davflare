@@ -110,6 +110,7 @@ const MIME: Record<string, string> = {
   jpeg: "image/jpeg",
   gif: "image/gif",
   webp: "image/webp",
+  avif: "image/avif",
   ico: "image/x-icon",
   txt: "text/plain; charset=utf-8",
   md: "text/markdown; charset=utf-8",

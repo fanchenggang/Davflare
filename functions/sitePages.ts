@@ -1,0 +1,470 @@
+// 导航站 / 相册站的静态页：自包含 HTML，视觉对齐 WebDAV 目录页暖纸感
+// （#f4f1ec / #f38020，prefers-color-scheme）。只做校验、转义与渲染；
+// 写入 sites/{slug}/ 由 functions/api/sites.ts 负责。
+import dictionary from "../src/app/stringsDictionary";
+
+export const NAV_MAX_LINKS = 1000;
+export const ALBUM_MAX_IMAGES = 200;
+export const ALBUM_MAX_BYTES = 100 * 1024 * 1024;
+/** 相册清单：相对路径列表。不是图片，画廊不得引用它。 */
+export const ALBUM_MANIFEST_NAME = ".davflare-album.json";
+
+export type PageLang = "zh" | "en";
+
+export type NavLink = { title: string; href: string };
+export type NavGroup = { name: string; links: NavLink[] };
+
+export type AlbumImage = { name: string; src: string };
+
+const RASTER_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif"]);
+
+export function pageLang(raw: unknown): PageLang {
+  return raw === "zh" ? "zh" : "en";
+}
+
+export function pageLabel(
+  lang: PageLang,
+  key: string,
+  params?: Record<string, string | number>
+): string {
+  const entry = dictionary[key];
+  const text = entry ? entry[lang] : key;
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (_match, name: string) =>
+    params[name] !== undefined ? String(params[name]) : `{${name}}`
+  );
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\u0000/g, "");
+}
+
+/** JSON embedded in HTML must not be able to close a script tag. */
+export function safeJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+export function isSafeNavHref(href: string): boolean {
+  const trimmed = href.trim();
+  if (!trimmed || /[\u0000-\u001f\s]/.test(trimmed)) return false;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return false;
+  }
+  return url.protocol === "http:" || url.protocol === "https:";
+}
+
+export function countNavLinks(groups: NavGroup[]): number {
+  let count = 0;
+  for (const group of groups) count += group.links.length;
+  return count;
+}
+
+function clip(value: string, max: number): string {
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+export function parseNavPayload(raw: unknown):
+  | { ok: true; lang: PageLang; title: string; groups: NavGroup[]; count: number }
+  | { ok: false; error: string } {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "bad nav" };
+  }
+  const body = raw as { lang?: unknown; title?: unknown; groups?: unknown };
+  const lang = pageLang(body.lang);
+  if (!Array.isArray(body.groups)) return { ok: false, error: "bad nav" };
+  if (body.groups.length > NAV_MAX_LINKS) {
+    return {
+      ok: false,
+      error: `bookmark limit exceeded: ${body.groups.length} > ${NAV_MAX_LINKS}`,
+    };
+  }
+  const groups: NavGroup[] = [];
+  let count = 0;
+  for (const groupRaw of body.groups) {
+    if (groupRaw === null || typeof groupRaw !== "object" || Array.isArray(groupRaw)) {
+      return { ok: false, error: "bad nav" };
+    }
+    const group = groupRaw as { name?: unknown; links?: unknown };
+    if (typeof group.name !== "string" || !Array.isArray(group.links)) {
+      return { ok: false, error: "bad nav" };
+    }
+    const links: NavLink[] = [];
+    for (const linkRaw of group.links) {
+      if (linkRaw === null || typeof linkRaw !== "object" || Array.isArray(linkRaw)) {
+        return { ok: false, error: "bad nav" };
+      }
+      const link = linkRaw as { title?: unknown; href?: unknown };
+      if (typeof link.title !== "string" || typeof link.href !== "string") {
+        return { ok: false, error: "bad nav" };
+      }
+      const href = clip(link.href.trim(), 4000);
+      if (!href) continue;
+      const title = clip(link.title.trim(), 500) || href;
+      links.push({ title, href });
+      count += 1;
+      if (count > NAV_MAX_LINKS) {
+        return {
+          ok: false,
+          error: `bookmark limit exceeded: ${count} > ${NAV_MAX_LINKS}`,
+        };
+      }
+    }
+    if (!links.length) continue;
+    const name = clip(group.name.trim(), 300) || pageLabel(lang, "siteNavUnfiled");
+    groups.push({ name, links });
+  }
+  if (count <= 0) return { ok: false, error: "no bookmarks" };
+  const titleRaw = typeof body.title === "string" ? body.title.trim() : "";
+  const title = clip(titleRaw, 200) || pageLabel(lang, "siteNavHeading");
+  return { ok: true, lang, title, groups, count };
+}
+
+export function rasterExtension(filename: string): string | null {
+  const base = filename.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return null;
+  const ext = base.slice(dot + 1).toLowerCase();
+  return RASTER_EXTS.has(ext) ? ext : null;
+}
+
+export function isRasterFileName(filename: string): boolean {
+  return rasterExtension(filename) !== null;
+}
+
+function albumStem(filename: string, ext: string): string {
+  const base = filename.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
+  let stem = base.slice(0, Math.max(0, base.length - (ext.length + 1)));
+  stem = stem.replace(/[\u0000-\u001f\u007f]/g, "");
+  stem = stem.replace(/\.\.+/g, ".");
+  stem = stem.replace(/[^\p{L}\p{N}._ -]+/gu, "_");
+  stem = stem.replace(/^\.+/, "").replace(/\.+$/, "").trim();
+  if (!stem || stem === "." || stem === "..") stem = "image";
+  return stem.slice(0, 80);
+}
+
+/** attempt 从 1 起：1 为原名，之后 stem-2.ext、stem-3.ext… */
+export function albumNameCandidate(filename: string, attempt: number): string | null {
+  const ext = rasterExtension(filename);
+  if (!ext || !Number.isInteger(attempt) || attempt < 1 || attempt > 10000) return null;
+  const stem = albumStem(filename, ext);
+  const name = attempt === 1 ? `${stem}.${ext}` : `${stem}-${attempt}.${ext}`;
+  if (
+    name.toLowerCase() === "index.html" ||
+    name.toLowerCase() === ALBUM_MANIFEST_NAME
+  ) {
+    return null;
+  }
+  if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
+  return name;
+}
+
+/**
+ * 同步分配文件名。blockedLower 是不能占用的已有名字（小写），
+ * 例如站点里不属于相册清单的用户文件。
+ */
+export function allocateAlbumNames(
+  filenames: string[],
+  blockedLower: Set<string> = new Set()
+): string[] | null {
+  const used = new Set<string>();
+  for (const blocked of blockedLower) used.add(blocked.toLowerCase());
+  const out: string[] = [];
+  for (const filename of filenames) {
+    if (!rasterExtension(filename)) return null;
+    let chosen: string | null = null;
+    for (let attempt = 1; attempt <= 10000; attempt += 1) {
+      const candidate = albumNameCandidate(filename, attempt);
+      if (!candidate) continue;
+      if (used.has(candidate.toLowerCase())) continue;
+      chosen = candidate;
+      break;
+    }
+    if (!chosen) return null;
+    used.add(chosen.toLowerCase());
+    out.push(chosen);
+  }
+  return out;
+}
+
+export function checkAlbumLimits(
+  count: number,
+  bytes: number
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isFinite(count) || count <= 0) return { ok: false, error: "no album images" };
+  if (count > ALBUM_MAX_IMAGES) {
+    return {
+      ok: false,
+      error: `album image limit exceeded: ${count} > ${ALBUM_MAX_IMAGES}`,
+    };
+  }
+  if (!Number.isFinite(bytes) || bytes < 0) return { ok: false, error: "bad album" };
+  if (bytes > ALBUM_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `album size limit exceeded: ${bytes} > ${ALBUM_MAX_BYTES}`,
+    };
+  }
+  return { ok: true };
+}
+
+export function isSafeManifestRel(rel: string): boolean {
+  if (!rel || rel.length > 500) return false;
+  if (rel.startsWith("/") || rel.startsWith("\\")) return false;
+  if (rel.includes("\\") || rel.includes("\u0000")) return false;
+  if (rel.split("/").some((part) => !part || part === "." || part === "..")) return false;
+  if (rel.includes("_$flaredrive$")) return false;
+  return true;
+}
+
+export function parseAlbumManifest(text: string): string[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return [];
+  const files = (data as { files?: unknown }).files;
+  if (!Array.isArray(files)) return [];
+  const out: string[] = [];
+  for (const item of files) {
+    if (typeof item !== "string") continue;
+    if (!isSafeManifestRel(item)) continue;
+    if (!out.includes(item)) out.push(item);
+    if (out.length >= ALBUM_MAX_IMAGES + 8) break;
+  }
+  return out;
+}
+
+const PAGE_CSS = `
+:root {
+  color-scheme: light dark;
+  --bg: #f4f1ec; --paper: #ffffff; --ink: #1a1714;
+  --muted: rgba(26, 23, 20, .6); --line: rgba(28, 22, 16, .1);
+  --brand: #f38020; --hover: rgba(243, 128, 32, .09);
+  --shadow: 0 1px 2px rgba(26, 23, 20, .05), 0 6px 24px rgba(26, 23, 20, .07);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171310; --paper: #211c17; --ink: #f1ece5;
+    --muted: rgba(241, 236, 229, .64); --line: rgba(255, 255, 255, .09);
+    --brand: #f79b45; --hover: rgba(243, 128, 32, .14);
+    --shadow: 0 8px 28px rgba(0, 0, 0, .4);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 15px; line-height: 1.5;
+}
+.wrap { width: 100%; max-width: 960px; margin: 0 auto; padding: 28px 16px 48px; }
+.brand {
+  margin: 0 2px 14px; font-weight: 700; font-size: 1.02rem;
+  letter-spacing: -.02em; color: var(--brand);
+}
+.card {
+  background: var(--paper); border-radius: 16px; box-shadow: var(--shadow);
+  padding: 18px 16px 16px;
+}
+h1 { font-size: 1.35rem; margin: 0 0 6px; letter-spacing: -.02em; }
+.meta { color: var(--muted); margin: 0 0 14px; font-size: .88rem; }
+.empty { color: var(--muted); text-align: center; padding: 28px 0; margin: 0; }
+.group { margin: 0 0 18px; }
+.group h2 {
+  font-size: .95rem; margin: 0 0 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.links a, .links .dead {
+  display: block; padding: 8px 10px; border-radius: 10px;
+  text-decoration: none; color: inherit;
+}
+.links a:hover { background: var(--hover); color: var(--brand); }
+.links .dead { color: var(--muted); }
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px; margin: 0; padding: 0; list-style: none;
+}
+.tile {
+  display: block; padding: 0; border: 0; background: transparent; cursor: pointer;
+  border-radius: 12px; overflow: hidden; color: inherit; text-align: left;
+}
+.tile img { width: 100%; height: 140px; object-fit: cover; display: block; background: var(--hover); }
+.tile span {
+  display: block; padding: 6px 8px 8px; font-size: .82rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tile:hover { background: var(--hover); }
+.lightbox {
+  position: fixed; inset: 0; background: rgba(26, 23, 20, .78);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 20px;
+}
+.lightbox[hidden] { display: none; }
+.lightbox img { max-width: min(92vw, 960px); max-height: 78vh; border-radius: 12px; background: var(--paper); }
+.lb-bar { display: flex; gap: 8px; align-items: center; }
+.lb-bar button {
+  border: 0; background: var(--paper); color: var(--ink); border-radius: 999px;
+  padding: 8px 14px; font: inherit; cursor: pointer;
+}
+.lb-cap { color: #fff; margin: 0; font-size: .9rem; }
+`;
+
+function docShell(lang: PageLang, title: string, body: string, extraScript = ""): string {
+  const htmlLang = lang === "zh" ? "zh-CN" : "en";
+  return `<!DOCTYPE html>
+<html lang="${htmlLang}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)} · Davflare</title>
+<style>${PAGE_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">Davflare</header>
+  ${body}
+</div>
+${extraScript}
+</body>
+</html>`;
+}
+
+export function renderNavPage(options: {
+  lang: PageLang;
+  title: string;
+  groups: NavGroup[];
+}): string {
+  const count = countNavLinks(options.groups);
+  if (count > NAV_MAX_LINKS) {
+    throw new Error(`bookmark limit exceeded: ${count} > ${NAV_MAX_LINKS}`);
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const sections = options.groups
+    .filter((group) => group.links.length > 0)
+    .map((group) => {
+      const items = group.links
+        .map((link) => {
+          const title = escapeHtml(link.title || link.href);
+          if (!isSafeNavHref(link.href)) {
+            return `<li><span class="dead">${title}</span></li>`;
+          }
+          const href = escapeHtml(link.href.trim());
+          return `<li><a href="${href}" target="_blank" rel="noopener noreferrer">${title}</a></li>`;
+        })
+        .join("");
+      return `<section class="group"><h2>${escapeHtml(group.name)}</h2><ul class="links">${items}</ul></section>`;
+    })
+    .join("");
+  const body = `<section class="card">
+  <h1>${escapeHtml(options.title)}</h1>
+  <p class="meta">${escapeHtml(pageLabel(lang, "siteNavCount", { count }))}</p>
+  ${sections || `<p class="empty">${escapeHtml(pageLabel(lang, "siteNavEmpty"))}</p>`}
+</section>`;
+  return docShell(lang, options.title, body);
+}
+
+export function renderAlbumPage(options: {
+  lang: PageLang;
+  title: string;
+  images: AlbumImage[];
+}): string {
+  if (options.images.length > ALBUM_MAX_IMAGES) {
+    throw new Error(
+      `album image limit exceeded: ${options.images.length} > ${ALBUM_MAX_IMAGES}`
+    );
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const images = options.images.filter(
+    (image) => image.name && image.name !== ALBUM_MANIFEST_NAME && image.src
+  );
+  const tiles = images
+    .map((image, index) => {
+      const src = escapeHtml(image.src);
+      const name = escapeHtml(image.name);
+      return `<li><button type="button" class="tile" data-i="${index}"><img src="${src}" alt="${name}"><span>${name}</span></button></li>`;
+    })
+    .join("");
+  const payload = safeJson(
+    images.map((image) => ({ src: image.src, name: image.name }))
+  );
+  const body = `<section class="card">
+  <h1>${escapeHtml(options.title)}</h1>
+  <p class="meta">${escapeHtml(pageLabel(lang, "siteAlbumCount", { count: images.length }))}</p>
+  ${
+    tiles
+      ? `<ul class="grid">${tiles}</ul>`
+      : `<p class="empty">${escapeHtml(pageLabel(lang, "siteAlbumEmpty"))}</p>`
+  }
+</section>
+<div id="lightbox" class="lightbox" hidden>
+  <img id="lb-img" alt="">
+  <p id="lb-cap" class="lb-cap"></p>
+  <div class="lb-bar">
+    <button type="button" id="lb-prev">${escapeHtml(pageLabel(lang, "siteAlbumPrev"))}</button>
+    <button type="button" id="lb-next">${escapeHtml(pageLabel(lang, "siteAlbumNext"))}</button>
+    <button type="button" id="lb-close">${escapeHtml(pageLabel(lang, "siteAlbumClose"))}</button>
+  </div>
+</div>`;
+  const script = `<script type="application/json" id="album-data">${payload}</script>
+<script>
+(function () {
+  var dataNode = document.getElementById("album-data");
+  var items = [];
+  try { items = JSON.parse(dataNode ? dataNode.textContent || "[]" : "[]"); } catch (e) { items = []; }
+  var box = document.getElementById("lightbox");
+  var img = document.getElementById("lb-img");
+  var cap = document.getElementById("lb-cap");
+  var i = 0;
+  function show(n) {
+    if (!items.length || !box || !img) return;
+    i = (n + items.length) % items.length;
+    img.src = items[i].src;
+    img.alt = items[i].name;
+    if (cap) cap.textContent = items[i].name + "  " + (i + 1) + " / " + items.length;
+    box.hidden = false;
+  }
+  function hide() {
+    if (!box || !img) return;
+    box.hidden = true;
+    img.removeAttribute("src");
+  }
+  var tiles = document.querySelectorAll(".tile");
+  for (var t = 0; t < tiles.length; t++) {
+    tiles[t].addEventListener("click", function (event) {
+      var btn = event.currentTarget;
+      var idx = Number(btn.getAttribute("data-i") || "0");
+      show(idx);
+    });
+  }
+  var prev = document.getElementById("lb-prev");
+  var next = document.getElementById("lb-next");
+  var closeBtn = document.getElementById("lb-close");
+  if (prev) prev.addEventListener("click", function () { show(i - 1); });
+  if (next) next.addEventListener("click", function () { show(i + 1); });
+  if (closeBtn) closeBtn.addEventListener("click", hide);
+  document.addEventListener("keydown", function (event) {
+    if (!box || box.hidden) return;
+    if (event.key === "ArrowLeft") show(i - 1);
+    else if (event.key === "ArrowRight") show(i + 1);
+    else if (event.key === "Escape") hide();
+  });
+})();
+</script>`;
+  return docShell(lang, options.title, body, script);
+}

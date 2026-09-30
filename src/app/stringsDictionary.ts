@@ -613,6 +613,41 @@ const entries: Record<string, DictionaryEntry> = {
   copyTextToast: { zh: "{label}已复制", en: "{label} copied" },
   fileName: { zh: "文件名", en: "File name" },
   noteContent: { zh: "内容", en: "Content" },
+  siteNavHeading: { zh: "导航", en: "Links" },
+  siteNavEmpty: { zh: "没有链接", en: "No links" },
+  siteNavUnfiled: { zh: "未分类", en: "Unfiled" },
+  siteNavCount: { zh: "{count} 个链接", en: "{count} link(s)" },
+  siteAlbumHeading: { zh: "相册", en: "Album" },
+  siteAlbumEmpty: { zh: "没有图片", en: "No images" },
+  siteAlbumCount: { zh: "{count} 张图片", en: "{count} image(s)" },
+  siteAlbumPrev: { zh: "上一张", en: "Previous" },
+  siteAlbumNext: { zh: "下一张", en: "Next" },
+  siteAlbumClose: { zh: "关闭", en: "Close" },
+  publishAsAlbum: { zh: "发布为相册站", en: "Publish as album" },
+  publishAlbumTitle: { zh: "发布为相册站", en: "Publish as album" },
+  publishAlbumSummary: {
+    zh: "将复制 {count} 张图片（约 {size}）到 sites/{slug}/。图片是副本，不是原文件的引用；删掉网盘里的原图不影响已发布的站。同一 slug 再次发布会覆盖该相册上次生成的图片和首页，不会清掉同目录里的其他文件。",
+    en: "Copies {count} image(s) (about {size}) into sites/{slug}/. These are copies, not references — deleting the originals on the drive does not affect the site. Publishing the same slug again replaces the album's previous images and index, and leaves other files in that folder alone.",
+  },
+  publishAlbumIgnored: {
+    zh: "已忽略 {count} 个非图片文件。",
+    en: "Ignored {count} non-image file(s).",
+  },
+  publishAlbumTooMany: {
+    zh: "图片 {count} 张，超过上限 {max} 张，未发布。",
+    en: "{count} images exceed the limit of {max}. Nothing was published.",
+  },
+  publishAlbumTooLarge: {
+    zh: "图片共 {size}，超过上限 {max}，未发布。",
+    en: "Images total {size}, over the {max} limit. Nothing was published.",
+  },
+  publishAlbumNoImages: {
+    zh: "选中的文件里没有可发布的图片。",
+    en: "The selection has no images to publish.",
+  },
+  publishAlbumDone: { zh: "相册已发布（{count} 张）", en: "Album published ({count} image(s))" },
+  publishAlbumPublishing: { zh: "正在发布…", en: "Publishing…" },
+  publishAlbumFailed: { zh: "发布相册失败", en: "Failed to publish album" },
 };
 
 export default entries;

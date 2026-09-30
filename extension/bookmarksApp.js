@@ -219,6 +219,26 @@ var COPY = {
     batchPin: "Pin",
     batchUnpin: "Unpin",
     batchDelete: "Delete",
+    navPublish: "Publish as nav",
+    navPublishTitle: "Publish as nav site",
+    navSummarySelected: "Publishing {n} selected bookmark(s), grouped by folder.",
+    navSummaryView: "Publishing {n} bookmark(s) in the current view, grouped by folder.",
+    navSlug: "Site slug",
+    navSlugHint:
+      "Lowercase letters, digits, and hyphens (max 63). Writes index.html into sites/{slug}/. The same slug overwrites that page only.",
+    navTooMany: "{n} bookmarks exceed the limit of {max}. Nothing was published.",
+    navNone: "Nothing to publish.",
+    navBadSlug: "Slug must match [a-z0-9][a-z0-9-]{0,62}",
+    navFailed: "Failed to publish the nav site.",
+    navNoHost: "Published to sites/{slug}/, but SITES_HOST is not set so the public URL is unavailable.",
+    navCopy: "Copy URL",
+    navOpen: "Open site",
+    navUrl: "Site URL",
+    navSubmit: "Publish",
+    navPublishing: "Publishing…",
+    navDone: "Published {n} link(s).",
+    navNeedInstance: "Set the instance URL and WebDAV credentials in Settings first.",
+    navHostDenied: "Publishing needs permission to call your instance. Allow access when Chrome asks.",
     batchMoveTitle: "Move bookmarks",
     batchMoveLabel: "Target folder",
     batchMoveHint:
@@ -541,6 +561,26 @@ var COPY = {
     batchPin: "置顶",
     batchUnpin: "取消置顶",
     batchDelete: "删除",
+    navPublish: "发布为导航站",
+    navPublishTitle: "发布为导航站",
+    navSummarySelected: "将发布选中的 {n} 条书签，按文件夹分组。",
+    navSummaryView: "将发布当前列表中的 {n} 条书签，按文件夹分组。",
+    navSlug: "站点 slug",
+    navSlugHint:
+      "只能用小写字母、数字和连字符，最长 63 位。会把 index.html 写入 sites/{slug}/。同一 slug 只覆盖这个页面。",
+    navTooMany: "共 {n} 条书签，超过上限 {max} 条，未发布。",
+    navNone: "没有可发布的书签。",
+    navBadSlug: "slug 须匹配 [a-z0-9][a-z0-9-]{0,62}",
+    navFailed: "发布导航站失败。",
+    navNoHost: "已发布到 sites/{slug}/，但未配置 SITES_HOST，公开地址暂不可用。",
+    navCopy: "复制链接",
+    navOpen: "打开站点",
+    navUrl: "站点地址",
+    navSubmit: "发布",
+    navPublishing: "正在发布…",
+    navDone: "已发布 {n} 个链接。",
+    navNeedInstance: "请先在设置里填写实例地址和 WebDAV 账号。",
+    navHostDenied: "发布需要允许扩展访问你的实例。请在 Chrome 提示时授权。",
     batchMoveTitle: "批量移动书签",
     batchMoveLabel: "目标分类",
     batchMoveHint: "选择现有分类或输入新路径（用 / 表示层级）；留空表示「未分类」。",
@@ -2745,6 +2785,176 @@ function allSelectedPinned(ids) {
     if (!byId[ids[j]] || !byId[ids[j]].pinned) return false;
   }
   return ids.length > 0;
+}
+
+var pendingNav = null;
+var NAV_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+function suggestNavSlug(name) {
+  var normalized = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  var started = normalized.replace(/^[^a-z0-9]+/, "");
+  var clipped = (started || "nav").slice(0, 63).replace(/-+$/, "");
+  return clipped || "nav";
+}
+
+function currentNavTitle() {
+  if (state.filter.kind === "folder") return folderLabel(state.filter.value);
+  if (state.filter.kind === "tag") return state.filter.value || t.tags;
+  if (state.filter.kind === "pinned") return t.navPinned;
+  return t.navAll;
+}
+
+function bookmarksForNav() {
+  var selected = selectedExistingIds();
+  if (selected.length) {
+    var want = Object.create(null);
+    for (var i = 0; i < selected.length; i++) want[selected[i]] = true;
+    var out = [];
+    var all = state.model && state.model.bookmarks ? state.model.bookmarks : [];
+    for (var j = 0; j < all.length; j++) {
+      if (want[all[j].id] && !all[j].deleted) out.push(all[j]);
+    }
+    return { mode: "selected", items: out };
+  }
+  return { mode: "view", items: filteredItemsOrdered() };
+}
+
+function basicAuthHeader(user, pass) {
+  return "Basic " + btoa(unescape(encodeURIComponent(String(user) + ":" + String(pass))));
+}
+
+function openNavDialog() {
+  var picked = bookmarksForNav();
+  var groups = BookmarksView.navGroupsFromBookmarks(picked.items, t.unfiled);
+  var count = BookmarksView.navLinkCount(groups);
+  var title = currentNavTitle();
+  pendingNav = { mode: picked.mode, groups: groups, count: count, title: title };
+  $("navError").textContent = "";
+  $("navSuccess").classList.add("hidden");
+  $("navUrl").value = "";
+  $("navDialogTitle").textContent = t.navPublishTitle;
+  $("navSummary").textContent = fmt(
+    picked.mode === "selected" ? t.navSummarySelected : t.navSummaryView,
+    { n: count }
+  );
+  $("navSlug").value = suggestNavSlug(title);
+  $("navSlug").disabled = false;
+  var blocked = "";
+  if (count <= 0) blocked = t.navNone;
+  else if (count > BookmarksView.NAV_LINK_LIMIT) {
+    blocked = fmt(t.navTooMany, { n: count, max: BookmarksView.NAV_LINK_LIMIT });
+  }
+  $("navError").textContent = blocked;
+  $("navSubmit").disabled = Boolean(blocked);
+  $("navSubmit").textContent = t.navSubmit;
+  $("navDialog").showModal();
+  if (!blocked) $("navSlug").focus();
+}
+
+async function submitNavPublish(event) {
+  event.preventDefault();
+  if (!pendingNav) return;
+  if (pendingNav.count <= 0) {
+    $("navError").textContent = t.navNone;
+    return;
+  }
+  if (pendingNav.count > BookmarksView.NAV_LINK_LIMIT) {
+    $("navError").textContent = fmt(t.navTooMany, {
+      n: pendingNav.count,
+      max: BookmarksView.NAV_LINK_LIMIT,
+    });
+    return;
+  }
+  var slug = $("navSlug").value.trim().toLowerCase();
+  if (!NAV_SLUG_RE.test(slug)) {
+    $("navError").textContent = t.navBadSlug;
+    return;
+  }
+  var made = await makeClient();
+  if (!made.cfg.instanceUrl || !made.cfg.username || !made.cfg.password) {
+    $("navError").textContent = t.navNeedInstance;
+    return;
+  }
+  var perm = await ensureOriginPermission(made.cfg.instanceUrl);
+  if (!perm.granted) {
+    $("navError").textContent = t.navHostDenied;
+    return;
+  }
+  $("navSubmit").disabled = true;
+  $("navSubmit").textContent = t.navPublishing;
+  $("navError").textContent = "";
+  try {
+    var base = String(made.cfg.instanceUrl).replace(/\/+$/, "");
+    var res = await fetch(base + "/api/sites", {
+      method: "POST",
+      headers: {
+        Authorization: basicAuthHeader(made.cfg.username, made.cfg.password),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        slug: slug,
+        nav: { lang: lang, title: pendingNav.title, groups: pendingNav.groups },
+      }),
+    });
+    var text = "";
+    try {
+      text = await res.text();
+    } catch (readErr) {
+      text = "";
+    }
+    if (!res.ok) {
+      $("navError").textContent = text || t.navFailed;
+      $("navSubmit").disabled = false;
+      $("navSubmit").textContent = t.navSubmit;
+      return;
+    }
+    var data = {};
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      data = {};
+    }
+    var published = data.slug || slug;
+    $("navSuccess").classList.remove("hidden");
+    $("navSlug").disabled = true;
+    if (data.sitesHost) {
+      var proto = "https:";
+      try {
+        proto = new URL(made.cfg.instanceUrl).protocol;
+      } catch (urlErr) {
+        proto = "https:";
+      }
+      var url = proto + "//" + data.sitesHost + "/" + published + "/";
+      $("navUrl").value = url;
+      $("navOpen").href = url;
+      $("navError").textContent = "";
+      flashStatus(fmt(t.navDone, { n: pendingNav.count }));
+    } else {
+      $("navUrl").value = "";
+      $("navOpen").removeAttribute("href");
+      $("navError").textContent = fmt(t.navNoHost, { slug: published });
+    }
+  } catch (err) {
+    $("navError").textContent = t.navFailed;
+    $("navSubmit").disabled = false;
+    $("navSubmit").textContent = t.navSubmit;
+  }
+}
+
+async function copyNavUrl() {
+  var url = $("navUrl").value;
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    flashStatus(t.linkCopied);
+  } catch (err) {
+    $("navError").textContent = t.navFailed;
+  }
 }
 
 function updateBatchBar() {
@@ -5201,6 +5411,16 @@ function applyCopy() {
   $("batchMove").textContent = t.batchMove;
   $("batchTags").textContent = t.batchTags;
   $("batchDelete").textContent = t.batchDelete;
+  if ($("publishNavBtn")) $("publishNavBtn").textContent = t.navPublish;
+  if ($("batchPublishNav")) $("batchPublishNav").textContent = t.navPublish;
+  if ($("navDialogTitle")) $("navDialogTitle").textContent = t.navPublishTitle;
+  if ($("navSlugLabel")) $("navSlugLabel").textContent = t.navSlug;
+  if ($("navSlugHint")) $("navSlugHint").textContent = t.navSlugHint;
+  if ($("navCopy")) $("navCopy").textContent = t.navCopy;
+  if ($("navOpen")) $("navOpen").textContent = t.navOpen;
+  if ($("navUrlLabel")) $("navUrlLabel").textContent = t.navUrl;
+  if ($("navCancel")) $("navCancel").textContent = t.cancel;
+  if ($("navSubmit")) $("navSubmit").textContent = t.navSubmit;
   $("batchMoveTitle").textContent = t.batchMoveTitle;
   $("batchMoveLabel").textContent = t.batchMoveLabel;
   $("batchMoveHint").textContent = t.batchMoveHint;
@@ -5456,6 +5676,17 @@ function wireEvents() {
     submitBatchPin();
   });
   $("batchDelete").addEventListener("click", submitBatchDelete);
+  $("publishNavBtn").addEventListener("click", openNavDialog);
+  $("batchPublishNav").addEventListener("click", openNavDialog);
+  $("navCancel").addEventListener("click", function () {
+    $("navDialog").close();
+  });
+  $("navForm").addEventListener("submit", function (event) {
+    submitNavPublish(event);
+  });
+  $("navCopy").addEventListener("click", function () {
+    copyNavUrl();
+  });
   // Search debounce (large libraries rebuild the whole list per keystroke);
   // deep-links / programmatic resets call renderItems directly, so only the
   // typing path defers.

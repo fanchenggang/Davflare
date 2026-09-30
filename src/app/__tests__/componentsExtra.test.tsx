@@ -95,6 +95,34 @@ describe("MultiSelectToolbar", () => {
     fireEvent.click(screen.getByText(strings.publishAsSite));
     expect(onPublish).toHaveBeenCalled();
   });
+
+  test("canPublishAlbum 控制相册按钮，且紧跟静态站按钮", () => {
+    const onPublishAlbum = vi.fn();
+    const { rerender } = render(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["a.jpg"]}
+        onPublish={() => undefined}
+        onPublishAlbum={onPublishAlbum}
+        canPublishAlbum={false}
+      />
+    );
+    const site = screen.getByText(strings.publishAsSite).closest("button");
+    const album = screen.getByText(strings.publishAsAlbum).closest("button");
+    expect(album).toBeDisabled();
+    expect(site?.nextElementSibling).toBe(album);
+    rerender(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["a.jpg"]}
+        onPublish={() => undefined}
+        onPublishAlbum={onPublishAlbum}
+        canPublishAlbum
+      />
+    );
+    fireEvent.click(screen.getByText(strings.publishAsAlbum));
+    expect(onPublishAlbum).toHaveBeenCalled();
+  });
 });
 
 describe("FileActionSheet", () => {
