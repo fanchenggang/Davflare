@@ -41,15 +41,16 @@ type Entry = { href: string; name: string; lastmod: string; length: string; dir:
 async function propfind(bucket: InMemoryBucket, path: string, depth: "0" | "1" | "infinity") {
   const response = await dav(bucket, "PROPFIND", path, { Depth: depth, "Content-Type": "application/xml" });
   const text = await response.text();
-  const entries: Entry[] = [...text.matchAll(/<response>([\s\S]*?)<\/response>/g)].map(([, block]) => {
-    const href = block.match(/<href>([^<]*)<\/href>/)![1];
+  // 服务端 DAV 元素带 d: 前缀；正则用可选前缀匹配，新旧输出都兼容。
+  const entries: Entry[] = [...text.matchAll(/<(?:[\w-]+:)?response>([\s\S]*?)<\/(?:[\w-]+:)?response>/g)].map(([, block]) => {
+    const href = block.match(/<(?:[\w-]+:)?href>([^<]*)<\/(?:[\w-]+:)?href>/)![1];
     const xmlDecoded = href.replace(/&apos;/g, "'").replace(/&amp;/g, "&");
     return {
       href,
       name: decodeURIComponent(xmlDecoded),
-      lastmod: block.match(/<getlastmodified>([^<]*)</)?.[1] ?? "",
-      length: block.match(/<getcontentlength>([^<]*)</)?.[1] ?? "",
-      dir: /<collection\s*\/>/.test(block),
+      lastmod: block.match(/<(?:[\w-]+:)?getlastmodified>([^<]*)</)?.[1] ?? "",
+      length: block.match(/<(?:[\w-]+:)?getcontentlength>([^<]*)</)?.[1] ?? "",
+      dir: /<(?:[\w-]+:)?collection\s*\/>/.test(block),
     };
   });
   return { status: response.status, entries };
