@@ -489,6 +489,34 @@ describe("sites host: static serving", () => {
     expect(pathBased.status).toBe(200);
   });
 
+  test("custom hostname does not shadow /collect (#154 N2)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    bucket.seed([
+      { key: "_$flaredrive$/site-hostnames/blog.example.com", body: "blog", contentType: "text/plain" },
+      {
+        key: siteConfigKey("blog"),
+        body: JSON.stringify({ slug: "blog", hostname: "blog.example.com" }),
+        contentType: "application/json",
+      },
+      // 站点里恰好有 collect/ 目录：也不能把收集链接盖掉
+      { key: "sites/blog/collect/index.html", body: "<h1>site collect</h1>", contentType: "text/html" },
+    ]);
+    const env = makeEnv(bucket, { SITES_HOST: "sites.example.com" });
+    const next = vi.fn(async () => new Response("next-ok", { status: 200 }));
+    for (const path of ["/collect", "/collect/", "/collect/0123456789abcdef0123456789abcdef"]) {
+      next.mockClear();
+      const response = await siteRequest(path, env, { host: "blog.example.com", next });
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(await response.text()).toBe("next-ok");
+    }
+    // 只排除 /collect 本身与其子路径，/collector 之类仍走站点
+    next.mockClear();
+    const other = await siteRequest("/collector", env, { host: "blog.example.com", next });
+    expect(next).not.toHaveBeenCalled();
+    expect(other.status).toBe(404);
+  });
+
   test("custom hostname: subdirectory without slash 301s, password gate first (#145)", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);
@@ -713,7 +741,7 @@ describe("drive product route gates (webdav/mcp)", () => {
   test("enabled product routes and /api/* paths pass through to next", async () => {
     const bucket = new InMemoryBucket();
     const next = vi.fn(async () => new Response("next-ok", { status: 200 }));
-    for (const path of ["/webdav/", "/mcp", "/api/upload", "/share/tok"]) {
+    for (const path of ["/webdav/", "/mcp", "/api/upload", "/share/tok", "/collect/tok"]) {
       next.mockClear();
       const response = await siteRequest(path, makeEnv(bucket), {
         host: "drive.example.com",

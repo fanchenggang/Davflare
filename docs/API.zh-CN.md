@@ -173,7 +173,7 @@ curl -X DELETE "https://<your-domain.com>/api/collects?token=<token>" -H "Author
 
 | 端点 | 请求体 | 说明 |
 | --- | --- | --- |
-| `POST /collect/<token>/create` | `{ name, size, type }` | → `{ uploadId, partSize: 10485760, partCount }`。检查过期/停用、单文件 100 MiB、每链接 200 个文件与 2 GiB（含进行中的上传）、同时进行 ≤10 个、目标文件夹仍存在。 |
+| `POST /collect/<token>/create` | `{ name, size, type }` | → `{ uploadId, partSize: 10485760, partCount }`。检查过期/停用、单文件 100 MiB、每链接 200 个文件与 2 GiB（含进行中的上传）、同时进行 ≤10 个（约 1 小时没有新分块、或开始超过 24 小时的上传不再占名额，并会被中止）、目标文件夹仍存在。 |
 | `PUT /collect/<token>/part?uploadId=&partNumber=` | 原始字节 | 必须带 `Content-Length`（411）；超过 10 MiB → 413；除最后一块外每块必须正好 10 MiB，最后一块正好是余数。`uploadId` 必须由**本令牌**创建，否则 404。 |
 | `POST /collect/<token>/complete` | `{ uploadId, parts }` | 按实际大小再查一次限额，然后以服务端选定的文件名直接存进目标文件夹。→ `{ ok, size, remainingFiles, remainingBytes }`（**不**返回最终文件名）。 |
 | `POST /collect/<token>/abort` | `{ uploadId }` | → 204。过期/停用后也允许。 |

@@ -173,7 +173,7 @@ Anonymous side (no auth, the token is the credential): `GET /collect/<token>` re
 
 | Endpoint | Body | Notes |
 | --- | --- | --- |
-| `POST /collect/<token>/create` | `{ name, size, type }` | → `{ uploadId, partSize: 10485760, partCount }`. Checks expiry/disabled, 100 MiB per file, 200 files and 2 GiB per link (counting in-flight uploads), ≤10 concurrent uploads, target folder still exists. |
+| `POST /collect/<token>/create` | `{ name, size, type }` | → `{ uploadId, partSize: 10485760, partCount }`. Checks expiry/disabled, 100 MiB per file, 200 files and 2 GiB per link (counting in-flight uploads), ≤10 concurrent uploads (an upload with no new part for about 1 hour, or started over 24 hours ago, stops counting and is aborted), target folder still exists. |
 | `PUT /collect/<token>/part?uploadId=&partNumber=` | raw bytes | `Content-Length` required (411); >10 MiB → 413; every part except the last must be exactly 10 MiB, the last exactly the remainder. `uploadId` must have been created by **this** token (else 404). |
 | `POST /collect/<token>/complete` | `{ uploadId, parts }` | Re-checks limits with the actual size, then stores the file directly in the target folder under a server-chosen name. → `{ ok, size, remainingFiles, remainingBytes }` (the final name is **not** returned). |
 | `POST /collect/<token>/abort` | `{ uploadId }` | → 204. Allowed even after expiry/disable. |

@@ -6,6 +6,8 @@
 import {
   COLLECT_MAX_PENDING,
   COLLECT_PART_SIZE,
+  COLLECT_PENDING_TOUCH_MS,
+  CollectPending,
   CollectRecord,
   abortCollectUpload,
   collectFolderExists,
@@ -22,6 +24,7 @@ import {
   livePending,
   loadCollect,
   mutateCollect,
+  pendingLastActive,
   prunePending,
   safeCollectContentType,
   sanitizeCollectName,
@@ -167,7 +170,7 @@ export async function handleCollectCreate(
     }
     return collectError(code, limitStatus(code));
   }
-  // 超过 24 小时未完成的上传已不占额度，顺手中止，别让分块在 R2 里再躺到 7 天自动清理
+  // 超时（开始超过 24 小时，或 1 小时没有新分块）的上传已不占额度，顺手中止，别让分块在 R2 里再躺到 7 天自动清理
   await abortStale(bucket, stale);
   return collectJson({
     uploadId: upload.uploadId,
@@ -214,9 +217,39 @@ export async function handleCollectPart(
     const part = await bucket
       .resumeMultipartUpload(pending.staging, uploadId)
       .uploadPart(partNumber, request.body);
+    await touchPending(bucket, token, uploadId, pending, now);
     return collectJson({ partNumber: part.partNumber, etag: part.etag });
   } catch {
     return collectError("unknown_upload", 404);
+  }
+}
+
+/**
+ * 分块成功后刷新 pending 的最近活动时间，让还在传的大文件不会被 1 小时空闲规则释放（#154 N1）。
+ * 节流：距上次记录不足 COLLECT_PENDING_TOUCH_MS 就不写。尽力而为：CAS 冲突或读写失败都忽略，
+ * 下一块会再试；分块本身已经成功，不能因为这一步给客户端报错。
+ */
+async function touchPending(
+  bucket: R2Bucket,
+  token: string,
+  uploadId: string,
+  pending: CollectPending,
+  now: number
+): Promise<void> {
+  if (now - pendingLastActive(pending) < COLLECT_PENDING_TOUCH_MS) return;
+  const seen = new Date(now).toISOString();
+  try {
+    await mutateCollect(bucket, token, (fresh) => {
+      if (!hasOwn(fresh.pending, uploadId)) return { write: false, result: null };
+      const entry = fresh.pending[uploadId];
+      if (now - pendingLastActive(entry) < COLLECT_PENDING_TOUCH_MS) {
+        return { write: false, result: null };
+      }
+      entry.seen = seen;
+      return { write: true, result: null };
+    });
+  } catch {
+    // 忽略：见上
   }
 }
 

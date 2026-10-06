@@ -28,6 +28,16 @@ export const COLLECT_MAX_EXPIRY_HOURS = 7 * 24;
 export const COLLECT_MAX_PENDING = 10;
 /** 超过此时长未完成的上传不再占用限额（R2 默认 7 天自动清理未完成的分块上传） */
 export const COLLECT_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * 上传开始后（或最近一次记下的分块之后）这么久没有新分块，就视为放弃、释放名额（#154 N1）。
+ * 浏览器关掉 / 断网留下的上传不必占满 24 小时，10 个并发名额很快就能恢复。
+ */
+export const COLLECT_PENDING_IDLE_MS = 60 * 60 * 1000;
+/**
+ * 分块成功后最多每隔这么久把「最近活动时间」写回记录一次：每块都写会多两次 R2 子请求，
+ * 也会和同一链接的其他上传抢 CAS。所以实际释放时间在最后一块之后约 50～60 分钟。
+ */
+export const COLLECT_PENDING_TOUCH_MS = 10 * 60 * 1000;
 export const COLLECT_NOTE_MAX = 200;
 export const COLLECT_NAME_MAX = 180;
 const CAS_ATTEMPTS = 5;
@@ -46,6 +56,8 @@ export interface CollectPending {
   size: number;
   contentType: string;
   at: string;
+  /** 最近一次记下的分块时间（节流写入，见 COLLECT_PENDING_TOUCH_MS）；没有分块时等于 at */
+  seen?: string;
 }
 
 export interface CollectRecord {
@@ -132,6 +144,7 @@ export function parseCollectRecord(raw: unknown): CollectRecord | null {
       contentType:
         typeof entry.contentType === "string" ? entry.contentType : "application/octet-stream",
       at: typeof entry.at === "string" ? entry.at : new Date(0).toISOString(),
+      ...(typeof entry.seen === "string" ? { seen: entry.seen } : {}),
     };
   }
   return {
@@ -161,9 +174,18 @@ export function collectStatus(record: CollectRecord, now = Date.now()): CollectS
   return "active";
 }
 
+/** 最近活动时间：记下的最后一块，或上传开始时间 */
+export function pendingLastActive(entry: CollectPending): number {
+  const at = Date.parse(entry.at);
+  const seen = entry.seen === undefined ? NaN : Date.parse(entry.seen);
+  return Number.isFinite(seen) && seen > at ? seen : at;
+}
+
+/** 仍占名额：开始不到 24 小时，且最近 1 小时内有过活动（#154 N1） */
 export function isPendingLive(entry: CollectPending, now = Date.now()): boolean {
   const at = Date.parse(entry.at);
-  return Number.isFinite(at) && now - at < COLLECT_PENDING_TTL_MS;
+  if (!Number.isFinite(at) || now - at >= COLLECT_PENDING_TTL_MS) return false;
+  return now - pendingLastActive(entry) < COLLECT_PENDING_IDLE_MS;
 }
 
 export function livePending(record: CollectRecord, now = Date.now()): CollectPending[] {

@@ -165,7 +165,9 @@ export const onRequest: PagesFunction<MiddlewareEnv> = async (context) => {
   // Per-slug custom hostname: serve sites/{slug}/ at the domain root.
   // Order: hostname resolve → password gate (inside serveSlugSite) → content.
   // Skip non-GET/HEAD and drive product prefixes so the drive origin stays cheap.
-  // (Custom hostnames should not shadow /api|/webdav|/mcp|/share.)
+  // (Custom hostnames should not shadow /api|/webdav|/mcp|/share|/collect.)
+  // /collect 是文件收集链接的上传页（#154 N2）：和 /share 一样不查自定义域名，
+  // 免得站点里恰好有 collect/ 目录时把收集链接盖掉，也省一次 R2 读。
   const path = url.pathname;
   const skipCustomHostLookup =
     path === "/api" ||
@@ -175,7 +177,9 @@ export const onRequest: PagesFunction<MiddlewareEnv> = async (context) => {
     path === "/mcp" ||
     path.startsWith("/mcp/") ||
     path === "/share" ||
-    path.startsWith("/share/");
+    path.startsWith("/share/") ||
+    path === "/collect" ||
+    path.startsWith("/collect/");
   if ((method === "GET" || method === "HEAD") && !skipCustomHostLookup) {
     const customSlug = await loadSlugForHostname(context.env.BUCKET, host);
     if (customSlug) {

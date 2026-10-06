@@ -18,6 +18,8 @@ import {
   COLLECT_MAX_PENDING,
   COLLECT_MAX_TOTAL_BYTES,
   COLLECT_PART_SIZE,
+  COLLECT_PENDING_IDLE_MS,
+  COLLECT_PENDING_TOUCH_MS,
   COLLECT_STAGING_PREFIX,
   COLLECT_FOLDER_MAX_BYTES,
   COLLECT_NAME_MAX_BYTES,
@@ -27,6 +29,7 @@ import {
   collectStatus,
   expectedPartLength,
   isForbiddenCollectFolder,
+  isPendingLive,
   parseCollectRecord,
   safeCollectContentType,
   sanitizeCollectName,
@@ -732,6 +735,85 @@ describe("limits", () => {
     expect(fresh.response.status).toBe(200);
     expect(aborted).toEqual([old.body.uploadId]);
     expect(Object.keys(record(bucket, token).pending)).toEqual([fresh.body.uploadId]);
+  });
+
+  test("isPendingLive: 1h idle releases the slot, recent parts keep it, 24h hard cap (#154 N1)", () => {
+    const now = Date.parse("2026-10-06T12:00:00.000Z");
+    const iso = (ms: number) => new Date(now - ms).toISOString();
+    const base = { staging: `${COLLECT_STAGING_PREFIX}x`, name: "a", size: 1, contentType: "text/plain" };
+    const MIN = 60 * 1000;
+    expect(COLLECT_PENDING_IDLE_MS).toBe(60 * MIN);
+    expect(isPendingLive({ ...base, at: iso(30 * MIN) }, now)).toBe(true);
+    expect(isPendingLive({ ...base, at: iso(61 * MIN) }, now)).toBe(false);
+    expect(isPendingLive({ ...base, at: iso(5 * 60 * MIN), seen: iso(10 * MIN) }, now)).toBe(true);
+    expect(isPendingLive({ ...base, at: iso(5 * 60 * MIN), seen: iso(70 * MIN) }, now)).toBe(false);
+    // 一直有分块也最多占 24 小时
+    expect(isPendingLive({ ...base, at: iso(25 * 60 * MIN), seen: iso(MIN) }, now)).toBe(false);
+    // 坏掉的 seen 退回 at
+    expect(isPendingLive({ ...base, at: iso(30 * MIN), seen: "garbage" }, now)).toBe(true);
+    expect(isPendingLive({ ...base, at: iso(90 * MIN), seen: "garbage" }, now)).toBe(false);
+  });
+
+  test("uploads idle for 1h no longer hold a slot and are aborted (#154 N1)", async () => {
+    const bucket = freshBucket();
+    const token = await newCollect(bucket);
+    for (let i = 0; i < COLLECT_MAX_PENDING; i++) {
+      expect((await createUpload(bucket, token, `p${i}`, 1)).response.status).toBe(200);
+    }
+    expect((await createUpload(bucket, token, "blocked", 1)).response.status).toBe(429);
+    const idleAt = new Date(Date.now() - COLLECT_PENDING_IDLE_MS - 60 * 1000).toISOString();
+    patchRecord(bucket, token, (r) => {
+      for (const entry of Object.values(r.pending) as any[]) entry.at = idleAt;
+    });
+    const { response, body } = await createUpload(bucket, token, "now-ok", 1);
+    expect(response.status).toBe(200);
+    expect(Object.keys(record(bucket, token).pending)).toEqual([body.uploadId]);
+  });
+
+  test("a part on an upload idle for 1h is rejected (#154 N1)", async () => {
+    const bucket = freshBucket();
+    const token = await newCollect(bucket);
+    const { body } = await createUpload(bucket, token, "a.txt", 3);
+    patchRecord(bucket, token, (r) => {
+      r.pending[body.uploadId].at = new Date(Date.now() - COLLECT_PENDING_IDLE_MS - 1000).toISOString();
+    });
+    const res = await putPart(bucket, token, body.uploadId, 1, new TextEncoder().encode("abc"));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "unknown_upload" });
+  });
+
+  test("parts refresh last activity (throttled) so slow uploads keep their slot (#154 N1)", async () => {
+    const bucket = freshBucket();
+    const token = await newCollect(bucket);
+    const bytes = new TextEncoder().encode("abc");
+    const { body } = await createUpload(bucket, token, "slow.txt", 3);
+    const id = body.uploadId;
+    // 刚开始：距开始不到 10 分钟，分块不写记录
+    expect((await putPart(bucket, token, id, 1, bytes)).status).toBe(200);
+    expect(record(bucket, token).pending[id].seen).toBeUndefined();
+    // 开始于 50 分钟前：这一块把 seen 刷到现在
+    const startedAt = new Date(Date.now() - 50 * 60 * 1000).toISOString();
+    patchRecord(bucket, token, (r) => {
+      r.pending[id].at = startedAt;
+    });
+    const before = Date.now();
+    const part = await putPart(bucket, token, id, 1, bytes);
+    expect(part.status).toBe(200);
+    const seen = record(bucket, token).pending[id].seen as string;
+    expect(Date.parse(seen)).toBeGreaterThanOrEqual(before - 1000);
+    expect(record(bucket, token).pending[id].at).toBe(startedAt);
+    // 10 分钟内再来一块：不重复写
+    expect((await putPart(bucket, token, id, 1, bytes)).status).toBe(200);
+    expect(record(bucket, token).pending[id].seen).toBe(seen);
+    expect(Date.now() - Date.parse(seen)).toBeLessThan(COLLECT_PENDING_TOUCH_MS);
+    // 开始时间已超过 1 小时，但最近有分块：仍能完成
+    patchRecord(bucket, token, (r) => {
+      r.pending[id].at = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    });
+    const etag = ((await (await putPart(bucket, token, id, 1, bytes)).json()) as any).etag;
+    const done = await postJson(bucket, `${token}/complete`, { uploadId: id, parts: [{ partNumber: 1, etag }] });
+    expect(done.status).toBe(200);
+    expect(await bucket.asBucket().get("inbox/slow.txt")).not.toBeNull();
   });
 
   test("too many concurrent uploads → 429", async () => {
