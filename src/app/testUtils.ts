@@ -114,38 +114,39 @@ export interface PropfindEntry {
 
 /** 构造多文件目录 PROPFIND Multi-Status XML。 */
 export function propfindXml(entries: PropfindEntry[]): string {
+  // 形状对齐服务端 PROPFIND 输出：DAV 元素带 d: 前缀，fd:thumbnail 用 flaredrive 命名空间。
   const responses = entries
     .map((entry) => {
       const props = [
         entry.isDir
-          ? "<resourcetype><collection/></resourcetype>"
-          : "<resourcetype/>",
+          ? "<d:resourcetype><d:collection/></d:resourcetype>"
+          : "<d:resourcetype/>",
       ];
       if (entry.contentType) {
-        props.push(`<getcontenttype>${entry.contentType}</getcontenttype>`);
+        props.push(`<d:getcontenttype>${entry.contentType}</d:getcontenttype>`);
       }
       if (entry.size !== undefined) {
-        props.push(`<getcontentlength>${entry.size}</getcontentlength>`);
+        props.push(`<d:getcontentlength>${entry.size}</d:getcontentlength>`);
       }
       if (entry.lastModified) {
-        props.push(`<getlastmodified>${entry.lastModified}</getlastmodified>`);
+        props.push(`<d:getlastmodified>${entry.lastModified}</d:getlastmodified>`);
       }
       if (entry.thumbnail) {
-        props.push(`<thumbnail xmlns="flaredrive">${entry.thumbnail}</thumbnail>`);
+        props.push(`<fd:thumbnail>${entry.thumbnail}</fd:thumbnail>`);
       }
       return [
-        "  <response>",
-        `    <href>${entry.href}</href>`,
-        "    <propstat>",
-        "      <prop>",
+        "  <d:response>",
+        `    <d:href>${entry.href}</d:href>`,
+        "    <d:propstat>",
+        "      <d:prop>",
         ...props.map((p) => `        ${p}`),
-        "      </prop>",
-        "    </propstat>",
-        "  </response>",
+        "      </d:prop>",
+        "    </d:propstat>",
+        "  </d:response>",
       ].join("\n");
     })
     .join("\n");
-  return `<?xml version="1.0" encoding="utf-8"?>\n<multistatus>\n${responses}\n</multistatus>`;
+  return `<?xml version="1.0" encoding="utf-8"?>\n<d:multistatus xmlns:d="DAV:" xmlns:fd="flaredrive">\n${responses}\n</d:multistatus>`;
 }
 
 /** 207 Multi-Status 响应 mock（fetchPath 校验 Content-Type: application/xml）。 */

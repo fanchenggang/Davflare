@@ -20,8 +20,8 @@ const LOCK_RECORDS_METADATA_KEY = "lock_records";
 
 function getSupportedLock(): string {
   return [
-    "<lockentry><lockscope><exclusive /></lockscope><locktype><write /></locktype></lockentry>",
-    "<lockentry><lockscope><shared /></lockscope><locktype><write /></locktype></lockentry>",
+    "<d:lockentry><d:lockscope><d:exclusive /></d:lockscope><d:locktype><d:write /></d:locktype></d:lockentry>",
+    "<d:lockentry><d:lockscope><d:shared /></d:lockscope><d:locktype><d:write /></d:locktype></d:lockentry>",
   ].join("");
 }
 
@@ -113,7 +113,7 @@ function getLockDiscovery(lockDetails: LockDetails | LockDetails[]): string {
   return lockDetailList
     .map(
       (lockDetail) =>
-        `<activelock><locktype><write /></locktype><lockscope><${lockDetail.scope} /></lockscope><depth>${lockDetail.depth}</depth>${lockDetail.owner ? `<owner>${escapeXml(lockDetail.owner)}</owner>` : ""}<timeout>${escapeXml(lockDetail.timeout)}</timeout><locktoken><href>urn:uuid:${escapeXml(lockDetail.token)}</href></locktoken><lockroot><href>${escapeXml(lockDetail.root)}</href></lockroot></activelock>`,
+        `<d:activelock><d:locktype><d:write /></d:locktype><d:lockscope><d:${lockDetail.scope} /></d:lockscope><d:depth>${lockDetail.depth}</d:depth>${lockDetail.owner ? `<d:owner>${escapeXml(lockDetail.owner)}</d:owner>` : ""}<d:timeout>${escapeXml(lockDetail.timeout)}</d:timeout><d:locktoken><d:href>urn:uuid:${escapeXml(lockDetail.token)}</d:href></d:locktoken><d:lockroot><d:href>${escapeXml(lockDetail.root)}</d:href></d:lockroot></d:activelock>`,
     )
     .join("");
 }

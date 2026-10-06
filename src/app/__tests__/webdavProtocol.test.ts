@@ -219,9 +219,10 @@ describe("webdav PROPFIND", () => {
     expect(response.status).toBe(207);
     expect(response.headers.get("Content-Type")).toContain("application/xml");
     const xml = await response.text();
-    expect(xml).toContain("<href>/webdav/</href>");
-    expect(xml).toContain("<href>/webdav/docs/</href>");
-    expect(xml).toContain("<href>/webdav/root.txt</href>");
+    expect(xml).toContain('<d:multistatus xmlns:d="DAV:" xmlns:fd="flaredrive">');
+    expect(xml).toContain("<d:href>/webdav/</d:href>");
+    expect(xml).toContain("<d:href>/webdav/docs/</d:href>");
+    expect(xml).toContain("<d:href>/webdav/root.txt</d:href>");
     // Depth 1 只列直接子项：孙辈文件被 delimiter 语义折叠
     expect(xml).not.toContain("docs/a.txt");
   });
@@ -235,10 +236,10 @@ describe("webdav PROPFIND", () => {
     );
     expect(response.status).toBe(207);
     const xml = await response.text();
-    expect(xml).toContain("<href>/webdav/docs/</href>");
-    expect(xml).toContain("<href>/webdav/docs/a.txt</href>");
-    expect(xml).toContain("<getcontentlength>1</getcontentlength>");
-    expect(xml).toContain("<getcontenttype>text/plain</getcontenttype>");
+    expect(xml).toContain("<d:href>/webdav/docs/</d:href>");
+    expect(xml).toContain("<d:href>/webdav/docs/a.txt</d:href>");
+    expect(xml).toContain("<d:getcontentlength>1</d:getcontentlength>");
+    expect(xml).toContain("<d:getcontenttype>text/plain</d:getcontenttype>");
   });
 
   test("Depth infinity on root also lists grandchildren", async () => {
@@ -251,7 +252,7 @@ describe("webdav PROPFIND", () => {
     );
     expect(response.status).toBe(207);
     const xml = await response.text();
-    expect(xml).toContain("<href>/webdav/docs/a.txt</href>");
+    expect(xml).toContain("<d:href>/webdav/docs/a.txt</d:href>");
   });
 
   test("Depth 0 on a file returns only itself", async () => {
@@ -263,8 +264,8 @@ describe("webdav PROPFIND", () => {
     );
     expect(response.status).toBe(207);
     const xml = await response.text();
-    expect(xml).toContain("<href>/webdav/a.txt</href>");
-    expect(xml).not.toContain("<response>\n    <href>/webdav/a.txt/</href>");
+    expect(xml).toContain("<d:href>/webdav/a.txt</d:href>");
+    expect(xml).not.toContain("<d:response>\n    <d:href>/webdav/a.txt/</d:href>");
   });
 
   test("missing resource is 404", async () => {
@@ -285,8 +286,8 @@ describe("webdav PROPFIND", () => {
     );
     expect(response.status).toBe(207);
     const xml = await response.text();
-    expect(xml).toContain("<href>/webdav/vdir/</href>");
-    expect(xml).toContain("<href>/webdav/vdir/inner.txt</href>");
+    expect(xml).toContain("<d:href>/webdav/vdir/</d:href>");
+    expect(xml).toContain("<d:href>/webdav/vdir/inner.txt</d:href>");
   });
 
   test("invalid Depth header is 400", async () => {
@@ -324,7 +325,7 @@ describe("webdav PROPFIND", () => {
     const xml = await response.text();
     expect(xml).toContain("HTTP/1.1 200 OK");
     expect(xml).toContain("HTTP/1.1 404 Not Found");
-    expect(xml).toContain("<getcontentlength>1</getcontentlength>");
+    expect(xml).toContain("<d:getcontentlength>1</d:getcontentlength>");
   });
 
   test("internal prefix is 404 even with auth", async () => {
@@ -1172,8 +1173,8 @@ describe("webdav LOCK / UNLOCK", () => {
     const tokenHeader = response.headers.get("Lock-Token") ?? "";
     expect(tokenHeader).toMatch(/^<urn:uuid:[0-9a-f-]+>$/);
     const xml = await response.text();
-    expect(xml).toContain("<locktoken><href>urn:uuid:");
-    expect(xml).toContain("<owner>tester</owner>");
+    expect(xml).toContain("<d:locktoken><d:href>urn:uuid:");
+    expect(xml).toContain("<d:owner>tester</d:owner>");
     expect(xml).toContain("Second-120");
     // 内容不变，锁写进 customMetadata
     expect(bucket.rawText("a.txt")).toBe("A");

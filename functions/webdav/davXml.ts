@@ -21,7 +21,10 @@ function renderDavProperty(propName: string, value: string): string {
   const content = RAW_XML_DAV_PROPERTIES.has(propName)
     ? value
     : escapeXml(value);
-  return `<${propName}>${content}</${propName}>`;
+  // DAV 元素统一带 d: 前缀（部分客户端假定 DAV: 命名空间带前缀声明）；
+  // 已带前缀的 fd:thumbnail 等保持原样，避免拼出 <d:fd:…> 非法标签。
+  const qualifiedName = propName.includes(":") ? propName : `d:${propName}`;
+  return `<${qualifiedName}>${content}</${qualifiedName}>`;
 }
 
 function serializeNodeChildren(node: Node): string {
@@ -201,7 +204,7 @@ function fromR2Object(object: R2Object | DavObject | null | undefined): DavPrope
       getcontenttype: "application/x-directory",
       getetag: undefined,
       getlastmodified: new Date().toUTCString(),
-      resourcetype: "<collection />",
+      resourcetype: "<d:collection />",
       supportedlock: getSupportedLock(),
       lockdiscovery: "",
       "fd:thumbnail": undefined,
@@ -220,7 +223,7 @@ function fromR2Object(object: R2Object | DavObject | null | undefined): DavPrope
       : object.httpMetadata?.contentType || "application/octet-stream",
     getetag: object.etag,
     getlastmodified: object.uploaded.toUTCString(),
-    resourcetype: isCollection ? "<collection />" : "",
+    resourcetype: isCollection ? "<d:collection />" : "",
     supportedlock: getSupportedLock(),
     lockdiscovery:
       lockDetails.length === 0
@@ -256,12 +259,12 @@ function renderPropstat(status: string, properties: string[]): string {
     return "";
   }
   return `
-    <propstat>
-      <prop>
+    <d:propstat>
+      <d:prop>
         ${properties.join("\n        ")}
-      </prop>
-      <status>${status}</status>
-    </propstat>`;
+      </d:prop>
+      <d:status>${status}</d:status>
+    </d:propstat>`;
 }
 
 export {

@@ -146,17 +146,21 @@ describe("davXml: dead 属性存取与渲染", () => {
 
   test("renderDavProperty：RAW 集合不转义，其余转义", () => {
     expect(renderDavProperty("resourcetype", "<collection />")).toBe(
-      "<resourcetype><collection /></resourcetype>"
+      "<d:resourcetype><collection /></d:resourcetype>"
     );
     expect(renderDavProperty("displayname", '<b>&"')).toBe(
-      "<displayname>&lt;b&gt;&amp;&quot;</displayname>"
+      "<d:displayname>&lt;b&gt;&amp;&quot;</d:displayname>"
+    );
+    // 已带前缀的属性（fd:thumbnail）保持原样，不加 d:，避免非法标签名
+    expect(renderDavProperty("fd:thumbnail", "u")).toBe(
+      "<fd:thumbnail>u</fd:thumbnail>"
     );
   });
 
   test("renderPropstat：空列表为空串，属性列表拼 propstat", () => {
     expect(renderPropstat("HTTP/1.1 200 OK", [])).toBe("");
     const xml = renderPropstat("HTTP/1.1 200 OK", ["<a/>", "<b/>"]);
-    expect(xml).toContain("<prop>");
+    expect(xml).toContain("<d:prop>");
     expect(xml).toContain("HTTP/1.1 200 OK");
   });
 
@@ -178,7 +182,7 @@ describe("davXml: dead 属性存取与渲染", () => {
 describe("davXml: fromR2Object 与 live 属性", () => {
   test("null → 根集合默认属性", () => {
     const props = fromR2Object(null);
-    expect(props.resourcetype).toBe("<collection />");
+    expect(props.resourcetype).toBe("<d:collection />");
     expect(props.getcontenttype).toBe("application/x-directory");
     expect(props.supportedlock).toBe(getSupportedLock());
   });
@@ -337,7 +341,7 @@ describe("davLock", () => {
       root: "/webdav/a",
     };
     const xml = getLockDiscovery([lock]);
-    expect(xml).toContain("<activelock>");
+    expect(xml).toContain("<d:activelock>");
     expect(xml).toContain("urn:uuid:t1");
     expect(xml).toContain("alice");
     expect(getLockDiscovery(lock)).toBe(xml);

@@ -520,9 +520,9 @@ function generatePropfindResponse(
   }
 
   return `
-  <response>
-    <href>${escapeXml(href)}</href>${renderPropstat("HTTP/1.1 200 OK", okProperties)}${renderPropstat("HTTP/1.1 404 Not Found", missingProperties)}
-  </response>`;
+  <d:response>
+    <d:href>${escapeXml(href)}</d:href>${renderPropstat("HTTP/1.1 200 OK", okProperties)}${renderPropstat("HTTP/1.1 404 Not Found", missingProperties)}
+  </d:response>`;
 }
 
 async function handlePropfind({
@@ -544,8 +544,10 @@ async function handlePropfind({
   }
 
   let isCollection = false;
+  // 保持带前缀的 DAV 命名空间（d: + fd:）：Legado/阅读 等客户端假定 DAV 元素
+  // 带前缀，若改回默认命名空间（xmlns="DAV:"）会触发其解析崩溃或导致空列表。
   let page = `<?xml version="1.0" encoding="utf-8"?>
-<multistatus xmlns="DAV:" xmlns:fd="${FLAREDRIVE_NAMESPACE}">`;
+<d:multistatus xmlns:d="DAV:" xmlns:fd="${FLAREDRIVE_NAMESPACE}">`;
 
   if (path === "") {
     page += generatePropfindResponse(null, propfindRequest);
@@ -591,7 +593,7 @@ async function handlePropfind({
     }
   }
 
-  page += "\n</multistatus>\n";
+  page += "\n</d:multistatus>\n";
   return new Response(page, {
     status: 207,
     headers: {
@@ -692,21 +694,21 @@ async function handleProppatch({
 
   const isCollection = isCollectionObject(object);
   let responseXML = `<?xml version="1.0" encoding="utf-8"?>
-<multistatus xmlns="DAV:">
-  <response>
-    <href>${escapeXml(getResourceHref(object.key, isCollection))}</href>`;
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>${escapeXml(getResourceHref(object.key, isCollection))}</d:href>`;
   for (const [status, propNames] of propstats) {
     responseXML += `
-    <propstat>
-      <prop>
+    <d:propstat>
+      <d:prop>
 ${propNames.map((propName) => `        ${propName}`).join("\n")}
-      </prop>
-      <status>${status}</status>
-    </propstat>`;
+      </d:prop>
+      <d:status>${status}</d:status>
+    </d:propstat>`;
   }
   responseXML += `
-  </response>
-</multistatus>`;
+  </d:response>
+</d:multistatus>`;
 
   return new Response(responseXML, {
     status: 207,
@@ -1122,7 +1124,7 @@ async function handleLock({
 
   return new Response(
     `<?xml version="1.0" encoding="utf-8"?>
-<prop xmlns="DAV:"><lockdiscovery>${getLockDiscovery(updatedLocks)}</lockdiscovery></prop>`,
+<d:prop xmlns:d="DAV:"><d:lockdiscovery>${getLockDiscovery(updatedLocks)}</d:lockdiscovery></d:prop>`,
     {
       status: existingLock ? 200 : 201,
       headers: {
