@@ -27,13 +27,15 @@ function file(key: string, size = 100, isDir = false): FileItem {
   return { key, name: key.split("/").pop()!, isDir, size, uploaded: "", contentType: "" };
 }
 
-function fakePrepared(docs: number, images: number, missing = 0, bytes = 4096): DocsPrepared {
+function fakePrepared(docs: number, images: number, missing = 0, bytes = 4096, outOfScope = 0, shortened = 0): DocsPrepared {
   return {
     md: {} as DocsPrepared["md"],
     docs: Array.from({ length: docs }, (_, i) => ({ name: `${i}.md` }) as DocsPrepared["docs"][number]),
     images: Array.from({ length: images }, (_, i) => file(`img/${i}.png`)),
     byRef: new Map(),
     missing,
+    outOfScope,
+    shortened,
     bytes,
   };
 }
@@ -93,6 +95,21 @@ describe("PublishDocsDialog", () => {
     );
     expect(await screen.findByText(translate("publishDocsIgnored", { count: 3 }))).toBeInTheDocument();
     expect(fetchPath).not.toHaveBeenCalled();
+  });
+
+  test("#153: out-of-scope images, missing images and shortened names are reported", async () => {
+    vi.mocked(prepareDocsPublish).mockResolvedValue(fakePrepared(2, 1, 3, 4096, 2, 1));
+    render(
+      <PublishDocsDialog
+        open
+        source={{ kind: "files", files: [file("n/a.md"), file("n/b.md")], ignored: 0, title: "n" }}
+        onClose={vi.fn()}
+        onNotify={vi.fn()}
+      />
+    );
+    expect(await screen.findByText(translate("publishDocsOutOfScope", { count: 2 }))).toBeInTheDocument();
+    expect(screen.getByText(translate("publishDocsMissingImages", { count: 3 }))).toBeInTheDocument();
+    expect(screen.getByText(translate("publishDocsNamesShortened", { count: 1 }))).toBeInTheDocument();
   });
 
   test("too many files after resolving images blocks publishing", async () => {

@@ -3,7 +3,7 @@
  */
 import { onRequestPost } from "../../../functions/api/sites";
 import { CONFIG_KEY, DEFAULT_FEATURE_FLAGS } from "../../../functions/_flags";
-import { DOCS_MAX_BYTES, DOCS_MAX_FILES } from "../../../functions/sitePages";
+import { DOCS_MAX_BYTES, DOCS_MAX_FILES, docsScopeOf } from "../../../functions/sitePages";
 import { SITE_MANIFEST_NAME } from "../../../functions/siteManifest";
 import { DOCS_PAGE_MAX_BYTES, isPlainFileKey, sitePublishPlanKey } from "../../../functions/sitePublish";
 import { InMemoryBucket, basicAuthHeader, makeContext } from "../testInMemoryBucket";
@@ -37,7 +37,21 @@ async function call(bucket: AnyBucket, slug: string, payload: Record<string, unk
   return { status: response.status, text, json };
 }
 
-const docs = (bucket: AnyBucket, slug: string, body: Record<string, unknown>) => call(bucket, slug, { docs: body });
+/**
+ * plan 需要笔记源 key（#153：服务端由它推出发布范围）。测试没显式给时，按图片的公共目录造一组源：
+ * 让既有用例的图片都落在范围内；范围相关的用例会显式传 sources。
+ */
+function withSources(body: Record<string, unknown>): Record<string, unknown> {
+  if (body.phase !== "plan" || !Array.isArray(body.pages) || "sources" in body) return body;
+  const images = Array.isArray(body.images)
+    ? body.images.filter((key): key is string => typeof key === "string" && isPlainFileKey(key))
+    : [];
+  const scope = docsScopeOf(images);
+  return { ...body, sources: body.pages.map((_, i) => (scope ? `${scope}/note-${i}.md` : `note-${i}.md`)) };
+}
+
+const docs = (bucket: AnyBucket, slug: string, body: Record<string, unknown>) =>
+  call(bucket, slug, { docs: withSources(body) });
 
 type Plan = { planId: string; pages: string[]; images: string[]; total: number };
 
@@ -333,5 +347,88 @@ describe("checkDocsLimits", () => {
     expect(checkDocsLimits(1, 0, -1)).toEqual({ ok: false, error: "bad docs" });
     expect(DOCS_MAX_FILES).toBe(200);
     expect(DOCS_MAX_BYTES).toBe(100 * 1024 * 1024);
+  });
+});
+
+describe("docs publish: publish scope (#153)", () => {
+  function seedScope(bucket: InMemoryBucket) {
+    bucket.seed([
+      { key: "vault/notes/a.md", body: "# a" },
+      { key: "vault/notes/img/ok.png", body: "OK" },
+      { key: "vault/secret.png", body: "S" },
+      { key: "private/top.png", body: "P" },
+      { key: "root.png", body: "R" },
+    ]);
+  }
+
+  test("plan requires one markdown source per page", async () => {
+    const bucket = new InMemoryBucket();
+    seedScope(bucket);
+    const base = { phase: "plan", pages: ["a.html"], images: [] };
+    for (const sources of [undefined, [], ["a.md", "b.md"], ["a.txt"], ["../a.md"], ["/a.md"], ["_$flaredrive$/a.md"], [1]]) {
+      const body: Record<string, unknown> = { ...base, sources };
+      if (sources === undefined) delete body.sources;
+      const res = await call(bucket, "s", { docs: body });
+      expect(res.status).toBe(400);
+      expect(res.text).toBe("bad sources");
+    }
+  });
+
+  test("images outside the notes' folder subtree are rejected", async () => {
+    const bucket = new InMemoryBucket();
+    seedScope(bucket);
+    const sources = ["vault/notes/a.md"];
+    for (const image of ["vault/secret.png", "private/top.png", "root.png"]) {
+      const res = await docs(bucket, "s", { phase: "plan", pages: ["a.html"], sources, images: [image] });
+      expect(res.status).toBe(400);
+      expect(res.text).toBe(`image outside the published folder: ${image.split("/").pop()}`);
+    }
+    const ok = await docs(bucket, "s", { phase: "plan", pages: ["a.html"], sources, images: ["vault/notes/img/ok.png"] });
+    expect(ok.status).toBe(200);
+  });
+
+  test("notes at the drive root only allow root-level images (never the whole drive)", async () => {
+    const bucket = new InMemoryBucket();
+    seedScope(bucket);
+    const sources = ["a.md"];
+    const deep = await docs(bucket, "s", { phase: "plan", pages: ["a.html"], sources, images: ["private/top.png"] });
+    expect(deep.status).toBe(400);
+    expect(deep.text).toBe("image outside the published folder: top.png");
+    const root = await docs(bucket, "s", { phase: "plan", pages: ["a.html"], sources, images: ["root.png"] });
+    expect(root.status).toBe(200);
+  });
+
+  test("notes spread over different top-level folders do not widen the scope", async () => {
+    const bucket = new InMemoryBucket();
+    seedScope(bucket);
+    const res = await docs(bucket, "s", {
+      phase: "plan",
+      pages: ["a.html", "b.html"],
+      sources: ["vault/notes/a.md", "private/b.md"],
+      images: ["vault/notes/img/ok.png"],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("an over-long page name is shortened (keeps .html) instead of failing the publish", async () => {
+    const bucket = new InMemoryBucket();
+    const longName = `${"长".repeat(150)}${"x".repeat(150)}.html`;
+    const { plan, finish } = await publish(bucket, "s", { [longName]: "<p>long</p>" });
+    expect(finish.status).toBe(200);
+    expect(plan.pages[0].length).toBeLessThanOrEqual(200);
+    expect(plan.pages[0].endsWith(".html")).toBe(true);
+    expect(plan.pages[0].startsWith("长长长")).toBe(true);
+    expect(bucket.has(`sites/s/${plan.pages[0]}`)).toBe(true);
+  });
+
+  test("an over-long image name is shortened inside assets/", async () => {
+    const bucket = new InMemoryBucket();
+    const key = `v/${"p".repeat(260)}.png`;
+    bucket.seed([{ key, body: "PNG" }]);
+    const { plan, finish } = await publish(bucket, "s", { "a.html": "<p>a</p>" }, [key]);
+    expect(finish.status).toBe(200);
+    expect(plan.images[0].startsWith("assets/")).toBe(true);
+    expect(plan.images[0].endsWith(".png")).toBe(true);
+    expect(plan.images[0].length).toBeLessThanOrEqual("assets/".length + 200);
   });
 });

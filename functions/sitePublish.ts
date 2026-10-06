@@ -29,6 +29,9 @@ import {
   pageLang,
   renderDirPage,
   type PageLang,
+  docsScopeOf,
+  isInDocsScope,
+  shortenFileName,
 } from "./sitePages";
 import {
   SITE_MANIFEST_NAME,
@@ -118,7 +121,8 @@ function sanitizeSiteName(name: string): string {
   let out = name.replace(/[\u0000-\u001f\u007f\\/]/g, "_").replace(/_\$flaredrive\$/g, "_flaredrive_");
   out = out.trim();
   if (!out || out === "." || out === "..") out = "file";
-  return out.slice(0, 200);
+  // 截短时保留扩展名（以前直接 slice 会把 .html 截掉，长文件名让整次文档站发布 400，#153）
+  return shortenFileName(out, 200);
 }
 
 function nameCandidate(name: string, attempt: number): string {
@@ -494,7 +498,7 @@ function isDocsPageName(name: string): boolean {
 export async function planDocsPublish(
   bucket: R2Bucket,
   slug: string,
-  body: { pages?: unknown; images?: unknown; lang?: unknown; title?: unknown }
+  body: { pages?: unknown; images?: unknown; sources?: unknown; lang?: unknown; title?: unknown }
 ): Promise<Response> {
   if (!Array.isArray(body.pages) || !body.pages.every((name) => typeof name === "string")) {
     return textResponse("bad pages", 400);
@@ -505,6 +509,16 @@ export async function planDocsPublish(
   }
   const pageNames = body.pages as string[];
   const imageKeys = images as string[];
+  // 发布范围（#153）：由笔记源 key 推出公共目录，图片必须在它的子树里（范围是根目录时只认根目录当前层）。
+  // 不只靠前端：服务端用同一规则复核，`../`、`/` 开头的路径或全盘搜索找来的图片都会被拒。
+  if (
+    !Array.isArray(body.sources) ||
+    body.sources.length !== pageNames.length ||
+    !body.sources.every((key) => typeof key === "string" && isPlainFileKey(key) && /\.(md|markdown)$/i.test(key))
+  ) {
+    return textResponse("bad sources", 400);
+  }
+  const scope = docsScopeOf(body.sources as string[]);
   if (pageNames.length + imageKeys.length > DOCS_MAX_FILES) {
     return textResponse(`file limit exceeded: ${pageNames.length + imageKeys.length} > ${DOCS_MAX_FILES}`, 400);
   }
@@ -517,6 +531,9 @@ export async function planDocsPublish(
   for (const key of imageKeys) {
     if (!isPlainFileKey(key) || rasterExtension(key) === null || key.startsWith(targetPrefix)) {
       return textResponse("bad image source", 400);
+    }
+    if (!isInDocsScope(key, scope)) {
+      return textResponse(`image outside the published folder: ${key.split("/").pop()}`, 400);
     }
     const object = await bucket.head(key);
     if (!object || isCollectionObject(object)) {

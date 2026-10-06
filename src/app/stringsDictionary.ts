@@ -764,8 +764,16 @@ const entries: Record<string, DictionaryEntry> = {
     en: "Only .md files at the top level of this folder are published; subfolders are skipped.",
   },
   publishDocsMissingImages: {
-    zh: "{count} 处图片没找到（或不是 jpg/png/gif/webp/avif），页面里会保留原文。",
-    en: "{count} image reference(s) were not found (or are not jpg/png/gif/webp/avif); the original text is kept.",
+    zh: "{count} 张图片在所选文件夹里没找到，页面里会保留原文。",
+    en: "{count} image(s) were not found in the selected folder; the original text is kept.",
+  },
+  publishDocsOutOfScope: {
+    zh: "{count} 张图片在所选文件夹之外（例如 ../ 或 / 开头的路径），不会公开，页面里保留原文。",
+    en: "{count} image(s) are outside the selected folder (e.g. paths starting with ../ or /); they will not be published and the original text is kept.",
+  },
+  publishDocsNamesShortened: {
+    zh: "{count} 篇笔记的文件名过长，页面文件名已自动缩短。",
+    en: "{count} note file name(s) are too long; their page file names were shortened.",
   },
   publishDocsCopyNote: {
     zh: "发布的是渲染好的副本，图片也会复制一份：之后修改网盘里的笔记或图片，不会影响已发布的站点；需要更新时重新发布即可。",

@@ -38,6 +38,9 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
   }
 
   const lower = query.toLowerCase();
+  // 可选 prefix：只在这个目录子树里扫（文档站图片兜底搜索用，#153），也比全盘扫便宜得多
+  const prefixRaw = (url.searchParams.get("prefix") || "").replace(/^\/+/, "");
+  const prefix = prefixRaw && !prefixRaw.startsWith("_$flaredrive$") ? prefixRaw : undefined;
   const items: Array<Record<string, unknown>> = [];
   let cursor: string | undefined = url.searchParams.get("cursor") || undefined;
   let nextCursor: string | undefined;
@@ -51,6 +54,7 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
   while (!done) {
     const listing = await env.BUCKET.list({
       cursor,
+      prefix,
       limit: SCAN_PAGE,
       include: ["httpMetadata", "customMetadata"],
     });

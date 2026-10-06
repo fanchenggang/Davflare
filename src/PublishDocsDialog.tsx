@@ -260,9 +260,19 @@ function PublishDocsDialog({
                     {translate("publishDocsIgnored", { count: ignored })}
                   </Typography>
                 ) : null}
+                {prepared && prepared.outOfScope > 0 ? (
+                  <Alert severity="warning">
+                    {translate("publishDocsOutOfScope", { count: prepared.outOfScope })}
+                  </Alert>
+                ) : null}
                 {prepared && prepared.missing > 0 ? (
                   <Typography variant="body2" color="text.secondary">
                     {translate("publishDocsMissingImages", { count: prepared.missing })}
+                  </Typography>
+                ) : null}
+                {prepared && prepared.shortened > 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {translate("publishDocsNamesShortened", { count: prepared.shortened })}
                   </Typography>
                 ) : null}
                 {prepared ? (
