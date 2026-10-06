@@ -21,7 +21,12 @@ import {
   sitesUnauthorized,
   SITES_PREFIX,
 } from "./_sites";
-import { SiteServePolicy, loadSiteServePolicy, siteFileForcesDownload } from "./siteManifest";
+import {
+  SITE_MANIFEST_NAMES,
+  SiteServePolicy,
+  loadSiteServePolicy,
+  siteFileForcesDownload,
+} from "./siteManifest";
 
 interface MiddlewareEnv {
   BUCKET: R2Bucket;
@@ -69,12 +74,16 @@ async function serveSlugSite(
   // 生成型站点（公开目录 / 相册 / 文档站）里的 active 文件强制下载（#146）。
   // 清单只在请求 active 类型时才读，且与正文读取并行；同一请求内最多读一次。
   const sitePrefix = `${SITES_PREFIX}${parsed.slug}/`;
+  // 站点根的清单文件是内部记录（列着所有生成文件），不对外提供（#147）
+  if ((SITE_MANIFEST_NAMES as readonly string[]).includes(parsed.key.slice(sitePrefix.length))) {
+    return sitesNotFound();
+  }
   let policyPromise: Promise<SiteServePolicy> | null = null;
+  const loadPolicy = () => (policyPromise ??= loadSiteServePolicy(context.env.BUCKET, sitePrefix));
   const forcesDownload = async (objectKey: string): Promise<boolean> => {
     const rel = objectKey.slice(sitePrefix.length);
     if (!siteFileForcesDownload("dir", rel)) return false; // 不是 active 类型 / 是首页：无需读清单
-    policyPromise ??= loadSiteServePolicy(context.env.BUCKET, sitePrefix);
-    const policy = await policyPromise;
+    const policy = await loadPolicy();
     return siteFileForcesDownload(policy.kind, rel, policy.docsPages);
   };
   if (siteFileForcesDownload("dir", parsed.key.slice(sitePrefix.length))) {
@@ -112,8 +121,9 @@ async function serveSlugSite(
     const notFoundObject = await context.env.BUCKET.get(
       siteNotFoundKey(parsed.slug)
     );
-    // 生成型站点里的 404.html 是复制进来的用户文件，不能当页面渲染（#146）
-    if (notFoundObject && !(await forcesDownload(siteNotFoundKey(parsed.slug)))) {
+    // 自定义 404 页只属于普通静态站。生成型站点（公开目录 / 相册 / 文档站）里的 404.html
+    // 要么是复制进来的用户文件（#146），要么是名叫 404.md 的笔记生成的普通页面（#147），都不当 404 页。
+    if (notFoundObject && !(await loadPolicy()).kind) {
       return sitesNotFoundPage({ body: notFoundObject.body }, method === "HEAD");
     }
     return sitesNotFound();

@@ -46,7 +46,7 @@ function PublishAlbumDialog({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [copiedCount, setCopiedCount] = useState(0);
   const [publishedSlug, setPublishedSlug] = useState("");
-  const slugGuard = useSiteSlugGuard("album", null);
+  const slugGuard = useSiteSlugGuard("album", null, { slug, enabled: open && !busy && !resultUrl });
 
   useEffect(() => {
     if (!open) return;

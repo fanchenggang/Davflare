@@ -62,7 +62,7 @@ function PublishDirDialog({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [copiedCount, setCopiedCount] = useState(0);
   const [publishedSlug, setPublishedSlug] = useState("");
-  const slugGuard = useSiteSlugGuard("dir", folder ? folder.key.replace(/^\/+|\/+$/g, "") : null);
+  const slugGuard = useSiteSlugGuard("dir", folder ? folder.key.replace(/^\/+|\/+$/g, "") : null, { slug, enabled: open && !busy && !resultUrl });
 
   useEffect(() => {
     if (!open || !folder) return;

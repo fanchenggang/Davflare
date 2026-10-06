@@ -98,7 +98,7 @@ const entries: Record<string, DictionaryEntry> = {
   deployZipFailed: { zh: "读取 zip 失败", en: "Failed to read zip" },
   publishAsSite: { zh: "发布为静态站", en: "Publish as site" },
   publishSiteTitle: { zh: "发布为静态站", en: "Publish as static site" },
-  publishSiteSlug: { zh: "站点 slug", en: "Site slug" },
+  publishSiteSlug: { zh: "站点地址", en: "Site address" },
   publishSiteSlugHint: {
     zh: "只能用小写字母、数字和连字符，最长 63 位。文件会复制到 sites/{slug}/，同名覆盖。",
     en: "Lowercase letters, digits, and hyphens only (max 63). Files copy to sites/{slug}/; same names are overwritten.",
@@ -555,7 +555,7 @@ const entries: Record<string, DictionaryEntry> = {
   },
   obsidianSizeTip: {
     zh: "单个文件需小于 100MB：超过 100MB 的请求会被 Cloudflare 直接拦下（返回它的通用 413 页面），请在 Remotely Save 设置里把「跳过大文件」（Skip Large Files）阈值设到 100MB 以下；改名会按「删除 + 重新上传」同步",
-    en: "Each file must be under 100MB: requests over 100MiB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's \"Skip Large Files\" threshold below 100MB; renames sync as delete + re-upload",
+    en: "Each file must be under 100MB: requests over 100MB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's \"Skip Large Files\" threshold below 100MB; renames sync as delete + re-upload",
   },
   obsidianCopyGuide: { zh: "复制 Obsidian 配置", en: "Copy Obsidian settings" },
   obsidianGuideLabel: { zh: "Obsidian 配置", en: "Obsidian settings" },
@@ -766,8 +766,8 @@ const entries: Record<string, DictionaryEntry> = {
   publishDocsLoading: { zh: "正在读取 Markdown 和图片…", en: "Reading Markdown and images…" },
   publishDocsLoadFailed: { zh: "读取 Markdown 失败：{reason}", en: "Failed to read Markdown: {reason}" },
   publishDocsSummary: {
-    zh: "{docs} 篇文档、{images} 张图片，共 {size}。会生成到 sites/{slug}/：每篇一页，首页带目录。",
-    en: "{docs} document(s) and {images} image(s), {size} total. Generated into sites/{slug}/: one page per document plus an index with a sidebar.",
+    zh: "{docs} 篇文档、{images} 张图片，生成后共约 {size}。会生成到 sites/{slug}/：每篇一页，首页带目录。",
+    en: "{docs} document(s) and {images} image(s), about {size} once generated. Generated into sites/{slug}/: one page per document plus an index with a sidebar.",
   },
   publishDocsIgnored: {
     zh: "已忽略 {count} 个非 Markdown 项。",
@@ -788,6 +788,10 @@ const entries: Record<string, DictionaryEntry> = {
   publishDocsNamesShortened: {
     zh: "{count} 篇笔记的文件名过长，页面文件名已自动缩短。",
     en: "{count} note file name(s) are too long; their page file names were shortened.",
+  },
+  publishDocsImageNamesShortened: {
+    zh: "{count} 张图片的文件名过长，复制到站点时文件名会自动缩短（页面里的引用会一并改好）。",
+    en: "{count} image file name(s) are too long; they are shortened when copied into the site (page references are updated to match).",
   },
   publishDocsCopyNote: {
     zh: "发布的是渲染好的副本，图片也会复制一份：之后修改网盘里的笔记或图片，不会影响已发布的站点；需要更新时重新发布即可。",

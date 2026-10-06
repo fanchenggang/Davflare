@@ -565,7 +565,7 @@ var COPY = {
     navPublishTitle: "发布为导航站",
     navSummarySelected: "将发布选中的 {n} 条书签，按文件夹分组。",
     navSummaryView: "将发布当前列表中的 {n} 条书签，按文件夹分组。",
-    navSlug: "站点 slug",
+    navSlug: "站点地址",
     navSlugHint:
       "只能用小写字母、数字和连字符，最长 63 位。会把 index.html 写入 sites/{slug}/。同一 slug 只覆盖这个页面。",
     navTooMany: "共 {n} 条书签，超过上限 {max} 条，未发布。",

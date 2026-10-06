@@ -550,10 +550,20 @@ export async function planDocsPublish(
   ) {
     return textResponse("bad sources", 400);
   }
-  const scope = docsScopeOf(body.sources as string[]);
   if (pageNames.length + imageKeys.length > DOCS_MAX_FILES) {
     return textResponse(`file limit exceeded: ${pageNames.length + imageKeys.length} > ${DOCS_MAX_FILES}`, 400);
   }
+  // 范围由笔记源 key 推出，所以这些 key 必须真的是网盘里的笔记：编一个不存在的 .md 路径
+  // （例如放到更上层）就能把范围撑大，进而公开范围外的图片（#158）。逐个 head 确认存在且不是目录。
+  const sources = body.sources as string[];
+  if (new Set(sources).size !== sources.length) return textResponse("duplicate sources", 400);
+  for (const key of sources) {
+    const object = await bucket.head(key);
+    if (!object || isCollectionObject(object)) {
+      return textResponse(`source missing: ${key.split("/").pop()}`, 409);
+    }
+  }
+  const scope = docsScopeOf(sources);
   for (const name of pageNames) {
     if (!isDocsPageName(sanitizeSiteName(name))) return textResponse("bad page name", 400);
   }

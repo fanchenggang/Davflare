@@ -19,6 +19,7 @@ import {
   ParsedDoc,
   desiredPageName,
   docsScopeOf,
+  isImageNameShortened,
   isPageNameShortened,
   isMarkdownName,
   loadDocsMarkdown,
@@ -488,7 +489,12 @@ export interface DocsPrepared {
   outOfScope: number;
   /** 文件名过长、页面名被缩短的笔记数（#153） */
   shortened: number;
-  /** Markdown 原文 + 图片的字节数（前端估算；服务端按实际 html 复核） */
+  /** 文件名过长、复制到 assets/ 时会被缩短的图片数（#158） */
+  shortenedImages: number;
+  /**
+   * 估算的发布字节数：按预计文件名试渲染一遍的 html（含每页的样式和目录）+ 首页 + 图片，
+   * 和服务端复核的口径一致（以前只算 Markdown 原文，接近上限时会到 put 阶段才被拒，#147）。
+   */
   bytes: number;
 }
 
@@ -509,7 +515,7 @@ async function readDriveText(key: string): Promise<string> {
 export const defaultDocsIO: DocsPrepareIO = {
   readText: readDriveText,
   listDir: (dir) => fetchPath(dir ? `${dir}/` : ""),
-  search: async (name, prefix) => (await searchFiles(name, undefined, 50, prefix)).items,
+  search: async (name, prefix) => (await searchFiles(name, undefined, 50, prefix, { exactName: true })).items,
 };
 
 /** 读 Markdown、解析、在网盘里找被引用的栅格图片。 */
@@ -527,9 +533,7 @@ export async function prepareDocsPublish(
   const docs = sortDocs(parsed);
   // 发布范围 = 所选笔记的公共目录：图片只从这里（含子文件夹）复制，服务端用同一规则复核（#153）
   const resolved = await resolveDocImages(docs, io, docsScopeOf(files.map((file) => file.key)));
-  const bytes =
-    docs.reduce((sum, doc) => sum + (Number.isFinite(doc.size) ? doc.size : 0), 0) +
-    albumSelectionBytes(resolved.images);
+  const bytes = estimateDocsPublishBytes(md, docs, resolved.images, resolved.byRef);
   return {
     md,
     docs,
@@ -538,8 +542,37 @@ export async function prepareDocsPublish(
     missing: resolved.missing,
     outOfScope: resolved.outOfScope,
     shortened: docs.filter(isPageNameShortened).length,
+    shortenedImages: resolved.images.filter(isImageNameShortened).length,
     bytes,
   };
+}
+
+/** 页面外壳里会随语言 / 站点标题变化的部分留出的余量（每页）。 */
+const DOCS_PAGE_SLACK_BYTES = 512;
+
+/**
+ * 发布字节数估算：用预计的页面名 / assets 名把整站试渲染一遍，按 UTF-8 计 html 字节，再加图片大小。
+ * 真正发布时服务端可能给重名的页面加 -2，标题、语言也可能不同，所以每页加一点余量。
+ */
+export function estimateDocsPublishBytes(
+  md: DocsMarkdown,
+  docs: ParsedDoc[],
+  images: FileItem[],
+  byRef: Map<string, string>
+): number {
+  const encoder = new TextEncoder();
+  const site = renderDocsSite(md, {
+    lang: "zh",
+    title: translate("siteDocsHeading"),
+    docs,
+    pageNames: docs.map(desiredPageName),
+    byRef,
+    imageRels: new Map(images.map((image) => [image.key, `assets/${image.name}`])),
+  });
+  const htmlBytes =
+    site.pages.reduce((sum, page) => sum + encoder.encode(page.html).length, 0) +
+    encoder.encode(site.index).length;
+  return htmlBytes + (docs.length + 1) * DOCS_PAGE_SLACK_BYTES + albumSelectionBytes(images);
 }
 
 export type DocsPublishProgress =
