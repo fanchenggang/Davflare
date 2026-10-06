@@ -19,6 +19,9 @@ import {
   COLLECT_MAX_TOTAL_BYTES,
   COLLECT_PART_SIZE,
   COLLECT_STAGING_PREFIX,
+  COLLECT_FOLDER_MAX_BYTES,
+  COLLECT_NAME_MAX_BYTES,
+  collectNameBudget,
   collectNameCandidates,
   collectRecordKey,
   collectStatus,
@@ -30,6 +33,7 @@ import {
 } from "../../../functions/_collect";
 import { placeCollectedObject } from "../../../functions/_collectUpload";
 import { formatCollectSize, safeJsonForScript } from "../../../functions/_collectPage";
+import { normalizeDirKey } from "../../../functions/api/_apikey";
 import { InMemoryBucket, basicAuthHeader, makeContext } from "../testInMemoryBucket";
 
 const AUTH = basicAuthHeader("user", "pass");
@@ -472,6 +476,46 @@ describe("anonymous upload flow", () => {
     expect(keys.some((key) => key.startsWith("_$flaredrive$/shares/"))).toBe(false);
   });
 
+  test("received keys survive the /api/* path round-trip unchanged (no %XX confused deputy)", async () => {
+    const bucket = freshBucket();
+    bucket.seedDir("inbox/Projects");
+    bucket.seed([{ key: "inbox/Projects/keep.txt", body: "precious" }]);
+    const token = await newCollect(bucket);
+    for (const name of ["%2e", "%2e%2e", "Projects%2Fkeep.txt", "a%5cb.txt", "x+y%20z.txt"]) {
+      expect((await uploadFile(bucket, token, name, "x")).status).toBe(200);
+    }
+    const added = (await allKeys(bucket)).filter(
+      (key) =>
+        key.startsWith("inbox/") &&
+        !["inbox/existing.txt", "inbox/Projects", "inbox/Projects/keep.txt"].includes(key)
+    );
+    expect(added).toHaveLength(5);
+    for (const key of added) {
+      // 客户端按规范编码 path 参数；服务端 URLSearchParams 解一次、decodeRawPath 再解一次
+      const viaApi = normalizeDirKey(new URLSearchParams(`path=${encodeURIComponent(key)}`).get("path"));
+      expect(viaApi).toBe(key);
+    }
+  });
+
+  test("owner cannot target a folder whose key leaves no room for file names", async () => {
+    const bucket = freshBucket();
+    const deep = "深".repeat(Math.floor(COLLECT_FOLDER_MAX_BYTES / 3) + 1);
+    bucket.seedDir(deep);
+    expect((await ownerCreate(bucket, { folder: deep })).status).toBe(400);
+    const ok = "深".repeat(Math.floor(COLLECT_FOLDER_MAX_BYTES / 3));
+    bucket.seedDir(ok);
+    const response = await ownerCreate(bucket, { folder: ok });
+    expect(response.status).toBe(201);
+    const token = ((await response.json()) as { token: string }).token;
+    // 最长的文件名 + 同名后缀仍在 1024 字节以内
+    for (let i = 0; i < 3; i++) {
+      expect((await uploadFile(bucket, token, `${"名".repeat(300)}.txt`, "x")).status).toBe(200);
+    }
+    const keys = (await allKeys(bucket)).filter((key) => key.startsWith(`${ok}/`));
+    expect(keys).toHaveLength(3);
+    for (const key of keys) expect(new TextEncoder().encode(key).length).toBeLessThanOrEqual(1024);
+  });
+
   test("active content types are stored as octet-stream", async () => {
     const bucket = freshBucket();
     const token = await newCollect(bucket);
@@ -871,9 +915,45 @@ describe("pure helpers", () => {
     expect(sanitizeCollectName(undefined)).toBe("file");
     expect(sanitizeCollectName("_$flaredrive$")).toBe("__$flaredrive$");
     const long = sanitizeCollectName(`${"名".repeat(300)}.docx`);
-    expect(Array.from(long)).toHaveLength(180);
-    expect(long.endsWith(".docx")).toBe(true);
+    expect(new TextEncoder().encode(long).length).toBeLessThanOrEqual(COLLECT_NAME_MAX_BYTES);
+    expect(long).toBe(`${"名".repeat(78)}.docx`);
     expect(Array.from(sanitizeCollectName("x".repeat(300)))).toHaveLength(180);
+  });
+
+  test("sanitizeCollectName: no %XX survives (decodeRawPath double-decodes /api paths)", () => {
+    expect(sanitizeCollectName("%2e")).toBe("_2e");
+    expect(sanitizeCollectName("%2E%2e")).toBe("_2E_2e");
+    expect(sanitizeCollectName("Projects%2Fkeep.txt")).toBe("Projects_2Fkeep.txt");
+    expect(sanitizeCollectName("a%5cb%00c")).toBe("a_5cb_00c");
+    // 去掉零宽字符后才拼出来的 %XX 也要处理
+    expect(sanitizeCollectName("%\u200b2e.txt")).toBe("_2e.txt");
+    // 不是转义序列的 % 保留
+    expect(sanitizeCollectName("50%折扣.pdf")).toBe("50%折扣.pdf");
+    expect(sanitizeCollectName("100%.txt")).toBe("100%.txt");
+  });
+
+  test("sanitizeCollectName: surrogates, invisible fillers, Windows device names", () => {
+    expect(sanitizeCollectName("a\ud800b.txt")).toBe("ab.txt");
+    expect(sanitizeCollectName("a\udc00b.txt")).toBe("ab.txt");
+    expect(sanitizeCollectName("😀.txt")).toBe("😀.txt");
+    expect(sanitizeCollectName("soft\u00adhy\u061cphen\u3164.txt")).toBe("softhyphen.txt");
+    expect(sanitizeCollectName("CON")).toBe("_CON");
+    expect(sanitizeCollectName("nul.txt")).toBe("_nul.txt");
+    expect(sanitizeCollectName("com1.tar.gz")).toBe("_com1.tar.gz");
+    expect(sanitizeCollectName("console.txt")).toBe("console.txt");
+  });
+
+  test("sanitizeCollectName: UTF-8 byte budget (emoji, folder key budget)", () => {
+    const emoji = sanitizeCollectName(`${"😀".repeat(300)}.txt`);
+    expect(new TextEncoder().encode(emoji).length).toBeLessThanOrEqual(COLLECT_NAME_MAX_BYTES);
+    expect(emoji.endsWith(".txt")).toBe(true);
+    // 不会切开代理对：UTF-8 往返后不变
+    expect(new TextDecoder().decode(new TextEncoder().encode(emoji))).toBe(emoji);
+    const tight = sanitizeCollectName(`${"名".repeat(50)}.pdf`, 20);
+    expect(tight).toBe(`${"名".repeat(5)}.pdf`);
+    expect(collectNameBudget("x".repeat(10))).toBe(COLLECT_NAME_MAX_BYTES);
+    expect(collectNameBudget("x".repeat(1000))).toBe(14);
+    expect(collectNameBudget("x".repeat(2000))).toBe(1);
   });
 
   test("collectNameCandidates", () => {

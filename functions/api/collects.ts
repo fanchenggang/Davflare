@@ -8,6 +8,7 @@
  */
 import {
   COLLECTS_PREFIX,
+  COLLECT_FOLDER_MAX_BYTES,
   COLLECT_MAX_EXPIRY_HOURS,
   COLLECT_NOTE_MAX,
   COLLECT_STAGING_PREFIX,
@@ -24,6 +25,7 @@ import {
   mutateCollect,
   newCollectToken,
   saveCollectRecord,
+  utf8Length,
 } from "../_collect";
 import {
   isSessionOrKeyAuthorized,
@@ -101,6 +103,10 @@ export const onRequestPost: PagesFunction<CollectsEnv> = async ({ request, env }
   if (folder instanceof Response) return folder;
   if (isForbiddenCollectFolder(folder)) {
     return textResponse("不能在站点目录或内部目录上创建收集链接", 400);
+  }
+  // 给收到的文件名留出键长：folder + "/" + 文件名 + 同名后缀不能超过 R2 的 1024 字节
+  if (utf8Length(folder) > COLLECT_FOLDER_MAX_BYTES) {
+    return textResponse("文件夹路径太长，请换一个层级更浅的文件夹", 400);
   }
   let hours = COLLECT_MAX_EXPIRY_HOURS;
   if (body.expiresInHours !== undefined && body.expiresInHours !== null) {

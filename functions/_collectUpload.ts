@@ -9,6 +9,7 @@ import {
   CollectRecord,
   abortCollectUpload,
   collectFolderExists,
+  collectNameBudget,
   collectNameCandidates,
   collectPartCount,
   collectRemaining,
@@ -123,12 +124,13 @@ export async function handleCollectCreate(
   const size = Number(body.size);
   if (!Number.isSafeInteger(size) || size < 0) return collectError("bad_request", 400);
   if (size === 0) return collectError("empty_file", 400);
-  const name = sanitizeCollectName(body.name);
   const contentType = safeCollectContentType(body.type);
 
   const loaded = await loadCollect(bucket, token);
   if (!loaded) return collectError("not_found", 404);
   const { record } = loaded;
+  // 文件名按目标文件夹剩余的键长预算截断，保证最终键（含同名后缀）不超过 R2 的 1024 字节
+  const name = sanitizeCollectName(body.name, collectNameBudget(record.folder));
   const blocked = statusError(record, now);
   if (blocked) return blocked;
   const limit = checkCreateLimits(record, size, now);

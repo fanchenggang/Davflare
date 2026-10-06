@@ -263,28 +263,80 @@ export function isForbiddenCollectFolder(folder: string): boolean {
   return folder === sitesRoot || folder.startsWith(SITES_PREFIX) || isInternalKey(folder);
 }
 
-// 控制字符、C1、零宽与双向覆盖字符（防止 "gpj.exe" 之类的显示欺骗）
+// 控制字符、C1、软连字符、零宽/不可见填充与双向覆盖字符（防止 "gpj.exe" 之类的显示欺骗）
 // eslint-disable-next-line no-control-regex
-const STRIP_CHARS_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+const STRIP_CHARS_RE = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u115f\u1160\u180e\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\uffa0\ufff9-\ufffb]/g;
+// 孤立代理项：R2 键按 UTF-8 编码时会被替换成 U+FFFD，head 与 put 看到的键可能不一致
+const LONE_SURROGATE_RE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 // Windows 保留字符替换为下划线，保证下载到任意系统都能落盘
 const RESERVED_CHARS_RE = /[<>:"|?*]/g;
+// `%XX` 会被 /api/* 的 decodeRawPath 在 URLSearchParams 之后再解码一次：
+// 名为 "%2e" 的收集文件经 API key 客户端删除时会解析成上级目录本身，
+// "a%2fb" 会落到别的文件上。收到的文件名里不保留任何 `%XX` 序列。
+const PERCENT_ESCAPE_RE = /%(?=[0-9a-fA-F]{2})/g;
+// Windows 设备名（CON、NUL、COM1.txt …）在 Windows 上无法落盘
+const WINDOWS_DEVICE_RE = /^(con|prn|aux|nul|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(\.|$)/i;
 
-function truncateName(name: string, max: number): string {
-  if (name.length <= max) return name;
-  const { stem, ext } = splitNameExt(name);
-  if (ext && ext.length <= 16 && ext.length < max) {
-    return `${Array.from(stem).slice(0, max - ext.length).join("")}${ext}`;
+const utf8 = new TextEncoder();
+
+export function utf8Length(value: string): number {
+  return utf8.encode(value).length;
+}
+
+/** 按码点截断，保证 UTF-8 字节数不超过 maxBytes（不会切开代理对） */
+function truncateUtf8(value: string, maxBytes: number): string {
+  if (utf8Length(value) <= maxBytes) return value;
+  let out = "";
+  let bytes = 0;
+  for (const ch of value) {
+    const size = utf8Length(ch);
+    if (bytes + size > maxBytes) break;
+    out += ch;
+    bytes += size;
   }
-  return Array.from(name).slice(0, max).join("");
+  return out;
+}
+
+function truncateName(name: string, maxChars: number, maxBytes: number): string {
+  const chars = Array.from(name);
+  if (chars.length <= maxChars && utf8Length(name) <= maxBytes) return name;
+  const { stem, ext } = splitNameExt(name);
+  const extChars = Array.from(ext).length;
+  const extBytes = utf8Length(ext);
+  if (ext && extChars <= 16 && extChars < maxChars && extBytes < maxBytes) {
+    const stemPart = Array.from(stem).slice(0, maxChars - extChars).join("");
+    return `${truncateUtf8(stemPart, maxBytes - extBytes)}${ext}`;
+  }
+  return truncateUtf8(chars.slice(0, maxChars).join(""), maxBytes);
+}
+
+/** 文件名字节上限：常见文件系统单个文件名 255 字节，再给同名后缀（最长 "-xxxxxxxx"）留余量 */
+export const COLLECT_NAME_MAX_BYTES = 240;
+const COLLECT_SUFFIX_MAX_BYTES = 9;
+const R2_KEY_MAX_BYTES = 1024;
+/** 目标文件夹键的字节上限：保证 folder + "/" + 最长文件名 + 后缀不超过 R2 的 1024 字节键长 */
+export const COLLECT_FOLDER_MAX_BYTES =
+  R2_KEY_MAX_BYTES - 1 - COLLECT_NAME_MAX_BYTES - COLLECT_SUFFIX_MAX_BYTES;
+
+/** 给定目标文件夹时文件名可用的字节数（兼容记录里过长的旧文件夹，至少留 1 字节） */
+export function collectNameBudget(folder: string): number {
+  const room = R2_KEY_MAX_BYTES - 1 - COLLECT_SUFFIX_MAX_BYTES - utf8Length(folder);
+  return Math.max(1, Math.min(COLLECT_NAME_MAX_BYTES, room));
+}
+
+function trimEdges(name: string): string {
+  return name.replace(/^[\s.]+/, "").replace(/[\s.]+$/, "");
 }
 
 /**
  * 服务端决定最终文件名：只取最后一段（剥掉任何 / 与 \ 路径），去掉控制/零宽/
- * 双向字符，替换 Windows 保留字符，去掉首尾空白与点（杜绝 "."、".." 与隐藏文件），
- * 截断到 COLLECT_NAME_MAX；结果为空时回落 "file"。
+ * 双向字符与孤立代理项，替换 Windows 保留字符与 `%XX` 转义，去掉首尾空白与点
+ * （杜绝 "."、".." 与隐藏文件），Windows 设备名前加下划线，按码点
+ * （COLLECT_NAME_MAX）与 UTF-8 字节（maxBytes）截断；结果为空时回落 "file"。
  */
-export function sanitizeCollectName(raw: unknown): string {
+export function sanitizeCollectName(raw: unknown, maxBytes = COLLECT_NAME_MAX_BYTES): string {
   let name = typeof raw === "string" ? raw : "";
+  name = name.replace(LONE_SURROGATE_RE, "");
   try {
     name = name.normalize("NFC");
   } catch {
@@ -292,10 +344,16 @@ export function sanitizeCollectName(raw: unknown): string {
   }
   const segments = name.split(/[\\/]/);
   name = segments[segments.length - 1] ?? "";
-  name = name.replace(STRIP_CHARS_RE, "").replace(RESERVED_CHARS_RE, "_");
-  name = name.replace(/^[\s.]+/, "").replace(/[\s.]+$/, "");
-  name = truncateName(name, COLLECT_NAME_MAX).replace(/[\s.]+$/, "");
-  if (!name || name === "_$flaredrive$") return name ? `_${name}` : "file";
+  name = name
+    .replace(STRIP_CHARS_RE, "")
+    .replace(RESERVED_CHARS_RE, "_")
+    .replace(PERCENT_ESCAPE_RE, "_");
+  name = trimEdges(name);
+  if (WINDOWS_DEVICE_RE.test(name)) name = `_${name}`;
+  const budget = Math.max(1, Math.min(COLLECT_NAME_MAX_BYTES, Math.floor(maxBytes)));
+  name = trimEdges(truncateName(name, COLLECT_NAME_MAX, budget));
+  if (!name) return "file";
+  if (name === "_$flaredrive$") return `_${name}`;
   return name;
 }
 
