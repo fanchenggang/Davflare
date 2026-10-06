@@ -1,4 +1,4 @@
-// 导航站 / 相册站的静态页：自包含 HTML，视觉对齐 WebDAV 目录页暖纸感
+// 导航站 / 相册站 / 公开目录 / 文档站的静态页：自包含 HTML，视觉对齐 WebDAV 目录页暖纸感
 // （#f4f1ec / #f38020，prefers-color-scheme）。只做校验、转义与渲染；
 // 写入 sites/{slug}/ 由 functions/api/sites.ts 负责。
 import dictionary from "../src/app/stringsDictionary";
@@ -12,6 +12,9 @@ export const ALBUM_MAX_BYTES = 100 * 1024 * 1024;
 /** 公开目录：每次最多 500 个文件、总共 2GB（只取文件夹当前层）。 */
 export const DIR_MAX_FILES = 500;
 export const DIR_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+/** 文档站：Markdown + 被引用图片合计最多 200 个文件、100MB。 */
+export const DOCS_MAX_FILES = 200;
+export const DOCS_MAX_BYTES = 100 * 1024 * 1024;
 
 export type PageLang = "zh" | "en";
 
@@ -319,6 +322,55 @@ h1 { font-size: 1.35rem; margin: 0 0 6px; letter-spacing: -.02em; }
 .files a.dl:hover { text-decoration: underline; }
 .note { color: var(--muted); font-size: .85rem; margin: 14px 2px 0; }
 @media (max-width: 600px) { .files td.time, .files th.time { display: none; } }
+.docs { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+.toc {
+  position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto;
+  background: var(--paper); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 8px;
+}
+.toc .home {
+  display: block; padding: 6px 10px 8px; font-weight: 700; color: inherit; text-decoration: none;
+  border-bottom: 1px solid var(--line); margin-bottom: 6px; word-break: break-word;
+}
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc li a {
+  display: block; padding: 6px 10px; border-radius: 10px; color: inherit;
+  text-decoration: none; font-size: .9rem; word-break: break-word;
+}
+.toc li a:hover { background: var(--hover); color: var(--brand); }
+.toc li a[aria-current="page"] { background: var(--hover); color: var(--brand); font-weight: 600; }
+.doc { padding: 22px 24px 26px; min-width: 0; }
+.md { overflow-wrap: break-word; }
+.md > :first-child { margin-top: 0; }
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { line-height: 1.3; margin: 1.4em 0 .5em; letter-spacing: -.01em; }
+.md h1 { font-size: 1.55rem; }
+.md h2 { font-size: 1.25rem; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.md h3 { font-size: 1.08rem; }
+.md p, .md ul, .md ol, .md blockquote, .md pre, .md table { margin: 0 0 1em; }
+.md a { color: var(--brand); }
+.md img { max-width: 100%; height: auto; border-radius: 8px; }
+.md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em;
+  background: var(--hover); padding: .1em .35em; border-radius: 5px;
+}
+.md pre { background: var(--hover); padding: 12px 14px; border-radius: 10px; overflow: auto; }
+.md pre code { background: transparent; padding: 0; }
+.md blockquote { margin-left: 0; padding: 2px 14px; border-left: 3px solid var(--brand); color: var(--muted); }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line); padding: 6px 10px; }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 1.6em 0; }
+.doc-list { list-style: none; margin: 0; padding: 0; }
+.doc-list li a {
+  display: block; padding: 10px; border-radius: 10px; color: inherit; text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.doc-list li:last-child a { border-bottom: 0; }
+.doc-list li a:hover { background: var(--hover); color: var(--brand); }
+.doc-list small { display: block; color: var(--muted); font-size: .8rem; }
+@media (max-width: 760px) {
+  .docs { grid-template-columns: 1fr; }
+  .toc { position: static; max-height: none; }
+  .doc { padding: 18px 16px 20px; }
+}
 `;
 
 function docShell(lang: PageLang, title: string, body: string, extraScript = ""): string {
@@ -538,4 +590,80 @@ export function renderDirPage(options: {
 </section>
 ${subdirs > 0 ? `<p class="note">${escapeHtml(pageLabel(lang, "siteDirSubdirsNote", { count: subdirs }))}</p>` : ""}`;
   return docShell(lang, options.title, body);
+}
+
+export function checkDocsLimits(
+  pages: number,
+  images: number,
+  bytes: number
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isFinite(pages) || pages <= 0) return { ok: false, error: "no files" };
+  const count = pages + (Number.isFinite(images) && images > 0 ? images : 0);
+  if (count > DOCS_MAX_FILES) {
+    return { ok: false, error: `file limit exceeded: ${count} > ${DOCS_MAX_FILES}` };
+  }
+  if (!Number.isFinite(bytes) || bytes < 0) return { ok: false, error: "bad docs" };
+  if (bytes > DOCS_MAX_BYTES) {
+    return { ok: false, error: `size limit exceeded: ${bytes} > ${DOCS_MAX_BYTES}` };
+  }
+  return { ok: true };
+}
+
+export type DocsNavItem = { href: string; title: string; file?: string };
+
+function renderDocsToc(lang: PageLang, siteTitle: string, nav: DocsNavItem[], current: string | null) {
+  const items = nav
+    .map((item) => {
+      const currentAttr = item.href === current ? ' aria-current="page"' : "";
+      return `<li><a href="${escapeHtml(encodeURIComponent(item.href))}"${currentAttr}>${escapeHtml(item.title)}</a></li>`;
+    })
+    .join("");
+  const homeCurrent = current === null ? ' aria-current="page"' : "";
+  return `<nav class="toc" aria-label="${escapeHtml(pageLabel(lang, "siteDocsToc"))}"><a class="home" href="index.html"${homeCurrent}>${escapeHtml(siteTitle)}</a><ol>${items}</ol></nav>`;
+}
+
+/**
+ * 文档站单篇页面。bodyHtml 来自浏览器端 markdown-it（html:false，原始 HTML 已被转义、危险链接已被拦截），
+ * 这里原样嵌入；其余所有文本都在这里转义。零 JS。
+ */
+export function renderDocsPage(options: {
+  lang: PageLang;
+  siteTitle: string;
+  pageTitle: string;
+  nav: DocsNavItem[];
+  current: string;
+  bodyHtml: string;
+}): string {
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const body = `<div class="docs">
+  ${renderDocsToc(lang, options.siteTitle, options.nav, options.current)}
+  <main class="card doc"><article class="md">${options.bodyHtml}</article></main>
+</div>`;
+  return docShell(lang, `${options.pageTitle} · ${options.siteTitle}`, body);
+}
+
+/** 文档站首页：侧边栏目录 + 文档列表。 */
+export function renderDocsIndex(options: {
+  lang: PageLang;
+  siteTitle: string;
+  nav: DocsNavItem[];
+}): string {
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const list = options.nav.length
+    ? `<ol class="doc-list">${options.nav
+        .map((item) => {
+          const file = item.file && item.file !== item.title ? `<small>${escapeHtml(item.file)}</small>` : "";
+          return `<li><a href="${escapeHtml(encodeURIComponent(item.href))}">${escapeHtml(item.title)}${file}</a></li>`;
+        })
+        .join("")}</ol>`
+    : `<p class="empty">${escapeHtml(pageLabel(lang, "siteDocsEmpty"))}</p>`;
+  const body = `<div class="docs">
+  ${renderDocsToc(lang, options.siteTitle, options.nav, null)}
+  <main class="card doc">
+    <h1>${escapeHtml(options.siteTitle)}</h1>
+    <p class="meta">${escapeHtml(pageLabel(lang, "siteDocsCount", { count: options.nav.length }))}</p>
+    ${list}
+  </main>
+</div>`;
+  return docShell(lang, options.siteTitle, body);
 }

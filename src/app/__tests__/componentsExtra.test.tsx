@@ -124,6 +124,17 @@ describe("MultiSelectToolbar", () => {
     expect(onPublishAlbum).toHaveBeenCalled();
   });
 
+  test("canPublishDocs 控制文档站按钮", () => {
+    const onPublishDocs = vi.fn();
+    const { rerender } = render(
+      <MultiSelectToolbar {...props} selectedKeys={["a.md"]} onPublishDocs={onPublishDocs} canPublishDocs={false} />
+    );
+    expect(screen.getByText(strings.publishAsDocs).closest("button")).toBeDisabled();
+    rerender(<MultiSelectToolbar {...props} selectedKeys={["a.md"]} onPublishDocs={onPublishDocs} canPublishDocs />);
+    fireEvent.click(screen.getByText(strings.publishAsDocs));
+    expect(onPublishDocs).toHaveBeenCalled();
+  });
+
   test("发布为公开目录与静态站共用 canPublish，且紧跟静态站按钮", () => {
     const onPublishDir = vi.fn();
     const { rerender } = render(
@@ -193,6 +204,31 @@ describe("FileActionSheet", () => {
     expect(screen.getByText(strings.open)).toBeInTheDocument();
     expect(screen.getByText(strings.publishAsSite)).toBeInTheDocument();
     expect(screen.getByText(strings.publishAsDir)).toBeInTheDocument();
+    expect(screen.getByText(strings.publishAsDocs)).toBeInTheDocument();
+  });
+
+  test(".md 文件显示发布为文档站，普通文件不显示", () => {
+    const { rerender } = render(
+      <FileActionSheet
+        file={{ ...file, key: "n/a.md", name: "a.md" }}
+        anchorPosition={{ top: 10, left: 20 }}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+        sitesEnabled
+      />
+    );
+    expect(screen.getByText(strings.publishAsDocs)).toBeInTheDocument();
+    expect(screen.queryByText(strings.publishAsDir)).not.toBeInTheDocument();
+    rerender(
+      <FileActionSheet
+        file={file}
+        anchorPosition={{ top: 10, left: 20 }}
+        onClose={vi.fn()}
+        onAction={vi.fn()}
+        sitesEnabled
+      />
+    );
+    expect(screen.queryByText(strings.publishAsDocs)).not.toBeInTheDocument();
   });
 
   test("文件或站点关闭时不显示发布为静态站", () => {

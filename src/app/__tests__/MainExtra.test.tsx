@@ -75,6 +75,22 @@ vi.mock("../../PublishDirDialog", () => ({
   default: ({ open, folder }: { open: boolean; folder: { name?: string } | null }) =>
     open ? <div>publish-dir-stub:{folder?.name ?? ""}</div> : null,
 }));
+vi.mock("../../PublishDocsDialog", () => ({
+  __esModule: true,
+  default: ({
+    open,
+    source,
+  }: {
+    open: boolean;
+    source: { kind: string; folder?: { name: string }; files?: Array<{ name: string }>; ignored?: number; title?: string } | null;
+  }) =>
+    open && source ? (
+      <div>
+        publish-docs-stub:{source.kind}:
+        {source.kind === "folder" ? source.folder?.name : `${source.files?.map((f) => f.name).join(",")}|${source.ignored}|${source.title}`}
+      </div>
+    ) : null,
+}));
 vi.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
 vi.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
 vi.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
@@ -336,6 +352,14 @@ describe("Main 上下文菜单动作", () => {
     await waitFor(() => expect(screen.getByText("publish-stub:docs")).toBeInTheDocument());
   });
 
+  test("文件夹菜单发布为文档站打开对话框（取当前层 .md）", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "docs" })));
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.publishAsDocs }));
+    await waitFor(() => expect(screen.getByText("publish-docs-stub:folder:docs")).toBeInTheDocument());
+  });
+
   test("文件夹菜单发布为公开目录打开对话框", async () => {
     renderMain();
     await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
@@ -492,6 +516,32 @@ describe("Main 多选工具栏", () => {
     const toolbar = document.querySelector(".MuiToolbar-root")!;
     fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsSite }));
     await waitFor(() => expect(screen.getByText("publish-stub:docs")).toBeInTheDocument());
+  });
+
+  test("多选含 .md → 发布为文档站（忽略非 md）", async () => {
+    const md = { ...file, key: "note.md", name: "note.md", contentType: "text/markdown" };
+    mockFetchPath.mockResolvedValue([file, md, folder]);
+    renderMain();
+    await waitFor(() => expect(screen.getByText("note.md")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "a.txt" })));
+    const toolbar = document.querySelector(".MuiToolbar-root")!;
+    expect(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsDocs })).toBeDisabled();
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "note.md" })));
+    fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsDocs }));
+    await waitFor(() =>
+      expect(
+        screen.getByText(`publish-docs-stub:files:note.md|1|${translate("siteDocsHeading")}`)
+      ).toBeInTheDocument()
+    );
+  });
+
+  test("单选文件夹 → 发布为文档站", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "docs" })));
+    const toolbar = document.querySelector(".MuiToolbar-root")!;
+    fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsDocs }));
+    await waitFor(() => expect(screen.getByText("publish-docs-stub:folder:docs")).toBeInTheDocument());
   });
 
   test("单选文件夹 → 发布为公开目录", async () => {

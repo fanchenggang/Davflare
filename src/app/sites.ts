@@ -1,19 +1,44 @@
 import { authFetch } from "./auth";
 import { translate } from "./strings";
 import type { Lang } from "./strings";
+import pLimit from "p-limit";
 import {
   ALBUM_MAX_BYTES,
   ALBUM_MAX_IMAGES,
   DIR_MAX_BYTES,
   DIR_MAX_FILES,
+  DOCS_MAX_BYTES,
+  DOCS_MAX_FILES,
   checkAlbumLimits,
   checkDirLimits,
   isRasterFileName,
 } from "../../functions/sitePages";
+import {
+  DocsLookupIO,
+  DocsMarkdown,
+  ParsedDoc,
+  desiredPageName,
+  isMarkdownName,
+  loadDocsMarkdown,
+  parseDoc,
+  renderDocsSite,
+  resolveDocImages,
+  sortDocs,
+} from "./docsSite";
+import { fetchPath, searchFiles } from "./transfer";
+import { WEBDAV_ENDPOINT } from "./uploadTransfer";
 import { FileItem } from "./types";
-import { humanReadableSize } from "./utils";
+import { encodeKey, humanReadableSize } from "./utils";
 
-export { ALBUM_MAX_BYTES, ALBUM_MAX_IMAGES, DIR_MAX_BYTES, DIR_MAX_FILES, isRasterFileName };
+export {
+  ALBUM_MAX_BYTES,
+  ALBUM_MAX_IMAGES,
+  DIR_MAX_BYTES,
+  DIR_MAX_FILES,
+  DOCS_MAX_BYTES,
+  DOCS_MAX_FILES,
+  isRasterFileName,
+};
 
 export interface SiteStats {
   objects: number;
@@ -154,7 +179,7 @@ export async function publishSite(
 
 export interface PublishGeneratedResult {
   slug: string;
-  kind: "nav" | "album" | "dir";
+  kind: "nav" | "album" | "dir" | "docs";
   copied: number;
   sitesHost: string | null;
   count?: number;
@@ -281,8 +306,8 @@ export function dirPublishBlockReason(files: FileItem[]): string | null {
 /** plan 成功之后的失败：sites/{slug}/ 可能已部分更新，需要提示「重新发布即可修复」。 */
 export class SitePublishInterruptedError extends Error {
   readonly reason: string;
-  constructor(reason: string) {
-    super(translate("publishDirInterrupted", { reason }));
+  constructor(reason: string, kind: "dir" | "docs" = "dir") {
+    super(translate(kind === "docs" ? "publishDocsInterrupted" : "publishDirInterrupted", { reason }));
     this.name = "SitePublishInterruptedError";
     this.reason = reason;
   }
@@ -361,5 +386,190 @@ export async function publishDirSite(
   } catch (error) {
     const reason = error instanceof Error && error.message ? error.message : translate("publishDirFailed");
     throw new SitePublishInterruptedError(reason);
+  }
+}
+
+// ---------------------------------------------------------------- 文档站
+
+export const DOCS_PUBLISH_BATCH = 50;
+/** 每次 put 请求里 html 的总字节上限（远低于 Pages 100MB 请求体上限）。 */
+export const DOCS_PUT_BATCH_BYTES = 4 * 1024 * 1024;
+
+export function partitionMarkdownFiles(items: FileItem[]): { docs: FileItem[]; ignored: number } {
+  const docs = items.filter((item) => !item.isDir && isMarkdownName(item.name));
+  return { docs, ignored: items.length - docs.length };
+}
+
+function docsLimitReason(docs: number, images: number, bytes: number): string | null {
+  if (docs <= 0) return translate("publishDocsEmpty");
+  if (docs + images > DOCS_MAX_FILES) {
+    return translate("publishDocsTooMany", {
+      count: docs + images,
+      docs,
+      images,
+      max: DOCS_MAX_FILES,
+    });
+  }
+  if (bytes > DOCS_MAX_BYTES) {
+    return translate("publishDocsTooLarge", {
+      size: humanReadableSize(bytes),
+      max: humanReadableSize(DOCS_MAX_BYTES),
+    });
+  }
+  return null;
+}
+
+/** 读 Markdown 之前先按数量/大小挡一次，免得下载一大堆再报超限。 */
+export function docsSourceBlockReason(docs: FileItem[]): string | null {
+  return docsLimitReason(docs.length, 0, albumSelectionBytes(docs));
+}
+
+export interface DocsPrepared {
+  md: DocsMarkdown;
+  docs: ParsedDoc[];
+  images: FileItem[];
+  byRef: Map<string, string>;
+  missing: number;
+  /** Markdown 原文 + 图片的字节数（前端估算；服务端按实际 html 复核） */
+  bytes: number;
+}
+
+export function docsPublishBlockReason(prepared: Pick<DocsPrepared, "docs" | "images" | "bytes">): string | null {
+  return docsLimitReason(prepared.docs.length, prepared.images.length, prepared.bytes);
+}
+
+export interface DocsPrepareIO extends DocsLookupIO {
+  readText: (key: string) => Promise<string>;
+}
+
+async function readDriveText(key: string): Promise<string> {
+  const response = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
+  if (!response.ok) throw new Error(key.split("/").pop() || key);
+  return response.text();
+}
+
+export const defaultDocsIO: DocsPrepareIO = {
+  readText: readDriveText,
+  listDir: (dir) => fetchPath(dir ? `${dir}/` : ""),
+  search: async (name) => (await searchFiles(name, undefined, 50)).items,
+};
+
+/** 读 Markdown、解析、在网盘里找被引用的栅格图片。 */
+export async function prepareDocsPublish(
+  files: FileItem[],
+  io: DocsPrepareIO = defaultDocsIO
+): Promise<DocsPrepared> {
+  const md = await loadDocsMarkdown();
+  const limit = pLimit(4);
+  const parsed = await Promise.all(
+    files.map((file) =>
+      limit(async () => parseDoc(md, file, await io.readText(file.key)))
+    )
+  );
+  const docs = sortDocs(parsed);
+  const resolved = await resolveDocImages(docs, io);
+  const bytes =
+    docs.reduce((sum, doc) => sum + (Number.isFinite(doc.size) ? doc.size : 0), 0) +
+    albumSelectionBytes(resolved.images);
+  return { md, docs, images: resolved.images, byRef: resolved.byRef, missing: resolved.missing, bytes };
+}
+
+export type DocsPublishProgress =
+  | { phase: "plan" }
+  | { phase: "upload"; done: number; total: number }
+  | { phase: "finish"; done: number; total: number };
+
+function chunkPages(pages: Array<{ name: string; html: string }>, maxItems: number) {
+  const encoder = new TextEncoder();
+  const batches: Array<Array<{ name: string; html: string }>> = [];
+  let current: Array<{ name: string; html: string }> = [];
+  let bytes = 0;
+  for (const page of pages) {
+    const size = encoder.encode(page.html).length;
+    if (current.length && (current.length >= maxItems || bytes + size > DOCS_PUT_BATCH_BYTES)) {
+      batches.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(page);
+    bytes += size;
+  }
+  if (current.length) batches.push(current);
+  return batches;
+}
+
+export async function publishDocsSite(
+  slug: string,
+  prepared: DocsPrepared,
+  options?: {
+    lang?: Lang;
+    title?: string;
+    batchSize?: number;
+    onProgress?: (progress: DocsPublishProgress) => void;
+  }
+): Promise<PublishGeneratedResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const reason = docsPublishBlockReason(prepared);
+  if (reason) throw new Error(reason);
+  const lang = options?.lang === "zh" ? "zh" : "en";
+  const title = (options?.title || "").trim() || translate("siteDocsHeading");
+  options?.onProgress?.({ phase: "plan" });
+  const planResponse = await postSites({
+    slug: normalizedSlug,
+    docs: {
+      phase: "plan",
+      pages: prepared.docs.map(desiredPageName),
+      images: prepared.images.map((image) => image.key),
+      lang,
+      title,
+    },
+  });
+  if (!planResponse.ok) {
+    throw new Error((await planResponse.text()) || translate("publishDocsFailed"));
+  }
+  const plan = (await planResponse.json()) as { planId: string; pages: string[]; images: string[] };
+  if (plan.pages.length !== prepared.docs.length || plan.images.length !== prepared.images.length) {
+    throw new Error(translate("publishDocsFailed"));
+  }
+  const imageRels = new Map(prepared.images.map((image, index) => [image.key, plan.images[index]]));
+  const site = renderDocsSite(prepared.md, {
+    lang,
+    title,
+    docs: prepared.docs,
+    pageNames: plan.pages,
+    byRef: prepared.byRef,
+    imageRels,
+  });
+  const batchSize = Math.max(1, Math.min(options?.batchSize ?? DOCS_PUBLISH_BATCH, 60));
+  const total = plan.images.length + site.pages.length + 1;
+  let done = 0;
+  options?.onProgress?.({ phase: "upload", done, total });
+  const send = async (body: Record<string, unknown>) => {
+    const response = await postSites({ slug: normalizedSlug, docs: { planId: plan.planId, ...body } });
+    if (!response.ok) throw new Error((await response.text()) || translate("publishDocsFailed"));
+    return response;
+  };
+  try {
+    for (let start = 0; start < plan.images.length; start += batchSize) {
+      const files = plan.images.slice(start, start + batchSize);
+      await send({ phase: "copy", files });
+      done += files.length;
+      options?.onProgress?.({ phase: "upload", done, total });
+    }
+    // 首页最后上传：中途失败时旧首页还在，不会指向半套新页面
+    for (const batch of [...chunkPages(site.pages, batchSize), [{ name: "index.html", html: site.index }]]) {
+      await send({ phase: "put", pages: batch });
+      done += batch.length;
+      options?.onProgress?.({ phase: "upload", done, total });
+    }
+    options?.onProgress?.({ phase: "finish", done, total });
+    const finish = await send({ phase: "finish" });
+    return (await finish.json()) as PublishGeneratedResult;
+  } catch (error) {
+    const message = error instanceof Error && error.message ? error.message : translate("publishDocsFailed");
+    throw new SitePublishInterruptedError(message, "docs");
   }
 }

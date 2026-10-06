@@ -725,6 +725,51 @@ const entries: Record<string, DictionaryEntry> = {
   publishDirFinishing: { zh: "正在生成列表页…", en: "Writing the listing page…" },
   publishDirDone: { zh: "公开目录已发布（{count} 个文件）", en: "Directory published ({count} file(s))" },
   publishDirFailed: { zh: "发布公开目录失败", en: "Failed to publish directory" },
+  siteDocsHeading: { zh: "文档", en: "Docs" },
+  siteDocsCount: { zh: "{count} 篇文档", en: "{count} document(s)" },
+  siteDocsToc: { zh: "目录", en: "Contents" },
+  siteDocsEmpty: { zh: "还没有文档", en: "No documents yet" },
+  publishAsDocs: { zh: "发布为文档站", en: "Publish as docs" },
+  publishDocsTitle: { zh: "发布为文档站", en: "Publish as docs site" },
+  publishDocsLoading: { zh: "正在读取 Markdown 和图片…", en: "Reading Markdown and images…" },
+  publishDocsLoadFailed: { zh: "读取 Markdown 失败：{reason}", en: "Failed to read Markdown: {reason}" },
+  publishDocsSummary: {
+    zh: "{docs} 篇文档、{images} 张图片，共 {size}。会生成到 sites/{slug}/：每篇一页，首页带目录。",
+    en: "{docs} document(s) and {images} image(s), {size} total. Generated into sites/{slug}/: one page per document plus an index with a sidebar.",
+  },
+  publishDocsIgnored: {
+    zh: "已忽略 {count} 个非 Markdown 项。",
+    en: "Ignored {count} non-Markdown item(s).",
+  },
+  publishDocsFolderNote: {
+    zh: "只取这个文件夹当前层的 .md 文件，子文件夹不发布。",
+    en: "Only .md files at the top level of this folder are published; subfolders are skipped.",
+  },
+  publishDocsMissingImages: {
+    zh: "{count} 处图片没找到（或不是 jpg/png/gif/webp/avif），页面里会保留原文。",
+    en: "{count} image reference(s) were not found (or are not jpg/png/gif/webp/avif); the original text is kept.",
+  },
+  publishDocsCopyNote: {
+    zh: "发布的是渲染好的副本，图片也会复制一份：之后修改网盘里的笔记或图片，不会影响已发布的站点；需要更新时重新发布即可。",
+    en: "The site is a rendered copy and images are copied too: later edits in the drive do not change it. Publish again to update.",
+  },
+  publishDocsEmpty: { zh: "没有可发布的 .md 文件。", en: "No .md files to publish." },
+  publishDocsTooMany: {
+    zh: "共 {count} 个文件（{docs} 篇文档 + {images} 张图片），超过上限 {max} 个，无法发布。",
+    en: "{count} files ({docs} documents + {images} images) exceed the limit of {max}. Cannot publish.",
+  },
+  publishDocsTooLarge: {
+    zh: "文档和图片共 {size}，超过上限 {max}，无法发布。",
+    en: "Documents and images total {size}, over the {max} limit. Cannot publish.",
+  },
+  publishDocsRendering: { zh: "正在生成页面…", en: "Rendering pages…" },
+  publishDocsProgress: { zh: "正在上传 {done}/{total}…", en: "Uploading {done}/{total}…" },
+  publishDocsDone: { zh: "文档站已发布（{count} 篇文档）", en: "Docs site published ({count} document(s))" },
+  publishDocsFailed: { zh: "发布文档站失败", en: "Failed to publish docs site" },
+  publishDocsInterrupted: {
+    zh: "发布中断：{reason}。站点可能不完整（部分页面或图片已更新，首页可能还是旧的），重新发布即可修复。",
+    en: "Publishing stopped: {reason}. The site may be incomplete (some pages or images updated, the index may be stale). Publish again to fix it.",
+  },
   publishDirInterrupted: {
     zh: "发布中断：{reason}。站点可能不完整（部分文件已更新，列表页可能还是旧的），重新发布即可修复。",
     en: "Publishing stopped: {reason}. The site may be incomplete (some files updated, the listing may be stale). Publish again to fix it.",

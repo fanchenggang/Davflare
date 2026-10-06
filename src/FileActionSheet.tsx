@@ -23,7 +23,9 @@ import {
   Share as ShareIcon,
   Language as PublishIcon,
   FolderShared as PublishDirIcon,
+  MenuBook as PublishDocsIcon,
 } from "@mui/icons-material";
+import { isMarkdownName } from "./app/docsSite";
 
 import { FileItem } from "./app/types";
 import { strings } from "./app/strings";
@@ -37,6 +39,7 @@ export type FileAction =
   | "share"
   | "publishSite"
   | "publishDir"
+  | "publishDocs"
   | "copy"
   | "cut"
   | "delete";
@@ -49,6 +52,8 @@ const ACTIONS: Array<{
   filesOnly?: boolean;
   dirsOnly?: boolean;
   sitesOnly?: boolean;
+  /** 文件夹或 .md 文件才显示 */
+  markdownOrDir?: boolean;
 }> = [
   { id: "open", labelKey: "open", icon: <OpenIcon /> },
   { id: "download", labelKey: "download", icon: <DownloadIcon /> },
@@ -69,6 +74,13 @@ const ACTIONS: Array<{
     icon: <PublishDirIcon />,
     dirsOnly: true,
     sitesOnly: true,
+  },
+  {
+    id: "publishDocs",
+    labelKey: "publishAsDocs",
+    icon: <PublishDocsIcon />,
+    sitesOnly: true,
+    markdownOrDir: true,
   },
   { id: "copy", labelKey: "copy", icon: <CopyIcon /> },
   { id: "cut", labelKey: "cut", icon: <CutIcon /> },
@@ -94,6 +106,7 @@ function FileActionSheet({
     if (action.filesOnly && (!file || file.isDir)) return false;
     if (action.dirsOnly && (!file || !file.isDir)) return false;
     if (action.sitesOnly && !sitesEnabled) return false;
+    if (action.markdownOrDir && (!file || (!file.isDir && !isMarkdownName(file.name)))) return false;
     return true;
   }).map((action) => ({ ...action, label: strings[action.labelKey] }));
 
@@ -108,7 +121,8 @@ function FileActionSheet({
       action === "delete" ||
       action === "move" ||
       action === "publishSite" ||
-      action === "publishDir";
+      action === "publishDir" ||
+      action === "publishDocs";
     if (openDialog) window.setTimeout(() => onAction(action, target), 0);
     else onAction(action, target);
   };
