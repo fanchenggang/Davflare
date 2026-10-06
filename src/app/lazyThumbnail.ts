@@ -5,7 +5,14 @@
 // 让 Remotely Save 之类的同步客户端以为文件被改过。
 import pLimit from "p-limit";
 
-import { authFetch, getCredentials, subscribeAuth } from "./auth";
+import { authFetch } from "./auth";
+import {
+  THUMBNAIL_CACHE_NAME,
+  clearThumbnailCache,
+  deleteThumbnailCacheStorage,
+  installThumbnailCacheCleanup,
+  registerThumbnailMemory,
+} from "./thumbnailCache";
 import { FileItem } from "./types";
 import { encodeKey } from "./utils";
 
@@ -15,7 +22,7 @@ export const LAZY_THUMBNAIL_MAX_BYTES = 5 * 1024 * 1024;
 export const LAZY_THUMBNAIL_CONCURRENCY = 2;
 export const LAZY_THUMBNAIL_SIZE = 144;
 const DECODE_TIMEOUT_MS = 8000;
-const CACHE_NAME = "davflare-thumbnails-v1";
+const CACHE_NAME = THUMBNAIL_CACHE_NAME;
 
 const RASTER_TYPES = new Set([
   "image/png",
@@ -54,6 +61,10 @@ export interface LazyThumbnailDeps {
   cacheGet: (id: string) => Promise<Blob | null>;
   cachePut: (id: string, blob: Blob) => Promise<void>;
   createUrl: (blob: Blob) => string;
+  /** 清理时回收 object URL；缺省用 URL.revokeObjectURL */
+  revokeUrl?: (url: string) => void;
+  /** 清理发生在写缓存途中时，再删一次持久缓存，避免退出后又写回一条 */
+  cacheClear?: () => Promise<void>;
 }
 
 async function fetchOriginal(key: string): Promise<Blob | null> {
@@ -139,26 +150,50 @@ export const defaultLazyThumbnailDeps: LazyThumbnailDeps = {
   cacheGet,
   cachePut,
   createUrl: (blob) => URL.createObjectURL(blob),
+  revokeUrl: (url) => URL.revokeObjectURL(url),
+  cacheClear: deleteThumbnailCacheStorage,
 };
 
-/** 生成器：内存缓存 + 并发限制；失败返回 null（显示类型图标），同一张不会反复重试 */
+/**
+ * 生成器：内存缓存 + 并发限制；失败返回 null（显示类型图标），同一张不会反复重试。
+ * clearMemory 会回收已发出的 object URL；清理前已在进行中的生成作废（不写缓存、返回 null）。
+ */
 export function createLazyThumbnailLoader(deps: LazyThumbnailDeps = defaultLazyThumbnailDeps) {
   const memory = new Map<string, Promise<string | null>>();
+  const urls = new Set<string>();
   const limit = pLimit(LAZY_THUMBNAIL_CONCURRENCY);
+  let generation = 0;
+
+  function issue(blob: Blob): string {
+    const url = deps.createUrl(blob);
+    urls.add(url);
+    return url;
+  }
+
   function load(file: Pick<FileItem, "key" | "size" | "uploaded">): Promise<string | null> {
     const id = lazyThumbnailId(file);
     let pending = memory.get(id);
     if (!pending) {
+      const startedIn = generation;
+      const stale = () => startedIn !== generation;
       pending = (async () => {
         try {
           const cached = await deps.cacheGet(id);
-          if (cached) return deps.createUrl(cached);
+          if (stale()) return null;
+          if (cached) return issue(cached);
           return await limit(async () => {
+            if (stale()) return null;
             const original = await deps.fetchOriginal(file.key);
-            if (!original) return null;
+            if (!original || stale()) return null;
             const thumb = await deps.render(original);
+            if (stale()) return null;
             await deps.cachePut(id, thumb);
-            return deps.createUrl(thumb);
+            if (stale()) {
+              // 写缓存途中退出了登录：这条可能刚被写回，再删一次
+              await deps.cacheClear?.();
+              return null;
+            }
+            return issue(thumb);
           });
         } catch {
           return null;
@@ -168,30 +203,34 @@ export function createLazyThumbnailLoader(deps: LazyThumbnailDeps = defaultLazyT
     }
     return pending;
   }
-  return { load, clearMemory: () => memory.clear() };
+
+  function clearMemory() {
+    generation += 1;
+    memory.clear();
+    const revoke = deps.revokeUrl ?? ((url: string) => URL.revokeObjectURL(url));
+    for (const url of urls) {
+      try {
+        revoke(url);
+      } catch {
+        // ignore
+      }
+    }
+    urls.clear();
+  }
+
+  return { load, clearMemory };
 }
 
 const defaultLoader = createLazyThumbnailLoader();
-let logoutHooked = false;
+registerThumbnailMemory(defaultLoader.clearMemory);
 
-/** 默认生成器；第一次用到时挂上「退出登录即清缓存」 */
+/** 默认生成器。退出登录清缓存在 App 启动时就挂上（#184），这里再保险调用一次（幂等） */
 export function loadLazyThumbnail(file: Pick<FileItem, "key" | "size" | "uploaded">): Promise<string | null> {
-  if (!logoutHooked) {
-    logoutHooked = true;
-    subscribeAuth(() => {
-      if (!getCredentials()) void clearLazyThumbnails();
-    });
-  }
+  installThumbnailCacheCleanup();
   return defaultLoader.load(file);
 }
 
-/** 退出登录时清掉懒生成的缩略图（内存 + Cache Storage），私有图片的小图不留在这台浏览器里 */
-export async function clearLazyThumbnails(): Promise<void> {
-  defaultLoader.clearMemory();
-  if (typeof caches === "undefined") return;
-  try {
-    await caches.delete(CACHE_NAME);
-  } catch {
-    // ignore
-  }
+/** 退出登录时清掉懒生成的缩略图（内存 + object URL + Cache Storage），私有图片的小图不留在这台浏览器里 */
+export function clearLazyThumbnails(): Promise<void> {
+  return clearThumbnailCache();
 }

@@ -16,6 +16,7 @@ import LoginDialog from "./LoginDialog";
 import Main from "./Main";
 import TransferManager from "./TransferManager";
 import { AuthProvider, useAuth } from "./app/auth";
+import { installThumbnailCacheCleanup } from "./app/thumbnailCache";
 import { FeaturesProvider, useFeatures } from "./app/features";
 import { ClipboardProvider } from "./app/clipboard";
 import { NoticeAction, NoticeOptions, NoticeSeverity, NotifyFn } from "./app/notify";
@@ -314,6 +315,10 @@ function ThemedApp() {
 }
 
 function App() {
+  // 退出登录清缩略图缓存要在启动时就挂上，不能等第一次加载缩略图（#184）
+  useEffect(() => {
+    installThumbnailCacheCleanup();
+  }, []);
   return (
     <AuthProvider>
       <FeaturesProvider>
