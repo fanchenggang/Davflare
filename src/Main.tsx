@@ -25,6 +25,7 @@ import PathBar, { SearchScope } from "./PathBar";
 import RenameDialog from "./RenameDialog";
 import PublishSiteDialog from "./PublishSiteDialog";
 import PublishAlbumDialog from "./PublishAlbumDialog";
+import PublishDirDialog from "./PublishDirDialog";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
@@ -137,6 +138,7 @@ function Main({
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null);
   const [publishTarget, setPublishTarget] = useState<FileItem | null>(null);
+  const [publishDirTarget, setPublishDirTarget] = useState<FileItem | null>(null);
   const [albumTarget, setAlbumTarget] = useState<{
     images: FileItem[];
     ignored: number;
@@ -416,6 +418,12 @@ function Main({
             return;
           }
           window.setTimeout(() => setPublishTarget(file), 50);
+        } else if (action === "publishDir") {
+          if (!file.isDir) {
+            onNotify(translate("publishSiteOnlyFolder"), "error");
+            return;
+          }
+          window.setTimeout(() => setPublishDirTarget(file), 50);
         } else if (action === "copy") {
           copyToClipboard([file.key]);
           onNotify(translate("copiedToClipboard"), "success");
@@ -823,6 +831,13 @@ function Main({
         onNotify={onNotify}
       />
 
+      <PublishDirDialog
+        open={Boolean(publishDirTarget)}
+        folder={publishDirTarget}
+        onClose={() => setPublishDirTarget(null)}
+        onNotify={onNotify}
+      />
+
       <PublishAlbumDialog
         open={Boolean(albumTarget)}
         images={albumTarget?.images ?? []}
@@ -975,6 +990,15 @@ function Main({
             return;
           }
           setPublishTarget(file);
+        }}
+        onPublishDir={() => {
+          if (selectedKeys.length !== 1) return;
+          const file = files.find((item) => item.key === selectedKeys[0]);
+          if (!file?.isDir) {
+            onNotify(translate("publishSiteOnlyFolder"), "error");
+            return;
+          }
+          setPublishDirTarget(file);
         }}
         canPublishAlbum={
           flags.sites &&

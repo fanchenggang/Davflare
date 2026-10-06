@@ -123,6 +123,34 @@ describe("MultiSelectToolbar", () => {
     fireEvent.click(screen.getByText(strings.publishAsAlbum));
     expect(onPublishAlbum).toHaveBeenCalled();
   });
+
+  test("发布为公开目录与静态站共用 canPublish，且紧跟静态站按钮", () => {
+    const onPublishDir = vi.fn();
+    const { rerender } = render(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["dir"]}
+        onPublish={() => undefined}
+        onPublishDir={onPublishDir}
+        canPublish={false}
+      />
+    );
+    const site = screen.getByText(strings.publishAsSite).closest("button");
+    const dir = screen.getByText(strings.publishAsDir).closest("button");
+    expect(dir).toBeDisabled();
+    expect(site?.nextElementSibling).toBe(dir);
+    rerender(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["dir"]}
+        onPublish={() => undefined}
+        onPublishDir={onPublishDir}
+        canPublish
+      />
+    );
+    fireEvent.click(screen.getByText(strings.publishAsDir));
+    expect(onPublishDir).toHaveBeenCalled();
+  });
 });
 
 describe("FileActionSheet", () => {
@@ -164,6 +192,7 @@ describe("FileActionSheet", () => {
     expect(screen.getByText(strings.download)).toBeInTheDocument();
     expect(screen.getByText(strings.open)).toBeInTheDocument();
     expect(screen.getByText(strings.publishAsSite)).toBeInTheDocument();
+    expect(screen.getByText(strings.publishAsDir)).toBeInTheDocument();
   });
 
   test("文件或站点关闭时不显示发布为静态站", () => {
@@ -187,6 +216,7 @@ describe("FileActionSheet", () => {
       />
     );
     expect(screen.queryByText(strings.publishAsSite)).not.toBeInTheDocument();
+    expect(screen.queryByText(strings.publishAsDir)).not.toBeInTheDocument();
   });
 
   test("file 为 null 时不渲染菜单项", () => {

@@ -2,12 +2,16 @@
 // （#f4f1ec / #f38020，prefers-color-scheme）。只做校验、转义与渲染；
 // 写入 sites/{slug}/ 由 functions/api/sites.ts 负责。
 import dictionary from "../src/app/stringsDictionary";
+import { ALBUM_MANIFEST_NAME, isSafeManifestRel, parseSiteManifest } from "./siteManifest";
+
+export { ALBUM_MANIFEST_NAME, isSafeManifestRel };
 
 export const NAV_MAX_LINKS = 1000;
 export const ALBUM_MAX_IMAGES = 200;
 export const ALBUM_MAX_BYTES = 100 * 1024 * 1024;
-/** 相册清单：相对路径列表。不是图片，画廊不得引用它。 */
-export const ALBUM_MANIFEST_NAME = ".davflare-album.json";
+/** 公开目录：每次最多 500 个文件、总共 2GB（只取文件夹当前层）。 */
+export const DIR_MAX_FILES = 500;
+export const DIR_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 
 export type PageLang = "zh" | "en";
 
@@ -221,33 +225,9 @@ export function checkAlbumLimits(
   return { ok: true };
 }
 
-export function isSafeManifestRel(rel: string): boolean {
-  if (!rel || rel.length > 500) return false;
-  if (rel.startsWith("/") || rel.startsWith("\\")) return false;
-  if (rel.includes("\\") || rel.includes("\u0000")) return false;
-  if (rel.split("/").some((part) => !part || part === "." || part === "..")) return false;
-  if (rel.includes("_$flaredrive$")) return false;
-  return true;
-}
-
+/** 相册清单解析：通用清单解析 + 相册自己的条目上限（行为与 #142 一致）。 */
 export function parseAlbumManifest(text: string): string[] {
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    return [];
-  }
-  if (data === null || typeof data !== "object" || Array.isArray(data)) return [];
-  const files = (data as { files?: unknown }).files;
-  if (!Array.isArray(files)) return [];
-  const out: string[] = [];
-  for (const item of files) {
-    if (typeof item !== "string") continue;
-    if (!isSafeManifestRel(item)) continue;
-    if (!out.includes(item)) out.push(item);
-    if (out.length >= ALBUM_MAX_IMAGES + 8) break;
-  }
-  return out;
+  return parseSiteManifest(text, ALBUM_MAX_IMAGES + 8).files;
 }
 
 const PAGE_CSS = `
@@ -323,6 +303,22 @@ h1 { font-size: 1.35rem; margin: 0 0 6px; letter-spacing: -.02em; }
   padding: 8px 14px; font: inherit; cursor: pointer;
 }
 .lb-cap { color: #fff; margin: 0; font-size: .9rem; }
+.files { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.files th {
+  text-align: left; font-weight: 600; font-size: .8rem; color: var(--muted);
+  padding: 6px 10px; border-bottom: 1px solid var(--line);
+}
+.files td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.files tr:last-child td { border-bottom: 0; }
+.files td.name { word-break: break-all; }
+.files td.name a { color: inherit; text-decoration: none; }
+.files td.name a:hover { color: var(--brand); }
+.files td.num, .files th.num { text-align: right; white-space: nowrap; }
+.files td.time { color: var(--muted); white-space: nowrap; }
+.files a.dl { color: var(--brand); text-decoration: none; white-space: nowrap; }
+.files a.dl:hover { text-decoration: underline; }
+.note { color: var(--muted); font-size: .85rem; margin: 14px 2px 0; }
+@media (max-width: 600px) { .files td.time, .files th.time { display: none; } }
 `;
 
 function docShell(lang: PageLang, title: string, body: string, extraScript = ""): string {
@@ -467,4 +463,79 @@ export function renderAlbumPage(options: {
 })();
 </script>`;
   return docShell(lang, options.title, body, script);
+}
+
+export type DirFile = { name: string; size: number; uploaded: string };
+
+export function checkDirLimits(
+  count: number,
+  bytes: number
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isFinite(count) || count <= 0) return { ok: false, error: "no files" };
+  if (count > DIR_MAX_FILES) {
+    return { ok: false, error: `file limit exceeded: ${count} > ${DIR_MAX_FILES}` };
+  }
+  if (!Number.isFinite(bytes) || bytes < 0) return { ok: false, error: "bad dir" };
+  if (bytes > DIR_MAX_BYTES) {
+    return { ok: false, error: `size limit exceeded: ${bytes} > ${DIR_MAX_BYTES}` };
+  }
+  return { ok: true };
+}
+
+/** 1536 → "1.5 KB"；与网盘的 humanReadableSize 同一套 1024 进制单位。 */
+export function formatSiteBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const text = unit === 0 ? String(Math.round(value)) : value.toFixed(value >= 100 ? 0 : 1);
+  return `${text} ${units[unit]}`;
+}
+
+/** 零 JS 页面没法按访客时区显示，统一用 UTC 并标注。 */
+export function formatSiteTime(value: string): { iso: string; text: string } | null {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return null;
+  const iso = new Date(time).toISOString();
+  return { iso, text: `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` };
+}
+
+export function renderDirPage(options: {
+  lang: PageLang;
+  title: string;
+  files: DirFile[];
+  subdirs?: number;
+}): string {
+  if (options.files.length > DIR_MAX_FILES) {
+    throw new Error(`file limit exceeded: ${options.files.length} > ${DIR_MAX_FILES}`);
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const files = options.files.filter((file) => file.name);
+  const total = files.reduce((sum, file) => sum + (Number.isFinite(file.size) ? file.size : 0), 0);
+  const rows = files
+    .map((file) => {
+      const name = escapeHtml(file.name);
+      const href = escapeHtml(encodeURIComponent(file.name));
+      const time = formatSiteTime(file.uploaded);
+      const timeCell = time
+        ? `<time datetime="${escapeHtml(time.iso)}">${escapeHtml(time.text)}</time>`
+        : "";
+      return `<tr><td class="name"><a href="${href}" download="${name}">${name}</a></td><td class="num">${escapeHtml(formatSiteBytes(file.size))}</td><td class="time">${timeCell}</td><td class="num"><a class="dl" href="${href}" download="${name}">${escapeHtml(pageLabel(lang, "siteDirDownload"))}</a></td></tr>`;
+    })
+    .join("");
+  const subdirs = Math.max(0, Math.floor(options.subdirs || 0));
+  const table = rows
+    ? `<table class="files"><thead><tr><th>${escapeHtml(pageLabel(lang, "siteDirName"))}</th><th class="num">${escapeHtml(pageLabel(lang, "siteDirSize"))}</th><th class="time">${escapeHtml(pageLabel(lang, "siteDirModified"))}</th><th class="num"></th></tr></thead><tbody>${rows}</tbody></table>`
+    : `<p class="empty">${escapeHtml(pageLabel(lang, "siteDirEmpty"))}</p>`;
+  const body = `<section class="card">
+  <h1>${escapeHtml(options.title)}</h1>
+  <p class="meta">${escapeHtml(pageLabel(lang, "siteDirCount", { count: files.length, size: formatSiteBytes(total) }))}</p>
+  ${table}
+</section>
+${subdirs > 0 ? `<p class="note">${escapeHtml(pageLabel(lang, "siteDirSubdirsNote", { count: subdirs }))}</p>` : ""}`;
+  return docShell(lang, options.title, body);
 }

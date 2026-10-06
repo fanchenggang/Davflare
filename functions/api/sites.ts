@@ -21,12 +21,13 @@ import {
   isSafeManifestRel,
   pageLabel,
   pageLang,
-  parseAlbumManifest,
   parseNavPayload,
   rasterExtension,
   renderAlbumPage,
   renderNavPage,
 } from "../sitePages";
+import { loadOwnedSiteRels } from "../siteManifest";
+import { handleDirPublish } from "../sitePublish";
 import {
   copyObject,
   isCollectionObject,
@@ -190,8 +191,8 @@ async function publishAlbum(
   const prefix = `${SITES_PREFIX}${slug}/`;
   const manifestKey = `${prefix}${ALBUM_MANIFEST_NAME}`;
   const indexKey = `${prefix}index.html`;
-  const manifestObject = await env.BUCKET.get(manifestKey);
-  const oldRels = manifestObject ? parseAlbumManifest(await manifestObject.text()) : [];
+  // 通用清单：相册清单与其它 kind（公开目录 / 文档站）的清单都算「上次发布拥有的路径」
+  const oldRels = await loadOwnedSiteRels(env.BUCKET, prefix);
   const manifestKeys = new Set<string>();
   for (const rel of oldRels) {
     if (!isSafeManifestRel(rel)) continue;
@@ -330,6 +331,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     hostname?: string | null;
     nav?: unknown;
     album?: unknown;
+    dir?: unknown;
   };
   try {
     body = await request.json();
@@ -387,6 +389,11 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, "album")) {
     return publishAlbum(env, slug, body.album);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "dir")) {
+    const flags = await loadFeatureFlags(env.BUCKET);
+    if (!flags.sites) return featureDisabledResponse();
+    return handleDirPublish(env.BUCKET, slug, body.dir, env.SITES_HOST);
   }
 
   // 只允许给已存在的站点改配置：前缀下至少要有一个对象

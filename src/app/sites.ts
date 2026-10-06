@@ -4,13 +4,16 @@ import type { Lang } from "./strings";
 import {
   ALBUM_MAX_BYTES,
   ALBUM_MAX_IMAGES,
+  DIR_MAX_BYTES,
+  DIR_MAX_FILES,
   checkAlbumLimits,
+  checkDirLimits,
   isRasterFileName,
 } from "../../functions/sitePages";
 import { FileItem } from "./types";
 import { humanReadableSize } from "./utils";
 
-export { ALBUM_MAX_BYTES, ALBUM_MAX_IMAGES, isRasterFileName };
+export { ALBUM_MAX_BYTES, ALBUM_MAX_IMAGES, DIR_MAX_BYTES, DIR_MAX_FILES, isRasterFileName };
 
 export interface SiteStats {
   objects: number;
@@ -151,7 +154,7 @@ export async function publishSite(
 
 export interface PublishGeneratedResult {
   slug: string;
-  kind: "nav" | "album";
+  kind: "nav" | "album" | "dir";
   copied: number;
   sitesHost: string | null;
   count?: number;
@@ -241,4 +244,122 @@ export async function publishAlbumSite(
     throw new Error(text);
   }
   return response.json();
+}
+
+/** 公开目录客户端分批大小：每批约 50 个文件，串行发送。 */
+export const DIR_PUBLISH_BATCH = 50;
+
+/** 文件夹当前层：只取文件，子文件夹单独计数（不发布）。 */
+export function partitionDirListing(items: FileItem[]): { files: FileItem[]; subdirs: number } {
+  const files: FileItem[] = [];
+  let subdirs = 0;
+  for (const item of items) {
+    if (item.isDir) subdirs += 1;
+    else files.push(item);
+  }
+  return { files, subdirs };
+}
+
+/** 客户端预检（服务端会再复核）。超限返回可展示的原因；通过返回 null。 */
+export function dirPublishBlockReason(files: FileItem[]): string | null {
+  const bytes = albumSelectionBytes(files);
+  const verdict = checkDirLimits(files.length, bytes);
+  if (verdict.ok) return null;
+  if (verdict.error === "no files") return translate("publishDirEmpty");
+  if (verdict.error.startsWith("file limit exceeded")) {
+    return translate("publishDirTooMany", { count: files.length, max: DIR_MAX_FILES });
+  }
+  if (verdict.error.startsWith("size limit exceeded")) {
+    return translate("publishDirTooLarge", {
+      size: humanReadableSize(bytes),
+      max: humanReadableSize(DIR_MAX_BYTES),
+    });
+  }
+  return translate("publishDirFailed");
+}
+
+/** plan 成功之后的失败：sites/{slug}/ 可能已部分更新，需要提示「重新发布即可修复」。 */
+export class SitePublishInterruptedError extends Error {
+  readonly reason: string;
+  constructor(reason: string) {
+    super(translate("publishDirInterrupted", { reason }));
+    this.name = "SitePublishInterruptedError";
+    this.reason = reason;
+  }
+}
+
+export type DirPublishProgress =
+  | { phase: "plan" }
+  | { phase: "copy"; done: number; total: number }
+  | { phase: "finish"; done: number; total: number };
+
+async function postSites(body: unknown): Promise<Response> {
+  return authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * 把文件夹当前层文件分批复制进 sites/{slug}/ 并生成列表页：
+ * plan（服务端列目录、复核上限、分配文件名）→ copy × N（每批 batchSize 个，串行）→ finish（写 index.html 与清单）。
+ */
+export async function publishDirSite(
+  slug: string,
+  source: string,
+  options?: {
+    lang?: Lang;
+    title?: string;
+    batchSize?: number;
+    onProgress?: (progress: DirPublishProgress) => void;
+  }
+): Promise<PublishGeneratedResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  options?.onProgress?.({ phase: "plan" });
+  const planResponse = await postSites({
+    slug: normalizedSlug,
+    dir: { phase: "plan", source, lang: options?.lang, title: options?.title },
+  });
+  if (!planResponse.ok) {
+    throw new Error((await planResponse.text()) || translate("publishDirFailed"));
+  }
+  const plan = (await planResponse.json()) as {
+    planId: string;
+    files: string[];
+    total: number;
+  };
+  const total = plan.files.length;
+  const batchSize = Math.max(1, Math.min(options?.batchSize ?? DIR_PUBLISH_BATCH, 60));
+  let done = 0;
+  options?.onProgress?.({ phase: "copy", done, total });
+  try {
+    for (let start = 0; start < total; start += batchSize) {
+      const files = plan.files.slice(start, start + batchSize);
+      const response = await postSites({
+        slug: normalizedSlug,
+        dir: { phase: "copy", planId: plan.planId, files },
+      });
+      if (!response.ok) {
+        throw new Error((await response.text()) || translate("publishDirFailed"));
+      }
+      done += files.length;
+      options?.onProgress?.({ phase: "copy", done, total });
+    }
+    options?.onProgress?.({ phase: "finish", done, total });
+    const finish = await postSites({
+      slug: normalizedSlug,
+      dir: { phase: "finish", planId: plan.planId },
+    });
+    if (!finish.ok) {
+      throw new Error((await finish.text()) || translate("publishDirFailed"));
+    }
+    return (await finish.json()) as PublishGeneratedResult;
+  } catch (error) {
+    const reason = error instanceof Error && error.message ? error.message : translate("publishDirFailed");
+    throw new SitePublishInterruptedError(reason);
+  }
 }

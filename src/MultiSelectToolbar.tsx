@@ -15,6 +15,7 @@ import {
   Share as ShareIcon,
   Language as PublishIcon,
   PhotoLibrary as AlbumIcon,
+  FolderShared as PublishDirIcon,
 } from "@mui/icons-material";
 
 function ActionButton({
@@ -57,6 +58,7 @@ function MultiSelectToolbar({
   onMove,
   onPublish,
   canPublish = false,
+  onPublishDir,
   onPublishAlbum,
   canPublishAlbum = false,
 }: {
@@ -72,6 +74,8 @@ function MultiSelectToolbar({
   onMove: () => void;
   onPublish?: () => void;
   canPublish?: boolean;
+  /** 发布为公开目录：与「发布为静态站」同样只在单选文件夹时可用（共用 canPublish）。 */
+  onPublishDir?: () => void;
   onPublishAlbum?: () => void;
   canPublishAlbum?: boolean;
 }) {
@@ -146,6 +150,14 @@ function MultiSelectToolbar({
             label={strings.publishAsSite}
             disabled={!canPublish}
             onClick={onPublish}
+          />
+        ) : null}
+        {onPublishDir ? (
+          <ActionButton
+            icon={<PublishDirIcon />}
+            label={strings.publishAsDir}
+            disabled={!canPublish}
+            onClick={onPublishDir}
           />
         ) : null}
         {onPublishAlbum ? (

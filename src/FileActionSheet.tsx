@@ -22,6 +22,7 @@ import {
   InfoOutlined as DetailsIcon,
   Share as ShareIcon,
   Language as PublishIcon,
+  FolderShared as PublishDirIcon,
 } from "@mui/icons-material";
 
 import { FileItem } from "./app/types";
@@ -35,6 +36,7 @@ export type FileAction =
   | "move"
   | "share"
   | "publishSite"
+  | "publishDir"
   | "copy"
   | "cut"
   | "delete";
@@ -58,6 +60,13 @@ const ACTIONS: Array<{
     id: "publishSite",
     labelKey: "publishAsSite",
     icon: <PublishIcon />,
+    dirsOnly: true,
+    sitesOnly: true,
+  },
+  {
+    id: "publishDir",
+    labelKey: "publishAsDir",
+    icon: <PublishDirIcon />,
     dirsOnly: true,
     sitesOnly: true,
   },
@@ -98,7 +107,8 @@ function FileActionSheet({
       action === "share" ||
       action === "delete" ||
       action === "move" ||
-      action === "publishSite";
+      action === "publishSite" ||
+      action === "publishDir";
     if (openDialog) window.setTimeout(() => onAction(action, target), 0);
     else onAction(action, target);
   };

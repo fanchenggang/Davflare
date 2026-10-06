@@ -680,6 +680,55 @@ const entries: Record<string, DictionaryEntry> = {
   publishAlbumDone: { zh: "相册已发布（{count} 张）", en: "Album published ({count} image(s))" },
   publishAlbumPublishing: { zh: "正在发布…", en: "Publishing…" },
   publishAlbumFailed: { zh: "发布相册失败", en: "Failed to publish album" },
+  // —— 公开目录（站点页 + 网盘对话框）——
+  siteDirCount: { zh: "{count} 个文件 · 共 {size}", en: "{count} file(s) · {size} total" },
+  siteDirName: { zh: "文件名", en: "Name" },
+  siteDirSize: { zh: "大小", en: "Size" },
+  siteDirModified: { zh: "修改时间", en: "Modified" },
+  siteDirDownload: { zh: "下载", en: "Download" },
+  siteDirEmpty: { zh: "这里还没有文件。", en: "No files here yet." },
+  siteDirSubdirsNote: {
+    zh: "原文件夹另有 {count} 个子文件夹，公开目录只包含当前层文件。",
+    en: "The source folder has {count} subfolder(s); this directory only lists files at the top level.",
+  },
+  publishAsDir: { zh: "发布为公开目录", en: "Publish as directory" },
+  publishDirTitle: { zh: "发布为公开目录", en: "Publish as public directory" },
+  publishDirLoading: { zh: "正在读取文件夹…", en: "Reading folder…" },
+  publishDirLoadFailed: { zh: "读取文件夹失败", en: "Failed to read the folder" },
+  publishDirSummary: {
+    zh: "当前层 {count} 个文件，共 {size}。文件会复制到 sites/{slug}/，并生成带下载链接的列表页。",
+    en: "{count} top-level file(s), {size} total. Files are copied into sites/{slug}/ with a listing page of download links.",
+  },
+  publishDirSubdirs: {
+    zh: "子文件夹不会发布（{count} 个），也不会出现在列表页里。",
+    en: "Subfolders are not published ({count}) and are not listed.",
+  },
+  publishDirCopyNote: {
+    zh: "发布的是文件副本：之后修改或删除网盘里的原文件，不会影响已发布的目录；需要更新时重新发布即可。",
+    en: "Published files are copies: later edits or deletes in the drive do not change the site. Publish again to update it.",
+  },
+  publishDirEmpty: { zh: "这个文件夹当前层没有文件，无法发布。", en: "This folder has no top-level files. Cannot publish." },
+  publishDirTooMany: {
+    zh: "当前层有 {count} 个文件，超过上限 {max} 个，无法发布。",
+    en: "{count} top-level files exceed the limit of {max}. Cannot publish.",
+  },
+  publishDirTooLarge: {
+    zh: "文件共 {size}，超过上限 {max}，无法发布。",
+    en: "Files total {size}, over the {max} limit. Cannot publish.",
+  },
+  publishDirSlugHint: {
+    zh: "只能用小写字母、数字和连字符，最长 63 位。重新发布会替换上次发布的文件；你自己放进站点的其它文件会保留。",
+    en: "Lowercase letters, digits and hyphens, up to 63 characters. Republishing replaces the files from the last publish; other files you added to the site are kept.",
+  },
+  publishDirPreparing: { zh: "正在准备…", en: "Preparing…" },
+  publishDirProgress: { zh: "正在复制 {done}/{total}…", en: "Copying {done}/{total}…" },
+  publishDirFinishing: { zh: "正在生成列表页…", en: "Writing the listing page…" },
+  publishDirDone: { zh: "公开目录已发布（{count} 个文件）", en: "Directory published ({count} file(s))" },
+  publishDirFailed: { zh: "发布公开目录失败", en: "Failed to publish directory" },
+  publishDirInterrupted: {
+    zh: "发布中断：{reason}。站点可能不完整（部分文件已更新，列表页可能还是旧的），重新发布即可修复。",
+    en: "Publishing stopped: {reason}. The site may be incomplete (some files updated, the listing may be stale). Publish again to fix it.",
+  },
 };
 
 export default entries;

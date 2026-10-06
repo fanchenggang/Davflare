@@ -70,6 +70,11 @@ vi.mock("../../PublishSiteDialog", () => ({
   default: ({ open, folder }: { open: boolean; folder: { name?: string } | null }) =>
     open ? <div>publish-stub:{folder?.name ?? ""}</div> : null,
 }));
+vi.mock("../../PublishDirDialog", () => ({
+  __esModule: true,
+  default: ({ open, folder }: { open: boolean; folder: { name?: string } | null }) =>
+    open ? <div>publish-dir-stub:{folder?.name ?? ""}</div> : null,
+}));
 vi.mock("../../SitesView", () => ({ __esModule: true, default: () => <div>sites-stub</div> }));
 vi.mock("../../ImagesView", () => ({ __esModule: true, default: () => <div>images-stub</div> }));
 vi.mock("../../TrashView", () => ({ __esModule: true, default: () => <div>trash-stub</div> }));
@@ -330,6 +335,14 @@ describe("Main 上下文菜单动作", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: strings.publishAsSite }));
     await waitFor(() => expect(screen.getByText("publish-stub:docs")).toBeInTheDocument());
   });
+
+  test("文件夹菜单发布为公开目录打开对话框", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "docs" })));
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.publishAsDir }));
+    await waitFor(() => expect(screen.getByText("publish-dir-stub:docs")).toBeInTheDocument());
+  });
 });
 
 describe("Main 删除-撤销/重试闭环", () => {
@@ -479,6 +492,15 @@ describe("Main 多选工具栏", () => {
     const toolbar = document.querySelector(".MuiToolbar-root")!;
     fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsSite }));
     await waitFor(() => expect(screen.getByText("publish-stub:docs")).toBeInTheDocument());
+  });
+
+  test("单选文件夹 → 发布为公开目录", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "docs" })));
+    const toolbar = document.querySelector(".MuiToolbar-root")!;
+    fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsDir }));
+    await waitFor(() => expect(screen.getByText("publish-dir-stub:docs")).toBeInTheDocument());
   });
 
 describe("Main 空目录入口", () => {
