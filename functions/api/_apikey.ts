@@ -236,13 +236,13 @@ export function isCollectionObject(
   );
 }
 
+/**
+ * 归一化 path 参数。**不再做 URL 解码**：查询参数经 URLSearchParams 已解码过一次，
+ * JSON 正文里本来就是原始键；再 decodeURIComponent 一次会把文件名里的字面量 `%XX`
+ * 当成转义（`%2e` → `.`、`a%2Fb` → `a/b`），指到别的对象上。
+ */
 export function decodeRawPath(raw: string | null): string {
-  let path = (raw || "").trim();
-  try {
-    path = decodeURIComponent(path);
-  } catch {
-    // keep raw
-  }
+  const path = (raw || "").trim();
   return path.replace(/\\/g, "/").replace(/^\/+/, "");
 }
 

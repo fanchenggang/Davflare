@@ -491,7 +491,7 @@ describe("anonymous upload flow", () => {
     );
     expect(added).toHaveLength(5);
     for (const key of added) {
-      // 客户端按规范编码 path 参数；服务端 URLSearchParams 解一次、decodeRawPath 再解一次
+      // 客户端按规范编码 path 参数；服务端只由 URLSearchParams 解一次
       const viaApi = normalizeDirKey(new URLSearchParams(`path=${encodeURIComponent(key)}`).get("path"));
       expect(viaApi).toBe(key);
     }
@@ -982,7 +982,7 @@ describe("pure helpers", () => {
     expect(Array.from(sanitizeCollectName("x".repeat(300)))).toHaveLength(180);
   });
 
-  test("sanitizeCollectName: no %XX survives (decodeRawPath double-decodes /api paths)", () => {
+  test("sanitizeCollectName: no %XX survives (defense in depth against clients that decode twice)", () => {
     expect(sanitizeCollectName("%2e")).toBe("_2e");
     expect(sanitizeCollectName("%2E%2e")).toBe("_2E_2e");
     expect(sanitizeCollectName("Projects%2Fkeep.txt")).toBe("Projects_2Fkeep.txt");

@@ -87,7 +87,7 @@ export const onRequestPost: PagesFunction<ArchiveEnv> = async (context) => {
   }
 
   // 与其他端点一致：禁止把内部目录（shares/apikeys/trash 元数据）打进压缩包。
-  // buildZipStream 内部会 decodeURIComponent，这里用 decodeRawPath 做同样的归一化后再判断。
+  // buildZipStream 内部用 decodeRawPath 归一化，这里用同一函数归一化后再判断。
   for (const rawKey of selectedKeys) {
     if (typeof rawKey !== "string") {
       return new Response("Bad Request", { status: 400 });

@@ -88,8 +88,7 @@ export async function buildZipStream(
   const emptyDirNames = new Map<string, Date | undefined>();
 
   for (const rawKey of selectedKeys) {
-    // 使用与 API 鉴权层一致的 decodeRawPath（内部已 try/catch），
-    // 避免对真实文件名里的字面量 `%`（如 100%.txt）二次 decode 时抛 URIError。
+    // 与 API 鉴权层一致的 decodeRawPath：只做斜杠归一化，不再 URL 解码（键是原始键）。
     const key = decodeRawPath(rawKey).replace(/\/$/, "");
     if (!key) continue;
 

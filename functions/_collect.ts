@@ -276,9 +276,8 @@ const STRIP_CHARS_RE = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u115f\u1160\u180
 const LONE_SURROGATE_RE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
 // Windows 保留字符替换为下划线，保证下载到任意系统都能落盘
 const RESERVED_CHARS_RE = /[<>:"|?*]/g;
-// `%XX` 会被 /api/* 的 decodeRawPath 在 URLSearchParams 之后再解码一次：
-// 名为 "%2e" 的收集文件经 API key 客户端删除时会解析成上级目录本身，
-// "a%2fb" 会落到别的文件上。收到的文件名里不保留任何 `%XX` 序列。
+// 收到的文件名里不保留任何 `%XX` 序列：/api/* 现在只解码一次，但第三方客户端可能
+// 自己多解码一次，收集来的匿名文件名不值得冒这个险。
 const PERCENT_ESCAPE_RE = /%(?=[0-9a-fA-F]{2})/g;
 // Windows 设备名（CON、NUL、COM1.txt …）在 Windows 上无法落盘
 const WINDOWS_DEVICE_RE = /^(con|prn|aux|nul|com[0-9\u00b9\u00b2\u00b3]|lpt[0-9\u00b9\u00b2\u00b3])(\.|$)/i;
