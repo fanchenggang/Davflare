@@ -39,20 +39,21 @@ Expect `OPTIONS 200` (with `cache-control` in `Access-Control-Allow-Headers`), `
 ### 2. Configure Obsidian (user, on each device)
 
 1. Drive → **WebDAV** → **Obsidian sync** card: copy the server address (`https://<drive-host>/webdav/`) and username.
-2. Obsidian → Settings → Community plugins: in a new vault turn off Restricted mode first (otherwise
-   there is no "Browse" button), then install and enable **Remotely Save**.
+2. Obsidian → Settings → Community plugins: in a new vault click "Exit Restricted mode" first
+   (otherwise there is no "Browse" button), then install and enable **Remotely Save**.
 3. Choose A Remote Service **Webdav**; Server Address / Username / Password (`WEBDAV_PASSWORD`);
    Auth Type **basic**; Depth **only supports depth='1'** (default); Remote Base Directory empty
-   (= vault name) or the same single-level name on every device — click "Confirm" after editing it.
+   (= vault name) or the same single-level name on every device — click "Confirm" after editing it, then "Confirm To Change" in the dialog.
 4. "Check Connectivity" → "Check", then sync from the ribbon icon. On the first sync the plugin shows
-   "HUGE updates on the sync algorithm": tick both boxes and click "Agree" ("Disagree" uninstalls it).
+   "HUGE updates on the sync algorithm": tick both boxes and click "Agree" ("Do Not Agree" disables it).
 5. Second device: start from an empty vault with the same name, configure as above, then sync.
 
 ## Do not
 
 - Do not print, paste or commit `WEBDAV_PASSWORD`; the in-app card never shows it either.
 - Do not set a nested Remote Base Directory (the plugin rejects `/`).
-- Do not push files ≥ 100MB through WebDAV (413); use the web chunked uploader.
+- Do not push files ≥ 100MB through WebDAV (413; over 100MiB Cloudflare answers with its generic 413 page).
+  Set Remotely Save's "Skip Large Files" below 100MB and use the web chunked uploader for big files.
 
 ## Done when
 

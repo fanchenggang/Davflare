@@ -525,8 +525,8 @@ const entries: Record<string, DictionaryEntry> = {
   // 面板上方挂载区也有「复制用户名」，读屏时用带上下文的名字区分（以可见文字开头）
   obsidianCopyAccountLabel: { zh: "复制用户名（Obsidian 同步）", en: "Copy username (Obsidian sync)" },
   obsidianPluginTip: {
-    zh: "新建的库要先在 设置 → 第三方插件 里关闭安全模式（开启社区插件），才会出现「浏览」按钮",
-    en: "In a new vault, first turn off Restricted mode (turn on community plugins) in Settings → Community plugins; the \"Browse\" button only appears after that",
+    zh: "新建的库要先在 设置 → 第三方插件 里点「退出受限模式」（开启社区插件），才会出现「浏览」按钮",
+    en: "In a new vault, first click \"Exit Restricted mode\" in Settings → Community plugins (turns on community plugins); the \"Browse\" button only appears after that",
   },
   obsidianPasswordTip: {
     zh: "密码：填网页登录密码（此处不显示）",
@@ -538,24 +538,24 @@ const entries: Record<string, DictionaryEntry> = {
     en: "Depth Header: keep the default \"only supports depth='1'\" (depth='infinity' also passed testing, but is heavier per request on large vaults)",
   },
   obsidianBaseDirTip: {
-    zh: "远端基文件夹：留空即用库名，会建在 WebDAV 根目录下；多台设备库名不一致时，都改成同一个名字（单层，不能含 /），改完要点旁边的「确认」才会生效",
-    en: "Remote Base Directory: leave empty to use the vault name (created at the WebDAV root); if vault names differ across devices, set the same single-level name everywhere (no /), then click \"Confirm\" next to it or the change is not saved",
+    zh: "远端基文件夹：留空即用库名，会建在 WebDAV 根目录下；多台设备库名不一致时，都改成同一个名字（单层，不能含 /），改完要点旁边的「确认」，再在弹出的对话框里点「确认修改」才会保存",
+    en: "Remote Base Directory: leave empty to use the vault name (created at the WebDAV root); if vault names differ across devices, set the same single-level name everywhere (no /), then click \"Confirm\" next to it and \"Confirm To Change\" in the dialog that follows, or the change is not saved",
   },
   obsidianCheckTip: {
     zh: "先点「检查可否连接」→「检查」，成功后再同步",
     en: "Click \"Check Connectivity\" → \"Check\" first, then sync",
   },
   obsidianFirstSyncTip: {
-    zh: "第一次同步前插件会弹出「HUGE updates on the sync algorithm」说明：勾选两个复选框后点「Agree」（点「Disagree」会卸载插件）",
-    en: "Before the first sync the plugin shows \"HUGE updates on the sync algorithm\": tick both checkboxes and click \"Agree\" (\"Disagree\" uninstalls the plugin)",
+    zh: "第一次同步前插件会弹出「同步算法有重大更新」说明：勾选两个复选框后点「同意」（点「不同意」会停用插件）",
+    en: "Before the first sync the plugin shows \"HUGE updates on the sync algorithm\": tick both checkboxes and click \"Agree\" (\"Do Not Agree\" disables the plugin)",
   },
   obsidianSecondDeviceTip: {
     zh: "第二台设备：建议先新建一个同名的空库，按同样方式配置后再同步，把内容拉下来",
     en: "Second device: create an empty vault with the same name first, configure it the same way, then sync to pull everything down",
   },
   obsidianSizeTip: {
-    zh: "单个文件需小于 100MB；改名会按「删除 + 重新上传」同步",
-    en: "Each file must be under 100MB; renames sync as delete + re-upload",
+    zh: "单个文件需小于 100MB：超过 100MB 的请求会被 Cloudflare 直接拦下（返回它的通用 413 页面），请在 Remotely Save 设置里把「跳过大文件」（Skip Large Files）阈值设到 100MB 以下；改名会按「删除 + 重新上传」同步",
+    en: "Each file must be under 100MB: requests over 100MiB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's \"Skip Large Files\" threshold below 100MB; renames sync as delete + re-upload",
   },
   obsidianCopyGuide: { zh: "复制 Obsidian 配置", en: "Copy Obsidian settings" },
   obsidianGuideLabel: { zh: "Obsidian 配置", en: "Obsidian settings" },

@@ -54,20 +54,20 @@ Sync an Obsidian vault to Davflare's WebDAV (`/webdav`) with the community plugi
 
 1. Deploy Davflare (see Quick start above) and keep the WebDAV switch on in `#/settings` (on by default).
 2. Open the drive → **WebDAV** in the top bar → **Obsidian sync** card, then click "Copy server address" (looks like `https://<your-domain>/webdav/`) and "Copy username". The password is `WEBDAV_PASSWORD` (your web sign-in password); the card never shows it.
-3. Obsidian → Settings → Community plugins. In a new vault, first turn off **Restricted mode** (turn on community plugins); only then does **Browse** appear. Browse, install and enable **Remotely Save**.
+3. Obsidian → Settings → Community plugins. In a new vault, first click **Exit Restricted mode** (turns on community plugins); only then does **Browse** appear. Browse, install and enable **Remotely Save**.
 4. In Remotely Save settings:
    - Choose A Remote Service: **Webdav**
    - Server Address / Username / Password: from step 2
    - Auth Type: **basic**
    - Depth Header Sent To Servers: keep the default **only supports depth='1'**
-   - Remote Base Directory: leave empty (defaults to the vault name, created at the WebDAV root); if your devices use different vault names, set the same single-level name on all of them (no `/`), then click **Confirm** next to the field — the change is not saved otherwise
+   - Remote Base Directory: leave empty (defaults to the vault name, created at the WebDAV root); if your devices use different vault names, set the same single-level name on all of them (no `/`), then click **Confirm** next to the field and **Confirm To Change** in the dialog that follows — the change is not saved otherwise
 5. Click "Check Connectivity" → "Check" and wait for the success notice.
-6. Click the Remotely Save icon in the left ribbon to sync once. Before the first sync the plugin shows "**HUGE updates on the sync algorithm**": tick both checkboxes and click **Agree** (**Disagree** uninstalls the plugin).
+6. Click the Remotely Save icon in the left ribbon to sync once. Before the first sync the plugin shows "**HUGE updates on the sync algorithm**": tick both checkboxes and click **Agree** (**Do Not Agree** disables the plugin).
 7. Second device: create an **empty vault with the same name** first, configure it with steps 3–5, then sync once to pull down the same content.
 
 Tested (local `wrangler pages dev` plus the same `webdav` client the plugin uses, replaying Remotely Save 0.5.25's request sequence as two devices syncing both ways): Chinese file names, spaces, special characters such as `+ & ' % #`, nested folders, empty folders, PNG / PDF attachments, 5MB / 12MB files, deletes, file renames, folder renames, and both depth='1' and depth='infinity' listing.
 
-Limits: each file must be under 100MB (Cloudflare's request body limit; larger uploads get 413). Remotely Save syncs a rename as "delete old file + upload new file".
+Limits: each file must be under 100MB (Cloudflare's request body limit). Requests over 100MiB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's **Skip Large Files** threshold below 100MB. Remotely Save syncs a rename as "delete old file + upload new file".
 
 ## Documentation
 

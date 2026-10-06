@@ -125,6 +125,11 @@ describe("WebDavPanel", () => {
     expect(card).toHaveTextContent(strings.obsidianSecondDeviceTip);
     expect(card).toHaveTextContent("100MB");
     expect(card.textContent).not.toContain("128");
+    // 对齐 Remotely Save 0.5.25 / Obsidian 1.14.4 中文界面（#163）
+    for (const text of ["退出受限模式", "确认修改", "同步算法有重大更新", "「同意」", "「不同意」会停用插件", "跳过大文件"]) {
+      expect(card).toHaveTextContent(text);
+    }
+    for (const text of ["安全模式", "卸载", "Disagree"]) expect(card.textContent).not.toContain(text);
     expect(document.body.textContent).not.toContain("s3cret-pass");
 
     fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyServerAddress }));
@@ -160,7 +165,11 @@ describe("WebDavPanel", () => {
     expect(card).toHaveTextContent("Username: (not configured)");
     expect(screen.getByRole("button", { name: "Copy server address" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copy username (Obsidian sync)" })).toBeNull();
-    expect(card).toHaveTextContent("Restricted mode");
+    expect(card).toHaveTextContent("Exit Restricted mode");
     expect(card).toHaveTextContent("HUGE updates on the sync algorithm");
+    expect(card).toHaveTextContent('"Do Not Agree" disables the plugin');
+    expect(card).toHaveTextContent('"Confirm To Change"');
+    expect(card).toHaveTextContent("Skip Large Files");
+    expect(card.textContent).not.toContain("uninstall");
   });
 });
