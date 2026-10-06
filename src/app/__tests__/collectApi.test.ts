@@ -901,6 +901,33 @@ describe("CAS and races", () => {
     expect(bucket.rawText("inbox/n-2.txt")).toBe("mine");
     expect(await placeCollectedObject(target, "inbox", "z.txt", "missing-stage")).toBeNull();
   });
+
+  test("placement errors (e.g. invalid key) roll back the reserved quota instead of a 500", async () => {
+    const bucket = freshBucket();
+    const token = await newCollect(bucket);
+    const target = bucket.asBucket();
+    const raw = new Proxy(target, {
+      get(obj, prop, receiver) {
+        if (prop === "head" || prop === "put") {
+          return async (key: string, ...rest: any[]) => {
+            if (key.startsWith("inbox/boom")) {
+              throw new Error("head: The specified object name is not valid. (10020)");
+            }
+            return (target as any)[prop](key, ...rest);
+          };
+        }
+        const value = Reflect.get(obj, prop, receiver);
+        return typeof value === "function" ? value.bind(obj) : value;
+      },
+    }) as R2Bucket;
+    const res = await uploadFile({ raw }, token, "boom.txt", "abc");
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "store_failed" });
+    expect(record(bucket, token).usage).toEqual({ files: 0, bytes: 0 });
+    expect(record(bucket, token).pending).toEqual({});
+    expect((await allKeys(bucket)).some((key) => key.startsWith(COLLECT_STAGING_PREFIX))).toBe(false);
+    expect((await uploadFile(bucket, token, "fine.txt", "abc")).status).toBe(200);
+  });
 });
 
 describe("pure helpers", () => {

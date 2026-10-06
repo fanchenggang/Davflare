@@ -247,24 +247,44 @@ export async function placeCollectedObject(
   for (const candidate of collectNameCandidates(name)) {
     const key = `${folder}/${candidate}`;
     if (isInternalKey(key)) continue;
-    if ((await bucket.head(key)) !== null) continue;
-    const source = await bucket.get(staging);
-    if (source === null) return null;
-    const written = await bucket.put(key, source.body, {
-      // 类型以 create 时的安全白名单结果为准，不信任暂存对象上的元数据
-      httpMetadata: { contentType },
-      onlyIf: { etagDoesNotMatch: "*" },
-    });
-    if (written !== null) return key;
+    let source: R2ObjectBody | null = null;
     try {
-      await source.body.cancel();
+      if ((await bucket.head(key)) !== null) continue;
+      source = await bucket.get(staging);
+      if (source === null) return null;
+      const written = await bucket.put(key, source.body, {
+        // 类型以 create 时的安全白名单结果为准，不信任暂存对象上的元数据
+        httpMetadata: { contentType },
+        onlyIf: { etagDoesNotMatch: "*" },
+      });
+      if (written !== null) return key;
     } catch {
-      // body may already be consumed
+      // 非法键（超长等）或 R2 临时错误：交给调用方回滚预占的额度，不让异常变成 500
+      await cancelBody(source);
+      return null;
     }
+    await cancelBody(source);
     races += 1;
     if (races >= 3) return null;
   }
   return null;
+}
+
+async function cancelBody(source: R2ObjectBody | null) {
+  if (!source) return;
+  try {
+    await source.body.cancel();
+  } catch {
+    // body may already be consumed
+  }
+}
+
+async function deleteQuietly(bucket: R2Bucket, key: string) {
+  try {
+    await bucket.delete(key);
+  } catch {
+    // 暂存对象残留不影响限额；DELETE 链接时会按前缀清理
+  }
 }
 
 async function dropPending(bucket: R2Bucket, token: string, uploadId: string) {
@@ -358,7 +378,7 @@ export async function handleCollectComplete(
     pending.staging,
     safeCollectContentType(pending.contentType)
   );
-  await bucket.delete(pending.staging);
+  await deleteQuietly(bucket, pending.staging);
   if (finalKey === null) {
     await mutateCollect(bucket, token, (fresh) => {
       fresh.usage.files = Math.max(0, fresh.usage.files - 1);
