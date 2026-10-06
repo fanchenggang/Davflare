@@ -43,7 +43,7 @@ Share (expiry + extract code):
 1. Open [Workers & Pages → Create](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) → **Pages** → **Connect to Git**, pick this repo (needs a Cloudflare account with R2 activated and a payment method on file).
 2. Framework preset **None**, build `npm run build`, output directory `build` (or rely on `wrangler.toml`'s `pages_build_output_dir`).
 3. Bind your R2 bucket to `BUCKET`, set `WEBDAV_USERNAME` and `WEBDAV_PASSWORD`, then retry deploy.
-4. Optional: `WEBDAV_PUBLIC_READ=1`, `TRASH_RETENTION_DAYS` (default `30`, `-1` disables), and for public sites/images bind `sites.<your-domain>` and set `SITES_HOST=sites.<your-domain>`.
+4. Optional: `WEBDAV_PUBLIC_READ=1`, `TRASH_RETENTION_DAYS` (default `30`, `-1` disables), and for public sites/images bind `sites.<your-domain>` and set `SITES_HOST=sites.<your-domain>`. On that zone set **Caching → Browser Cache TTL** to **Respect Existing Headers** (the 4-hour default rewrites site css/js/svg/images to `max-age=14400`); see [docs/sites.md#caching](docs/sites.md#caching).
 5. Optional: add a custom domain for the drive UI.
 
 Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs/deploy.md).

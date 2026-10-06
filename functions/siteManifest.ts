@@ -190,6 +190,11 @@ export interface SiteServePolicy {
   kind: string | null;
   /** kind 为 docs 时：清单里列出的 .html 页面（只有这些照常渲染） */
   docsPages: ReadonlySet<string>;
+  /**
+   * 清单最后写入时间（两份取较新的）；没有清单为 null。
+   * 站点类型 / 页面列表一变，清单就会重写，所以它也是「服务规则」的修改时间（#170：并入 Last-Modified）。
+   */
+  updatedAt: Date | null;
 }
 
 const NO_PAGES: ReadonlySet<string> = new Set();
@@ -202,6 +207,8 @@ export async function loadSiteServePolicy(bucket: R2Bucket, prefix: string): Pro
     ]);
     let kind: string | null = album ? "album" : null;
     let docsPages: ReadonlySet<string> = NO_PAGES;
+    const times = [generic?.uploaded, album?.uploaded].filter((value): value is Date => value instanceof Date);
+    const updatedAt = times.length ? new Date(Math.max(...times.map((value) => value.getTime()))) : null;
     if (generic) {
       const text = await generic.text();
       const genericKind = manifestKindFromText(text);
@@ -210,9 +217,9 @@ export async function loadSiteServePolicy(bucket: R2Bucket, prefix: string): Pro
         docsPages = new Set(parseSiteManifest(text).files.filter((rel) => /\.html?$/i.test(rel)));
       }
     }
-    return { kind, docsPages };
+    return { kind, docsPages, updatedAt };
   } catch {
-    return { kind: "dir", docsPages: NO_PAGES };
+    return { kind: "dir", docsPages: NO_PAGES, updatedAt: null };
   }
 }
 

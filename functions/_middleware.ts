@@ -97,10 +97,14 @@ async function serveSlugSite(
       const spaObject = await context.env.BUCKET.get(siteSpaKey(parsed.slug));
       if (spaObject) {
         return sitesResponse(
-          { body: spaObject.body, httpEtag: spaObject.httpEtag },
+          { body: spaObject.body, httpEtag: spaObject.httpEtag, uploaded: spaObject.uploaded },
           siteSpaKey(parsed.slug),
           method === "HEAD",
-          { privateCache, ifNoneMatch: context.request.headers.get("If-None-Match") }
+          {
+            privateCache,
+            ifNoneMatch: context.request.headers.get("If-None-Match"),
+            ifModifiedSince: context.request.headers.get("If-Modified-Since"),
+          }
         );
       }
       return sitesNotFound();
@@ -115,14 +119,18 @@ async function serveSlugSite(
     return sitesNotFound();
   }
 
+  const download = await forcesDownload(key);
   return sitesResponse(
-    { body: object.body, httpEtag: object.httpEtag },
+    { body: object.body, httpEtag: object.httpEtag, uploaded: object.uploaded },
     key,
     method === "HEAD",
     {
       privateCache,
-      download: await forcesDownload(key),
+      download,
       ifNoneMatch: context.request.headers.get("If-None-Match"),
+      ifModifiedSince: context.request.headers.get("If-Modified-Since"),
+      // active 类型读过清单：服务规则的修改时间并入 Last-Modified（#170）
+      policyUpdatedAt: policyPromise ? (await policyPromise).updatedAt : null,
     }
   );
 }

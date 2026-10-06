@@ -132,9 +132,17 @@ describe("sites host: static serving", () => {
     const authed = await siteRequest("/blog/app.js", defaultEnv(bucket), {
       headers: { "If-None-Match": etag, Authorization: `Basic ${utf8ToBase64(":gate")}` },
     });
-    expect(authed.status).toBe(304);
+    // 公开时缓存的副本（旧 ETag）换了规则：拿到完整的 200 和新的 private 头，而不是 304 续用旧头（#170）
+    expect(authed.status).toBe(200);
     expect(authed.headers.get("Cache-Control")).toBe("private, no-cache");
     expect(authed.headers.get("Vary")).toBe("Authorization");
+    const privateEtag = authed.headers.get("ETag")!;
+    expect(privateEtag).not.toBe(etag);
+    const again = await siteRequest("/blog/app.js", defaultEnv(bucket), {
+      headers: { "If-None-Match": privateEtag, Authorization: `Basic ${utf8ToBase64(":gate")}` },
+    });
+    expect(again.status).toBe(304);
+    expect(again.headers.get("Cache-Control")).toBe("private, no-cache");
   });
 
   test("exact object hit returns 200 with mime/nosniff/cache headers", async () => {

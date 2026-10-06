@@ -345,6 +345,9 @@ if [ -n "$SITES_HOST" ]; then
   assert_contains "dir site html is attachment" "$(grep -i '^Content-Disposition' /tmp/suite-dir-html)" "attachment"
   curl -s --noproxy '*' -D /tmp/suite-dir-svg -o /dev/null "$BASE/$DSITE/evil.svg" -H "$SH"
   assert_contains "dir site svg is attachment" "$(grep -i '^Content-Disposition' /tmp/suite-dir-svg)" "attachment"
+  # #170：active 类型边缘不存；ETag 带上强制下载标记
+  assert_contains "dir site svg CDN no-store" "$(grep -i '^CDN-Cache-Control' /tmp/suite-dir-svg)" "no-store"
+  assert_contains "dir site svg etag variant" "$(grep -i '^ETag' /tmp/suite-dir-svg)" "-dl"
   curl -s --noproxy '*' -D /tmp/suite-dir-index -o /dev/null "$BASE/$DSITE/" -H "$SH"
   if grep -qi '^Content-Disposition' /tmp/suite-dir-index; then bad "dir listing page inline" "attachment" "inline"; else ok "dir listing page inline"; fi
   curl -s --noproxy '*' -D /tmp/suite-plain-html -o /dev/null "$BASE/$SITE/index.html" -H "$SH"

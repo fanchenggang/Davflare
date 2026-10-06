@@ -5,6 +5,7 @@ import {
   timingSafeEqual,
 } from "./api/_apikey";
 import { contentDisposition } from "./api/_disposition";
+import { isActiveSiteFile } from "./siteManifest";
 
 export const SITES_PREFIX = "sites/";
 
@@ -400,11 +401,42 @@ export function etagMatches(ifNoneMatch: string | null | undefined, etag: string
   });
 }
 
+/**
+ * 把服务规则编进 ETag（#170）：同一份字节，强制下载 / 密码站的响应头不同，ETag 也必须不同。
+ * 否则站点换类型后，边缘或浏览器拿旧 ETag 回源得到 304，会继续用缓存里不带 attachment / sandbox 的旧响应头。
+ */
+export function siteVariantEtag(
+  etag: string | undefined,
+  variant: { download?: boolean; privateCache?: boolean }
+): string | undefined {
+  if (!etag) return etag;
+  const suffix = `${variant.download ? "-dl" : ""}${variant.privateCache ? "-p" : ""}`;
+  if (!suffix) return etag;
+  const weak = etag.startsWith("W/");
+  const raw = weak ? etag.slice(2) : etag;
+  const inner = raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2 ? raw.slice(1, -1) : raw;
+  return `${weak ? "W/" : ""}"${inner}${suffix}"`;
+}
+
+function notModifiedSince(ifModifiedSince: string | null | undefined, lastModified: Date | null): boolean {
+  if (!ifModifiedSince || !lastModified) return false;
+  const since = Date.parse(ifModifiedSince);
+  if (!Number.isFinite(since)) return false;
+  return Math.floor(lastModified.getTime() / 1000) <= Math.floor(since / 1000);
+}
+
 export function sitesResponse(
-  object: { body: ReadableStream | null; httpEtag?: string },
+  object: { body: ReadableStream | null; httpEtag?: string; uploaded?: Date },
   key: string,
   head: boolean,
-  options?: { privateCache?: boolean; download?: boolean; ifNoneMatch?: string | null }
+  options?: {
+    privateCache?: boolean;
+    download?: boolean;
+    ifNoneMatch?: string | null;
+    ifModifiedSince?: string | null;
+    /** 服务规则（清单）的修改时间：Last-Modified 取它和文件本身的较新者（#170） */
+    policyUpdatedAt?: Date | null;
+  }
 ) {
   const headers = new Headers();
   headers.set("Content-Type", mimeForKey(key));
@@ -426,8 +458,27 @@ export function sitesResponse(
     headers.set("Cache-Control", "public, no-cache");
   }
   headers.set("X-Robots-Tag", "noindex");
-  if (object.httpEtag) headers.set("ETag", object.httpEtag);
-  if (etagMatches(options?.ifNoneMatch, object.httpEtag)) {
+  // html/svg/xml/js：边缘一律不存（#170）。响应头会随站点类型变（是否强制下载），
+  // Cloudflare 边缘用 304 回源验证时不会更新已缓存的响应头，旧的内联响应会继续被提供。
+  // 浏览器仍按 Cache-Control: no-cache 每次回源验证。
+  if (isActiveSiteFile(key)) headers.set("CDN-Cache-Control", "no-store");
+  const etag = siteVariantEtag(object.httpEtag, {
+    download: options?.download,
+    privateCache: options?.privateCache,
+  });
+  if (etag) headers.set("ETag", etag);
+  // Last-Modified：Cloudflare 开着 Email Obfuscation 时会剥掉 HTML 的 ETag，浏览器只能靠它拿 304（#170）。
+  // 取文件和服务规则（清单）的较新者：站点换类型时清单会重写，旧副本不会被 304 续命。
+  const times = [object.uploaded, options?.policyUpdatedAt ?? undefined].filter(
+    (value): value is Date => value instanceof Date && Number.isFinite(value.getTime())
+  );
+  const lastModified = times.length ? new Date(Math.max(...times.map((value) => value.getTime()))) : null;
+  if (lastModified) headers.set("Last-Modified", lastModified.toUTCString());
+  // RFC 9110：有 If-None-Match 时只看它，忽略 If-Modified-Since
+  const notModified = options?.ifNoneMatch
+    ? etagMatches(options.ifNoneMatch, etag)
+    : notModifiedSince(options?.ifModifiedSince, lastModified);
+  if (notModified) {
     // 不返回正文：把 R2 的读取流关掉，免得悬着
     try {
       void object.body?.cancel().catch(() => undefined);
