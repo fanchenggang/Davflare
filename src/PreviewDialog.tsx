@@ -205,9 +205,15 @@ function PreviewDialog({
   onSaved?: () => void;
 }) {
   const isPhone = useMediaQuery("(max-width:600px)");
-  const [url, setUrl] = useState<string | null>(null);
-  // PDF 预览用的是补了 Title 的副本（#149 附带问题）；下载仍给原文件
-  const originalUrlRef = useRef<string | null>(null);
+  // 预览用的 object URL 和它属于哪个文件绑在一起（#185）：切换文件的那一帧里，
+  // 新文件绝不会拿到上一个文件（已回收）的 URL。
+  // PDF 预览用的是补了 Title 的副本（#149 附带问题）；originalUrl 是原文件，下载用它
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    url: string;
+    originalUrl: string | null;
+  } | null>(null);
+  const url = loaded && file && loaded.key === file.key ? loaded.url : null;
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -252,7 +258,7 @@ function PreviewDialog({
 
   useEffect(() => {
     if (!file) {
-      setUrl(null);
+      setLoaded(null);
       setText(null);
       setZoom(1);
       setOffset({ x: 0, y: 0 });
@@ -273,7 +279,7 @@ function PreviewDialog({
     let canceled = false;
     const controller = new AbortController();
     setLoading(true);
-    setUrl(null);
+    setLoaded(null);
     setText(null);
     setTooLarge(false);
     setLargeSize(0);
@@ -328,15 +334,12 @@ function PreviewDialog({
           // 内置阅读器的标题栏默认显示 blob URL 里的 UUID；给预览副本写上文件名作为文档标题
           const titled = await withPdfTitle(blob, file.name);
           if (canceled) return;
-          if (titled !== blob) {
-            originalObjectUrl = URL.createObjectURL(blob);
-            originalUrlRef.current = originalObjectUrl;
-          }
+          if (titled !== blob) originalObjectUrl = URL.createObjectURL(blob);
           objectUrl = URL.createObjectURL(titled);
         } else {
           objectUrl = URL.createObjectURL(blob);
         }
-        setUrl(objectUrl);
+        setLoaded({ key: file.key, url: objectUrl, originalUrl: originalObjectUrl });
       } catch (error) {
         if (canceled || (error as Error).name === "AbortError") return;
         onNotify(errorMessage(error), "error");
@@ -350,7 +353,6 @@ function PreviewDialog({
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       if (originalObjectUrl) URL.revokeObjectURL(originalObjectUrl);
-      originalUrlRef.current = null;
     };
   }, [file]);
 
@@ -393,7 +395,7 @@ function PreviewDialog({
       }
       if (url) {
         const a = document.createElement("a");
-        a.href = originalUrlRef.current ?? url;
+        a.href = loaded?.originalUrl ?? url;
         a.download = file.name;
         document.body.appendChild(a);
         a.click();
@@ -829,6 +831,8 @@ function PreviewDialog({
             <audio src={url} controls style={{ width: "100%" }} />
           ) : isPdf ? (
             <iframe
+              // 每份文档一个新的 iframe，不在同一个 iframe 里从旧 blob 跳到新 blob
+              key={url}
               src={url}
               title={file?.name}
               style={{ width: "100%", height: "100%", border: "none" }}

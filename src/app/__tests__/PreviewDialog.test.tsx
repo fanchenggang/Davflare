@@ -423,3 +423,54 @@ describe("PDF preview title (#149)", () => {
     click.mockRestore();
   });
 });
+
+describe("PDF sibling switch never shows the previous blob URL (#185)", () => {
+  const pdfBody = (n: number) =>
+    "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nxref\n0 2\n0000000000 65535 f\r\n0000000009 00000 n\r\n" +
+    `trailer\n<< /Size 2 /Root 1 0 R >>\nstartxref\n47\n%%EOF\n%${"x".repeat(n)}\n`;
+
+  test("switching from a loaded PDF to the previous one: no frame pairs the new file with the old URL", async () => {
+    const a: FileItem = { key: "docs/英文 name & #hash.pdf", name: "英文 name & #hash.pdf", isDir: false, size: 200, uploaded: "", contentType: "application/pdf" };
+    const b: FileItem = { ...a, key: "docs/季度报告 (v2).pdf", name: "季度报告 (v2).pdf" };
+    let releaseB!: () => void;
+    const gateB = new Promise<void>((r) => (releaseB = r));
+    mockAuthFetch.mockImplementation(async (path: string) => {
+      const isB = path.includes(encodeURIComponent("季度报告"));
+      if (isB) await gateB;
+      return { ok: true, headers: { get: () => null }, blob: async () => new Blob([pdfBody(isB ? 2 : 1)], { type: "application/pdf" }), body: null };
+    });
+    let n = 0;
+    (URL as any).createObjectURL = vi.fn(() => `blob:u${++n}`);
+    const props = { siblings: [b, a], onSibling: vi.fn(), onClose: vi.fn(), onNotify: vi.fn(), onShare: vi.fn(), onRename: vi.fn(), onDelete: vi.fn() };
+    const { rerender } = render(<PreviewDialog file={a} {...props} />);
+    // a：u1 = 原文件（下载用），u2 = 带标题的副本（iframe 用）
+    await waitFor(() => expect(document.querySelector("iframe")?.getAttribute("src")).toBe("blob:u2"));
+    const firstFrame = document.querySelector("iframe");
+
+    const seen: Array<{ src: string | null; title: string | null }> = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        const nodes = record.type === "attributes" ? [record.target] : Array.from(record.addedNodes);
+        for (const node of nodes) {
+          const frames = node instanceof HTMLIFrameElement ? [node] : node instanceof Element ? Array.from(node.querySelectorAll("iframe")) : [];
+          frames.forEach((el) => seen.push({ src: el.getAttribute("src"), title: el.getAttribute("title") }));
+        }
+      }
+    });
+    observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["src", "title"] });
+
+    rerender(<PreviewDialog file={b} {...props} />); // 「上一个」
+    await Promise.resolve();
+    expect(document.querySelector("iframe")).toBeNull(); // 加载中：不保留旧阅读器
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:u1");
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:u2");
+
+    releaseB();
+    await waitFor(() => expect(document.querySelector("iframe")?.getAttribute("src")).toBe("blob:u4"));
+    observer.disconnect();
+    expect(document.querySelector("iframe")).not.toBe(firstFrame);
+    expect(document.querySelector("iframe")?.getAttribute("title")).toBe(b.name);
+    // 任何时刻都没有「标题是 b、地址却是 a 的旧 URL」的 iframe
+    expect(seen.filter((s) => s.title === b.name && s.src !== "blob:u4")).toEqual([]);
+  });
+});
