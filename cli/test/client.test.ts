@@ -158,7 +158,7 @@ describe("uploadFile（单发小文件）", () => {
 });
 
 describe("uploadFile（>=100MB 三段式分块）", () => {
-  const TOTAL = 100 * 1000 * 1000; // 与 client 内 SINGLE_UPLOAD_LIMIT 一致
+  const TOTAL = 100 * 1000 * 1000; // 与 client 内 SINGLE_UPLOAD_LIMIT（10^8 字节，略低于服务端的 100 MiB）一致
   const PART = 8 * 1000 * 1000;
   let bigFile: string;
   let bigDir: string;

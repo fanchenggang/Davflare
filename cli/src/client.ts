@@ -44,7 +44,9 @@ export interface PublishSiteResult {
   sitesHost: string | null;
 }
 
-const SINGLE_UPLOAD_LIMIT = 100 * 1000 * 1000; // 与服务端 413 阈值一致
+// 单次 PUT 的上限：10^8 字节（100 MB）。服务端 413 阈值是 100 MiB（104,857,600 字节），
+// 这里故意取得略低，留出余量：介于两者之间的文件也走分块，不会撞到 413。
+const SINGLE_UPLOAD_LIMIT = 100 * 1000 * 1000;
 const PART_SIZE = 8 * 1000 * 1000; // 三段式分块大小（服务端按 R2 multipart 转存）
 
 export class ApiError extends Error {
@@ -155,7 +157,7 @@ export class DavflareClient {
     return (await response.json()) as ListPage & { hasMore?: boolean };
   }
 
-  /** 上传本地文件。>100MB 自动走三段式分块；onProgress 上报已发送字节。 */
+  /** 上传本地文件。≥ SINGLE_UPLOAD_LIMIT（10^8 字节）自动走三段式分块；onProgress 上报已发送字节。 */
   async uploadFile(localPath: string, remoteKey: string, onProgress?: (sent: number, total: number) => void): Promise<void> {
     const body = await fs.promises.readFile(localPath);
     if (body.byteLength >= SINGLE_UPLOAD_LIMIT) {
