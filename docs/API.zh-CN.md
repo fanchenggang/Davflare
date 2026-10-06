@@ -148,6 +148,38 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 提取码门禁不变，对落地页与两个参数同样生效：旧式 `?code=` 查询参数继续可用，表单 POST 成功后种下 Path 限定的 `HttpOnly` cookie，落地页上渲染的链接会继承 `?code=`，旧式链接的预览同样能过门禁。过期 → **410**，撤销/不存在 → **404**，提取码错误 → **403** 表单。
 
+### 文件收集链接（匿名上传）
+
+文件收集链接让拿到链接的任何人往**一个文件夹**上传文件，但看不到、列不出、也下载不了里面的任何东西。它是独立的只写令牌：记录在 `_$flaredrive$/collects/<token>.json`（分享在 `_$flaredrive$/shares/`），收集令牌在 `/share/…` 上无效，分享令牌在 `/collect/…` 上也无效。
+
+管理端（Basic 会话或 API key，与分享相同）：
+
+```bash
+# 创建（文件夹须存在，且不在 sites/ 或内部目录下）。有效期默认且最长 168 小时（7 天）
+curl -X POST "https://<your-domain.com>/api/collects" \
+  -H "Authorization: Bearer <apiKey>" -H "Content-Type: application/json" \
+  -d '{"folder":"inbox/作业","expiresInHours":72,"note":"请上传本周作业"}'
+# → 201 { token, url: "https://<your-domain.com>/collect/<token>", status, usage, limits, ... }
+
+curl "https://<your-domain.com>/api/collects" -H "Authorization: Bearer <apiKey>"             # 列表
+curl -X PATCH "https://<your-domain.com>/api/collects?token=<token>" \
+  -H "Authorization: Bearer <apiKey>" -H "Content-Type: application/json" -d '{"disabled":true}'  # 停用（不可恢复）
+curl -X DELETE "https://<your-domain.com>/api/collects?token=<token>" -H "Authorization: Bearer <apiKey>"  # 删除链接（已收到的文件保留）
+```
+
+停用或删除链接会中止它所有进行中的上传。
+
+匿名端（无需登录，令牌即凭据）：`GET /collect/<token>` 返回上传页（只有一段负责分块的内联脚本，CSP nonce 放行）。页面调用：
+
+| 端点 | 请求体 | 说明 |
+| --- | --- | --- |
+| `POST /collect/<token>/create` | `{ name, size, type }` | → `{ uploadId, partSize: 10485760, partCount }`。检查过期/停用、单文件 100 MiB、每链接 200 个文件与 2 GiB（含进行中的上传）、同时进行 ≤10 个、目标文件夹仍存在。 |
+| `PUT /collect/<token>/part?uploadId=&partNumber=` | 原始字节 | 必须带 `Content-Length`（411）；超过 10 MiB → 413；除最后一块外每块必须正好 10 MiB，最后一块正好是余数。`uploadId` 必须由**本令牌**创建，否则 404。 |
+| `POST /collect/<token>/complete` | `{ uploadId, parts }` | 按实际大小再查一次限额，然后以服务端选定的文件名直接存进目标文件夹。→ `{ ok, size, remainingFiles, remainingBytes }`（**不**返回最终文件名）。 |
+| `POST /collect/<token>/abort` | `{ uploadId }` | → 204。过期/停用后也允许。 |
+
+错误统一为 `{ "error": "<code>" }`（`not_found` 404，`expired`/`disabled`/`folder_gone` 410，`file_too_large`/`too_many_files`/`quota_exceeded`/`part_too_large` 413，`too_many_pending` 429，`busy` 503 …）。文件名会清洗（只取最后一段路径，去掉控制/双向字符和开头的点），且永不覆盖：`a.txt` → `a-2.txt` → `a-3.txt`。不在被动类型白名单（图片、音视频、PDF、纯文本、压缩包、Office）里的内容类型一律存成 `application/octet-stream`。
+
 ### 复制、stat、搜索
 
 `POST /api/copy` 复制文件（to 已存在则 409，除非 overwrite=1；不支持目录）。`GET /api/stat?path=` 返回 kind / size / etag / uploaded / contentType。`GET /api/search?q=` 按文件名子串搜索（cursor 分页）。`GET /api/download` 会发 Accept-Ranges: bytes，并响应单个 Range 为 206。

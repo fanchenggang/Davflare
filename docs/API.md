@@ -148,6 +148,38 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 Extract-code gating is unchanged and applies to the landing page and both params: the legacy `?code=` query keeps working, the form POST sets a Path-scoped `HttpOnly` cookie, and links rendered on the landing page inherit `?code=` so previews work from old-style links. Expired → **410**, revoked/missing → **404**, wrong code → **403** form.
 
+### File request links (anonymous upload)
+
+A file request link lets anyone with the link upload into **one folder** without being able to see, list or download anything. It is a separate, write-only token type: records live in `_$flaredrive$/collects/<token>.json` (shares live in `_$flaredrive$/shares/`), so a collect token never works on `/share/…` and a share token never works on `/collect/…`.
+
+Management (Basic session or API key, like shares):
+
+```bash
+# create (folder must exist; not under sites/ or the internal prefix). Default and maximum expiry: 168 h (7 days)
+curl -X POST "https://<your-domain.com>/api/collects" \
+  -H "Authorization: Bearer <apiKey>" -H "Content-Type: application/json" \
+  -d '{"folder":"inbox/homework","expiresInHours":72,"note":"Please upload this week'"'"'s homework"}'
+# → 201 { token, url: "https://<your-domain.com>/collect/<token>", status, usage, limits, ... }
+
+curl "https://<your-domain.com>/api/collects" -H "Authorization: Bearer <apiKey>"             # list
+curl -X PATCH "https://<your-domain.com>/api/collects?token=<token>" \
+  -H "Authorization: Bearer <apiKey>" -H "Content-Type: application/json" -d '{"disabled":true}'  # disable (one-way)
+curl -X DELETE "https://<your-domain.com>/api/collects?token=<token>" -H "Authorization: Bearer <apiKey>"  # delete the link (received files stay)
+```
+
+Disabling or deleting a link aborts its in-flight uploads.
+
+Anonymous side (no auth, the token is the credential): `GET /collect/<token>` renders the upload page (one small inline script for chunking, CSP-nonce'd). The page drives:
+
+| Endpoint | Body | Notes |
+| --- | --- | --- |
+| `POST /collect/<token>/create` | `{ name, size, type }` | → `{ uploadId, partSize: 10485760, partCount }`. Checks expiry/disabled, 100 MiB per file, 200 files and 2 GiB per link (counting in-flight uploads), ≤10 concurrent uploads, target folder still exists. |
+| `PUT /collect/<token>/part?uploadId=&partNumber=` | raw bytes | `Content-Length` required (411); >10 MiB → 413; every part except the last must be exactly 10 MiB, the last exactly the remainder. `uploadId` must have been created by **this** token (else 404). |
+| `POST /collect/<token>/complete` | `{ uploadId, parts }` | Re-checks limits with the actual size, then stores the file directly in the target folder under a server-chosen name. → `{ ok, size, remainingFiles, remainingBytes }` (the final name is **not** returned). |
+| `POST /collect/<token>/abort` | `{ uploadId }` | → 204. Allowed even after expiry/disable. |
+
+Errors are `{ "error": "<code>" }` (`not_found` 404, `expired`/`disabled`/`folder_gone` 410, `file_too_large`/`too_many_files`/`quota_exceeded`/`part_too_large` 413, `too_many_pending` 429, `busy` 503 …). Names are sanitized (last path segment only, control/bidi characters stripped, leading dots removed) and never overwrite: `a.txt` → `a-2.txt` → `a-3.txt`. Content types other than a passive allow-list (images, audio/video, PDF, plain text, archives, Office) are stored as `application/octet-stream`.
+
 ### Copy, stat, search
 
 ```bash

@@ -65,6 +65,11 @@ vi.mock("../trash", () => ({
 
 vi.mock("../../PreviewDialog", () => ({ __esModule: true, default: () => null }));
 vi.mock("../../ShareDialog", () => ({ __esModule: true, default: () => null }));
+vi.mock("../../CollectDialog", () => ({
+  __esModule: true,
+  default: ({ open, folder, onClose }: { open: boolean; folder: { name: string } | null; onClose: () => void }) =>
+    open ? <button onClick={onClose}>{`collect-stub:${folder?.name}`}</button> : null,
+}));
 vi.mock("../../PublishSiteDialog", () => ({
   __esModule: true,
   default: ({ open, folder }: { open: boolean; folder: { name?: string } | null }) =>
@@ -342,6 +347,19 @@ describe("Main 上下文菜单动作", () => {
       expect(screen.getByText(translate("confirmDeleteMsg", { count: 1 }))).toBeInTheDocument()
     );
     fireEvent.click(screen.getByText(strings.cancel));
+  });
+
+  test("文件夹菜单「收集文件」打开收集对话框，文件没有该项", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "a.txt" })));
+    expect(screen.queryByRole("menuitem", { name: strings.collectFiles })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    fireEvent.click(screen.getByLabelText(translate("fileActionsLabel", { name: "docs" })));
+    fireEvent.click(screen.getByRole("menuitem", { name: strings.collectFiles }));
+    await waitFor(() => expect(screen.getByText("collect-stub:docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("collect-stub:docs"));
+    await waitFor(() => expect(screen.queryByText("collect-stub:docs")).not.toBeInTheDocument());
   });
 
   test("文件夹菜单发布为静态站打开对话框", async () => {

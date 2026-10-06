@@ -255,6 +255,20 @@ describe("FileActionSheet", () => {
     expect(screen.queryByText(strings.publishAsDir)).not.toBeInTheDocument();
   });
 
+  test("收集文件只对文件夹显示", async () => {
+    const onAction = vi.fn();
+    const dir = { ...file, isDir: true, key: "d", name: "d" };
+    const { rerender } = render(
+      <FileActionSheet file={file} anchorPosition={{ top: 10, left: 20 }} onClose={vi.fn()} onAction={onAction} />
+    );
+    expect(screen.queryByText(strings.collectFiles)).not.toBeInTheDocument();
+    rerender(
+      <FileActionSheet file={dir} anchorPosition={{ top: 10, left: 20 }} onClose={vi.fn()} onAction={onAction} />
+    );
+    fireEvent.click(screen.getByText(strings.collectFiles));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith("collect", dir));
+  });
+
   test("file 为 null 时不渲染菜单项", () => {
     render(
       <FileActionSheet file={null} anchorPosition={null} onClose={vi.fn()} onAction={vi.fn()} />

@@ -24,6 +24,7 @@ import {
   Language as PublishIcon,
   FolderShared as PublishDirIcon,
   MenuBook as PublishDocsIcon,
+  DriveFolderUpload as CollectIcon,
 } from "@mui/icons-material";
 import { isMarkdownName } from "./app/docsSite";
 
@@ -37,6 +38,7 @@ export type FileAction =
   | "rename"
   | "move"
   | "share"
+  | "collect"
   | "publishSite"
   | "publishDir"
   | "publishDocs"
@@ -61,6 +63,7 @@ const ACTIONS: Array<{
   { id: "rename", labelKey: "rename", icon: <RenameIcon /> },
   { id: "move", labelKey: "move", icon: <MoveIcon /> },
   { id: "share", labelKey: "share", icon: <ShareIcon /> },
+  { id: "collect", labelKey: "collectFiles", icon: <CollectIcon />, dirsOnly: true },
   {
     id: "publishSite",
     labelKey: "publishAsSite",
@@ -118,6 +121,7 @@ function FileActionSheet({
       action === "details" ||
       action === "rename" ||
       action === "share" ||
+      action === "collect" ||
       action === "delete" ||
       action === "move" ||
       action === "publishSite" ||

@@ -17,6 +17,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteIcon from "@mui/icons-material/Delete";
 import LinkOffIcon from "@mui/icons-material/LinkOff";
 
+import CollectLinksSection from "./CollectLinksSection";
 import EmptyState from "./EmptyState";
 import ShareQrButton from "./ShareQrButton";
 import { formatShareClipboard, listShares, revokeShare, shareExpiryView } from "./app/share";
@@ -186,6 +187,7 @@ function SharesView({
           })}
         </List>
       )}
+      <CollectLinksSection onNotify={onNotify} />
     </>
   );
 }

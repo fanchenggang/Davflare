@@ -9,6 +9,7 @@
 import * as shareRoute from "../../../functions/share/[[token]]";
 import * as webdavRoute from "../../../functions/webdav/[[path]]";
 import * as mcpRoute from "../../../functions/mcp";
+import * as collectRoute from "../../../functions/collect/[[token]]";
 
 // 通用 helper / 常量模块
 import "../../../functions/_flags";
@@ -16,6 +17,9 @@ import "../../../functions/_images";
 import "../../../functions/_mcp";
 import "../../../functions/_middleware";
 import "../../../functions/_sites";
+import "../../../functions/_collect";
+import "../../../functions/_collectPage";
+import "../../../functions/_collectUpload";
 import "../../../functions/api/_apikey";
 import "../../../functions/api/_zip";
 import "../../../functions/webdav/protocol";
@@ -23,6 +27,7 @@ import "../../../functions/webdav/protocol";
 // Pages Functions 入口（api/*）
 import "../../../functions/api/archive";
 import "../../../functions/api/backup";
+import "../../../functions/api/collects";
 import "../../../functions/api/config";
 import "../../../functions/api/copy";
 import "../../../functions/api/counts";
@@ -49,6 +54,7 @@ describe("functions modules load", () => {
     const handlers = [
       [mcpRoute, "mcp.ts"],
       [shareRoute, "share/[[token]].ts"],
+      [collectRoute, "collect/[[token]].ts"],
       [webdavRoute, "webdav/[[path]].ts"],
     ] as Array<[Record<string, unknown>, string]>;
 

@@ -29,6 +29,7 @@ import PublishDirDialog from "./PublishDirDialog";
 import PublishDocsDialog, { DocsPublishSource } from "./PublishDocsDialog";
 import { isMarkdownName } from "./app/docsSite";
 import ShareDialog from "./ShareDialog";
+import CollectDialog from "./CollectDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
 import SetupView from "./SetupView";
@@ -145,6 +146,7 @@ function Main({
   } | null>(null);
   const [renameTarget, setRenameTarget] = useState<FileItem | null>(null);
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null);
+  const [collectTarget, setCollectTarget] = useState<FileItem | null>(null);
   const [publishTarget, setPublishTarget] = useState<FileItem | null>(null);
   const [publishDirTarget, setPublishDirTarget] = useState<FileItem | null>(null);
   const [publishDocsSource, setPublishDocsSource] = useState<DocsPublishSource | null>(null);
@@ -421,6 +423,8 @@ function Main({
           window.setTimeout(() => setConfirmDelete([file.key]), 50);
         } else if (action === "share") {
           window.setTimeout(() => setShareTarget(file), 50);
+        } else if (action === "collect") {
+          if (file.isDir) window.setTimeout(() => setCollectTarget(file), 50);
         } else if (action === "publishSite") {
           if (!file.isDir) {
             onNotify(translate("publishSiteOnlyFolder"), "error");
@@ -838,6 +842,13 @@ function Main({
         open={Boolean(shareTarget)}
         file={shareTarget}
         onClose={() => setShareTarget(null)}
+        onNotify={onNotify}
+      />
+
+      <CollectDialog
+        open={Boolean(collectTarget)}
+        folder={collectTarget}
+        onClose={() => setCollectTarget(null)}
         onNotify={onNotify}
       />
 
