@@ -120,16 +120,21 @@ export function isActiveSiteFile(rel: string): boolean {
  * 生成型站点里这个相对路径是否必须以附件下载。
  * - 没有清单（普通静态站）：从不。
  * - 站点根 index.html：生成的首页（index.html 是保留名，用户文件不会占用），照常渲染。
- * - 文档站：生成的 .html 页面照常渲染，其余 active 类型（svg/xml/js…）下载。
+ * - 文档站：清单里列出的生成 .html 页面照常渲染；不在清单里的 html 与其余 active 类型（svg/xml/js…）下载。
  * - 公开目录、相册、无法识别的 kind：所有 active 类型下载（宁严勿松）。
  * 非 active 类型（图片、pdf、文本…）本来就靠 nosniff 不会执行，保持内联，免得每个请求多读一次清单。
  */
-export function siteFileForcesDownload(kind: string | null, rel: string): boolean {
+export function siteFileForcesDownload(
+  kind: string | null,
+  rel: string,
+  docsPages?: ReadonlySet<string>
+): boolean {
   if (!kind) return false;
   const lower = rel.toLowerCase();
   if (lower === "index.html") return false;
   if (!isActiveSiteFile(lower)) return false;
-  if (kind === "docs" && /\.html?$/.test(lower)) return false;
+  // 文档站只放行清单里列出的生成页面（#160）：手工放进去或发布途中放进去的其它 html 一律下载
+  if (kind === "docs" && /\.html?$/.test(lower) && docsPages?.has(rel)) return false;
   return true;
 }
 
@@ -180,16 +185,36 @@ export async function writeEarlySiteManifest(
  * 两份清单都在时取更严格的 kind；清单损坏或读失败一律按 dir 处理（失败时宁可多下载、不可执行）。
  * 只在请求 active 类型时调用：两次 R2 读（get + head）并行，普通静态站的图片/css/字体不受影响。
  */
-export async function loadSiteManifestKind(bucket: R2Bucket, prefix: string): Promise<string | null> {
+export interface SiteServePolicy {
+  kind: string | null;
+  /** kind 为 docs 时：清单里列出的 .html 页面（只有这些照常渲染） */
+  docsPages: ReadonlySet<string>;
+}
+
+const NO_PAGES: ReadonlySet<string> = new Set();
+
+export async function loadSiteServePolicy(bucket: R2Bucket, prefix: string): Promise<SiteServePolicy> {
   try {
     const [generic, album] = await Promise.all([
       bucket.get(`${prefix}${SITE_MANIFEST_NAME}`),
       bucket.head(`${prefix}${ALBUM_MANIFEST_NAME}`),
     ]);
     let kind: string | null = album ? "album" : null;
-    if (generic) kind = stricterKind(kind, manifestKindFromText(await generic.text()));
-    return kind;
+    let docsPages: ReadonlySet<string> = NO_PAGES;
+    if (generic) {
+      const text = await generic.text();
+      const genericKind = manifestKindFromText(text);
+      kind = stricterKind(kind, genericKind);
+      if (kind === "docs") {
+        docsPages = new Set(parseSiteManifest(text).files.filter((rel) => /\.html?$/i.test(rel)));
+      }
+    }
+    return { kind, docsPages };
   } catch {
-    return "dir";
+    return { kind: "dir", docsPages: NO_PAGES };
   }
+}
+
+export async function loadSiteManifestKind(bucket: R2Bucket, prefix: string): Promise<string | null> {
+  return (await loadSiteServePolicy(bucket, prefix)).kind;
 }

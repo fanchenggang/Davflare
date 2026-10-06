@@ -90,6 +90,20 @@ export interface SitePublishPlan {
   pagesDone?: Record<string, number>;
 }
 
+/** 发布计划的有效期（#160）：超过后 copy/put/finish 不再接受，站点按「放弃的发布」处理。 */
+export const SITE_PUBLISH_PLAN_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function isSitePublishPlanExpired(plan: { createdAt?: unknown }, now = Date.now()): boolean {
+  const created = typeof plan.createdAt === "string" ? Date.parse(plan.createdAt) : NaN;
+  return !Number.isFinite(created) || now - created > SITE_PUBLISH_PLAN_TTL_MS;
+}
+
+/** 计划仍在有效期内（发布进行中）；没有计划、计划损坏或已过期都返回 false。 */
+export async function hasLiveSitePublishPlan(bucket: R2Bucket, slug: string): Promise<boolean> {
+  const plan = await loadPlan(bucket, slug);
+  return Boolean(plan && !isSitePublishPlanExpired(plan));
+}
+
 export function sitePublishPlanKey(slug: string): string {
   return `${SITE_PUBLISH_PLAN_PREFIX}${slug}.json`;
 }
@@ -206,6 +220,7 @@ async function getPlanForBatch(
   const plan = await loadPlan(bucket, slug);
   if (!plan) return textResponse("publish plan not found", 409);
   if (plan.id !== planId) return textResponse("publish superseded by a newer publish", 409);
+  if (isSitePublishPlanExpired(plan)) return textResponse("publish plan expired, please publish again", 409);
   // 旧计划文件没有 kind 时视为公开目录
   if ((plan.kind ?? "dir") !== kind) return textResponse("publish plan kind mismatch", 409);
   return plan;

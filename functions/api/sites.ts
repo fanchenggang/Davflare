@@ -27,8 +27,19 @@ import {
   renderAlbumPage,
   renderNavPage,
 } from "../sitePages";
-import { loadOwnedSiteRels, loadSiteManifestKind, writeEarlySiteManifest } from "../siteManifest";
-import { handleDirPublish, handleDocsPublish } from "../sitePublish";
+import {
+  SITE_MANIFEST_NAMES,
+  deleteKeysInChunks,
+  loadOwnedSiteRels,
+  loadSiteManifestKind,
+  writeEarlySiteManifest,
+} from "../siteManifest";
+import {
+  handleDirPublish,
+  handleDocsPublish,
+  hasLiveSitePublishPlan,
+  sitePublishPlanKey,
+} from "../sitePublish";
 import {
   copyObject,
   isCollectionObject,
@@ -65,6 +76,22 @@ async function listSiteSlugs(bucket: R2Bucket): Promise<string[]> {
     cursor = listing.cursor;
   } while (true);
   return slugs;
+}
+
+/**
+ * 只做了 plan 就放弃的发布（#160）：站点目录里只有清单文件，且没有仍在有效期内的发布计划。
+ * 这种「占位站」不算已占用，也不出现在站点列表里（再发布会直接覆盖它）。
+ * 一次 list（最多 3 个对象）；只有全是清单时才多读一次计划。
+ */
+async function isAbandonedPlaceholderSite(bucket: R2Bucket, slug: string): Promise<boolean> {
+  const prefix = `${SITES_PREFIX}${slug}/`;
+  const listing = await bucket.list({ prefix, limit: SITE_MANIFEST_NAMES.length + 1 });
+  if (listing.objects.length === 0) return false;
+  const onlyManifests = listing.objects.every((object) =>
+    (SITE_MANIFEST_NAMES as readonly string[]).includes(object.key.slice(prefix.length))
+  );
+  if (!onlyManifests || listing.truncated) return false;
+  return !(await hasLiveSitePublishPlan(bucket, slug));
 }
 
 /** 聚合站点文件数/总大小；缓存未过期直接复用，扫描封顶防大站超时 */
@@ -303,7 +330,7 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
       loadSiteConfig(env.BUCKET, slug),
       loadSiteManifestKind(env.BUCKET, prefix),
     ]);
-    const exists = listing.objects.length > 0;
+    const exists = listing.objects.length > 0 && !(await isAbandonedPlaceholderSite(env.BUCKET, slug));
     return jsonResponse({
       slug,
       exists,
@@ -318,6 +345,7 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const slugs = await listSiteSlugs(env.BUCKET);
   const sites = [];
   for (const slug of slugs) {
+    if (await isAbandonedPlaceholderSite(env.BUCKET, slug)) continue;
     const config = (await loadSiteConfig(env.BUCKET, slug)) || { slug };
     let stats = config.stats;
     if (withStats && (!statsSlug || statsSlug === slug)) {
@@ -396,16 +424,34 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     const descendants = await listDescendants(env.BUCKET, source);
     if (descendants instanceof Response) return descendants;
 
+    // 普通文件夹发布 = 普通静态站（#160）：之前若是公开目录 / 相册 / 文档站（或只做了 plan 的发布），
+    // 复制完成后删掉上次生成的文件、两份清单和发布计划，站点回到「没有清单」的静态站规则。
+    // 先复制、最后删清单：复制途中旧清单仍生效，旧的生成文件不会提前变成可执行。
+    const sitePrefix = `${SITES_PREFIX}${slug}/`;
+    const previouslyOwned = await loadOwnedSiteRels(env.BUCKET, sitePrefix);
+    const manifestNames = SITE_MANIFEST_NAMES as readonly string[];
+    const written = new Set<string>();
     let copied = 0;
     for (const object of descendants.objects) {
       if (isCollectionObject(object)) continue;
       const rel = object.key.slice(source.length + 1);
       if (!rel || rel.includes("..")) continue;
-      const to = `${SITES_PREFIX}${slug}/${rel}`;
+      // 源文件夹根目录里的清单文件不复制，否则会把普通静态站变成生成型站点
+      if (manifestNames.includes(rel)) continue;
+      const to = `${sitePrefix}${rel}`;
       const error = await copyObject(env.BUCKET, object.key, to, { overwrite: true });
       if (error) return error;
+      written.add(rel);
       copied += 1;
     }
+    const stale = previouslyOwned
+      .filter((rel) => !manifestNames.includes(rel) && !written.has(rel))
+      .map((rel) => `${sitePrefix}${rel}`);
+    await deleteKeysInChunks(env.BUCKET, stale);
+    await deleteKeysInChunks(env.BUCKET, [
+      ...manifestNames.map((name) => `${sitePrefix}${name}`),
+      sitePublishPlanKey(slug),
+    ]);
     await recordSiteSource(env.BUCKET, slug, source);
 
     return jsonResponse({
@@ -546,6 +592,8 @@ export const onRequestDelete: PagesFunction<SitesApiEnv> = async (context) => {
     cursor = listing.cursor;
   } while (true);
 
+  // 站点内容没了，未完成的发布计划也没有意义（#160：放弃的计划以前删站点也会留着）
+  await env.BUCKET.delete(sitePublishPlanKey(slug));
   if (purge) {
     const config = await loadSiteConfig(env.BUCKET, slug);
     if (config?.hostname) await deleteHostnameIndex(env.BUCKET, config.hostname);

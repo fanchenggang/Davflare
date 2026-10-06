@@ -84,7 +84,9 @@ describe("policy helpers", () => {
       expect(siteFileForcesDownload(kind, "x.png")).toBe(false);
     }
     // 文档站：生成的 html 页面要能渲染，复制进来的 svg 等仍下载
-    expect(siteFileForcesDownload("docs", "guide/intro.html")).toBe(false);
+    expect(siteFileForcesDownload("docs", "guide/intro.html", new Set(["guide/intro.html"]))).toBe(false);
+    // 不在清单里的 html 下载（#160）
+    expect(siteFileForcesDownload("docs", "guide/other.html", new Set(["guide/intro.html"]))).toBe(true);
     expect(siteFileForcesDownload("docs", "img/diagram.svg")).toBe(true);
     expect(siteFileForcesDownload("docs", "x.js")).toBe(true);
   });

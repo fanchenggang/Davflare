@@ -20,7 +20,7 @@ import {
   sitesUnauthorized,
   SITES_PREFIX,
 } from "./_sites";
-import { loadSiteManifestKind, siteFileForcesDownload } from "./siteManifest";
+import { SiteServePolicy, loadSiteServePolicy, siteFileForcesDownload } from "./siteManifest";
 
 interface MiddlewareEnv {
   BUCKET: R2Bucket;
@@ -68,15 +68,16 @@ async function serveSlugSite(
   // 生成型站点（公开目录 / 相册 / 文档站）里的 active 文件强制下载（#146）。
   // 清单只在请求 active 类型时才读，且与正文读取并行；同一请求内最多读一次。
   const sitePrefix = `${SITES_PREFIX}${parsed.slug}/`;
-  let kindPromise: Promise<string | null> | null = null;
+  let policyPromise: Promise<SiteServePolicy> | null = null;
   const forcesDownload = async (objectKey: string): Promise<boolean> => {
     const rel = objectKey.slice(sitePrefix.length);
     if (!siteFileForcesDownload("dir", rel)) return false; // 不是 active 类型 / 是首页：无需读清单
-    kindPromise ??= loadSiteManifestKind(context.env.BUCKET, sitePrefix);
-    return siteFileForcesDownload(await kindPromise, rel);
+    policyPromise ??= loadSiteServePolicy(context.env.BUCKET, sitePrefix);
+    const policy = await policyPromise;
+    return siteFileForcesDownload(policy.kind, rel, policy.docsPages);
   };
   if (siteFileForcesDownload("dir", parsed.key.slice(sitePrefix.length))) {
-    kindPromise = loadSiteManifestKind(context.env.BUCKET, sitePrefix);
+    policyPromise = loadSiteServePolicy(context.env.BUCKET, sitePrefix);
   }
 
   const key = parsed.key;
