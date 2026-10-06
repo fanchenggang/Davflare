@@ -16,7 +16,7 @@ import {
   normalizeDirKey,
   textResponse,
 } from "./api/_apikey";
-import { SITES_PREFIX, normalizeSitesHost } from "./_sites";
+import { SITES_PREFIX, normalizeSitesHost, recordSiteSource } from "./_sites";
 import {
   DIR_MAX_BYTES,
   DIR_MAX_FILES,
@@ -37,6 +37,7 @@ import {
   isSafeManifestRel,
   loadOwnedSiteRels,
   serializeSiteManifest,
+  writeEarlySiteManifest,
   type SiteManifestKind,
 } from "./siteManifest";
 
@@ -298,21 +299,8 @@ export async function planDirPublish(
     done: {},
   };
   await savePlan(bucket, plan);
-  // 先写一份「预清单」把站点标成 dir，再开始复制：复制途中或中途放弃时，已复制进来的 html/svg
-  // 也会被站点按公开目录处理成下载（#146），而不是在共享域名下执行。
-  // 列入的路径 = 上次拥有的 + 本次计划的，与「未完成计划写过的路径也算自己拥有」的语义一致；
-  // finish 会用正式清单覆盖它。
-  const preliminary = [
-    ...new Set([
-      ...[...owned].filter((rel) => isSafeManifestRel(rel)),
-      ...plan.items.map((item) => item.to),
-      "index.html",
-      SITE_MANIFEST_NAME,
-    ]),
-  ];
-  await bucket.put(`${prefix}${SITE_MANIFEST_NAME}`, serializeSiteManifest("dir", preliminary), {
-    httpMetadata: { contentType: "application/json; charset=utf-8" },
-  });
+  // 先写预清单把站点标成 dir，再开始复制（#146）；finish 会用正式清单覆盖它
+  await writeEarlySiteManifest(bucket, prefix, "dir", [...owned, ...planTargets(plan), "index.html"]);
   return jsonResponse({
     slug,
     kind: "dir",
@@ -466,6 +454,8 @@ export async function finishSitePublish(
     await commitSiteManifest(bucket, plan, [...pages, ...plan.items.map((item) => item.to)]);
   }
 
+  // 公开目录记下源文件夹，文档站（多选 .md，没有单一来源）清掉旧值；发布前占用检查用（#151）
+  await recordSiteSource(bucket, slug, plan.kind === "dir" ? plan.source : null);
   const bytes = planBytesDone(plan);
   return jsonResponse({
     slug,
@@ -584,6 +574,8 @@ export async function planDocsPublish(
     done: {},
   };
   await savePlan(bucket, plan);
+  // 与公开目录一样，复制图片 / 上传页面之前先写预清单（#146 跟进）
+  await writeEarlySiteManifest(bucket, targetPrefix, "docs", [...owned, ...planTargets(plan)]);
   return jsonResponse({
     slug,
     kind: "docs",

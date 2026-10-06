@@ -118,6 +118,58 @@ export async function deleteSite(slug: string, options?: { purge?: boolean }): P
   return data.deleted ?? 0;
 }
 
+/** 发布时这次属于哪种站点：普通文件夹复制 / 相册 / 公开目录 / 文档站 */
+export type SitePublishKind = "static" | "album" | "dir" | "docs";
+
+export interface SiteSlugCheck {
+  slug: string;
+  exists: boolean;
+  /** "static" | "album" | "dir" | "docs" | 未来的其它 kind；不存在时为 null */
+  kind: string | null;
+  /** 上次从哪个网盘文件夹发布（普通静态站 / 公开目录）；未知为 null */
+  source: string | null;
+}
+
+/** 发布前查询地址是否已被占用（#151）。 */
+export async function checkSiteSlug(slug: string): Promise<SiteSlugCheck> {
+  const response = await authFetch(`/api/sites?check=${encodeURIComponent(slug)}`);
+  if (!response.ok) throw new Error((await response.text()) || translate("loadSitesFailed"));
+  return response.json();
+}
+
+function siteKindLabel(kind: string | null): string {
+  if (kind === "static") return translate("siteKindStatic");
+  if (kind === "album") return translate("siteKindAlbum");
+  if (kind === "dir") return translate("siteKindDir");
+  if (kind === "docs") return translate("siteKindDocs");
+  return translate("siteKindUnknown");
+}
+
+/**
+ * 占用检查结果 → 需要提示的文案；null 表示可以直接发布。
+ * - 地址未占用：直接发布。
+ * - 已有站点的类型不同：提示（会换掉首页 / 覆盖同名文件）。
+ * - 同类型：相册、文档站的重新发布只替换自己上次发布的文件，不打扰；
+ *   普通静态站、公开目录按源文件夹判断，同一文件夹重新发布不打扰，换了文件夹或来源未知（普通站）才提示。
+ */
+export function siteSlugConflictMessage(
+  check: SiteSlugCheck,
+  kind: SitePublishKind,
+  source: string | null
+): string | null {
+  if (!check.exists) return null;
+  if (check.kind !== kind) {
+    return translate("siteSlugTakenKind", { slug: check.slug, kind: siteKindLabel(check.kind) });
+  }
+  if (kind === "album" || kind === "docs") return null;
+  if (check.source && source && check.source === source) return null;
+  if (check.source && source && check.source !== source) {
+    return translate("siteSlugTakenSource", { slug: check.slug, source: check.source });
+  }
+  if (kind === "static") return translate("siteSlugTakenStatic", { slug: check.slug });
+  return null;
+}
+
 /** 站点访问地址；SITES_HOST 未配置时返回 null */
 export function siteUrl(sitesHost: string | null, slug: string): string | null {
   if (!sitesHost) return null;
