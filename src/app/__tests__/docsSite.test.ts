@@ -377,12 +377,37 @@ describe("resolveDocImages", () => {
     expect(isImageNameShortened(item(`v/${"图".repeat(DOCS_PAGE_NAME_MAX)}.png`))).toBe(true);
   });
 
-  test("#153: wiki paths with ../ or a leading / stay inside the scope", async () => {
+  test("#153/#183: wiki paths with ../ or a leading / stay inside the scope and count as out of scope", async () => {
     const { listDir } = fakeDrive(["v/", "v/n/", "v/n/x.png", "x.png", "other/", "other/x.png"]);
     const a = doc("v/n/a.md", "![[../x.png]] ![[/other/x.png]]");
     const result = await resolveDocImages([a], { listDir });
     expect(result.images).toEqual([]);
-    expect(result.missing).toBe(2);
+    expect(result.outOfScope).toBe(2);
+    expect(result.missing).toBe(0);
+    for (const [dir] of listDir.mock.calls) expect(dir === "v/n" || dir.startsWith("v/n/")).toBe(true);
+  });
+
+  test("#183: wiki embeds climbing above the drive root / scope match Markdown images", async () => {
+    const { listDir } = fakeDrive(["v/", "v/n/", "v/n/sub/", "v/n/ok.png", "v/n/sub/deep.png"]);
+    const a = doc(
+      "v/n/sub/a.md",
+      [
+        "![[../x.png]]", // v/n/x.png：范围内，没有 → 缺失
+        "![[../../x.png]]", // v/x.png：范围 v/n 之外 → 超出范围
+        "![[../../../x.png]]", // 越过网盘根目录 → 超出范围
+        "![[/x.png]]", // 网盘根目录 → 超出范围
+        "![[/_$flaredrive$/t.png]]", // 内部目录 → 超出范围
+        "![[../ok.png]]", // 找到
+        "![[deep.png]]", // 笔记旁边 → 找到
+        "![[gone.png]]", // 普通文件名没找到 → 缺失
+        "![[gone/x.png]]", // 不含 ../ 的相对路径没找到 → 缺失
+      ].join(" ")
+    );
+    const md = doc("v/n/sub/b.md", "![](../../x.png) ![](../../../x.png) ![](/x.png)");
+    const result = await resolveDocImages([a, md, doc("v/n/c.md", "")], { listDir });
+    expect(result.images.map((image) => image.key)).toEqual(["v/n/ok.png", "v/n/sub/deep.png"]);
+    expect(result.outOfScope).toBe(4 + 3);
+    expect(result.missing).toBe(3);
   });
 
   test("#153: a root-level note never searches the drive", async () => {

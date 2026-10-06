@@ -475,6 +475,14 @@ export async function resolveDocImages(
         );
         found = matches[0] ?? null;
       }
+      if (!found) {
+        // 明确写了 ../ 或以 / 开头的路径：解析到发布范围之外（或越过网盘根目录、碰到内部目录）
+        // 算「超出范围」而不是「缺失」，与 Markdown 图片的统计一致（#183）。
+        // 只在没找到时判断：在范围内找到的照常发布。
+        const explicitPath = ref.target.startsWith("/") || ref.target.split(/[?#]/)[0].split("/").includes("..");
+        const key = resolveRelativeKey(doc.dir, ref.target);
+        if (escapesDrive(doc.dir, ref.target) || (explicitPath && key && !inScope(key))) return { kind: "out" };
+      }
     }
     return found && rasterExtension(found.name) && inScope(found.key) ? { kind: "found", item: found } : { kind: "missing" };
   };
