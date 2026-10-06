@@ -383,6 +383,34 @@ describe("webdav MKCOL", () => {
 });
 
 describe("webdav GET / HEAD", () => {
+  test("stored active types never execute on the drive origin: nosniff + CSP sandbox", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([
+      { key: "evil.html", body: "<script>alert(1)</script>", contentType: "text/html" },
+      { key: "evil.svg", body: "<svg onload='alert(1)'/>", contentType: "image/svg+xml" },
+      { key: "evil.xhtml", body: "<x/>", contentType: "application/xhtml+xml" },
+      { key: "blob.bin", body: "<script>", contentType: "application/octet-stream" },
+      { key: "note.txt", body: "hi", contentType: "text/plain" },
+      { key: "pic.png", body: "png", contentType: "image/png" },
+      { key: "doc.pdf", body: "%PDF", contentType: "application/pdf" },
+      { key: "clip.mp4", body: "mp4", contentType: "video/mp4" },
+    ]);
+    for (const key of ["evil.html", "evil.svg", "evil.xhtml", "blob.bin", "note.txt"]) {
+      const response = await call(req(`/webdav/${key}`, "GET", { Authorization: AUTH }), makeEnv(bucket));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(response.headers.get("Content-Security-Policy")).toBe("sandbox");
+    }
+    for (const key of ["pic.png", "doc.pdf", "clip.mp4"]) {
+      const response = await call(req(`/webdav/${key}`, "GET", { Authorization: AUTH }), makeEnv(bucket));
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      // PDF 在 sandbox 文档里 Chrome 不渲染：媒体类型不加 sandbox
+      expect(response.headers.get("Content-Security-Policy")).toBeNull();
+    }
+    const head = await call(req("/webdav/evil.html", "HEAD", { Authorization: AUTH }), makeEnv(bucket));
+    expect(head.headers.get("Content-Security-Policy")).toBe("sandbox");
+  });
+
   test("GET returns content with metadata headers", async () => {
     const bucket = new InMemoryBucket();
     bucket.seed([

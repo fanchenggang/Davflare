@@ -2,6 +2,7 @@ import { authFetch } from "./auth";
 import { DownloadRequest, FileItem } from "./types";
 import { basename, encodeKey } from "./utils";
 import { translate } from "./strings";
+import { isMediaPreviewable, mimeType } from "./preview";
 
 import { WEBDAV_ENDPOINT } from "./uploadTransfer";
 
@@ -167,11 +168,39 @@ export async function searchFiles(
   };
 }
 
+function isTextLikeType(type: string) {
+  return (
+    type.startsWith("text/") ||
+    type === "application/json" ||
+    type.endsWith("+json") ||
+    type === "application/xml" ||
+    type.endsWith("+xml") ||
+    type.includes("javascript")
+  );
+}
+
+/**
+ * blob: URL 与网盘同源，新标签页里打开 text/html、image/svg+xml 等会带着网盘凭据
+ * （localStorage）执行脚本；文件收集链接让匿名方也能往网盘里放文件。
+ * 只有位图/音视频/PDF 原样打开，文本类一律按 text/plain 显示源码，其它类型直接下载。
+ */
+export function openableBlob(blob: Blob): Blob | null {
+  const type = mimeType(blob.type);
+  if (isMediaPreviewable({ contentType: type })) return blob;
+  if (isTextLikeType(type)) return new Blob([blob], { type: "text/plain;charset=utf-8" });
+  return null;
+}
+
 export async function openFile(key: string) {
   const res = await authFetch(`${WEBDAV_ENDPOINT}${encodeKey(key)}`);
   if (!res.ok) throw new Error(translate("openFileFailed"));
   const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+  const openable = openableBlob(blob);
+  if (!openable) {
+    saveBlob(blob, basename(key) || "download");
+    return;
+  }
+  const url = URL.createObjectURL(openable);
   window.open(url, "_blank", "noopener,noreferrer");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

@@ -6,6 +6,7 @@ import {
   downloadFile,
   fetchPath,
   openFile,
+  openableBlob,
   processTransferTask,
   selectDirectoryFiles,
 } from "../transfer";
@@ -66,11 +67,54 @@ describe("fetchPath extra", () => {
 
 describe("open/download", () => {
   test("openFile success", async () => {
-    mockAuthFetch.mockResolvedValue(blobResponse(true));
+    mockAuthFetch.mockResolvedValue({
+      ...blobResponse(true),
+      blob: async () => new Blob(["data"], { type: "text/plain" }),
+    });
     const open = vi.fn();
     window.open = open;
     await openFile("a.txt");
     expect(open).toHaveBeenCalled();
+  });
+
+  test("openableBlob never opens active documents as same-origin blobs", () => {
+    const png = new Blob(["x"], { type: "image/png" });
+    expect(openableBlob(png)).toBe(png);
+    expect(openableBlob(new Blob(["x"], { type: "application/pdf" }))?.type).toBe("application/pdf");
+    for (const type of [
+      "text/html",
+      "text/html; charset=utf-8",
+      "image/svg+xml",
+      "application/xhtml+xml",
+      "application/xml",
+      "text/javascript",
+    ]) {
+      expect(openableBlob(new Blob(["<script>alert(1)</script>"], { type }))?.type).toBe(
+        "text/plain;charset=utf-8"
+      );
+    }
+    expect(openableBlob(new Blob(["x"], { type: "application/octet-stream" }))).toBeNull();
+    expect(openableBlob(new Blob(["<html><script>"]))).toBeNull();
+  });
+
+  test("openFile downloads instead of opening unknown/binary types", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ...blobResponse(true),
+      blob: async () => new Blob(["<html><script>alert(1)</script>"], { type: "application/octet-stream" }),
+    });
+    const open = vi.fn();
+    window.open = open;
+    const click = vi.fn();
+    const orig = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = orig(tag);
+      if (tag === "a") (el as HTMLAnchorElement).click = click;
+      return el;
+    });
+    await openFile("inbox/noext");
+    expect(open).not.toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    (document.createElement as Mock).mockRestore();
   });
 
   test("openFile failure", async () => {
