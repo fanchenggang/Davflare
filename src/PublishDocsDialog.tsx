@@ -32,6 +32,7 @@ import {
 import { getLang, strings, translate } from "./app/strings";
 import { fetchPath } from "./app/transfer";
 import { FileItem } from "./app/types";
+import { useSiteSlugGuard } from "./useSiteSlugGuard";
 import { errorMessage, humanReadableSize } from "./app/utils";
 
 /** 入口二选一：多选里的 .md 文件，或单选文件夹（取当前层 .md）。 */
@@ -68,6 +69,7 @@ function PublishDocsDialog({
   const [progress, setProgress] = useState<DocsPublishProgress | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [publishedSlug, setPublishedSlug] = useState("");
+  const slugGuard = useSiteSlugGuard("docs", null);
   const [publishedCount, setPublishedCount] = useState(0);
 
   const title = source ? (source.kind === "folder" ? source.folder.name : source.title) : "";
@@ -76,6 +78,7 @@ function PublishDocsDialog({
     if (!open || !source) return;
     let canceled = false;
     setSlug(suggestSiteSlug(title || "docs"));
+    slugGuard.reset();
     setPrepared(null);
     setIgnored(0);
     setBlocked(null);
@@ -141,6 +144,10 @@ function PublishDocsDialog({
     }
     setBusy(true);
     setError(null);
+    if (!(await slugGuard.guard(trimmed))) {
+      setBusy(false);
+      return;
+    }
     try {
       const result = await publishDocsSite(trimmed, prepared, {
         lang: getLang(),
@@ -276,7 +283,10 @@ function PublishDocsDialog({
                   </Box>
                 ) : null}
                 {error ? <Alert severity="error">{error}</Alert> : null}
-                {prepared ? (
+                {slugGuard.conflict ? (
+                <Alert severity="warning">{slugGuard.conflict.message}</Alert>
+              ) : null}
+              {prepared ? (
                   <TextField
                     autoFocus
                     fullWidth
@@ -285,6 +295,7 @@ function PublishDocsDialog({
                     onChange={(event) => {
                       setSlug(event.target.value);
                       setError(null);
+                      slugGuard.reset();
                     }}
                     helperText={strings.publishDirSlugHint}
                     disabled={busy}
@@ -302,7 +313,11 @@ function PublishDocsDialog({
               variant="contained"
               disabled={busy || loading || !prepared || Boolean(blocked)}
             >
-              {busy ? strings.publishAlbumPublishing : strings.publishSiteSubmit}
+              {busy
+                ? strings.publishAlbumPublishing
+                : slugGuard.conflict
+                  ? strings.siteSlugOverwrite
+                  : strings.publishSiteSubmit}
             </Button>
           </DialogActions>
         </form>

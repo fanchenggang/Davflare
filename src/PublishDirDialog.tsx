@@ -30,6 +30,7 @@ import {
 import { getLang, strings, translate } from "./app/strings";
 import { fetchPath } from "./app/transfer";
 import { FileItem } from "./app/types";
+import { useSiteSlugGuard } from "./useSiteSlugGuard";
 import { errorMessage, humanReadableSize } from "./app/utils";
 
 function progressText(progress: DirPublishProgress | null): string {
@@ -61,11 +62,13 @@ function PublishDirDialog({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [copiedCount, setCopiedCount] = useState(0);
   const [publishedSlug, setPublishedSlug] = useState("");
+  const slugGuard = useSiteSlugGuard("dir", folder ? folder.key.replace(/^\/+|\/+$/g, "") : null);
 
   useEffect(() => {
     if (!open || !folder) return;
     let canceled = false;
     setSlug(suggestSiteSlug(folder.name));
+    slugGuard.reset();
     setFiles([]);
     setSubdirs(0);
     setError(null);
@@ -111,6 +114,10 @@ function PublishDirDialog({
     }
     setBusy(true);
     setError(null);
+    if (!(await slugGuard.guard(trimmed))) {
+      setBusy(false);
+      return;
+    }
     try {
       const result = await publishDirSite(trimmed, folder.key, {
         lang: getLang(),
@@ -232,7 +239,10 @@ function PublishDirDialog({
                   </Box>
                 ) : null}
                 {error && error !== blocked ? <Alert severity="error">{error}</Alert> : null}
-                <TextField
+                {slugGuard.conflict ? (
+                <Alert severity="warning">{slugGuard.conflict.message}</Alert>
+              ) : null}
+              <TextField
                   autoFocus
                   fullWidth
                   label={strings.publishSiteSlug}
@@ -240,6 +250,7 @@ function PublishDirDialog({
                   onChange={(event) => {
                     setSlug(event.target.value);
                     setError(null);
+                    slugGuard.reset();
                   }}
                   helperText={strings.publishDirSlugHint}
                   disabled={busy}
@@ -256,7 +267,11 @@ function PublishDirDialog({
               variant="contained"
               disabled={busy || loading || Boolean(blocked)}
             >
-              {busy ? strings.publishAlbumPublishing : strings.publishSiteSubmit}
+              {busy
+                ? strings.publishAlbumPublishing
+                : slugGuard.conflict
+                  ? strings.siteSlugOverwrite
+                  : strings.publishSiteSubmit}
             </Button>
           </DialogActions>
         </form>
