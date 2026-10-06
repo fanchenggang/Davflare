@@ -17,11 +17,12 @@ import DownloadIcon from "@mui/icons-material/Download";
 import ShareIcon from "@mui/icons-material/Share";
 import DeleteIcon from "@mui/icons-material/Delete";
 
-import AuthThumbnail from "./AuthThumbnail";
+import AuthThumbnail, { LazyThumbnail } from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { Density, ViewMode } from "./app/prefs";
 import { MOTION, ORANGE, Z_INDEX, warmShadow } from "./app/theme";
 import { strings, translate } from "./app/strings";
+import { canLazyThumbnail } from "./app/lazyThumbnail";
 import { FileItem } from "./app/types";
 import {
   formatDateTime,
@@ -760,16 +761,19 @@ function FileGrid({
 }
 
 function thumbnail(file: FileItem, size: number) {
-  return file.thumbnail ? (
-    <AuthThumbnail
-      digest={file.thumbnail}
-      name={file.name}
-      contentType={file.contentType}
-      size={size}
-    />
-  ) : (
-    <MimeIcon contentType={file.contentType} name={file.name} />
-  );
+  if (file.thumbnail) {
+    return (
+      <AuthThumbnail
+        digest={file.thumbnail}
+        name={file.name}
+        contentType={file.contentType}
+        size={size}
+      />
+    );
+  }
+  // WebDAV 等途径上传、没有预生成缩略图的小图：浏览器里懒生成（#149）
+  if (canLazyThumbnail(file)) return <LazyThumbnail file={file} size={size} />;
+  return <MimeIcon contentType={file.contentType} name={file.name} />;
 }
 
 // 浅比较 props：Main 侧回调均为 useCallback、emptyMessage 已 useMemo，

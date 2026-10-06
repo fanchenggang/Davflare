@@ -16,6 +16,7 @@ vi.mock("../transfer", () => ({
 vi.mock("../../AuthThumbnail", () => ({
   __esModule: true,
   default: () => <span data-testid="auth-thumb" />,
+  LazyThumbnail: () => <span data-testid="lazy-thumb" />,
 }));
 
 const mockDownload = downloadFile as unknown as Mock;
@@ -97,6 +98,15 @@ describe("FileInfoSidebar", () => {
   test("图片文件带 digest 时用 AuthThumbnail 大图", () => {
     renderSidebar({ ...file, thumbnail: "digest" });
     expect(screen.getByTestId("auth-thumb")).toBeInTheDocument();
+  });
+
+  test("没有 digest 的小图懒生成缩略图，大图退回类型图标（#149）", () => {
+    const { unmount } = renderSidebar(file);
+    expect(screen.getByTestId("lazy-thumb")).toBeInTheDocument();
+    expect(screen.queryByTestId("auth-thumb")).toBeNull();
+    unmount();
+    renderSidebar({ ...file, size: 50 * 1024 * 1024 });
+    expect(screen.queryByTestId("lazy-thumb")).toBeNull();
   });
 
   test("目录大小显示为 —，下载走打包下载", async () => {

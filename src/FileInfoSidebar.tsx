@@ -20,13 +20,14 @@ import {
   Share as ShareIcon,
 } from "@mui/icons-material";
 
-import AuthThumbnail from "./AuthThumbnail";
+import AuthThumbnail, { LazyThumbnail } from "./AuthThumbnail";
 import MimeIcon from "./MimeIcon";
 import { NotifyFn } from "./app/notify";
 import { FileIconKind, fileIconKind } from "./app/preview";
 import { strings, translate } from "./app/strings";
 import { MOTION, warmShadow } from "./app/theme";
 import { downloadFile, downloadFolderArchive } from "./app/transfer";
+import { canLazyThumbnail } from "./app/lazyThumbnail";
 import { FileItem } from "./app/types";
 import {
   encodeKey,
@@ -95,7 +96,7 @@ function FileInfoSidebar({
     contentType: shown.contentType,
     isDir: shown.isDir,
   });
-  // AuthThumbnail 需要 thumbnail digest；图片没有 digest 时退回类型图标
+  // 有预生成缩略图用它；没有时小图在浏览器里懒生成（#149），其余退回类型图标
   const preview = shown.thumbnail && kind === "image" ? (
     <AuthThumbnail
       digest={shown.thumbnail}
@@ -103,6 +104,8 @@ function FileInfoSidebar({
       contentType={shown.contentType}
       size={160}
     />
+  ) : kind === "image" && canLazyThumbnail(shown) ? (
+    <LazyThumbnail file={shown} size={160} />
   ) : (
     <MimeIcon
       contentType={shown.contentType}

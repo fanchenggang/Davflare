@@ -10,6 +10,7 @@ import { FileItem } from "../types";
 vi.mock("../../AuthThumbnail", () => ({
   __esModule: true,
   default: () => <span data-testid="auth-thumb" />,
+  LazyThumbnail: () => <span data-testid="lazy-thumb" />,
 }));
 
 vi.mock("../../MimeIcon", () => ({

@@ -10,6 +10,7 @@ import { FileItem } from "../types";
 vi.mock("../../AuthThumbnail", () => ({
   __esModule: true,
   default: () => <span data-testid="auth-thumb" />,
+  LazyThumbnail: () => <span data-testid="lazy-thumb" />,
 }));
 
 vi.mock("../../MimeIcon", () => ({
@@ -133,5 +134,34 @@ describe("FileGrid ARIA", () => {
     // 无焦点项时首行持有 tabIndex=0（roving）
     expect(options[0]).toHaveAttribute("tabindex", "0");
     expect(options[1]).toHaveAttribute("tabindex", "-1");
+  });
+});
+
+describe("FileGrid thumbnails (#149)", () => {
+  const image = (patch: Partial<FileItem>): FileItem => ({
+    key: "vault/附件/a.png",
+    name: "a.png",
+    isDir: false,
+    size: 200 * 1024,
+    uploaded: "2026-10-06T00:00:00.000Z",
+    contentType: "image/png",
+    ...patch,
+  });
+
+  test.each(["grid", "list"] as const)("%s: pre-generated → AuthThumbnail, small image → lazy, others → icon", (view) => {
+    renderList({
+      view,
+      files: [
+        image({ key: "a.png", thumbnail: "digest" }),
+        image({ key: "b.png", name: "b.png" }),
+        image({ key: "c.png", name: "c.png", size: 50 * 1024 * 1024 }),
+        image({ key: "d.svg", name: "d.svg", contentType: "image/svg+xml" }),
+        file,
+      ],
+    });
+    expect(screen.getAllByTestId("auth-thumb")).toHaveLength(1);
+    expect(screen.getAllByTestId("lazy-thumb")).toHaveLength(1);
+    // 大图、svg、文本 + 列表里的其它图标
+    expect(screen.getAllByTestId("mime-icon").length).toBeGreaterThanOrEqual(3);
   });
 });

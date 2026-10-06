@@ -104,7 +104,7 @@ vi.mock("../../SettingsView", () => ({ __esModule: true, default: () => <div>set
 vi.mock("../../WebDavPanel", () => ({ __esModule: true, default: () => null }));
 vi.mock("../../TextPadDrawer", () => ({ __esModule: true, default: () => null }));
 vi.mock("../../MoveDialog", () => ({ __esModule: true, default: ({ open }: { open: boolean }) => (open ? <div>move-stub</div> : null) }));
-vi.mock("../../AuthThumbnail", () => ({ __esModule: true, default: () => <span /> }));
+vi.mock("../../AuthThumbnail", () => ({ __esModule: true, default: () => <span />, LazyThumbnail: () => <span /> }));
 vi.mock("../../MimeIcon", () => ({ __esModule: true, default: () => <span /> }));
 
 const mockUseAuth = useAuth as unknown as Mock;
