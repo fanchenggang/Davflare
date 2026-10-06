@@ -321,6 +321,25 @@ if [ -n "$SITES_HOST" ]; then
   assert_code "custom 404 keeps status 404" "$code" "404"
   assert_contains "custom 404 page body" "$(cat /tmp/o)" "custom-not-found"
 
+  # #146：公开目录里的 html/svg 以附件下载，生成的列表页照常渲染
+  DSITE="e2edir"
+  curl -s --noproxy '*' -o /dev/null -X POST "$BASE/api/upload?path=$DIR/pubdir/" -H "$A" -H "X-File-Name: evil.html" --data-binary "<script>alert(1)</script>"
+  curl -s --noproxy '*' -o /dev/null -X POST "$BASE/api/upload?path=$DIR/pubdir/" -H "$A" -H "X-File-Name: evil.svg" --data-binary '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'
+  PLAN=$(curl -s --noproxy '*' -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$DSITE\",\"dir\":{\"phase\":\"plan\",\"source\":\"$DIR/pubdir\",\"lang\":\"en\"}}")
+  PLAN_ID=$(echo "$PLAN" | python3 -c "import sys,json;print(json.load(sys.stdin)['planId'])")
+  curl -s --noproxy '*' -o /dev/null -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$DSITE\",\"dir\":{\"phase\":\"copy\",\"planId\":\"$PLAN_ID\",\"files\":[\"evil.html\",\"evil.svg\"]}}"
+  code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$DSITE\",\"dir\":{\"phase\":\"finish\",\"planId\":\"$PLAN_ID\"}}")
+  assert_code "dir site publish finish 200" "$code" "200"
+  curl -s --noproxy '*' -D /tmp/suite-dir-html -o /dev/null "$BASE/$DSITE/evil.html" -H "$SH"
+  assert_contains "dir site html is attachment" "$(grep -i '^Content-Disposition' /tmp/suite-dir-html)" "attachment"
+  curl -s --noproxy '*' -D /tmp/suite-dir-svg -o /dev/null "$BASE/$DSITE/evil.svg" -H "$SH"
+  assert_contains "dir site svg is attachment" "$(grep -i '^Content-Disposition' /tmp/suite-dir-svg)" "attachment"
+  curl -s --noproxy '*' -D /tmp/suite-dir-index -o /dev/null "$BASE/$DSITE/" -H "$SH"
+  if grep -qi '^Content-Disposition' /tmp/suite-dir-index; then bad "dir listing page inline" "attachment" "inline"; else ok "dir listing page inline"; fi
+  curl -s --noproxy '*' -D /tmp/suite-plain-html -o /dev/null "$BASE/$SITE/index.html" -H "$SH"
+  if grep -qi '^Content-Disposition' /tmp/suite-plain-html; then bad "plain site html inline" "attachment" "inline"; else ok "plain site html inline"; fi
+  curl -s --noproxy '*' -o /dev/null -X DELETE "$BASE/api/sites?slug=$DSITE&purge=1" -H "$BASIC"
+
   SITES_LIST=$(curl -s --noproxy '*' "$BASE/api/sites" -H "$BASIC")
   assert_contains "sites list contains site" "$SITES_LIST" "\"slug\":\"$SITE\""
   assert_contains "sites list reports spa=false" "$SITES_LIST" '"spa":false'

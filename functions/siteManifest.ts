@@ -87,3 +87,86 @@ export async function deleteKeysInChunks(bucket: R2Bucket, keys: string[]): Prom
     if (chunk.length) await bucket.delete(chunk);
   }
 }
+
+// ---- 生成型站点的文件服务策略（#146） ----
+// 公开目录 / 相册把网盘里的文件原样复制进 sites/{slug}/，而所有站点共用 SITES_HOST 一个域名：
+// 别人给的 x.html / x.svg 被直接打开时，脚本会在共享域名下执行。生成型站点里这些「会执行」的类型
+// 一律以附件下载；普通静态站（没有清单）的 html/js 照常渲染。
+
+/** 浏览器直接打开时可能执行脚本的扩展名（含按 MIME 表会被当成 html/svg/xml/js 的类型）。 */
+const ACTIVE_SITE_EXTS = new Set([
+  "html",
+  "htm",
+  "xhtml",
+  "xht",
+  "shtml",
+  "svg",
+  "svgz",
+  "xml",
+  "xsl",
+  "xslt",
+  "js",
+  "mjs",
+]);
+
+export function isActiveSiteFile(rel: string): boolean {
+  const base = rel.split("/").pop() || "";
+  const dot = base.lastIndexOf(".");
+  if (dot < 0) return false;
+  return ACTIVE_SITE_EXTS.has(base.slice(dot + 1).toLowerCase());
+}
+
+/**
+ * 生成型站点里这个相对路径是否必须以附件下载。
+ * - 没有清单（普通静态站）：从不。
+ * - 站点根 index.html：生成的首页（index.html 是保留名，用户文件不会占用），照常渲染。
+ * - 文档站：生成的 .html 页面照常渲染，其余 active 类型（svg/xml/js…）下载。
+ * - 公开目录、相册、无法识别的 kind：所有 active 类型下载（宁严勿松）。
+ * 非 active 类型（图片、pdf、文本…）本来就靠 nosniff 不会执行，保持内联，免得每个请求多读一次清单。
+ */
+export function siteFileForcesDownload(kind: string | null, rel: string): boolean {
+  if (!kind) return false;
+  const lower = rel.toLowerCase();
+  if (lower === "index.html") return false;
+  if (!isActiveSiteFile(lower)) return false;
+  if (kind === "docs" && /\.html?$/.test(lower)) return false;
+  return true;
+}
+
+const KIND_STRICTNESS: Record<string, number> = { docs: 1, album: 2, dir: 3 };
+
+function stricterKind(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return (KIND_STRICTNESS[a] ?? 4) >= (KIND_STRICTNESS[b] ?? 4) ? a : b;
+}
+
+/**
+ * 读 sites/{slug}/ 的清单得到站点 kind；没有清单返回 null（普通静态站）。
+ * 两份清单都在时取更严格的 kind；清单损坏或读失败一律按 dir 处理（失败时宁可多下载、不可执行）。
+ * 只在请求 active 类型时调用：两次 R2 读（get + head）并行，普通静态站的图片/css/字体不受影响。
+ */
+export async function loadSiteManifestKind(bucket: R2Bucket, prefix: string): Promise<string | null> {
+  try {
+    const [generic, album] = await Promise.all([
+      bucket.get(`${prefix}${SITE_MANIFEST_NAME}`),
+      bucket.head(`${prefix}${ALBUM_MANIFEST_NAME}`),
+    ]);
+    let kind: string | null = album ? "album" : null;
+    if (generic) {
+      let genericKind = "dir";
+      try {
+        const data = JSON.parse(await generic.text()) as { kind?: unknown } | null;
+        if (data && typeof data === "object" && typeof data.kind === "string" && data.kind) {
+          genericKind = data.kind;
+        }
+      } catch {
+        genericKind = "dir";
+      }
+      kind = stricterKind(kind, genericKind);
+    }
+    return kind;
+  } catch {
+    return "dir";
+  }
+}

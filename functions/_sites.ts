@@ -3,6 +3,7 @@ import {
   sha256Hex,
   timingSafeEqual,
 } from "./api/_apikey";
+import { contentDisposition } from "./api/_disposition";
 
 export const SITES_PREFIX = "sites/";
 
@@ -311,11 +312,17 @@ export function sitesResponse(
   object: { body: ReadableStream | null; httpEtag?: string },
   key: string,
   head: boolean,
-  options?: { privateCache?: boolean }
+  options?: { privateCache?: boolean; download?: boolean }
 ) {
   const headers = new Headers();
   headers.set("Content-Type", mimeForKey(key));
   headers.set("X-Content-Type-Options", "nosniff");
+  if (options?.download) {
+    // 生成型站点里的 html/svg/xml/js（#146）：强制下载；万一客户端无视 Content-Disposition，
+    // CSP sandbox 也让它在不透明源里打开，脚本碰不到共享站点域名
+    headers.set("Content-Disposition", contentDisposition(key.split("/").pop() || "", "attachment"));
+    headers.set("Content-Security-Policy", "sandbox");
+  }
   if (options?.privateCache) {
     // Password-gated sites must not land in shared CDN caches.
     headers.set("Cache-Control", "private, max-age=60");
