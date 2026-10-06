@@ -215,6 +215,11 @@ function PreviewDialog({
   } | null>(null);
   const url = loaded && file && loaded.key === file.key ? loaded.url : null;
   const [loading, setLoading] = useState(false);
+  // #190：带 Title 的 blob 就绪后，Chrome 阅读器仍可能先用 blob UUID 填工具栏再去解析 Title。
+  // 大文件刚拆掉时这段空窗约 1 秒。iframe 先盖住，等 load + 按体积估算的解析缓冲后再揭开。
+  const [pdfCovered, setPdfCovered] = useState(false);
+  const prevPdfBytesRef = useRef(0);
+  const pdfRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -259,6 +264,11 @@ function PreviewDialog({
   useEffect(() => {
     if (!file) {
       setLoaded(null);
+      setPdfCovered(false);
+      if (pdfRevealTimerRef.current) {
+        clearTimeout(pdfRevealTimerRef.current);
+        pdfRevealTimerRef.current = null;
+      }
       setText(null);
       setZoom(1);
       setOffset({ x: 0, y: 0 });
@@ -280,6 +290,11 @@ function PreviewDialog({
     const controller = new AbortController();
     setLoading(true);
     setLoaded(null);
+    setPdfCovered(false);
+    if (pdfRevealTimerRef.current) {
+      clearTimeout(pdfRevealTimerRef.current);
+      pdfRevealTimerRef.current = null;
+    }
     setText(null);
     setTooLarge(false);
     setLargeSize(0);
@@ -336,8 +351,11 @@ function PreviewDialog({
           if (canceled) return;
           if (titled !== blob) originalObjectUrl = URL.createObjectURL(blob);
           objectUrl = URL.createObjectURL(titled);
+          // 先盖住阅读器，等 onLoad + 解析缓冲再揭开（#190）
+          setPdfCovered(true);
         } else {
           objectUrl = URL.createObjectURL(blob);
+          setPdfCovered(false);
         }
         setLoaded({ key: file.key, url: objectUrl, originalUrl: originalObjectUrl });
       } catch (error) {
@@ -351,6 +369,10 @@ function PreviewDialog({
     return () => {
       canceled = true;
       controller.abort();
+      if (pdfRevealTimerRef.current) {
+        clearTimeout(pdfRevealTimerRef.current);
+        pdfRevealTimerRef.current = null;
+      }
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       if (originalObjectUrl) URL.revokeObjectURL(originalObjectUrl);
     };
@@ -830,13 +852,53 @@ function PreviewDialog({
           ) : isAudio ? (
             <audio src={url} controls style={{ width: "100%" }} />
           ) : isPdf ? (
-            <iframe
-              // 每份文档一个新的 iframe，不在同一个 iframe 里从旧 blob 跳到新 blob
-              key={url}
-              src={url}
-              title={file?.name}
-              style={{ width: "100%", height: "100%", border: "none" }}
-            />
+            <Box sx={{ position: "relative", width: "100%", height: "100%", flex: 1, minHeight: 0 }}>
+              {pdfCovered && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: "background.paper",
+                  }}
+                >
+                  <CircularProgress />
+                </Box>
+              )}
+              <iframe
+                // 每份文档一个新的 iframe，不在同一个 iframe 里从旧 blob 跳到新 blob
+                key={url}
+                src={url}
+                title={file?.name}
+                onLoad={() => {
+                  if (pdfRevealTimerRef.current) clearTimeout(pdfRevealTimerRef.current);
+                  const nextBytes = file?.size || 0;
+                  // 大文件拆掉后阅读器进程还在消化时，小文件也会先闪 UUID；按「上一份/这一份」体积估缓冲
+                  const settleMs = Math.min(
+                    1500,
+                    Math.ceil(Math.max(prevPdfBytesRef.current, nextBytes) / 25_000)
+                  );
+                  prevPdfBytesRef.current = nextBytes;
+                  if (settleMs <= 0) {
+                    setPdfCovered(false);
+                    return;
+                  }
+                  pdfRevealTimerRef.current = setTimeout(() => {
+                    pdfRevealTimerRef.current = null;
+                    setPdfCovered(false);
+                  }, settleMs);
+                }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  border: "none",
+                  visibility: pdfCovered ? "hidden" : "visible",
+                }}
+              />
+            </Box>
           ) : (
             <Typography>{strings.unsupportedPreview}</Typography>
           )

@@ -99,6 +99,27 @@ describe("withPdfTitle", () => {
     expect(await withPdfTitle(ok, "   ")).toBe(ok);
   });
 
+  test("linearized flag is blanked so Chrome will not progressive-paint before Title (#190)", async () => {
+    const head =
+      "%PDF-1.5\n" +
+      "999 0 obj\n<< /Linearized 1 /L 12345 /H [ 100 20 ] /O 5 /E 200 /N 1 /T 12000 >>\nendobj\n";
+    const xrefAt = head.length;
+    const original =
+      head +
+      "1 0 obj\n<< /Type /Catalog >>\nendobj\n" +
+      `xref\n0 2\n0000000000 65535 f\r\n${String(head.length).padStart(10, "0")} 00000 n\r\n` +
+      "trailer\n<< /Size 2 /Root 1 0 R >>\n" +
+      `startxref\n${xrefAt}\n%%EOF\n`;
+    expect(original).toContain("/Linearized 1");
+    const out = await withPdfTitle(new Blob([original], { type: "application/pdf" }), "lin.pdf");
+    const patched = await text(out);
+    expect(patched).not.toContain("/Linearized");
+    // 同长度空格替换：前缀体积不变，Title 附录紧接其后
+    expect(out.size - original.length).toBeGreaterThan(50);
+    expect(patched.slice(original.length)).toMatch(/^\n2 0 obj\n<< \/Title /);
+    expect(patched).toContain(`/Title ${pdfTextString("lin.pdf")}`);
+  });
+
   test("pdfTextString: UTF-16BE hex with BOM (no escaping needed)", () => {
     expect(pdfTextString("A(")).toBe("<FEFF00410028>");
     expect(pdfTextString("中")).toBe("<FEFF4E2D>");

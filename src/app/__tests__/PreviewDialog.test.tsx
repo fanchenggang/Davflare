@@ -474,3 +474,60 @@ describe("PDF sibling switch never shows the previous blob URL (#185)", () => {
     expect(seen.filter((s) => s.title === b.name && s.src !== "blob:u4")).toEqual([]);
   });
 });
+
+
+describe("PDF preview stays covered until the viewer settles (#190)", () => {
+  const pdfBody =
+    "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nxref\n0 2\n0000000000 65535 f\r\n0000000009 00000 n\r\n" +
+    "trailer\n<< /Size 2 /Root 1 0 R >>\nstartxref\n47\n%%EOF\n";
+
+  test("iframe is not mounted while withPdfTitle is still running; cover hides it until load", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    mockAuthFetch.mockImplementation(async () => {
+      await gate;
+      return {
+        ok: true,
+        headers: { get: () => null },
+        blob: async () => new Blob([pdfBody], { type: "application/pdf" }),
+        body: null,
+      };
+    });
+    let n = 0;
+    (URL as any).createObjectURL = vi.fn(() => `blob:t${++n}`);
+    const pdf: FileItem = {
+      key: "docs/a.pdf",
+      name: "a.pdf",
+      isDir: false,
+      size: 30_000_000,
+      uploaded: "",
+      contentType: "application/pdf",
+    };
+    try {
+      render(
+        <PreviewDialog
+          file={pdf}
+          onClose={vi.fn()}
+          onNotify={vi.fn()}
+          onShare={vi.fn()}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      );
+      // 标题还没写完：只有转圈，没有阅读器
+      expect(document.querySelector("iframe")).toBeNull();
+      expect(screen.getAllByRole("progressbar").length).toBeGreaterThan(0);
+      release();
+      await waitFor(() => expect(document.querySelector("iframe")?.getAttribute("src")).toBe("blob:t2"));
+      const frame = document.querySelector("iframe")!;
+      // 刚挂上时仍盖着（大文件按体积会有解析缓冲）
+      expect(frame.style.visibility).toBe("hidden");
+      fireEvent.load(frame);
+      await vi.advanceTimersByTimeAsync(1600);
+      expect(frame.style.visibility).toBe("visible");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

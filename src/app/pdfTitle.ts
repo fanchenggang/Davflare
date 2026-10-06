@@ -93,6 +93,23 @@ async function readTrailer(blob: Blob): Promise<TrailerInfo | null> {
   return { prev, root, size, id };
 }
 
+/**
+ * 线性化 PDF 会先按文件头的 hint 渐进显示，此时还读不到我们追加在末尾的 Title，
+ * 工具栏会先闪一下 blob UUID（#190）。抹掉 /Linearized，长度不变、后面 xref 偏移不变，
+ * Chrome 会改走从 EOF 读 trailer 的完整解析，一开始就能拿到 Title。
+ */
+async function withoutLinearization(blob: Blob): Promise<Blob> {
+  const headSize = Math.min(blob.size, 8192);
+  if (headSize <= 0) return blob;
+  const head = await readBytes(blob.slice(0, headSize));
+  const asText = latin1(head);
+  const match = asText.match(/\/Linearized\s+\d+/);
+  if (!match || match.index == null) return blob;
+  const patched = new Uint8Array(head);
+  patched.fill(0x20, match.index, match.index + match[0].length);
+  return new Blob([patched, blob.slice(headSize)], { type: blob.type || "application/pdf" });
+}
+
 /** 返回带 Title 的 PDF 副本；无法安全处理时原样返回 */
 export async function withPdfTitle(blob: Blob, title: string): Promise<Blob> {
   const name = title.trim();
@@ -100,8 +117,9 @@ export async function withPdfTitle(blob: Blob, title: string): Promise<Blob> {
   try {
     const trailer = await readTrailer(blob);
     if (!trailer || !Number.isSafeInteger(trailer.size) || trailer.size <= 0) return blob;
+    const base = await withoutLinearization(blob);
     const obj = trailer.size;
-    const objOffset = blob.size + 1; // 前面补一个换行
+    const objOffset = base.size + 1; // 前面补一个换行
     const objText = `${obj} 0 obj\n<< /Title ${pdfTextString(name.slice(0, 500))} >>\nendobj\n`;
     const xrefOffset = objOffset + objText.length;
     const appendix =
@@ -116,7 +134,7 @@ export async function withPdfTitle(blob: Blob, title: string): Promise<Blob> {
       `${xrefOffset}\n` +
       "%%EOF\n";
     // appendix 只含 ASCII（标题已转成十六进制），字符数 = 字节数
-    return new Blob([blob, appendix], { type: "application/pdf" });
+    return new Blob([base, appendix], { type: "application/pdf" });
   } catch {
     return blob;
   }
