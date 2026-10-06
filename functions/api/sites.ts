@@ -27,7 +27,7 @@ import {
   renderAlbumPage,
   renderNavPage,
 } from "../sitePages";
-import { loadOwnedSiteRels, loadSiteManifestKind } from "../siteManifest";
+import { loadOwnedSiteRels, loadSiteManifestKind, writeEarlySiteManifest } from "../siteManifest";
 import { handleDirPublish, handleDocsPublish } from "../sitePublish";
 import {
   copyObject,
@@ -222,6 +222,13 @@ async function publishAlbum(
   const sourceKeys = new Set(planned.map((file) => file.key));
   const newKeys = new Set<string>([indexKey, manifestKey]);
   for (const file of planned) newKeys.add(`${prefix}${file.name}`);
+
+  // 删除 / 复制之前先写预清单（#146 跟进）：发布途中站点已按相册处理
+  await writeEarlySiteManifest(env.BUCKET, prefix, "album", [
+    ...oldRels,
+    ...planned.map((file) => file.name),
+    "index.html",
+  ]);
 
   for (const rel of oldRels) {
     if (!isSafeManifestRel(rel)) continue;

@@ -141,6 +141,40 @@ function stricterKind(a: string | null, b: string | null): string | null {
   return (KIND_STRICTNESS[a] ?? 4) >= (KIND_STRICTNESS[b] ?? 4) ? a : b;
 }
 
+function manifestKindFromText(text: string): string {
+  try {
+    const data = JSON.parse(text) as { kind?: unknown } | null;
+    if (data && typeof data === "object" && typeof data.kind === "string" && data.kind) return data.kind;
+  } catch {
+    // 损坏的清单按最严格处理
+  }
+  return "dir";
+}
+
+/**
+ * 发布开始（复制任何文件之前）先写一份「预清单」（#146 跟进）：
+ * 站点从这一刻起就按生成型站点服务，复制途中或中途放弃时已复制进来的 html/svg/js 也是下载。
+ * - files：上次拥有的 + 本次计划写入的路径（与「未完成计划写过的路径也算自己拥有」的语义一致）；
+ * - 同一份清单文件里原本的 kind 更严格时保留它（例如在公开目录上发布文档站：完成前仍按 dir 处理，
+ *   旧目录里的 html 不会因为 docs 允许渲染 html 而在发布途中变成可执行）。
+ * 另一份清单文件不动：服务端读两份取最严格，finish 时再清理。
+ */
+export async function writeEarlySiteManifest(
+  bucket: R2Bucket,
+  prefix: string,
+  kind: SiteManifestKind,
+  files: string[]
+): Promise<void> {
+  const name = manifestNameForKind(kind);
+  let effective: string = kind;
+  const existing = await bucket.get(`${prefix}${name}`);
+  if (existing) effective = stricterKind(manifestKindFromText(await existing.text()), kind) || kind;
+  const list = [...new Set([...files.filter((rel) => isSafeManifestRel(rel)), name])];
+  await bucket.put(`${prefix}${name}`, JSON.stringify({ version: 1, kind: effective, files: list }), {
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
+  });
+}
+
 /**
  * 读 sites/{slug}/ 的清单得到站点 kind；没有清单返回 null（普通静态站）。
  * 两份清单都在时取更严格的 kind；清单损坏或读失败一律按 dir 处理（失败时宁可多下载、不可执行）。
@@ -153,18 +187,7 @@ export async function loadSiteManifestKind(bucket: R2Bucket, prefix: string): Pr
       bucket.head(`${prefix}${ALBUM_MANIFEST_NAME}`),
     ]);
     let kind: string | null = album ? "album" : null;
-    if (generic) {
-      let genericKind = "dir";
-      try {
-        const data = JSON.parse(await generic.text()) as { kind?: unknown } | null;
-        if (data && typeof data === "object" && typeof data.kind === "string" && data.kind) {
-          genericKind = data.kind;
-        }
-      } catch {
-        genericKind = "dir";
-      }
-      kind = stricterKind(kind, genericKind);
-    }
+    if (generic) kind = stricterKind(kind, manifestKindFromText(await generic.text()));
     return kind;
   } catch {
     return "dir";
