@@ -100,7 +100,7 @@ Rules:
 - Hostname must be a DNS name with at least one dot (`blog.example.com`); it cannot equal `SITES_HOST`.
 - Do **not** use your drive/manager hostname — the custom-host middleware would shadow the app.
 - Coexists with site access password: Host resolve → Basic Auth gate → content (same order as a future `_redirects` hook).
-- `/api`, `/webdav`, `/mcp`, and `/share` on a custom hostname are not remapped to site files (reserved for the drive product).
+- `/api`, `/webdav`, `/mcp`, `/share`, and `/collect` on a custom hostname are not remapped to site files (reserved for the drive product).
 
 ## Caching
 

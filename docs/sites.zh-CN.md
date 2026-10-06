@@ -100,7 +100,7 @@ jobs:
 - 主机名须为带至少一个点的 DNS 名（如 `blog.example.com`）；不能等于 `SITES_HOST`。
 - **不要**填网盘/管理界面自己的域名——自定义域中间件会遮蔽应用。
 - 可与站点访问密码共存：先按 Host 解析 → Basic Auth 门禁 → 再出内容（与未来 `_redirects` 钩子同序）。
-- 自定义域名上的 `/api`、`/webdav`、`/mcp`、`/share` 不会映射成站点文件（留给网盘产品路径）。
+- 自定义域名上的 `/api`、`/webdav`、`/mcp`、`/share`、`/collect` 不会映射成站点文件（留给网盘产品路径）。
 
 ## 缓存
 
