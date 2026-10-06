@@ -330,3 +330,20 @@ describe("counts", () => {
     expect(Object.keys(body.counts)).toHaveLength(100);
   });
 });
+
+describe("search prefix (#153)", () => {
+  test("prefix confines the scan to that subtree; internal prefixes are ignored", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([
+      { key: "vault/a/x.png", body: "1" },
+      { key: "vault/b/x.png", body: "2" },
+      { key: "other/x.png", body: "3" },
+    ]);
+    const scoped = await search(bucket, `/api/search?q=x.png&prefix=${encodeURIComponent("vault/a/")}`);
+    const keys = ((await scoped.json()) as { items: Array<{ key: string }> }).items.map((item) => item.key);
+    expect(keys).toEqual(["vault/a/x.png"]);
+    const internal = await search(bucket, `/api/search?q=x.png&prefix=${encodeURIComponent("_$flaredrive$/")}`);
+    const all = ((await internal.json()) as { items: Array<{ key: string }> }).items.map((item) => item.key);
+    expect(all.every((key) => !key.startsWith("_$flaredrive$"))).toBe(true);
+  });
+});

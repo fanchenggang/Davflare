@@ -141,10 +141,12 @@ export async function fetchFolderCounts(
 export async function searchFiles(
   query: string,
   cursor?: string,
-  limit = 100
+  limit = 100,
+  prefix?: string
 ): Promise<SearchResponse> {
   const params: Record<string, string> = { q: query, limit: String(limit) };
   if (cursor) params.cursor = cursor;
+  if (prefix) params.prefix = prefix;
   const res = await authFetch(`/api/search?${new URLSearchParams(params)}`);
   if (!res.ok) throw new Error("Search failed");
   const data = (await res.json()) as {

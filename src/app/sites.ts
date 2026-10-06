@@ -18,6 +18,8 @@ import {
   DocsMarkdown,
   ParsedDoc,
   desiredPageName,
+  docsScopeOf,
+  isPageNameShortened,
   isMarkdownName,
   loadDocsMarkdown,
   parseDoc,
@@ -482,6 +484,10 @@ export interface DocsPrepared {
   images: FileItem[];
   byRef: Map<string, string>;
   missing: number;
+  /** 指到所选文件夹之外、不会公开的图片引用数（#153） */
+  outOfScope: number;
+  /** 文件名过长、页面名被缩短的笔记数（#153） */
+  shortened: number;
   /** Markdown 原文 + 图片的字节数（前端估算；服务端按实际 html 复核） */
   bytes: number;
 }
@@ -503,7 +509,7 @@ async function readDriveText(key: string): Promise<string> {
 export const defaultDocsIO: DocsPrepareIO = {
   readText: readDriveText,
   listDir: (dir) => fetchPath(dir ? `${dir}/` : ""),
-  search: async (name) => (await searchFiles(name, undefined, 50)).items,
+  search: async (name, prefix) => (await searchFiles(name, undefined, 50, prefix)).items,
 };
 
 /** 读 Markdown、解析、在网盘里找被引用的栅格图片。 */
@@ -519,11 +525,21 @@ export async function prepareDocsPublish(
     )
   );
   const docs = sortDocs(parsed);
-  const resolved = await resolveDocImages(docs, io);
+  // 发布范围 = 所选笔记的公共目录：图片只从这里（含子文件夹）复制，服务端用同一规则复核（#153）
+  const resolved = await resolveDocImages(docs, io, docsScopeOf(files.map((file) => file.key)));
   const bytes =
     docs.reduce((sum, doc) => sum + (Number.isFinite(doc.size) ? doc.size : 0), 0) +
     albumSelectionBytes(resolved.images);
-  return { md, docs, images: resolved.images, byRef: resolved.byRef, missing: resolved.missing, bytes };
+  return {
+    md,
+    docs,
+    images: resolved.images,
+    byRef: resolved.byRef,
+    missing: resolved.missing,
+    outOfScope: resolved.outOfScope,
+    shortened: docs.filter(isPageNameShortened).length,
+    bytes,
+  };
 }
 
 export type DocsPublishProgress =
@@ -574,6 +590,8 @@ export async function publishDocsSite(
     docs: {
       phase: "plan",
       pages: prepared.docs.map(desiredPageName),
+      // 服务端由笔记源 key 推出发布范围，复核每张图片都在范围内（#153）
+      sources: prepared.docs.map((doc) => doc.key),
       images: prepared.images.map((image) => image.key),
       lang,
       title,

@@ -7,6 +7,7 @@ import {
   docsPublishBlockReason,
   docsSourceBlockReason,
   partitionMarkdownFiles,
+  defaultDocsIO,
   prepareDocsPublish,
   publishDocsSite,
 } from "../sites";
@@ -97,7 +98,14 @@ describe("publishDocsSite", () => {
     const bodies = mockAuthFetch.mock.calls.map(bodyOf);
     expect(bodies[0]).toEqual({
       slug: "notes",
-      docs: { phase: "plan", pages: ["a.html", "b.html"], images: ["v/img/pic.png"], lang: "en", title: "V" },
+      docs: {
+        phase: "plan",
+        pages: ["a.html", "b.html"],
+        sources: ["v/a.md", "v/b.md"],
+        images: ["v/img/pic.png"],
+        lang: "en",
+        title: "V",
+      },
     });
     expect(bodies[1].docs).toEqual({ planId: "p", phase: "copy", files: ["assets/pic.png"] });
     const pages = bodies[2].docs.pages as Array<{ name: string; html: string }>;
@@ -160,5 +168,34 @@ describe("publishDocsSite", () => {
     await publishDocsSite("s", ready);
     const puts = mockAuthFetch.mock.calls.map(bodyOf).filter((b) => b.docs.phase === "put");
     expect(puts.map((b) => (b.docs.pages as unknown[]).length)).toEqual([1, 1, 1]);
+  });
+});
+
+describe("docs publish scope (#153)", () => {
+  test("out-of-scope paths are counted separately and never listed or copied", async () => {
+    const listDir = vi.fn(async (dir: string) => (dir === "v/n" ? [file("v/n/ok.png", 5)] : []));
+    const readText = vi.fn(async () => "![](../secret.png) ![](/etc/top.png) ![](ok.png) ![[gone.png]] ![[Other]]");
+    const ready = await prepareDocsPublish([file("v/n/a.md")], { readText, listDir });
+    expect(ready.images.map((image) => image.key)).toEqual(["v/n/ok.png"]);
+    expect(ready.outOfScope).toBe(2);
+    expect(ready.missing).toBe(1);
+    expect(listDir.mock.calls.every(([dir]) => dir === "v/n" || dir.startsWith("v/n/"))).toBe(true);
+  });
+
+  test("long note names are shortened (still .html) and counted", async () => {
+    const name = `${"n".repeat(260)}.md`;
+    const ready = await prepareDocsPublish([file(`v/${name}`), file("v/short.md")], {
+      readText: vi.fn(async () => "x"),
+      listDir: vi.fn(async () => []),
+    });
+    expect(ready.shortened).toBe(1);
+  });
+
+  test("default search passes the scope prefix to /api/search", async () => {
+    mockAuthFetch.mockOkOnce({ items: [] });
+    await defaultDocsIO.search!("x.png", "vault/a/");
+    const url = String(mockAuthFetch.mock.calls[0][0]);
+    expect(url).toContain("q=x.png");
+    expect(url).toContain(`prefix=${encodeURIComponent("vault/a/")}`);
   });
 });
