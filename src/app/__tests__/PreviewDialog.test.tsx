@@ -389,3 +389,37 @@ describe("PreviewDialog leftovers", () => {
     await waitFor(() => expect(document.querySelector("iframe")).toBeTruthy());
   });
 });
+
+describe("PDF preview title (#149)", () => {
+  test("iframe shows a copy titled with the file name; download keeps the original bytes", async () => {
+    const original =
+      "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nxref\n0 2\n0000000000 65535 f\r\n0000000009 00000 n\r\n" +
+      "trailer\n<< /Size 2 /Root 1 0 R >>\nstartxref\n47\n%%EOF\n";
+    const source = new Blob([original], { type: "application/pdf" });
+    mockAuthFetch.mockResolvedValue({ ok: true, headers: { get: () => null }, blob: async () => source, body: null });
+    const made: Blob[] = [];
+    (URL as any).createObjectURL = vi.fn((blob: Blob) => {
+      made.push(blob);
+      return `blob:${made.length}`;
+    });
+    const clicked: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push(this.getAttribute("href") || "");
+    });
+    const pdf: FileItem = { key: "docs/季度.pdf", name: "季度.pdf", isDir: false, size: original.length, uploaded: "", contentType: "application/pdf" };
+    const { unmount } = render(
+      <PreviewDialog file={pdf} onClose={vi.fn()} onNotify={vi.fn()} onShare={vi.fn()} onRename={vi.fn()} onDelete={vi.fn()} />
+    );
+    await waitFor(() => expect(document.querySelector("iframe")?.getAttribute("src")).toBe("blob:2"));
+    expect(made[0]).toBe(source);
+    expect(made[1]).not.toBe(source);
+    expect(made[1].size).toBeGreaterThan(source.size);
+    fireEvent.click(screen.getAllByText(strings.download)[0]);
+    expect(clicked).toEqual(["blob:1"]);
+    expect(mockDownload).not.toHaveBeenCalled();
+    unmount();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:1");
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:2");
+    click.mockRestore();
+  });
+});

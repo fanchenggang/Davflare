@@ -36,6 +36,7 @@ import {
   tokensToLines,
 } from "./app/highlight";
 import { NotifyFn } from "./app/notify";
+import { withPdfTitle } from "./app/pdfTitle";
 import {
   fileExtension,
   fileIconKind,
@@ -205,6 +206,8 @@ function PreviewDialog({
 }) {
   const isPhone = useMediaQuery("(max-width:600px)");
   const [url, setUrl] = useState<string | null>(null);
+  // PDF 预览用的是补了 Title 的副本（#149 附带问题）；下载仍给原文件
+  const originalUrlRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -266,6 +269,7 @@ function PreviewDialog({
       return;
     }
     let objectUrl: string | null = null;
+    let originalObjectUrl: string | null = null;
     let canceled = false;
     const controller = new AbortController();
     setLoading(true);
@@ -320,7 +324,18 @@ function PreviewDialog({
         }
         const blob = await response.blob();
         if (canceled) return;
-        objectUrl = URL.createObjectURL(blob);
+        if (mimeType(file.contentType) === "application/pdf") {
+          // 内置阅读器的标题栏默认显示 blob URL 里的 UUID；给预览副本写上文件名作为文档标题
+          const titled = await withPdfTitle(blob, file.name);
+          if (canceled) return;
+          if (titled !== blob) {
+            originalObjectUrl = URL.createObjectURL(blob);
+            originalUrlRef.current = originalObjectUrl;
+          }
+          objectUrl = URL.createObjectURL(titled);
+        } else {
+          objectUrl = URL.createObjectURL(blob);
+        }
         setUrl(objectUrl);
       } catch (error) {
         if (canceled || (error as Error).name === "AbortError") return;
@@ -334,6 +349,8 @@ function PreviewDialog({
       canceled = true;
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (originalObjectUrl) URL.revokeObjectURL(originalObjectUrl);
+      originalUrlRef.current = null;
     };
   }, [file]);
 
@@ -376,7 +393,7 @@ function PreviewDialog({
       }
       if (url) {
         const a = document.createElement("a");
-        a.href = url;
+        a.href = originalUrlRef.current ?? url;
         a.download = file.name;
         document.body.appendChild(a);
         a.click();

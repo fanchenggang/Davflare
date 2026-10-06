@@ -3,6 +3,7 @@ import { DownloadRequest, FileItem } from "./types";
 import { basename, encodeKey } from "./utils";
 import { translate } from "./strings";
 import { isMediaPreviewable, mimeType } from "./preview";
+import { withPdfTitle } from "./pdfTitle";
 
 import { WEBDAV_ENDPOINT } from "./uploadTransfer";
 
@@ -204,7 +205,10 @@ export async function openFile(key: string) {
     saveBlob(blob, basename(key) || "download");
     return;
   }
-  const url = URL.createObjectURL(openable);
+  // 新标签页里的 PDF：写上文件名作为文档标题，标签页和阅读器标题栏不再显示 UUID（#149 附带问题）
+  const shown =
+    mimeType(openable.type) === "application/pdf" ? await withPdfTitle(openable, basename(key)) : openable;
+  const url = URL.createObjectURL(shown);
   window.open(url, "_blank", "noopener,noreferrer");
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
