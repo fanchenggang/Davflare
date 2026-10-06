@@ -74,7 +74,7 @@ describe("docs publish", () => {
   test("plan writes a docs manifest before any page or image lands", async () => {
     const bucket = new InMemoryBucket();
     seed(bucket);
-    const plan = await post(bucket.asBucket(), { slug: "manual", docs: { phase: "plan", pages: ["intro.html"], images: ["notes/a.png"] } });
+    const plan = await post(bucket.asBucket(), { slug: "manual", docs: { phase: "plan", pages: ["intro.html"], sources: ["notes/intro.md"], images: ["notes/a.png"] } });
     expect(plan.status).toBe(200);
     const early = manifest(bucket, "manual");
     expect(early?.kind).toBe("docs");
@@ -90,7 +90,7 @@ describe("docs publish", () => {
       { key: "sites/mix/evil.html", body: "<script>alert(1)</script>" },
       { key: `sites/mix/${SITE_MANIFEST_NAME}`, body: serializeSiteManifest("dir", ["index.html", "evil.html", SITE_MANIFEST_NAME]) },
     ]);
-    const plan = await post(bucket.asBucket(), { slug: "mix", docs: { phase: "plan", pages: ["intro.html"], images: [] } });
+    const plan = await post(bucket.asBucket(), { slug: "mix", docs: { phase: "plan", pages: ["intro.html"], sources: ["intro.md"], images: [] } });
     const planId = plan.json?.planId as string;
     expect(manifest(bucket, "mix")?.kind).toBe("dir");
     const during = await serve(bucket.asBucket(), "/mix/evil.html");

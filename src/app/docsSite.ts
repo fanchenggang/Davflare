@@ -5,7 +5,18 @@
 // 服务端分配页面/图片文件名 → 用同一份 token 渲染成 html（渲染规则从 env 取解析结果）。
 import type { MarkdownIt as MarkdownItType, StateInline, Token } from "markdown-it";
 
-import { rasterExtension, renderDocsIndex, renderDocsPage, type DocsNavItem, type PageLang } from "../../functions/sitePages";
+import {
+  docsScopeOf,
+  isInDocsScope,
+  rasterExtension,
+  renderDocsIndex,
+  renderDocsPage,
+  shortenFileName,
+  type DocsNavItem,
+  type PageLang,
+} from "../../functions/sitePages";
+
+export { docsScopeOf, isInDocsScope };
 import { FileItem } from "./types";
 
 export type DocsMarkdown = MarkdownItType;
@@ -285,12 +296,13 @@ export function sortDocs<T extends { name: string }>(docs: T[]): T[] {
 
 /** Obsidian 常见附件目录名（相对笔记所在目录或其上级）。 */
 export const ATTACHMENT_DIRS = ["attachments", "Attachments", "assets", "images", "img", "附件", "_resources"];
-/** 每次发布最多用搜索兜底找几个文件名（搜索会扫全盘，太多会很慢）。 */
+/** 每次发布最多用搜索兜底找几个文件名（搜索只扫发布范围的子树，但仍是逐个列举）。 */
 export const DOCS_SEARCH_LOOKUPS = 20;
 
 export interface DocsLookupIO {
   listDir: (dir: string) => Promise<FileItem[]>;
-  search?: (name: string) => Promise<FileItem[]>;
+  /** 按文件名搜索；prefix 是「范围目录/」，只在这个子树里搜 */
+  search?: (name: string, prefix: string) => Promise<FileItem[]>;
 }
 
 export interface ResolvedImages {
@@ -298,8 +310,10 @@ export interface ResolvedImages {
   byRef: Map<string, string>;
   /** 去重后的图片（按首次出现顺序） */
   images: FileItem[];
-  /** 没找到或不是栅格图片的引用数 */
+  /** 发布范围内没找到的栅格图片引用数（![[笔记]]、pdf、svg 等非栅格嵌入不计入） */
   missing: number;
+  /** 路径指到发布范围之外、因此不会复制的图片引用数（#153） */
+  outOfScope: number;
 }
 
 function ancestorsOf(dir: string): string[] {
@@ -309,7 +323,22 @@ function ancestorsOf(dir: string): string[] {
   return out;
 }
 
-export async function resolveDocImages(docs: ParsedDoc[], io: DocsLookupIO): Promise<ResolvedImages> {
+/**
+ * 在网盘里找被引用的栅格图片，只在发布范围（scope，默认取笔记的公共目录）里找（#153）：
+ * - `../`、`/` 开头等解析到范围之外的路径不读、不复制，计入 outOfScope；
+ * - ![[x.png]] 的上级目录 / 附件目录查找不越过范围；
+ * - 搜索兜底只在范围子树里搜；范围是网盘根目录时不搜（否则等于全盘搜索）。
+ */
+export async function resolveDocImages(
+  docs: ParsedDoc[],
+  io: DocsLookupIO,
+  scopeArg?: string
+): Promise<ResolvedImages> {
+  const scope = scopeArg ?? docsScopeOf(docs.map((doc) => doc.key));
+  const inScope = (key: string | null): key is string => Boolean(key) && isInDocsScope(key as string, scope);
+  // 笔记所在目录及其上级，截止到范围目录（范围是根目录时只有根目录本身）
+  const scopedAncestors = (dir: string) =>
+    ancestorsOf(dir).filter((ancestor) => (scope ? ancestor === scope || ancestor.startsWith(`${scope}/`) : ancestor === ""));
   const listings = new Map<string, Promise<FileItem[]>>();
   const list = (dir: string) => {
     let pending = listings.get(dir);
@@ -329,12 +358,12 @@ export async function resolveDocImages(docs: ParsedDoc[], io: DocsLookupIO): Pro
   const searchCache = new Map<string, Promise<FileItem[]>>();
   let searches = 0;
   const searchByName = (name: string): Promise<FileItem[]> => {
-    if (!io.search) return Promise.resolve([]);
+    if (!io.search || !scope) return Promise.resolve([]);
     let pending = searchCache.get(name);
     if (!pending) {
       if (searches >= DOCS_SEARCH_LOOKUPS) return Promise.resolve([]);
       searches += 1;
-      pending = io.search(name).catch(() => [] as FileItem[]);
+      pending = io.search(name, `${scope}/`).catch(() => [] as FileItem[]);
       searchCache.set(name, pending);
     }
     return pending;
@@ -343,49 +372,56 @@ export async function resolveDocImages(docs: ParsedDoc[], io: DocsLookupIO): Pro
   const byRef = new Map<string, string>();
   const images = new Map<string, FileItem>();
   let missing = 0;
+  let outOfScope = 0;
 
   for (const doc of docs) {
     for (const ref of doc.refs) {
       const id = refId(ref.kind, doc.dir, ref.target);
       if (byRef.has(id)) continue;
       let found: FileItem | null = null;
-      if (rasterExtension(ref.target)) {
+      // 非栅格嵌入（![[笔记]]、pdf、svg…）本来就不复制、保留原文，不算「没找到」
+      if (!rasterExtension(ref.target)) continue;
+      {
         if (ref.kind === "md") {
           const key = resolveRelativeKey(doc.dir, ref.target);
+          if (key && !inScope(key)) {
+            outOfScope += 1;
+            continue;
+          }
           if (key) found = await fileAt(key);
         } else {
           const target = ref.target.replace(/^\/+/, "");
           const candidates: string[] = [];
           const relative = resolveRelativeKey(doc.dir, target);
-          if (relative) candidates.push(relative);
-          for (const ancestor of ancestorsOf(doc.dir)) {
+          if (inScope(relative)) candidates.push(relative);
+          for (const ancestor of scopedAncestors(doc.dir)) {
             const key = resolveRelativeKey(ancestor, target);
-            if (key && !candidates.includes(key)) candidates.push(key);
+            if (inScope(key) && !candidates.includes(key)) candidates.push(key);
           }
           for (const key of candidates) {
             found = await fileAt(key);
             if (found) break;
           }
           if (!found && !target.includes("/")) {
-            outer: for (const ancestor of ancestorsOf(doc.dir)) {
+            outer: for (const ancestor of scopedAncestors(doc.dir)) {
               for (const sub of ATTACHMENT_DIRS) {
+                const key = ancestor ? `${ancestor}/${sub}/${target}` : `${sub}/${target}`;
+                if (!inScope(key)) continue;
                 if (!(await hasSubdir(ancestor, sub))) continue;
-                found = await fileAt(ancestor ? `${ancestor}/${sub}/${target}` : `${sub}/${target}`);
+                found = await fileAt(key);
                 if (found) break outer;
               }
             }
           }
           if (!found) {
             const base = target.split("/").pop() || target;
-            const top = doc.dir.split("/")[0];
             const matches = (await searchByName(base)).filter(
               (item) =>
                 !item.isDir &&
                 item.name === base &&
                 (target.includes("/") ? item.key.endsWith(`/${target}`) || item.key === target : true) &&
-                (!top || item.key.startsWith(`${top}/`)) &&
-                !item.key.startsWith("sites/") &&
-                !item.key.includes("_$flaredrive$")
+                inScope(item.key) &&
+                !item.key.startsWith("sites/")
             );
             // 优先离笔记最近的（共同目录前缀最长），再按路径短
             const score = (key: string) => {
@@ -400,7 +436,7 @@ export async function resolveDocImages(docs: ParsedDoc[], io: DocsLookupIO): Pro
           }
         }
       }
-      if (found && rasterExtension(found.name)) {
+      if (found && rasterExtension(found.name) && inScope(found.key)) {
         byRef.set(id, found.key);
         if (!images.has(found.key)) images.set(found.key, found);
       } else {
@@ -408,14 +444,22 @@ export async function resolveDocImages(docs: ParsedDoc[], io: DocsLookupIO): Pro
       }
     }
   }
-  return { byRef, images: [...images.values()], missing };
+  return { byRef, images: [...images.values()], missing, outOfScope };
 }
 
 // ---------------------------------------------------------------- 渲染
 
+/** 页面文件名上限（与服务端 sanitizeSiteName 一致）；更长的文件名缩短而不是让整次发布失败（#153）。 */
+export const DOCS_PAGE_NAME_MAX = 200;
+
 export function desiredPageName(doc: { name: string }): string {
   const stem = stemOf(doc.name).trim() || "page";
-  return `${stem}.html`;
+  return shortenFileName(`${stem}.html`, DOCS_PAGE_NAME_MAX);
+}
+
+export function isPageNameShortened(doc: { name: string }): boolean {
+  const stem = stemOf(doc.name).trim() || "page";
+  return desiredPageName(doc) !== `${stem}.html`;
 }
 
 export interface RenderedDocsSite {

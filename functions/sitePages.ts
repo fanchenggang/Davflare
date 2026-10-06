@@ -592,6 +592,47 @@ ${subdirs > 0 ? `<p class="note">${escapeHtml(pageLabel(lang, "siteDirSubdirsNot
   return docShell(lang, options.title, body);
 }
 
+/**
+ * 文档站的「发布范围」（#153）：所选笔记的公共目录。图片只能来自这个目录的子树。
+ * 范围是网盘根目录（笔记在根目录，或分散在不同顶层文件夹）时只认根目录当前层，绝不放开到全盘。
+ */
+export function docsScopeOf(keys: string[]): string {
+  let common: string[] | null = null;
+  for (const key of keys) {
+    const parts = key.split("/").filter(Boolean);
+    parts.pop();
+    if (common === null) {
+      common = parts;
+      continue;
+    }
+    let i = 0;
+    while (i < common.length && i < parts.length && common[i] === parts[i]) i += 1;
+    common = common.slice(0, i);
+  }
+  return (common ?? []).join("/");
+}
+
+export function isInDocsScope(key: string, scope: string): boolean {
+  if (!key || key.includes("_$flaredrive$")) return false;
+  if (key.split("/").some((part) => !part || part === "." || part === "..")) return false;
+  if (!scope) return !key.includes("/");
+  return key.startsWith(`${scope}/`);
+}
+
+/** 文件名按 UTF-16 长度截短但保留扩展名，且不切断代理对（#153：长文件名不再让整次发布 400）。 */
+export function shortenFileName(name: string, max: number): string {
+  if (name.length <= max) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 16 ? name.slice(dot) : "";
+  const budget = Math.max(1, max - ext.length);
+  let stem = "";
+  for (const ch of Array.from(ext ? name.slice(0, dot) : name)) {
+    if (stem.length + ch.length > budget) break;
+    stem += ch;
+  }
+  return `${stem.trimEnd() || "file"}${ext}`;
+}
+
 export function checkDocsLimits(
   pages: number,
   images: number,

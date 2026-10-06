@@ -2,11 +2,15 @@ import MarkdownIt from "markdown-it";
 import { vi } from "vitest";
 import {
   ATTACHMENT_DIRS,
+  DOCS_PAGE_NAME_MAX,
   DOCS_SEARCH_LOOKUPS,
   ParsedDoc,
   createDocsMarkdown,
   desiredPageName,
+  docsScopeOf,
   isExternalUrl,
+  isInDocsScope,
+  isPageNameShortened,
   loadDocsMarkdown,
   parseDoc,
   refId,
@@ -259,7 +263,7 @@ describe("resolveDocImages", () => {
     return { listDir, all };
   }
 
-  test("relative refs, ancestors, attachment folders; non-raster and missing counted", async () => {
+  test("relative refs, ancestors, attachment folders; non-raster not counted, missing counted", async () => {
     const { listDir } = fakeDrive([
       "vault/",
       "vault/notes/",
@@ -270,8 +274,10 @@ describe("resolveDocImages", () => {
       "vault/attachments/att.jpg",
       "vault/notes/pic.svg",
     ]);
-    const a = doc("vault/notes/a.md", "![](img/one.png) ![[root.png]] ![[att.jpg]] ![](pic.svg) ![](nope.png) ![[img/one.png]]");
-    const result = await resolveDocImages([a], { listDir });
+    const a = doc("vault/notes/a.md", "![](img/one.png) ![[root.png]] ![[att.jpg]] ![](pic.svg) ![](nope.png) ![[img/one.png]] ![[Other note]]");
+    const top = doc("vault/index.md", "hello");
+    // 范围 = 所选笔记的公共目录 vault：上级目录、附件目录在范围内
+    const result = await resolveDocImages([a, top], { listDir });
     expect(result.byRef.get(refId("md", "vault/notes", "img/one.png"))).toBe("vault/notes/img/one.png");
     expect(result.byRef.get(refId("wiki", "vault/notes", "root.png"))).toBe("vault/root.png");
     expect(result.byRef.get(refId("wiki", "vault/notes", "att.jpg"))).toBe("vault/attachments/att.jpg");
@@ -281,23 +287,80 @@ describe("resolveDocImages", () => {
       "vault/root.png",
       "vault/attachments/att.jpg",
     ]);
-    expect(result.missing).toBe(2);
+    // 只有 nope.png 算没找到：svg 与 ![[笔记]] 不是栅格图片，不计入（#153 计数虚高）
+    expect(result.missing).toBe(1);
+    expect(result.outOfScope).toBe(0);
     expect(ATTACHMENT_DIRS).toContain("attachments");
   });
 
-  test("search fallback is scoped to the same top folder and prefers the closest match", async () => {
+  test("#153: ancestors and attachment folders never climb above the published folder", async () => {
+    const { listDir } = fakeDrive(["vault/", "vault/notes/", "vault/root.png", "vault/attachments/", "vault/attachments/att.jpg"]);
+    const a = doc("vault/notes/a.md", "![[root.png]] ![[att.jpg]]");
+    const result = await resolveDocImages([a], { listDir });
+    expect(result.images).toEqual([]);
+    expect(result.missing).toBe(2);
+    expect(listDir.mock.calls.map(([dir]) => dir)).not.toContain("vault");
+  });
+
+  test("#153: ../ and / paths outside the published folder are dropped, not read", async () => {
+    const { listDir } = fakeDrive(["vault/", "vault/notes/", "vault/secret.png", "secret/", "secret/top.png", "vault/notes/ok.png"]);
+    const a = doc(
+      "vault/notes/a.md",
+      "![](../secret.png) ![](/secret/top.png) ![](../../secret/top.png) ![](ok.png) ![](sub/../ok.png)"
+    );
+    const result = await resolveDocImages([a], { listDir });
+    expect(result.images.map((image) => image.key)).toEqual(["vault/notes/ok.png"]);
+    expect(result.outOfScope).toBe(3);
+    expect(result.missing).toBe(0);
+    for (const [dir] of listDir.mock.calls) expect(dir === "vault/notes" || dir.startsWith("vault/notes/")).toBe(true);
+  });
+
+  test("#153: wiki paths with ../ or a leading / stay inside the scope", async () => {
+    const { listDir } = fakeDrive(["v/", "v/n/", "v/n/x.png", "x.png", "other/", "other/x.png"]);
+    const a = doc("v/n/a.md", "![[../x.png]] ![[/other/x.png]]");
+    const result = await resolveDocImages([a], { listDir });
+    expect(result.images).toEqual([]);
+    expect(result.missing).toBe(2);
+  });
+
+  test("#153: a root-level note never searches the drive", async () => {
+    const { listDir } = fakeDrive(["Other/", "Other/pic.png"]);
+    const search = vi.fn(async () => [item("Other/pic.png")]);
+    const result = await resolveDocImages([doc("root.md", "![[pic.png]] ![](Other/pic.png)")], { listDir, search });
+    expect(search).not.toHaveBeenCalled();
+    expect(result.images).toEqual([]);
+    expect(result.missing).toBe(1);
+    expect(result.outOfScope).toBe(1);
+  });
+
+  test("#153: root-level scope still finds images next to the notes", async () => {
+    const { listDir } = fakeDrive(["pic.png"]);
+    const result = await resolveDocImages([doc("root.md", "![[pic.png]] ![](pic.png)")], { listDir });
+    expect(result.images.map((image) => image.key)).toEqual(["pic.png"]);
+  });
+
+  test("search fallback is confined to the published folder subtree and prefers the closest match", async () => {
     const { listDir } = fakeDrive(["vault/", "vault/a/", "vault/a/b/"]);
     const search = vi.fn(async () => [
       item("other/x.png"),
       item("vault/far/away/x.png"),
       item("vault/a/x.png"),
+      item("vault/a/b/c/x.png"),
       item("vault/a/xx.png"),
       item("sites/s/x.png"),
     ]);
     const a = doc("vault/a/b/n.md", "![[x.png]]");
     const result = await resolveDocImages([a], { listDir, search });
-    expect(result.images.map((image) => image.key)).toEqual(["vault/a/x.png"]);
-    expect(search).toHaveBeenCalledWith("x.png");
+    expect(result.images.map((image) => image.key)).toEqual(["vault/a/b/c/x.png"]);
+    expect(search).toHaveBeenCalledWith("x.png", "vault/a/b/");
+  });
+
+  test("search results outside the scope are ignored even if the server returns them", async () => {
+    const { listDir } = fakeDrive(["vault/", "vault/a/"]);
+    const search = vi.fn(async () => [item("vault/x.png"), item("other/vault/a/x.png")]);
+    const result = await resolveDocImages([doc("vault/a/n.md", "![[x.png]]")], { listDir, search });
+    expect(result.images).toEqual([]);
+    expect(result.missing).toBe(1);
   });
 
   test("search lookups are capped and failures are treated as missing", async () => {
@@ -317,5 +380,33 @@ describe("resolveDocImages", () => {
     });
     const result = await resolveDocImages([doc("v/n.md", "![](a.png)")], { listDir });
     expect(result.missing).toBe(1);
+  });
+});
+
+describe("#153 scope helpers", () => {
+  test("docsScopeOf is the common folder; mixed top folders collapse to the root", () => {
+    expect(docsScopeOf(["v/a.md", "v/b.md"])).toBe("v");
+    expect(docsScopeOf(["v/n/a.md", "v/b.md"])).toBe("v");
+    expect(docsScopeOf(["v/a.md", "w/b.md"])).toBe("");
+    expect(docsScopeOf(["a.md"])).toBe("");
+  });
+
+  test("isInDocsScope: subtree only; root scope means root level only", () => {
+    expect(isInDocsScope("v/x.png", "v")).toBe(true);
+    expect(isInDocsScope("v/a/b/x.png", "v")).toBe(true);
+    expect(isInDocsScope("vv/x.png", "v")).toBe(false);
+    expect(isInDocsScope("v/../x.png", "v")).toBe(false);
+    expect(isInDocsScope("x.png", "")).toBe(true);
+    expect(isInDocsScope("a/x.png", "")).toBe(false);
+    expect(isInDocsScope("_$flaredrive$/x.png", "")).toBe(false);
+  });
+
+  test("desiredPageName shortens long names, keeps .html and surrogate pairs intact", () => {
+    const name = desiredPageName({ name: `${"😀".repeat(150)}.md` });
+    expect(name.endsWith(".html")).toBe(true);
+    expect(name.length).toBeLessThanOrEqual(DOCS_PAGE_NAME_MAX);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(name)).toBe(false);
+    expect(isPageNameShortened({ name: `${"😀".repeat(150)}.md` })).toBe(true);
+    expect(isPageNameShortened({ name: "short.md" })).toBe(false);
   });
 });
