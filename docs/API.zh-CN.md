@@ -155,7 +155,7 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 管理端（Basic 会话或 API key，与分享相同）：
 
 ```bash
-# 创建（文件夹须存在，且不在 sites/ 或内部目录下）。有效期默认且最长 168 小时（7 天）
+# 创建（文件夹须存在，且不在 sites/ 或内部目录下；文件夹路径 ≤ 774 字节 UTF-8）。有效期默认且最长 168 小时（7 天）
 curl -X POST "https://<your-domain.com>/api/collects" \
   -H "Authorization: Bearer <apiKey>" -H "Content-Type: application/json" \
   -d '{"folder":"inbox/作业","expiresInHours":72,"note":"请上传本周作业"}'
@@ -178,7 +178,7 @@ curl -X DELETE "https://<your-domain.com>/api/collects?token=<token>" -H "Author
 | `POST /collect/<token>/complete` | `{ uploadId, parts }` | 按实际大小再查一次限额，然后以服务端选定的文件名直接存进目标文件夹。→ `{ ok, size, remainingFiles, remainingBytes }`（**不**返回最终文件名）。 |
 | `POST /collect/<token>/abort` | `{ uploadId }` | → 204。过期/停用后也允许。 |
 
-错误统一为 `{ "error": "<code>" }`（`not_found` 404，`expired`/`disabled`/`folder_gone` 410，`file_too_large`/`too_many_files`/`quota_exceeded`/`part_too_large` 413，`too_many_pending` 429，`busy` 503 …）。文件名会清洗（只取最后一段路径，去掉控制/双向字符和开头的点），且永不覆盖：`a.txt` → `a-2.txt` → `a-3.txt`。不在被动类型白名单（图片、音视频、PDF、纯文本、压缩包、Office）里的内容类型一律存成 `application/octet-stream`。
+错误统一为 `{ "error": "<code>" }`（`not_found` 404，`expired`/`disabled`/`folder_gone` 410，`file_too_large`/`too_many_files`/`quota_exceeded`/`part_too_large` 413，`too_many_pending` 429，`busy` 503 …）。文件名会清洗（只取最后一段路径，去掉控制/双向/不可见字符和开头的点，`%XX` 转义与 Windows 保留字符替换成 `_`，最长 180 个字符 / 240 字节 UTF-8），且永不覆盖：`a.txt` → `a-2.txt` → `a-3.txt`。不在被动类型白名单（图片、音视频、PDF、纯文本、压缩包、Office）里的内容类型一律存成 `application/octet-stream`。
 
 ### 复制、stat、搜索
 

@@ -155,7 +155,7 @@ A file request link lets anyone with the link upload into **one folder** without
 Management (Basic session or API key, like shares):
 
 ```bash
-# create (folder must exist; not under sites/ or the internal prefix). Default and maximum expiry: 168 h (7 days)
+# create (folder must exist; not under sites/ or the internal prefix; folder path ≤ 774 UTF-8 bytes). Default and maximum expiry: 168 h (7 days)
 curl -X POST "https://<your-domain.com>/api/collects" \
   -H "Authorization: Bearer <apiKey>" -H "Content-Type: application/json" \
   -d '{"folder":"inbox/homework","expiresInHours":72,"note":"Please upload this week'"'"'s homework"}'
@@ -178,7 +178,7 @@ Anonymous side (no auth, the token is the credential): `GET /collect/<token>` re
 | `POST /collect/<token>/complete` | `{ uploadId, parts }` | Re-checks limits with the actual size, then stores the file directly in the target folder under a server-chosen name. → `{ ok, size, remainingFiles, remainingBytes }` (the final name is **not** returned). |
 | `POST /collect/<token>/abort` | `{ uploadId }` | → 204. Allowed even after expiry/disable. |
 
-Errors are `{ "error": "<code>" }` (`not_found` 404, `expired`/`disabled`/`folder_gone` 410, `file_too_large`/`too_many_files`/`quota_exceeded`/`part_too_large` 413, `too_many_pending` 429, `busy` 503 …). Names are sanitized (last path segment only, control/bidi characters stripped, leading dots removed) and never overwrite: `a.txt` → `a-2.txt` → `a-3.txt`. Content types other than a passive allow-list (images, audio/video, PDF, plain text, archives, Office) are stored as `application/octet-stream`.
+Errors are `{ "error": "<code>" }` (`not_found` 404, `expired`/`disabled`/`folder_gone` 410, `file_too_large`/`too_many_files`/`quota_exceeded`/`part_too_large` 413, `too_many_pending` 429, `busy` 503 …). Names are sanitized (last path segment only, control/bidi/invisible characters stripped, leading dots removed, `%XX` escapes and Windows-reserved characters replaced with `_`, capped at 180 characters / 240 UTF-8 bytes) and never overwrite: `a.txt` → `a-2.txt` → `a-3.txt`. Content types other than a passive allow-list (images, audio/video, PDF, plain text, archives, Office) are stored as `application/octet-stream`.
 
 ### Copy, stat, search
 
