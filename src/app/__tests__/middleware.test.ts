@@ -132,6 +132,76 @@ describe("sites host: static serving", () => {
     expect(await response.text()).toBe("<h1>about</h1>");
   });
 
+  test("folder-marker objects are directories: 301 when sub/index.html exists (#157)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    // MKCOL / 新建文件夹 / 上传 API 都会写 0 字节 x-directory 标记，key 不带尾斜杠
+    bucket.seedDir("sites/blog/guide");
+    bucket.seedDir("sites/blog/v1.2");
+    bucket.seed([
+      { key: "sites/blog/guide/index.html", body: "<h1>guide</h1>", contentType: "text/html" },
+      { key: "sites/blog/v1.2/index.html", body: "<h1>v1.2</h1>", contentType: "text/html" },
+    ]);
+    for (const method of ["GET", "HEAD"]) {
+      const redirect = await siteRequest("/blog/guide?x=1", defaultEnv(bucket), { method });
+      expect(redirect.status).toBe(301);
+      expect(redirect.headers.get("Location")).toBe("http://sites.example.com/blog/guide/?x=1");
+    }
+    // 目录名带点（tryIndex=false）也按目录处理
+    const dotted = await siteRequest("/blog/v1.2", defaultEnv(bucket));
+    expect(dotted.status).toBe(301);
+    expect(dotted.headers.get("Location")).toBe("http://sites.example.com/blog/v1.2/");
+    const page = await siteRequest("/blog/guide/", defaultEnv(bucket));
+    expect(page.status).toBe(200);
+    expect(await page.text()).toBe("<h1>guide</h1>");
+  });
+
+  test("a folder marker without index.html is never served as an empty 200 file (#157)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    bucket.seedDir("sites/blog/empty");
+    bucket.seed([
+      { key: "sites/blog/typed", body: new Uint8Array(0), contentType: "application/x-directory" },
+      { key: "sites/blog/meta", body: new Uint8Array(0), customMetadata: { resourcetype: "<collection />" } },
+    ]);
+    for (const path of ["/blog/empty", "/blog/typed", "/blog/meta"]) {
+      const response = await siteRequest(path, defaultEnv(bucket));
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Content-Type")).not.toBe("application/x-directory");
+    }
+    // 站点有 404.html 时走 404 页面，同样不是 200
+    bucket.seed([{ key: "sites/blog/404.html", body: "<h1>nope</h1>", contentType: "text/html" }]);
+    const custom = await siteRequest("/blog/empty", defaultEnv(bucket));
+    expect(custom.status).toBe(404);
+    expect(await custom.text()).toBe("<h1>nope</h1>");
+  });
+
+  test("folder marker on a password-protected site: gate first, then private redirect (#157)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const passwordHash = await sha256Hex("gate");
+    bucket.seedDir("sites/blog/guide");
+    bucket.seed([
+      { key: "sites/blog/guide/index.html", body: "<h1>guide</h1>", contentType: "text/html" },
+      { key: siteConfigKey("blog"), body: JSON.stringify({ slug: "blog", passwordHash }), contentType: "application/json" },
+    ]);
+    expect((await siteRequest("/blog/guide", defaultEnv(bucket))).status).toBe(401);
+    const ok = await siteRequest("/blog/guide", defaultEnv(bucket), {
+      headers: { Authorization: `Basic ${utf8ToBase64(":gate")}` },
+    });
+    expect(ok.status).toBe(301);
+    expect(ok.headers.get("Cache-Control")).toBe("private, max-age=60");
+  });
+
+  test("ordinary extensionless files are still served as files", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    bucket.seed([{ key: "sites/blog/LICENSE", body: "MIT", contentType: "text/plain" }]);
+    const response = await siteRequest("/blog/LICENSE", defaultEnv(bucket));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("MIT");
+  });
+
   test("site root without trailing slash 301s to /{slug}/ keeping the query (#145)", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);

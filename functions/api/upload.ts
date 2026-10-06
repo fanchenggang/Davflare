@@ -24,12 +24,8 @@ function tooLarge() {
 }
 
 function normalizeFolder(raw: string | null): string | Response {
+  // 查询参数已由 URLSearchParams 解码一次，这里不再解码（文件名里的字面量 %XX 保持原样）
   let path = (raw || "").trim();
-  try {
-    path = decodeURIComponent(path);
-  } catch {
-    // keep raw
-  }
   path = path.replace(/\\/g, "/").replace(/^\/+/, "");
   if (!path) return "";
   const parts = path.split("/").filter((part) => part && part !== ".");
@@ -147,12 +143,8 @@ async function readUpload(
 
 // 分块上传：path 为完整文件键（目录/文件名）
 function multipartFileKey(raw: string | null): string | Response {
-  let path = (raw || "").trim();
-  try {
-    path = decodeURIComponent(path);
-  } catch {
-    // keep raw
-  }
+  // 同 normalizeFolder：只依赖 URLSearchParams 的一次解码
+  const path = (raw || "").trim();
   if (!path) return textResponse("分块上传需要 path 指向完整文件键", 400);
   const parts = path
     .replace(/\\/g, "/")

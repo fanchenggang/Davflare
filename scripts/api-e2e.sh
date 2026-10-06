@@ -87,6 +87,13 @@ assert_contains "dir gone after delete" "$(curl -s --noproxy '*' "$BASE/api/list
 code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X DELETE "$BASE/api/delete?path=$DIR/apitest/missing.txt" -H "$A")
 assert_code "delete missing = 404" "$code" "404"
 
+echo "== 开放接口：path 只解码一次 =="
+curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/pct/" -H "$A" -H "X-File-Name: keep.txt" --data-binary "keep" -o /dev/null
+curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/pct/" -H "$A" -H "X-File-Name: %2e" --data-binary "dot" -o /dev/null
+code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" -X DELETE "$BASE/api/delete?path=$DIR/pct/%252e&soft=1" -H "$A")
+assert_code "soft delete literal %2e 200" "$code" "200"
+assert_contains "folder kept after deleting %2e" "$(curl -s --noproxy '*' "$BASE/api/list?path=$DIR/pct/" -H "$A")" "keep.txt"
+
 echo "== 开放接口：backup =="
 curl -s --noproxy '*' -X POST "$BASE/api/upload?path=$DIR/apitest/" -H "$A" -H "X-File-Name: backup-target.txt" --data-binary "to-backup" -o /dev/null
 code=$(curl -s --noproxy '*' -o /tmp/o.json -w "%{http_code}" -X POST "$BASE/api/backup?path=$DIR/apitest/backup-target.txt" -H "$A")
