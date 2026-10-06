@@ -513,6 +513,38 @@ const entries: Record<string, DictionaryEntry> = {
   uploadLimitNote: { zh: "单次上传限制约 128MB，更大的文件请用网页端分块上传。", en: "A single upload is limited to ~128MB; use the web chunked uploader for larger files." },
   finderHowTo: { zh: "macOS Finder：菜单「前往」→「连接服务器」，粘贴上述地址。", en: "macOS Finder: Go → Connect to Server, then paste the address above." },
   passwordNote: { zh: "密码与网页登录密码相同，此处不显示。", en: "The password is the same as your web sign-in; it is not shown here." },
+  obsidianSyncTitle: { zh: "Obsidian 同步", en: "Obsidian sync" },
+  obsidianSyncIntro: {
+    zh: "用社区插件 Remotely Save 把 Obsidian 库同步到这里。插件里「选择远程服务」选 Webdav，按下面填写：",
+    en: "Sync an Obsidian vault here with the Remotely Save community plugin. In \"Choose A Remote Service\" pick Webdav, then fill in:",
+  },
+  obsidianServerAddress: { zh: "服务器地址", en: "Server Address" },
+  obsidianCopyServerAddress: { zh: "复制服务器地址", en: "Copy server address" },
+  obsidianUsernameLine: { zh: "用户名：{username}", en: "Username: {username}" },
+  obsidianCopyAccount: { zh: "复制 Obsidian 用户名", en: "Copy Obsidian username" },
+  obsidianPasswordTip: {
+    zh: "密码：填网页登录密码（此处不显示）",
+    en: "Password: your web sign-in password (not shown here)",
+  },
+  obsidianAuthTip: { zh: "鉴权类型：basic", en: "Auth Type: basic" },
+  obsidianDepthTip: {
+    zh: "Depth 设置：保持默认「只支持 depth='1'」（实测 depth='infinity' 也可用，但大库单次请求更重）",
+    en: "Depth Header: keep the default \"only supports depth='1'\" (depth='infinity' also passed testing, but is heavier per request on large vaults)",
+  },
+  obsidianBaseDirTip: {
+    zh: "远端基文件夹：留空即用库名，会建在 WebDAV 根目录下；多台设备库名不一致时，都改成同一个名字（单层，不能含 /）",
+    en: "Remote Base Directory: leave empty to use the vault name (created at the WebDAV root); if vault names differ across devices, set the same single-level name everywhere (no /)",
+  },
+  obsidianCheckTip: {
+    zh: "先点「检查可否连接」→「检查」，成功后再同步",
+    en: "Click \"Check Connectivity\" → \"Check\" first, then sync",
+  },
+  obsidianSizeTip: {
+    zh: "单个文件需小于 100MB；改名会按「删除 + 重新上传」同步",
+    en: "Each file must be under 100MB; renames sync as delete + re-upload",
+  },
+  obsidianCopyGuide: { zh: "复制 Obsidian 配置", en: "Copy Obsidian settings" },
+  obsidianGuideLabel: { zh: "Obsidian 配置", en: "Obsidian settings" },
 
   // —— 本轮新增（硬编码文案收编）——
   language: { zh: "语言", en: "Language" },

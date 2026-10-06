@@ -398,6 +398,52 @@ function calcContentRange(object: R2ObjectBody) {
   return { rangeOffset, rangeEnd };
 }
 
+// WebDAV 客户端（Obsidian Remotely Save、Cyberduck 等）上传附件时常带 application/octet-stream
+// 或不带类型；网页端按 contentType 决定图片/PDF/音视频预览与缩略图。这里只在「未声明或泛型」时按扩展名补齐，
+// 且只补「内联渲染也安全」的类型（不含 html/svg/js/xml，避免同源下把上传内容当页面执行）。
+const SAFE_UPLOAD_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  pdf: "application/pdf",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  md: "text/markdown",
+  markdown: "text/markdown",
+  txt: "text/plain",
+  csv: "text/csv",
+  json: "application/json",
+  canvas: "application/json",
+};
+
+function guessUploadContentType(resourcePath: string): string | undefined {
+  const base = resourcePath.split("/").pop() ?? "";
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return undefined;
+  return SAFE_UPLOAD_MIME[base.slice(dot + 1).toLowerCase()];
+}
+
+/** PUT 写入 R2 的 httpMetadata：声明了具体类型就原样保留，否则按扩展名补安全类型。 */
+function uploadHttpMetadata(headers: Headers, resourcePath: string): Headers {
+  const declared = (headers.get("Content-Type") ?? "").split(";")[0].trim().toLowerCase();
+  if (declared !== "" && declared !== "application/octet-stream") return headers;
+  const guessed = guessUploadContentType(resourcePath);
+  if (guessed === undefined) return headers;
+  const next = new Headers(headers);
+  next.set("Content-Type", guessed);
+  return next;
+}
+
 export {
   DAV_ENDPOINT,
   DAV_ENDPOINT_WITH_SLASH,
@@ -426,4 +472,6 @@ export {
   listAll,
   deleteAll,
   calcContentRange,
+  guessUploadContentType,
+  uploadHttpMetadata,
 };

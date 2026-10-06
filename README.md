@@ -48,6 +48,26 @@ Share (expiry + extract code):
 
 Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs/deploy.md).
 
+## Free Obsidian sync in 10 minutes
+
+Sync an Obsidian vault to Davflare's WebDAV (`/webdav`) with the community plugin [Remotely Save](https://github.com/remotely-save/remotely-save). Every device shares one copy, no extra server.
+
+1. Deploy Davflare (see Quick start above) and keep the WebDAV switch on in `#/settings` (on by default).
+2. Open the drive → **WebDAV** in the top bar → **Obsidian sync** card, then click "Copy server address" (looks like `https://<your-domain>/webdav/`) and "Copy Obsidian username". The password is `WEBDAV_PASSWORD` (your web sign-in password); the card never shows it.
+3. Obsidian → Settings → Community plugins → Browse, install and enable **Remotely Save**.
+4. In Remotely Save settings:
+   - Choose A Remote Service: **Webdav**
+   - Server Address / Username / Password: from step 2
+   - Auth Type: **basic**
+   - Depth Header Sent To Servers: keep the default **only supports depth='1'**
+   - Remote Base Directory: leave empty (defaults to the vault name, created at the WebDAV root); if your devices use different vault names, set the same single-level name on all of them (no `/`)
+5. Click "Check Connectivity" → "Check" and wait for the success notice.
+6. Click the Remotely Save icon in the left ribbon to sync once. Configure the second device with steps 3–5 and sync it to get the same content.
+
+Tested (local `wrangler pages dev` plus the same `webdav` client the plugin uses, replaying Remotely Save 0.5.25's request sequence as two devices syncing both ways): Chinese file names, spaces, special characters such as `+ & ' % #`, nested folders, empty folders, PNG / PDF attachments, 5MB / 12MB files, deletes, file renames, folder renames, and both depth='1' and depth='infinity' listing.
+
+Limits: each file must be under 100MB (Cloudflare's request body limit; larger uploads get 413). Remotely Save syncs a rename as "delete old file + upload new file".
+
 ## Documentation
 
 | Topic | Link |

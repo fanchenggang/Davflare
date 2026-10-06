@@ -48,6 +48,26 @@
 
 完整 Pages / Wrangler 步骤与五个功能开关见 [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md)。
 
+## 10 分钟搭一个免费的 Obsidian 同步
+
+用 Obsidian 社区插件 [Remotely Save](https://github.com/remotely-save/remotely-save) 把库同步到 Davflare 的 WebDAV（`/webdav`），多台设备共用一份，不用额外服务器。
+
+1. 按上面「快速开始」部署 Davflare，`#/settings` 里 WebDAV 开关保持打开（默认开）。
+2. 打开网盘 → 顶栏 **WebDAV** → **Obsidian 同步** 卡片，点「复制服务器地址」（形如 `https://<你的域名>/webdav/`）和「复制 Obsidian 用户名」。密码就是 `WEBDAV_PASSWORD`（网页登录密码），卡片里不显示。
+3. Obsidian → 设置 → 第三方插件 → 浏览，搜索安装并启用 **Remotely Save**。
+4. Remotely Save 设置里：
+   - 选择远程服务：**Webdav**
+   - 服务器地址 / 用户名 / 密码：填第 2 步的内容
+   - 鉴权类型：**basic**
+   - 发送到服务器的 Depth header：保持默认 **只支持 depth='1'**
+   - 远端基文件夹：留空（默认用库名，在 WebDAV 根目录下建同名文件夹）；两台设备库名不同时，改成同一个名字（单层，不能含 `/`）
+5. 点「检查可否连接」→「检查」，看到连接成功的提示。
+6. 点左侧边栏的 Remotely Save 图标同步一次；第二台设备按第 3–5 步同样配置，再同步一次就能拿到同样的内容。
+
+已实测（本地 `wrangler pages dev` + 与插件相同的 `webdav` 客户端，按 Remotely Save 0.5.25 的请求序列模拟两台设备双向同步）：中文文件名、空格、`+ & ' % #` 等特殊字符、多层目录、空目录、PNG / PDF 附件、5MB / 12MB 大文件、删除、文件改名、目录改名，以及 depth='1' 与 depth='infinity' 两种列目录方式。
+
+限制：单个文件需小于 100MB（Cloudflare 单次请求体上限，超出返回 413）；Remotely Save 把改名同步为「删除旧文件 + 上传新文件」。
+
 ## 文档
 
 | 主题 | 链接 |

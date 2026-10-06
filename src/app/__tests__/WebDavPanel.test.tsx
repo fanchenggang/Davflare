@@ -101,4 +101,55 @@ describe("WebDavPanel", () => {
     );
   });
 
+  test("Obsidian 同步卡片：复制服务器地址/用户名/配置，且从不展示密码", async () => {
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      // 即便接口意外带回密码字段，卡片也不能展示或复制它
+      json: async () => ({ username: "alice", publicRead: false, password: "s3cret-pass" }),
+    } as unknown as Response);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const onNotify = vi.fn();
+    render(<WebDavPanel open onClose={vi.fn()} onNotify={onNotify} />);
+
+    const card = await screen.findByRole("region", { name: strings.obsidianSyncTitle });
+    const server = `${window.location.origin}/webdav/`;
+    expect(screen.getByTestId("obsidian-server-address")).toHaveTextContent(server);
+    expect(card).toHaveTextContent(translate("obsidianUsernameLine", { username: "alice" }));
+    expect(card).toHaveTextContent(strings.obsidianDepthTip);
+    expect(card).toHaveTextContent(strings.obsidianBaseDirTip);
+    expect(document.body.textContent).not.toContain("s3cret-pass");
+
+    fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyServerAddress }));
+    fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyAccount }));
+    fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyGuide }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(3));
+    expect(writeText).toHaveBeenNthCalledWith(1, server);
+    expect(writeText).toHaveBeenNthCalledWith(2, "alice");
+    const guide = writeText.mock.calls[2][0] as string;
+    expect(guide).toContain(server);
+    expect(guide).toContain(strings.obsidianAuthTip);
+    expect(guide).toContain(strings.obsidianPasswordTip);
+    for (const [text] of writeText.mock.calls) expect(text).not.toContain("s3cret-pass");
+    expect(onNotify).toHaveBeenCalledWith(
+      translate("copiedFormat", { label: strings.obsidianServerAddress }),
+      "success"
+    );
+  });
+
+  test("Obsidian 同步卡片：英文文案；未配置用户名时不出现复制用户名按钮", async () => {
+    setLang("en");
+    mockAuthFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ username: "", publicRead: false }),
+    } as unknown as Response);
+    render(<WebDavPanel open onClose={vi.fn()} onNotify={vi.fn()} />);
+    const card = await screen.findByRole("region", { name: "Obsidian sync" });
+    expect(card).toHaveTextContent("Remotely Save");
+    expect(card).toHaveTextContent("Username: (not configured)");
+    expect(screen.getByRole("button", { name: "Copy server address" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy Obsidian username" })).toBeNull();
+  });
 });

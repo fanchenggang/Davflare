@@ -27,6 +27,7 @@ import {
   thumbnailObjectKey,
   thumbnailRefKey,
   timingSafeEqual,
+  uploadHttpMetadata,
 } from "./davUtil";
 import {
   DAV_NAMESPACE,
@@ -348,7 +349,7 @@ async function handlePut({
     conditionalHeaders.has("if-range");
   const result = await bucket.put(path, body, {
     ...(hasPreconditions ? { onlyIf: conditionalHeaders } : {}),
-    httpMetadata: request.headers,
+    httpMetadata: uploadHttpMetadata(request.headers, path),
     customMetadata: preservedMetadata,
   });
   if (!result) {
@@ -1393,6 +1394,9 @@ function addCorsHeaders(response: Response, request: Request): Response {
       "lock-token",
       "timeout",
       "fd-thumbnail",
+      // Obsidian Remotely Save 每个请求都带 Cache-Control: no-cache；不放行时走 fetch 的客户端（旧版移动端、浏览器）会被预检拦下
+      "cache-control",
+      "pragma",
     ].join(", "),
   );
   response.headers.set(

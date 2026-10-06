@@ -17,6 +17,7 @@ import { authFetch } from "./app/auth";
 import { NotifyFn } from "./app/notify";
 import { strings, translate } from "./app/strings";
 import { errorMessage } from "./app/utils";
+import ObsidianSyncCard from "./ObsidianSyncCard";
 
 interface WebDavInfo {
   username: string;
@@ -149,6 +150,11 @@ function WebDavPanel({
                 {strings.copyWebDavGuide}
               </Button>
             </Box>
+            <ObsidianSyncCard
+              serverAddress={`${webdavUrl}/`}
+              username={info?.username}
+              onCopy={copy}
+            />
           </Stack>
         )}
       </DialogContent>
