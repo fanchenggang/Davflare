@@ -102,6 +102,10 @@ Rules:
 - Coexists with site access password: Host resolve → Basic Auth gate → content (same order as a future `_redirects` hook).
 - `/api`, `/webdav`, `/mcp`, `/share`, and `/collect` on a custom hostname are not remapped to site files (reserved for the drive product).
 
+## Site index and the trash
+
+Publishing a public directory, album, docs site or nav page writes a generated `index.html` at the site root, and folder re-publishes clean up files the previous generated site owned. If the existing `index.html` was not written by Davflare (uploaded by hand, uploaded while a publish was in progress, or copied in from a folder), it is moved to the **trash** before being overwritten or cleaned up, so you can restore it from there. Generated pages are tagged and are replaced or deleted directly.
+
 ## Caching
 
 Site responses are `Cache-Control: public, no-cache` (`private, no-cache` behind a password): browsers and the edge revalidate every time and get a cheap `304` when nothing changed, so password, site-type and content changes apply on the next request. The serving rules (forced download, password) are part of the `ETag`, `Last-Modified` also covers the site's manifest (and the moment a generated site was switched back to a plain one), and html/svg/xml/js are sent with `CDN-Cache-Control: no-store`, so an old inline copy is never revalidated after a site switches to a docs site, public directory or album.

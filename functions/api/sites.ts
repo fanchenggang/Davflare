@@ -34,6 +34,7 @@ import {
   loadSiteManifestKind,
   writeEarlySiteManifest,
 } from "../siteManifest";
+import { deleteSiteKeys, putGeneratedSiteIndex } from "../siteIndex";
 import {
   handleDirPublish,
   handleDocsPublish,
@@ -146,9 +147,8 @@ async function publishNav(
     title: parsed.title,
     groups: parsed.groups,
   });
-  await env.BUCKET.put(`${SITES_PREFIX}${slug}/index.html`, html, {
-    httpMetadata: { contentType: "text/html; charset=utf-8" },
-  });
+  // 覆盖前把用户的首页移进回收站（#177）
+  await putGeneratedSiteIndex(env.BUCKET, `${SITES_PREFIX}${slug}/`, html);
   return jsonResponse({
     slug,
     kind: "nav",
@@ -257,13 +257,15 @@ async function publishAlbum(
     "index.html",
   ]);
 
-  for (const rel of oldRels) {
-    if (!isSafeManifestRel(rel)) continue;
-    const key = `${prefix}${rel}`;
-    if (!key.startsWith(prefix)) continue;
-    if (sourceKeys.has(key)) continue;
-    await env.BUCKET.delete(key);
-  }
+  // 首页走回收站兜底（#177）：清单记着、实际是用户文件的 index.html 不硬删
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !sourceKeys.has(key))
+  );
 
   const images: Array<{ name: string; src: string }> = [];
   for (const file of planned) {
@@ -275,9 +277,7 @@ async function publishAlbum(
 
   await recordSiteSource(env.BUCKET, slug, null);
   const html = renderAlbumPage({ lang, title, images });
-  await env.BUCKET.put(indexKey, html, {
-    httpMetadata: { contentType: "text/html; charset=utf-8" },
-  });
+  await putGeneratedSiteIndex(env.BUCKET, prefix, html);
   const manifestFiles = [
     ...planned.map((file) => file.name),
     "index.html",
@@ -289,13 +289,14 @@ async function publishAlbum(
     { httpMetadata: { contentType: "application/json; charset=utf-8" } }
   );
 
-  for (const rel of oldRels) {
-    if (!isSafeManifestRel(rel)) continue;
-    const key = `${prefix}${rel}`;
-    if (!key.startsWith(prefix)) continue;
-    if (newKeys.has(key)) continue;
-    await env.BUCKET.delete(key);
-  }
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !newKeys.has(key))
+  );
 
   return jsonResponse({
     slug,
@@ -447,7 +448,8 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     const stale = previouslyOwned
       .filter((rel) => !manifestNames.includes(rel) && !written.has(rel))
       .map((rel) => `${sitePrefix}${rel}`);
-    await deleteKeysInChunks(env.BUCKET, stale);
+    // 首页走回收站兜底（#177）：发布计划进行中上传的首页、被生成首页覆盖前的首页都不会被硬删
+    await deleteSiteKeys(env.BUCKET, sitePrefix, stale);
     await deleteKeysInChunks(env.BUCKET, [
       ...manifestNames.map((name) => `${sitePrefix}${name}`),
       sitePublishPlanKey(slug),
