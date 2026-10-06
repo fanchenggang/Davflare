@@ -22,6 +22,7 @@ import {
 } from "./app/sites";
 import { strings, translate } from "./app/strings";
 import { FileItem } from "./app/types";
+import { useSiteSlugGuard } from "./useSiteSlugGuard";
 import { errorMessage } from "./app/utils";
 
 function PublishSiteDialog({
@@ -41,10 +42,12 @@ function PublishSiteDialog({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [copiedCount, setCopiedCount] = useState(0);
   const [publishedSlug, setPublishedSlug] = useState("");
+  const slugGuard = useSiteSlugGuard("static", folder ? folder.key.replace(/^\/+|\/+$/g, "") : null);
 
   useEffect(() => {
     if (open && folder) {
       setSlug(suggestSiteSlug(folder.name));
+    slugGuard.reset();
       setError(null);
       setBusy(false);
       setResultUrl(null);
@@ -63,6 +66,10 @@ function PublishSiteDialog({
     }
     setBusy(true);
     setError(null);
+    if (!(await slugGuard.guard(trimmed))) {
+      setBusy(false);
+      return;
+    }
     try {
       const result = await publishSite(folder.key, trimmed);
       setCopiedCount(result.copied);
@@ -150,6 +157,9 @@ function PublishSiteDialog({
                 value={folder?.key ?? ""}
                 InputProps={{ readOnly: true }}
               />
+              {slugGuard.conflict ? (
+                <Alert severity="warning">{slugGuard.conflict.message}</Alert>
+              ) : null}
               <TextField
                 autoFocus
                 fullWidth
@@ -158,6 +168,7 @@ function PublishSiteDialog({
                 onChange={(event) => {
                   setSlug(event.target.value);
                   setError(null);
+                  slugGuard.reset();
                 }}
                 error={Boolean(error)}
                 helperText={error || strings.publishSiteSlugHint}
@@ -170,7 +181,11 @@ function PublishSiteDialog({
               {strings.cancel}
             </Button>
             <Button type="submit" variant="contained" disabled={busy}>
-              {busy ? strings.publishSitePublishing : strings.publishSiteSubmit}
+              {busy
+                ? strings.publishSitePublishing
+                : slugGuard.conflict
+                  ? strings.siteSlugOverwrite
+                  : strings.publishSiteSubmit}
             </Button>
           </DialogActions>
         </form>

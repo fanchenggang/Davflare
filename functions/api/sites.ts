@@ -12,6 +12,7 @@ import {
   normalizeHostname,
   normalizeSitesHost,
   putHostnameIndex,
+  recordSiteSource,
   siteConfigKey,
 } from "../_sites";
 import {
@@ -26,7 +27,7 @@ import {
   renderAlbumPage,
   renderNavPage,
 } from "../sitePages";
-import { loadOwnedSiteRels } from "../siteManifest";
+import { loadOwnedSiteRels, loadSiteManifestKind } from "../siteManifest";
 import { handleDirPublish, handleDocsPublish } from "../sitePublish";
 import {
   copyObject,
@@ -238,6 +239,7 @@ async function publishAlbum(
     images.push({ name: file.name, src: encodeURIComponent(file.name) });
   }
 
+  await recordSiteSource(env.BUCKET, slug, null);
   const html = renderAlbumPage({ lang, title, images });
   await env.BUCKET.put(indexKey, html, {
     httpMetadata: { contentType: "text/html; charset=utf-8" },
@@ -282,6 +284,27 @@ export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   }
 
   const url = new URL(request.url);
+
+  // 发布前的占用检查（#151）：?check=<slug> → 是否已存在、是哪种站点、上次从哪个文件夹发布。
+  // 最多 4 次 R2 读（list 1 个 + 配置 + 两份清单），不扫全站。
+  if (url.searchParams.has("check")) {
+    const slug = (url.searchParams.get("check") || "").trim().toLowerCase();
+    if (!isValidSlug(slug)) return new Response("Bad slug", { status: 400 });
+    const prefix = `${SITES_PREFIX}${slug}/`;
+    const [listing, config, manifestKind] = await Promise.all([
+      env.BUCKET.list({ prefix, limit: 1 }),
+      loadSiteConfig(env.BUCKET, slug),
+      loadSiteManifestKind(env.BUCKET, prefix),
+    ]);
+    const exists = listing.objects.length > 0;
+    return jsonResponse({
+      slug,
+      exists,
+      kind: exists ? manifestKind || "static" : null,
+      source: exists ? config?.source || null : null,
+    });
+  }
+
   const withStats = url.searchParams.get("stats") === "1";
   const statsSlug = url.searchParams.get("slug");
 
@@ -376,6 +399,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
       if (error) return error;
       copied += 1;
     }
+    await recordSiteSource(env.BUCKET, slug, source);
 
     return jsonResponse({
       slug,

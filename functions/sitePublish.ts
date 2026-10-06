@@ -16,7 +16,7 @@ import {
   normalizeDirKey,
   textResponse,
 } from "./api/_apikey";
-import { SITES_PREFIX, normalizeSitesHost } from "./_sites";
+import { SITES_PREFIX, normalizeSitesHost, recordSiteSource } from "./_sites";
 import {
   DIR_MAX_BYTES,
   DIR_MAX_FILES,
@@ -466,6 +466,8 @@ export async function finishSitePublish(
     await commitSiteManifest(bucket, plan, [...pages, ...plan.items.map((item) => item.to)]);
   }
 
+  // 公开目录记下源文件夹，文档站（多选 .md，没有单一来源）清掉旧值；发布前占用检查用（#151）
+  await recordSiteSource(bucket, slug, plan.kind === "dir" ? plan.source : null);
   const bytes = planBytesDone(plan);
   return jsonResponse({
     slug,

@@ -32,6 +32,8 @@ export interface SiteConfig {
   passwordHash?: string;
   /** Optional custom hostname (e.g. blog.example.com); served at domain root. */
   hostname?: string;
+  /** 最近一次「从网盘文件夹发布」（普通静态站 / 公开目录）的源文件夹；发布前占用检查用（#151） */
+  source?: string;
   stats?: SiteStats;
 }
 
@@ -96,6 +98,26 @@ export async function loadSiteConfig(
   } catch {
     return null;
   }
+}
+
+/**
+ * 记下这个站点最近一次发布的源文件夹（null = 不是从单个文件夹发布，清掉旧值）。
+ * 配置不存在且无需记录时不写，避免为相册 / 文档站凭空生成配置文件。
+ */
+export async function recordSiteSource(
+  bucket: R2Bucket,
+  slug: string,
+  source: string | null
+): Promise<void> {
+  const existing = await loadSiteConfig(bucket, slug);
+  if (!existing && !source) return;
+  const config: SiteConfig = { ...(existing || {}), slug };
+  if ((config.source || null) === source) return;
+  if (source) config.source = source;
+  else delete config.source;
+  await bucket.put(siteConfigKey(slug), JSON.stringify(config), {
+    httpMetadata: { contentType: "application/json" },
+  });
 }
 
 const MIME: Record<string, string> = {

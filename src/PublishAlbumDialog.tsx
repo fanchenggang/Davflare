@@ -24,6 +24,7 @@ import {
 } from "./app/sites";
 import { getLang, strings, translate } from "./app/strings";
 import { FileItem } from "./app/types";
+import { useSiteSlugGuard } from "./useSiteSlugGuard";
 import { errorMessage, humanReadableSize } from "./app/utils";
 
 function PublishAlbumDialog({
@@ -45,11 +46,13 @@ function PublishAlbumDialog({
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [copiedCount, setCopiedCount] = useState(0);
   const [publishedSlug, setPublishedSlug] = useState("");
+  const slugGuard = useSiteSlugGuard("album", null);
 
   useEffect(() => {
     if (!open) return;
     const seed = images[0]?.name?.replace(/\.[^.]+$/, "") || "album";
     setSlug(suggestSiteSlug(seed));
+    slugGuard.reset();
     setError(albumPublishBlockReason(images));
     setBusy(false);
     setResultUrl(null);
@@ -74,6 +77,10 @@ function PublishAlbumDialog({
     }
     setBusy(true);
     setError(null);
+    if (!(await slugGuard.guard(trimmed))) {
+      setBusy(false);
+      return;
+    }
     try {
       const result = await publishAlbumSite(
         trimmed,
@@ -172,6 +179,9 @@ function PublishAlbumDialog({
                 </Typography>
               ) : null}
               {blocked ? <Alert severity="warning">{blocked}</Alert> : null}
+              {slugGuard.conflict ? (
+                <Alert severity="warning">{slugGuard.conflict.message}</Alert>
+              ) : null}
               <TextField
                 autoFocus
                 fullWidth
@@ -180,6 +190,7 @@ function PublishAlbumDialog({
                 onChange={(event) => {
                   setSlug(event.target.value);
                   setError(blocked);
+                  slugGuard.reset();
                 }}
                 error={Boolean(error)}
                 helperText={error || strings.publishSiteSlugHint}
@@ -192,7 +203,11 @@ function PublishAlbumDialog({
               {strings.cancel}
             </Button>
             <Button type="submit" variant="contained" disabled={busy || Boolean(blocked)}>
-              {busy ? strings.publishAlbumPublishing : strings.publishSiteSubmit}
+              {busy
+                ? strings.publishAlbumPublishing
+                : slugGuard.conflict
+                  ? strings.siteSlugOverwrite
+                  : strings.publishSiteSubmit}
             </Button>
           </DialogActions>
         </form>
