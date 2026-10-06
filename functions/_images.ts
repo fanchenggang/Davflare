@@ -105,7 +105,7 @@ export function imageResponseHeaders(opts: {
 
 export type SitesHostRoute =
   | { kind: "image"; id: string }
-  | { kind: "site"; slug: string; key: string; tryIndex: boolean }
+  | { kind: "site"; slug: string; key: string; tryIndex: boolean; redirectToSlash?: boolean }
   | { kind: "notFound" };
 
 /**
@@ -129,6 +129,7 @@ export function resolveSitesHostRoute(
     slug: parsed.slug,
     key: parsed.key,
     tryIndex: parsed.tryIndex,
+    ...(parsed.redirectToSlash ? { redirectToSlash: true } : {}),
   };
 }
 

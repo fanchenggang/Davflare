@@ -55,6 +55,7 @@ describe("sites path parsing (parseSitesPath / helpers)", () => {
       slug: "blog",
       key: "sites/blog/index.html",
       tryIndex: false,
+      redirectToSlash: true,
     });
     expect(parseSitesPath("/Blog/style.CSS")).toEqual({
       ok: true,
@@ -115,16 +116,78 @@ describe("sites host: static serving", () => {
     expect(await response.text()).toBe("console.log(1)");
   });
 
-  test("extensionless directory path falls back to its own index.html", async () => {
+  test("extensionless directory path 301s to its slash form; slash form serves index.html (#145)", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);
     bucket.seed([
       { key: "sites/blog/about/index.html", body: "<h1>about</h1>", contentType: "text/html" },
     ]);
-    const response = await siteRequest("/blog/about", defaultEnv(bucket));
+    const redirect = await siteRequest("/blog/about?x=1&y=%E4%B8%AD", defaultEnv(bucket));
+    expect(redirect.status).toBe(301);
+    expect(redirect.headers.get("Location")).toBe("http://sites.example.com/blog/about/?x=1&y=%E4%B8%AD");
+    expect(redirect.headers.get("Cache-Control")).toBe("public, max-age=300");
+    const response = await siteRequest("/blog/about/", defaultEnv(bucket));
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
     expect(await response.text()).toBe("<h1>about</h1>");
+  });
+
+  test("site root without trailing slash 301s to /{slug}/ keeping the query (#145)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const response = await siteRequest("/blog?utm=a%20b", defaultEnv(bucket));
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("http://sites.example.com/blog/?utm=a%20b");
+    expect(await response.text()).toBe("");
+    const head = await siteRequest("/Blog", defaultEnv(bucket), { method: "HEAD" });
+    expect(head.status).toBe(301);
+    expect(head.headers.get("Location")).toBe("http://sites.example.com/Blog/");
+  });
+
+  test("root redirect is unconditional: no R2 read, no password/existence leak (#145)", async () => {
+    const bucket = new InMemoryBucket();
+    const passwordHash = await sha256Hex("gate");
+    bucket.seed([
+      { key: "sites/secret/index.html", body: "<h1>s</h1>", contentType: "text/html" },
+      { key: siteConfigKey("secret"), body: JSON.stringify({ slug: "secret", passwordHash }), contentType: "application/json" },
+    ]);
+    const env = defaultEnv(bucket);
+    const getSpy = vi.spyOn(env.BUCKET, "get");
+    const secret = await siteRequest("/secret", env);
+    const missing = await siteRequest("/nope", env);
+    expect(secret.status).toBe(301);
+    expect(missing.status).toBe(301);
+    // 只有 flags 读取；不读站点配置、不读 index.html
+    expect(getSpy.mock.calls.map((call) => String(call[0])).filter((key) => key.includes("sites"))).toEqual([]);
+  });
+
+  test("a real extensionless file wins over the directory redirect", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    bucket.seed([
+      { key: "sites/blog/LICENSE", body: "MIT", contentType: "text/plain" },
+      { key: "sites/blog/LICENSE/index.html", body: "<h1>dir</h1>", contentType: "text/html" },
+    ]);
+    const response = await siteRequest("/blog/LICENSE", defaultEnv(bucket));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("MIT");
+  });
+
+  test("extensionless path without a directory index is a plain miss, not a redirect", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const response = await siteRequest("/blog/nothing", defaultEnv(bucket));
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Location")).toBeNull();
+  });
+
+  test("redirect location stays on this origin for //-prefixed paths", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const response = await siteRequest("//blog", defaultEnv(bucket));
+    expect(response.status).toBe(301);
+    const location = new URL(response.headers.get("Location") || "", "http://other.invalid");
+    expect(location.host).toBe("sites.example.com");
   });
 
   test("root path serves index.html directly", async () => {
@@ -201,8 +264,12 @@ describe("sites host: static serving", () => {
   test("malformed paths (traversal / internal prefix / root) are plain 404", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);
+    // WHATWG URL 会把 /blog/%2e%2e/secret 规范化成 /secret（裸 slug），按 #145 跳到 /secret/，那里同样 404
+    const normalized = await siteRequest("/blog/%2e%2e/secret", defaultEnv(bucket));
+    expect(normalized.status).toBe(301);
+    expect(normalized.headers.get("Location")).toBe("http://sites.example.com/secret/");
+    expect((await siteRequest("/secret/", defaultEnv(bucket))).status).toBe(404);
     for (const path of [
-      "/blog/%2e%2e/secret",
       "/blog/%2e%2e%2fsecret",
       "/blog/_$flaredrive$/apikeys/x.json",
       "/_$flaredrive$/config.json",
@@ -308,6 +375,33 @@ describe("sites host: static serving", () => {
     // Path-based SITES_HOST still works
     const pathBased = await siteRequest("/blog/app.js", env);
     expect(pathBased.status).toBe(200);
+  });
+
+  test("custom hostname: subdirectory without slash 301s, password gate first (#145)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const passwordHash = await sha256Hex("gate");
+    bucket.seed([
+      { key: "sites/blog/docs/index.html", body: "<h1>docs</h1>", contentType: "text/html" },
+      { key: "_$flaredrive$/site-hostnames/blog.example.com", body: "blog", contentType: "text/plain" },
+      {
+        key: siteConfigKey("blog"),
+        body: JSON.stringify({ slug: "blog", hostname: "blog.example.com", passwordHash }),
+        contentType: "application/json",
+      },
+    ]);
+    const env = makeEnv(bucket, { SITES_HOST: "sites.example.com" });
+    const blocked = await siteRequest("/docs?q=1", env, { host: "blog.example.com" });
+    expect(blocked.status).toBe(401);
+    const ok = await siteRequest("/docs?q=1", env, {
+      host: "blog.example.com",
+      headers: { Authorization: `Basic ${utf8ToBase64(":gate")}` },
+    });
+    expect(ok.status).toBe(301);
+    expect(new URL(ok.headers.get("Location") || "").pathname).toBe("/docs/");
+    expect(new URL(ok.headers.get("Location") || "").search).toBe("?q=1");
+    expect(ok.headers.get("Cache-Control")).toBe("private, max-age=60");
+    expect(ok.headers.get("Vary")).toBe("Authorization");
   });
 
   test("custom hostname respects password gate then content", async () => {

@@ -306,6 +306,10 @@ if [ -n "$SITES_HOST" ]; then
   assert_contains "sites host serves index" "$(curl -s --noproxy '*' "$BASE/$SITE/index.html" -H "$SH")" "e2e-site-ok"
   code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" "$BASE/$SITE/missing-page" -H "$SH")
   assert_code "sites miss plain 404 (spa off)" "$code" "404"
+  # #145：不带结尾斜杠的站点根 301 到 /{slug}/（保留查询串），否则页面相对链接会解析到域名根
+  code=$(curl -s --noproxy '*' -D /tmp/suite-slash-headers -o /dev/null -w "%{http_code}" "$BASE/$SITE?from=e2e" -H "$SH")
+  assert_code "sites root without slash 301" "$code" "301"
+  assert_contains "slash redirect location" "$(grep -i '^Location' /tmp/suite-slash-headers)" "/$SITE/?from=e2e"
 
   code=$(curl -s --noproxy '*' -o /tmp/o -w "%{http_code}" -X POST "$BASE/api/sites" -H "$BASIC" -H "Content-Type: application/json" -d "{\"slug\":\"$SITE\",\"spa\":true}")
   assert_code "sites config spa=1 200" "$code" "200"

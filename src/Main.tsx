@@ -26,6 +26,8 @@ import RenameDialog from "./RenameDialog";
 import PublishSiteDialog from "./PublishSiteDialog";
 import PublishAlbumDialog from "./PublishAlbumDialog";
 import PublishDirDialog from "./PublishDirDialog";
+import PublishDocsDialog, { DocsPublishSource } from "./PublishDocsDialog";
+import { isMarkdownName } from "./app/docsSite";
 import ShareDialog from "./ShareDialog";
 import SharesView from "./SharesView";
 import SettingsView from "./SettingsView";
@@ -44,6 +46,7 @@ import { strings, translate } from "./app/strings";
 import {
   albumPublishBlockReason,
   isRasterFileName,
+  partitionMarkdownFiles,
   partitionRasterFiles,
 } from "./app/sites";
 import {
@@ -79,6 +82,11 @@ function SectionLoading() {
       <CircularProgress size={28} />
     </Box>
   );
+}
+
+/** 多选 .md 发布时的站点标题：当前文件夹名，根目录用「文档」。 */
+function docsTitleFor(cwd: string): string {
+  return cwd.split("/").filter(Boolean).pop() || translate("siteDocsHeading");
 }
 
 function Main({
@@ -139,6 +147,7 @@ function Main({
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null);
   const [publishTarget, setPublishTarget] = useState<FileItem | null>(null);
   const [publishDirTarget, setPublishDirTarget] = useState<FileItem | null>(null);
+  const [publishDocsSource, setPublishDocsSource] = useState<DocsPublishSource | null>(null);
   const [albumTarget, setAlbumTarget] = useState<{
     images: FileItem[];
     ignored: number;
@@ -424,6 +433,14 @@ function Main({
             return;
           }
           window.setTimeout(() => setPublishDirTarget(file), 50);
+        } else if (action === "publishDocs") {
+          const source: DocsPublishSource | null = file.isDir
+            ? { kind: "folder", folder: file }
+            : isMarkdownName(file.name)
+              ? { kind: "files", files: [file], ignored: 0, title: docsTitleFor(cwd) }
+              : null;
+          if (!source) return;
+          window.setTimeout(() => setPublishDocsSource(source), 50);
         } else if (action === "copy") {
           copyToClipboard([file.key]);
           onNotify(translate("copiedToClipboard"), "success");
@@ -831,6 +848,13 @@ function Main({
         onNotify={onNotify}
       />
 
+      <PublishDocsDialog
+        open={Boolean(publishDocsSource)}
+        source={publishDocsSource}
+        onClose={() => setPublishDocsSource(null)}
+        onNotify={onNotify}
+      />
+
       <PublishDirDialog
         open={Boolean(publishDirTarget)}
         folder={publishDirTarget}
@@ -999,6 +1023,33 @@ function Main({
             return;
           }
           setPublishDirTarget(file);
+        }}
+        canPublishDocs={
+          flags.sites &&
+          (selectedKeys.some((key) => {
+            const file = files.find((item) => item.key === key);
+            return Boolean(file && !file.isDir && isMarkdownName(file.name));
+          }) ||
+            (selectedKeys.length === 1 &&
+              Boolean(files.find((item) => item.key === selectedKeys[0])?.isDir)))
+        }
+        onPublishDocs={() => {
+          const selected = selectedKeys
+            .map((key) => files.find((item) => item.key === key))
+            .filter((item): item is FileItem => Boolean(item));
+          const { docs, ignored } = partitionMarkdownFiles(selected);
+          if (docs.length === 0) {
+            if (selected.length === 1 && selected[0].isDir) {
+              setPublishDocsSource({ kind: "folder", folder: selected[0] });
+            }
+            return;
+          }
+          setPublishDocsSource({
+            kind: "files",
+            files: docs,
+            ignored: ignored + (selectedKeys.length - selected.length),
+            title: docsTitleFor(cwd),
+          });
         }}
         canPublishAlbum={
           flags.sites &&

@@ -27,7 +27,7 @@ import {
   renderNavPage,
 } from "../sitePages";
 import { loadOwnedSiteRels } from "../siteManifest";
-import { handleDirPublish } from "../sitePublish";
+import { handleDirPublish, handleDocsPublish } from "../sitePublish";
 import {
   copyObject,
   isCollectionObject,
@@ -332,6 +332,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     nav?: unknown;
     album?: unknown;
     dir?: unknown;
+    docs?: unknown;
   };
   try {
     body = await request.json();
@@ -394,6 +395,12 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     const flags = await loadFeatureFlags(env.BUCKET);
     if (!flags.sites) return featureDisabledResponse();
     return handleDirPublish(env.BUCKET, slug, body.dir, env.SITES_HOST);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "docs")) {
+    const flags = await loadFeatureFlags(env.BUCKET);
+    if (!flags.sites) return featureDisabledResponse();
+    return handleDocsPublish(env.BUCKET, slug, body.docs, env.SITES_HOST);
   }
 
   // 只允许给已存在的站点改配置：前缀下至少要有一个对象
