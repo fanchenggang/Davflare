@@ -203,7 +203,7 @@ export async function deleteHostnameIndex(
 export function parseSitesRootPath(
   pathname: string,
   slug: string
-): { ok: true; slug: string; key: string; tryIndex: boolean } | { ok: false; reason: string } {
+): ParsedSitePath | { ok: false; reason: string } {
   const normalizedSlug = slug.toLowerCase();
   if (!SLUG_RE.test(normalizedSlug)) return { ok: false, reason: "bad slug" };
   const raw = pathname.replace(/\\/g, "/");
@@ -257,9 +257,19 @@ function decodeSegment(segment: string): string {
   }
 }
 
+export interface ParsedSitePath {
+  ok: true;
+  slug: string;
+  key: string;
+  /** 无扩展名、不带结尾斜杠：对象不存在时尝试 `{key}/index.html`（命中则 301 到带斜杠地址） */
+  tryIndex: boolean;
+  /** 站点根不带结尾斜杠：无需读 R2，直接 301 到带斜杠地址 */
+  redirectToSlash?: boolean;
+}
+
 export function parseSitesPath(
   pathname: string
-): { ok: true; slug: string; key: string; tryIndex: boolean } | { ok: false; reason: string } {
+): ParsedSitePath | { ok: false; reason: string } {
   const raw = pathname.replace(/\\/g, "/");
   // 逐段解码后校验：%2e%2e 之类的编码穿越同样被拦，编码斜杠视为非法；
   // 而文件名内部的 "a..b.html"、空格、中文等合法字符不再被误伤
@@ -277,6 +287,16 @@ export function parseSitesPath(
   const rest = parts.slice(1);
   const trailingSlash = raw.endsWith("/");
   if (rest.length === 0) {
+    // `/{slug}` 不带结尾斜杠：页面里的相对链接会解析到域名根（#145），由调用方 301 到 `/{slug}/`
+    if (!trailingSlash) {
+      return {
+        ok: true,
+        slug,
+        key: `${SITES_PREFIX}${slug}/index.html`,
+        tryIndex: false,
+        redirectToSlash: true,
+      };
+    }
     return { ok: true, slug, key: `${SITES_PREFIX}${slug}/index.html`, tryIndex: false };
   }
   const file = rest.join("/");
@@ -294,6 +314,31 @@ export function parseSitesPath(
 
 export function indexFallbackKey(key: string): string {
   return key.endsWith("/") ? `${key}index.html` : `${key}/index.html`;
+}
+
+/**
+ * 目录地址补结尾斜杠（#145）：`/{slug}` → `/{slug}/`、`/{slug}/sub` → `/{slug}/sub/`，保留查询串。
+ * Location 用绝对地址，避免 `//evil.com` 这类路径被当成协议相对地址的开放跳转。
+ */
+export function sitesSlashRedirect(
+  requestUrl: string,
+  options?: { privateCache?: boolean }
+): Response {
+  const url = new URL(requestUrl);
+  const location = `${url.origin}${url.pathname.replace(/\/+$/, "")}/${url.search}`;
+  const headers = new Headers({
+    Location: location,
+    "Content-Type": "text/plain; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "X-Robots-Tag": "noindex",
+  });
+  if (options?.privateCache) {
+    headers.set("Cache-Control", "private, max-age=60");
+    headers.set("Vary", "Authorization");
+  } else {
+    headers.set("Cache-Control", "public, max-age=300");
+  }
+  return new Response(null, { status: 301, headers });
 }
 
 export function sitesNotFound(): Response {

@@ -37,6 +37,7 @@ describe("static sites host routing", () => {
       slug: "blog",
       key: "sites/blog/index.html",
       tryIndex: false,
+      redirectToSlash: true,
     });
     expect(parseSitesPath("/blog/")).toEqual({
       ok: true,

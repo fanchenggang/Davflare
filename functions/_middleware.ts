@@ -16,6 +16,7 @@ import {
   sitesNotFound,
   sitesNotFoundPage,
   sitesResponse,
+  sitesSlashRedirect,
   sitesUnauthorized,
 } from "./_sites";
 
@@ -46,9 +47,11 @@ async function serveImage(
 
 async function serveSlugSite(
   context: EventContext<MiddlewareEnv, any, any>,
-  parsed: { slug: string; key: string; tryIndex: boolean }
+  parsed: { slug: string; key: string; tryIndex: boolean; redirectToSlash?: boolean }
 ): Promise<Response> {
   const method = context.request.method.toUpperCase();
+  // 站点根不带斜杠：无条件跳转，不读 R2，也不泄露站点是否存在 / 是否加密（#145）
+  if (parsed.redirectToSlash) return sitesSlashRedirect(context.request.url);
   // Password gate runs before any content (and before a future _redirects hook).
   // Load config once up front so SPA/404 reuse it without a second R2 get.
   const config = await loadSiteConfig(context.env.BUCKET, parsed.slug);
@@ -60,11 +63,13 @@ async function serveSlugSite(
     }
   }
 
-  let key = parsed.key;
-  let object = await context.env.BUCKET.get(key);
+  const key = parsed.key;
+  const object = await context.env.BUCKET.get(key);
   if (!object && parsed.tryIndex) {
-    key = indexFallbackKey(parsed.key);
-    object = await context.env.BUCKET.get(key);
+    // `/{slug}/sub` 不是文件但 `sub/index.html` 存在：跳到 `/{slug}/sub/`，
+    // 否则页面里的相对链接会按上一级目录解析（#145）。只需 head，不读正文。
+    const indexHead = await context.env.BUCKET.head(indexFallbackKey(parsed.key));
+    if (indexHead) return sitesSlashRedirect(context.request.url, { privateCache });
   }
   if (!object) {
     if (config?.spa) {
