@@ -39,11 +39,14 @@ Expect `OPTIONS 200` (with `cache-control` in `Access-Control-Allow-Headers`), `
 ### 2. Configure Obsidian (user, on each device)
 
 1. Drive → **WebDAV** → **Obsidian sync** card: copy the server address (`https://<drive-host>/webdav/`) and username.
-2. Obsidian → Settings → Community plugins → install and enable **Remotely Save**.
+2. Obsidian → Settings → Community plugins: in a new vault turn off Restricted mode first (otherwise
+   there is no "Browse" button), then install and enable **Remotely Save**.
 3. Choose A Remote Service **Webdav**; Server Address / Username / Password (`WEBDAV_PASSWORD`);
    Auth Type **basic**; Depth **only supports depth='1'** (default); Remote Base Directory empty
-   (= vault name) or the same single-level name on every device.
-4. "Check Connectivity" → "Check", then sync from the ribbon icon. Repeat on the second device.
+   (= vault name) or the same single-level name on every device — click "Confirm" after editing it.
+4. "Check Connectivity" → "Check", then sync from the ribbon icon. On the first sync the plugin shows
+   "HUGE updates on the sync algorithm": tick both boxes and click "Agree" ("Disagree" uninstalls it).
+5. Second device: start from an empty vault with the same name, configure as above, then sync.
 
 ## Do not
 

@@ -293,11 +293,11 @@ async function handlePut({
   }
 
   const contentLength = Number(request.headers.get("Content-Length") || "0");
-  // Cloudflare Workers/Pages 单次请求体约 100–128MB。超过时给出明确中文说明，
+  // Cloudflare Pages Functions（免费 / Pro 计划）单次请求体上限 100MB。超过时给出明确中文说明，
   // 避免客户端只看到泛化的 413/网络错误。分块上传走 uploadId+partNumber，不受此限。
   if (Number.isFinite(contentLength) && contentLength >= 100 * 1024 * 1024) {
     return new Response(
-      "单次上传超过 Cloudflare 约 128MB 的请求限制，无法通过 WebDAV 直传。请改用网页端分块上传（支持大文件与断点续传）。",
+      "单个文件需小于 100MB（Cloudflare 单次请求体上限），无法通过 WebDAV 直传。请改用网页端分块上传（支持大文件与断点续传）。",
       { status: 413, headers: { "Content-Type": "text/plain; charset=utf-8" } },
     );
   }

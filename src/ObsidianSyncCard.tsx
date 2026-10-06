@@ -17,11 +17,14 @@ function ObsidianSyncCard({
   onCopy: (text: string, label: string) => void;
 }) {
   const tips = [
+    strings.obsidianPluginTip,
     strings.obsidianPasswordTip,
     strings.obsidianAuthTip,
     strings.obsidianDepthTip,
     strings.obsidianBaseDirTip,
     strings.obsidianCheckTip,
+    strings.obsidianFirstSyncTip,
+    strings.obsidianSecondDeviceTip,
     strings.obsidianSizeTip,
   ];
   const guide = [
@@ -75,6 +78,7 @@ function ObsidianSyncCard({
             size="small"
             startIcon={<ContentCopyIcon />}
             onClick={() => onCopy(username, strings.username)}
+            aria-label={strings.obsidianCopyAccountLabel}
           >
             {strings.obsidianCopyAccount}
           </Button>

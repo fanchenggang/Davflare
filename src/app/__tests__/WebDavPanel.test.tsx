@@ -26,7 +26,8 @@ describe("WebDavPanel", () => {
     render(<WebDavPanel open onClose={vi.fn()} onNotify={vi.fn()} />);
 
     await waitFor(() => expect(screen.getByText("alice")).toBeInTheDocument());
-    expect(screen.getByText(`${window.location.origin}/webdav`)).toBeInTheDocument();
+    // 挂载地址与 Obsidian 卡片统一带结尾斜杠
+    expect(screen.getAllByText(`${window.location.origin}/webdav/`).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(strings.publicReadOn)).toBeInTheDocument();
   });
 
@@ -75,7 +76,7 @@ describe("WebDavPanel", () => {
     render(<WebDavPanel open onClose={vi.fn()} onNotify={onNotify} />);
     await screen.findByText("alice");
 
-    fireEvent.click(screen.getByText(strings.copyUsername));
+    fireEvent.click(screen.getByRole("button", { name: strings.copyUsername }));
     fireEvent.click(screen.getAllByRole("button", { name: strings.copyWebDavGuide })[0]);
     fireEvent.click(screen.getAllByRole("button", { name: strings.copyWebDavGuide })[1]);
     await waitFor(() => expect(onNotify).toHaveBeenCalledTimes(3));
@@ -119,10 +120,18 @@ describe("WebDavPanel", () => {
     expect(card).toHaveTextContent(translate("obsidianUsernameLine", { username: "alice" }));
     expect(card).toHaveTextContent(strings.obsidianDepthTip);
     expect(card).toHaveTextContent(strings.obsidianBaseDirTip);
+    expect(card).toHaveTextContent(strings.obsidianPluginTip);
+    expect(card).toHaveTextContent(strings.obsidianFirstSyncTip);
+    expect(card).toHaveTextContent(strings.obsidianSecondDeviceTip);
+    expect(card).toHaveTextContent("100MB");
+    expect(card.textContent).not.toContain("128");
     expect(document.body.textContent).not.toContain("s3cret-pass");
 
     fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyServerAddress }));
-    fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyAccount }));
+    const accountButton = screen.getByRole("button", { name: strings.obsidianCopyAccountLabel });
+    expect(accountButton).toHaveTextContent(strings.obsidianCopyAccount);
+    expect(strings.obsidianCopyAccount).toBe("复制用户名");
+    fireEvent.click(accountButton);
     fireEvent.click(screen.getByRole("button", { name: strings.obsidianCopyGuide }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(3));
     expect(writeText).toHaveBeenNthCalledWith(1, server);
@@ -150,6 +159,8 @@ describe("WebDavPanel", () => {
     expect(card).toHaveTextContent("Remotely Save");
     expect(card).toHaveTextContent("Username: (not configured)");
     expect(screen.getByRole("button", { name: "Copy server address" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copy Obsidian username" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy username (Obsidian sync)" })).toBeNull();
+    expect(card).toHaveTextContent("Restricted mode");
+    expect(card).toHaveTextContent("HUGE updates on the sync algorithm");
   });
 });

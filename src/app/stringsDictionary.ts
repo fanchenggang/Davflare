@@ -510,7 +510,7 @@ const entries: Record<string, DictionaryEntry> = {
   selectFileLabel: { zh: "选择 {name}", en: "Select {name}" },
   fileActionsLabel: { zh: "{name} 操作", en: "{name} actions" },
   webdavConfigFailed: { zh: "无法读取 WebDAV 配置", en: "Failed to load WebDAV config" },
-  uploadLimitNote: { zh: "单次上传限制约 128MB，更大的文件请用网页端分块上传。", en: "A single upload is limited to ~128MB; use the web chunked uploader for larger files." },
+  uploadLimitNote: { zh: "单个文件需小于 100MB（Cloudflare 单次请求体上限），更大的文件请用网页端分块上传。", en: "Each file must be under 100MB (Cloudflare's request body limit); use the web chunked uploader for larger files." },
   finderHowTo: { zh: "macOS Finder：菜单「前往」→「连接服务器」，粘贴上述地址。", en: "macOS Finder: Go → Connect to Server, then paste the address above." },
   passwordNote: { zh: "密码与网页登录密码相同，此处不显示。", en: "The password is the same as your web sign-in; it is not shown here." },
   obsidianSyncTitle: { zh: "Obsidian 同步", en: "Obsidian sync" },
@@ -521,7 +521,13 @@ const entries: Record<string, DictionaryEntry> = {
   obsidianServerAddress: { zh: "服务器地址", en: "Server Address" },
   obsidianCopyServerAddress: { zh: "复制服务器地址", en: "Copy server address" },
   obsidianUsernameLine: { zh: "用户名：{username}", en: "Username: {username}" },
-  obsidianCopyAccount: { zh: "复制 Obsidian 用户名", en: "Copy Obsidian username" },
+  obsidianCopyAccount: { zh: "复制用户名", en: "Copy username" },
+  // 面板上方挂载区也有「复制用户名」，读屏时用带上下文的名字区分（以可见文字开头）
+  obsidianCopyAccountLabel: { zh: "复制用户名（Obsidian 同步）", en: "Copy username (Obsidian sync)" },
+  obsidianPluginTip: {
+    zh: "新建的库要先在 设置 → 第三方插件 里关闭安全模式（开启社区插件），才会出现「浏览」按钮",
+    en: "In a new vault, first turn off Restricted mode (turn on community plugins) in Settings → Community plugins; the \"Browse\" button only appears after that",
+  },
   obsidianPasswordTip: {
     zh: "密码：填网页登录密码（此处不显示）",
     en: "Password: your web sign-in password (not shown here)",
@@ -532,12 +538,20 @@ const entries: Record<string, DictionaryEntry> = {
     en: "Depth Header: keep the default \"only supports depth='1'\" (depth='infinity' also passed testing, but is heavier per request on large vaults)",
   },
   obsidianBaseDirTip: {
-    zh: "远端基文件夹：留空即用库名，会建在 WebDAV 根目录下；多台设备库名不一致时，都改成同一个名字（单层，不能含 /）",
-    en: "Remote Base Directory: leave empty to use the vault name (created at the WebDAV root); if vault names differ across devices, set the same single-level name everywhere (no /)",
+    zh: "远端基文件夹：留空即用库名，会建在 WebDAV 根目录下；多台设备库名不一致时，都改成同一个名字（单层，不能含 /），改完要点旁边的「确认」才会生效",
+    en: "Remote Base Directory: leave empty to use the vault name (created at the WebDAV root); if vault names differ across devices, set the same single-level name everywhere (no /), then click \"Confirm\" next to it or the change is not saved",
   },
   obsidianCheckTip: {
     zh: "先点「检查可否连接」→「检查」，成功后再同步",
     en: "Click \"Check Connectivity\" → \"Check\" first, then sync",
+  },
+  obsidianFirstSyncTip: {
+    zh: "第一次同步前插件会弹出「HUGE updates on the sync algorithm」说明：勾选两个复选框后点「Agree」（点「Disagree」会卸载插件）",
+    en: "Before the first sync the plugin shows \"HUGE updates on the sync algorithm\": tick both checkboxes and click \"Agree\" (\"Disagree\" uninstalls the plugin)",
+  },
+  obsidianSecondDeviceTip: {
+    zh: "第二台设备：建议先新建一个同名的空库，按同样方式配置后再同步，把内容拉下来",
+    en: "Second device: create an empty vault with the same name first, configure it the same way, then sync to pull everything down",
   },
   obsidianSizeTip: {
     zh: "单个文件需小于 100MB；改名会按「删除 + 重新上传」同步",

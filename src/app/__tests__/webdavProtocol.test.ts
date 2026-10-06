@@ -800,6 +800,8 @@ describe("webdav PUT", () => {
       makeEnv(bucket)
     );
     expect(response.status).toBe(413);
+    // 文案与卡片 / README / docs 统一为 100MB（服务端实际上限）
+    expect(await response.text()).toContain("100MB");
   });
 });
 
