@@ -126,6 +126,18 @@ export function isPlainFileKey(key: string): boolean {
   return !isInternalKey(key);
 }
 
+/**
+ * 预清单（plan 阶段写）里能不能先记上 index.html（#169）。
+ * 生成的首页要到 put / finish 才真正写入；在那之前，站点里已有一个不属于本站清单的 index.html
+ * （例如手动上传的）时不能先记进清单——否则只做了 plan 就放弃、再用普通文件夹重新发布时，
+ * 它会被当成生成文件永久删除。真正写入首页后，finish 的正式清单会把它记上。
+ * 只认清单里记过的 index.html；未完成的旧计划里列过的不算（旧计划从没真正写过它）。
+ */
+async function earlyIndexRels(bucket: R2Bucket, prefix: string, manifestOwned: string[]): Promise<string[]> {
+  if (manifestOwned.includes("index.html")) return ["index.html"];
+  return (await bucket.head(`${prefix}index.html`)) ? [] : ["index.html"];
+}
+
 function planTargets(plan: SitePublishPlan | null): string[] {
   if (!plan) return [];
   return [...plan.items.map((item) => item.to), ...(plan.pages ?? [])];
@@ -285,7 +297,8 @@ export async function planDirPublish(
   files.sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }));
 
   const prefix = `${SITES_PREFIX}${slug}/`;
-  const owned = new Set(await loadOwnedSiteRels(bucket, prefix));
+  const manifestOwned = await loadOwnedSiteRels(bucket, prefix);
+  const owned = new Set(manifestOwned);
   const stale = await loadPlan(bucket, slug);
   if (stale && stale.slug === slug) for (const rel of planTargets(stale)) owned.add(rel);
   const blocked = new Set<string>();
@@ -319,7 +332,11 @@ export async function planDirPublish(
   };
   await savePlan(bucket, plan);
   // 先写预清单把站点标成 dir，再开始复制（#146）；finish 会用正式清单覆盖它
-  await writeEarlySiteManifest(bucket, prefix, "dir", [...owned, ...planTargets(plan), "index.html"]);
+  await writeEarlySiteManifest(bucket, prefix, "dir", [
+    ...[...owned].filter((rel) => rel !== "index.html"),
+    ...planTargets(plan),
+    ...(await earlyIndexRels(bucket, prefix, manifestOwned)),
+  ]);
   return jsonResponse({
     slug,
     kind: "dir",
@@ -560,7 +577,8 @@ export async function planDocsPublish(
   const verdict = checkDocsLimits(pageNames.length, imageItems.length, imageBytes);
   if (!verdict.ok) return textResponse(verdict.error, 400);
 
-  const owned = new Set(await loadOwnedSiteRels(bucket, targetPrefix));
+  const manifestOwned = await loadOwnedSiteRels(bucket, targetPrefix);
+  const owned = new Set(manifestOwned);
   const stale = await loadPlan(bucket, slug);
   if (stale && stale.slug === slug) for (const rel of planTargets(stale)) owned.add(rel);
 
@@ -607,7 +625,12 @@ export async function planDocsPublish(
   };
   await savePlan(bucket, plan);
   // 与公开目录一样，复制图片 / 上传页面之前先写预清单（#146 跟进）
-  await writeEarlySiteManifest(bucket, targetPrefix, "docs", [...owned, ...planTargets(plan)]);
+  const earlyIndex = await earlyIndexRels(bucket, targetPrefix, manifestOwned);
+  await writeEarlySiteManifest(bucket, targetPrefix, "docs", [
+    ...[...owned].filter((rel) => rel !== "index.html"),
+    ...planTargets(plan).filter((rel) => rel !== "index.html"),
+    ...earlyIndex,
+  ]);
   return jsonResponse({
     slug,
     kind: "docs",
