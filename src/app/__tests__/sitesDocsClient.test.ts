@@ -12,6 +12,7 @@ import {
   publishDocsSite,
 } from "../sites";
 import { FileItem } from "../types";
+import { renderDocsSite } from "../docsSite";
 import { setLang, translate } from "../strings";
 import { authFetch } from "../auth";
 import { asAuthFetchMock } from "../testUtils";
@@ -75,7 +76,22 @@ describe("docs client helpers", () => {
     expect(prepared.docs.map((d) => d.title)).toEqual(["Alpha", "Beta"]);
     expect(prepared.images.map((i) => i.key)).toEqual(["v/img/pic.png"]);
     expect(prepared.missing).toBe(1);
-    expect(prepared.bytes).toBe(30 + 20 + 2048);
+    // 估算按试渲染的 html（每页带样式和目录）+ 图片，不再只算 Markdown 原文（#147）
+    const site = renderDocsSite(prepared.md, {
+      lang: "en",
+      title: "V",
+      docs: prepared.docs,
+      pageNames: ["a.html", "b.html"],
+      byRef: prepared.byRef,
+      imageRels: new Map([["v/img/pic.png", "assets/pic.png"]]),
+    });
+    const encoder = new TextEncoder();
+    const actual =
+      [...site.pages.map((page) => page.html), site.index].reduce((sum, html) => sum + encoder.encode(html).length, 0) +
+      2048;
+    expect(prepared.bytes).toBeGreaterThanOrEqual(actual);
+    expect(prepared.bytes).toBeLessThan(actual + 4096);
+    expect(prepared.bytes).toBeGreaterThan(30 + 20 + 2048 + 3 * 1024);
   });
 });
 
@@ -197,5 +213,7 @@ describe("docs publish scope (#153)", () => {
     const url = String(mockAuthFetch.mock.calls[0][0]);
     expect(url).toContain("q=x.png");
     expect(url).toContain(`prefix=${encodeURIComponent("vault/a/")}`);
+    // 只要文件名完全相同的结果（#147）
+    expect(url).toContain("match=name");
   });
 });

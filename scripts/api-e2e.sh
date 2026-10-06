@@ -350,6 +350,9 @@ if [ -n "$SITES_HOST" ]; then
   assert_contains "dir site svg etag variant" "$(grep -i '^ETag' /tmp/suite-dir-svg)" "-dl"
   curl -s --noproxy '*' -D /tmp/suite-dir-index -o /dev/null "$BASE/$DSITE/" -H "$SH"
   if grep -qi '^Content-Disposition' /tmp/suite-dir-index; then bad "dir listing page inline" "attachment" "inline"; else ok "dir listing page inline"; fi
+  # #147：站点根的清单文件不对外提供
+  code=$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$BASE/$DSITE/.davflare-manifest.json" -H "$SH")
+  assert_code "dir site manifest hidden 404" "$code" "404"
   curl -s --noproxy '*' -D /tmp/suite-plain-html -o /dev/null "$BASE/$SITE/index.html" -H "$SH"
   if grep -qi '^Content-Disposition' /tmp/suite-plain-html; then bad "plain site html inline" "attachment" "inline"; else ok "plain site html inline"; fi
   curl -s --noproxy '*' -o /dev/null -X DELETE "$BASE/api/sites?slug=$DSITE&purge=1" -H "$BASIC"

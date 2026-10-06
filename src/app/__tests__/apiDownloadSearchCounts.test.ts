@@ -342,8 +342,27 @@ describe("search prefix (#153)", () => {
     const scoped = await search(bucket, `/api/search?q=x.png&prefix=${encodeURIComponent("vault/a/")}`);
     const keys = ((await scoped.json()) as { items: Array<{ key: string }> }).items.map((item) => item.key);
     expect(keys).toEqual(["vault/a/x.png"]);
-    const internal = await search(bucket, `/api/search?q=x.png&prefix=${encodeURIComponent("_$flaredrive$/")}`);
-    const all = ((await internal.json()) as { items: Array<{ key: string }> }).items.map((item) => item.key);
-    expect(all.every((key) => !key.startsWith("_$flaredrive$"))).toBe(true);
+    // 内部前缀：直接返回空，不再退回全盘扫描（#158）
+    for (const prefix of ["_$flaredrive$/", "_$flaredrive$", "/_$flaredrive$/x"]) {
+      const internal = await search(bucket, `/api/search?q=x.png&prefix=${encodeURIComponent(prefix)}`);
+      expect(internal.status).toBe(200);
+      expect(((await internal.json()) as { items: unknown[] }).items).toEqual([]);
+    }
+  });
+
+  test("match=name only returns exact file-name matches (case-insensitive)", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([
+      { key: "v/x.png", body: "1" },
+      { key: "v/sub/X.PNG", body: "2" },
+      { key: "v/ax.png", body: "3" },
+      { key: "v/x.png.bak", body: "4" },
+      { key: "v/x.png/inner.txt", body: "5" },
+    ]);
+    const exact = await search(bucket, `/api/search?q=x.png&prefix=v%2F&match=name`);
+    const keys = ((await exact.json()) as { items: Array<{ key: string }> }).items.map((item) => item.key).sort();
+    expect(keys).toEqual(["v/sub/X.PNG", "v/x.png"]);
+    const loose = await search(bucket, `/api/search?q=x.png&prefix=v%2F`);
+    expect(((await loose.json()) as { items: unknown[] }).items).toHaveLength(5);
   });
 });

@@ -253,4 +253,52 @@ describe("dialogs warn before overwriting", () => {
     fireEvent.click(screen.getByRole("button", { name: strings.publishSiteSubmit }));
     await waitFor(() => expect(publishSite).toHaveBeenCalledTimes(1));
   });
+
+  test("#152: the check also runs ~500ms after the slug stops changing (debounced), stale results dropped", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(checkSiteSlug).mockImplementation(async (slug: string) =>
+        slug === "taken"
+          ? { slug, exists: true, kind: "album", source: null }
+          : { slug, exists: false, kind: null, source: null }
+      );
+      render(<PublishSiteDialog open folder={folderItem("My Blog")} onClose={vi.fn()} onNotify={vi.fn()} />);
+      const input = screen.getByLabelText(strings.publishSiteSlug);
+      // 连续输入：只在停下 500ms 后查最后一个地址
+      for (const value of ["t", "ta", "tak", "take", "taken"]) {
+        fireEvent.change(input, { target: { value } });
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      expect(checkSiteSlug).not.toHaveBeenCalledWith("tak");
+      await vi.advanceTimersByTimeAsync(500);
+      const warning = translate("siteSlugTakenKind", { slug: "taken", kind: translate("siteKindAlbum") });
+      await waitFor(() => expect(screen.getByText(warning)).toBeInTheDocument());
+      expect(checkSiteSlug).toHaveBeenLastCalledWith("taken");
+      // 没点「发布」就已经提示，按钮已是「覆盖发布」
+      expect(screen.getByRole("button", { name: strings.siteSlugOverwrite })).toBeInTheDocument();
+      expect(publishSite).not.toHaveBeenCalled();
+      // 改成空闲地址：警告马上清掉，之后的自动检查不再提示
+      fireEvent.change(input, { target: { value: "free-one" } });
+      expect(screen.queryByText(warning)).toBeNull();
+      await vi.advanceTimersByTimeAsync(600);
+      expect(screen.queryByRole("button", { name: strings.siteSlugOverwrite })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("#152: an invalid slug is not checked automatically", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(checkSiteSlug).mockResolvedValue({ slug: "x", exists: false, kind: null, source: null });
+      render(<PublishSiteDialog open folder={folderItem("My Blog")} onClose={vi.fn()} onNotify={vi.fn()} />);
+      await vi.advanceTimersByTimeAsync(600);
+      vi.mocked(checkSiteSlug).mockClear();
+      fireEvent.change(screen.getByLabelText(strings.publishSiteSlug), { target: { value: "Bad Slug!" } });
+      await vi.advanceTimersByTimeAsync(600);
+      expect(checkSiteSlug).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

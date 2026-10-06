@@ -8,7 +8,9 @@ import {
   createDocsMarkdown,
   desiredPageName,
   docsScopeOf,
+  escapesDrive,
   isExternalUrl,
+  isImageNameShortened,
   isInDocsScope,
   isPageNameShortened,
   loadDocsMarkdown,
@@ -181,9 +183,27 @@ describe("docs markdown: links and titles", () => {
     });
     expect(html).toContain('<a href="b.html">b</a>');
     expect(html).toContain('<a href="c-page.html#part">c</a>');
-    expect(html).toContain('<a href="missing.md">x</a>');
+    // 指向没发布的笔记：只留文字，不生成站内死链（#147）
+    expect(html).not.toContain("missing.md");
+    expect(html).toContain("</a> x <a");
     expect(html).toContain('<a href="https://e.com/a.md">ext</a>');
     expect(html).toContain('<a href="#top">h</a>');
+  });
+
+  test("links to unpublished notes become plain text (absolute, ../, escaping, with markup)", () => {
+    const html = body(
+      "[abs](/Other/c.md) [up](../../../../x.md#h) [**bold** text](nope.md?x=1) [pdf](file.pdf) [ok](b.md)",
+      { key: "n/a.md", pages: { "n/b.md": "b.html" } }
+    );
+    expect(html).not.toMatch(/href="[^"]*\.md/);
+    expect(html).toContain("abs up <strong>bold</strong> text");
+    // 非 md 的相对链接保持原样；已发布的照常改写
+    expect(html).toContain('<a href="file.pdf">pdf</a>');
+    expect(html).toContain('<a href="b.html">ok</a>');
+    // 渲染结果稳定
+    expect(body("[x](missing.md) [b](b.md)", { key: "n/a.md", pages: { "n/b.md": "b.html" } })).toBe(
+      body("[x](missing.md) [b](b.md)", { key: "n/a.md", pages: { "n/b.md": "b.html" } })
+    );
   });
 
   test("wikilinks link to published notes; others keep original text", () => {
@@ -313,6 +333,48 @@ describe("resolveDocImages", () => {
     expect(result.outOfScope).toBe(3);
     expect(result.missing).toBe(0);
     for (const [dir] of listDir.mock.calls) expect(dir === "vault/notes" || dir.startsWith("vault/notes/")).toBe(true);
+  });
+
+  test("#158: ../ climbing above the drive root or into internal folders counts as out of scope, not missing", async () => {
+    const { listDir } = fakeDrive(["v/", "v/a.png"]);
+    const a = doc("v/a.md", "![](../../x.png) ![](../../../../deep/y.png) ![](/_$flaredrive$/t.png) ![](gone.png)");
+    const result = await resolveDocImages([a], { listDir });
+    expect(result.outOfScope).toBe(3);
+    expect(result.missing).toBe(1);
+    expect(result.images).toEqual([]);
+  });
+
+  test("escapesDrive: only paths that leave the drive root or touch internal folders", () => {
+    expect(escapesDrive("v", "../../x.png")).toBe(true);
+    expect(escapesDrive("v", "../x.png")).toBe(false);
+    expect(escapesDrive("", "/../x.png")).toBe(true);
+    expect(escapesDrive("a/b", "../../c/../x.png")).toBe(false);
+    expect(escapesDrive("a", "_$flaredrive$/x.png")).toBe(true);
+    expect(escapesDrive("a", "")).toBe(false);
+  });
+
+  test("search fallbacks run concurrently (bounded), results stay in reference order", async () => {
+    const { listDir } = fakeDrive(["v/", "v/n/", "v/p/", "v/p/one.png", "v/p/two.png", "v/p/three.png"]);
+    let inFlight = 0;
+    let peak = 0;
+    const search = vi.fn(async (name: string) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return [item(`v/p/${name}`)];
+    });
+    const a = doc("v/n/a.md", "![[three.png]] ![[one.png]] ![[two.png]]");
+    const result = await resolveDocImages([a, doc("v/p/b.md", "")], { listDir, search });
+    expect(result.images.map((image) => image.key)).toEqual(["v/p/three.png", "v/p/one.png", "v/p/two.png"]);
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(4);
+  });
+
+  test("isImageNameShortened matches the server's 200-character asset name limit", () => {
+    expect(isImageNameShortened(item("v/short.png"))).toBe(false);
+    expect(isImageNameShortened(item(`v/${"图".repeat(DOCS_PAGE_NAME_MAX)}.png`))).toBe(true);
   });
 
   test("#153: wiki paths with ../ or a leading / stay inside the scope", async () => {

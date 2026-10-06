@@ -40,7 +40,17 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
   const lower = query.toLowerCase();
   // 可选 prefix：只在这个目录子树里扫（文档站图片兜底搜索用，#153），也比全盘扫便宜得多
   const prefixRaw = (url.searchParams.get("prefix") || "").replace(/^\/+/, "");
-  const prefix = prefixRaw && !prefixRaw.startsWith("_$flaredrive$") ? prefixRaw : undefined;
+  // 内部目录不可搜：以前是退回全盘扫描，现在直接返回空（#158）
+  if (prefixRaw.startsWith("_$flaredrive$")) {
+    return new Response(
+      JSON.stringify({ items: [], hasMore: false, nextCursor: undefined }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
+  const prefix = prefixRaw || undefined;
+  // match=name：只要文件名（不含目录）与 q 完全相同（不区分大小写）的结果。
+  // 文档站图片兜底用它，常见文件名的子串命中不会把真正的结果挤出 limit（#147）。
+  const exactName = url.searchParams.get("match") === "name";
   const items: Array<Record<string, unknown>> = [];
   let cursor: string | undefined = url.searchParams.get("cursor") || undefined;
   let nextCursor: string | undefined;
@@ -61,7 +71,10 @@ export const onRequestGet: PagesFunction<SearchEnv> = async (context) => {
 
     for (const object of listing.objects) {
       if (object.key.startsWith("_$flaredrive$/")) continue;
-      if (!object.key.toLowerCase().includes(lower)) continue;
+      const keyLower = object.key.toLowerCase();
+      if (exactName) {
+        if (keyLower.slice(keyLower.lastIndexOf("/") + 1) !== lower) continue;
+      } else if (!keyLower.includes(lower)) continue;
 
       items.push({
         key: object.key,

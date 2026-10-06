@@ -67,7 +67,7 @@ Sync an Obsidian vault to Davflare's WebDAV (`/webdav`) with the community plugi
 
 Tested (local `wrangler pages dev` plus the same `webdav` client the plugin uses, replaying Remotely Save 0.5.25's request sequence as two devices syncing both ways): Chinese file names, spaces, special characters such as `+ & ' % #`, nested folders, empty folders, PNG / PDF attachments, 5MB / 12MB files, deletes, file renames, folder renames, and both depth='1' and depth='infinity' listing.
 
-Limits: each file must be under 100MB (Cloudflare's request body limit). Requests over 100MiB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's **Skip Large Files** threshold below 100MB. Remotely Save syncs a rename as "delete old file + upload new file".
+Limits: each file must be under 100MB (Cloudflare's request body limit). Requests over 100MB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's **Skip Large Files** threshold below 100MB. Remotely Save syncs a rename as "delete old file + upload new file".
 
 ## Documentation
 

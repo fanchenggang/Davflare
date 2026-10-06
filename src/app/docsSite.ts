@@ -4,6 +4,7 @@
 // 流程：读 .md → 解析一次 token（顺便收集图片引用与标题）→ 在网盘里找被引用的栅格图片 →
 // 服务端分配页面/图片文件名 → 用同一份 token 渲染成 html（渲染规则从 env 取解析结果）。
 import type { MarkdownIt as MarkdownItType, StateInline, Token } from "markdown-it";
+import pLimit from "p-limit";
 
 import {
   docsScopeOf,
@@ -93,6 +94,27 @@ export function resolveRelativeKey(baseDir: string, path: string): string | null
   if (!parts.length) return null;
   const key = parts.join("/");
   return key.includes("_$flaredrive$") ? null : key;
+}
+
+/**
+ * 路径是否明确指到网盘根目录之外或内部目录（`../` 越过根、`_$flaredrive$`）：
+ * 这类引用不是「没找到」，而是「在所选文件夹之外」（#158）。
+ */
+export function escapesDrive(baseDir: string, path: string): boolean {
+  const clean = path.split(/[?#]/)[0];
+  if (!clean) return false;
+  if (clean.includes("_$flaredrive$")) return true;
+  let depth = clean.startsWith("/") ? 0 : baseDir.split("/").filter(Boolean).length;
+  for (const segment of clean.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      if (depth === 0) return true;
+      depth -= 1;
+    } else {
+      depth += 1;
+    }
+  }
+  return false;
 }
 
 function escapeHtml(value: string): string {
@@ -204,27 +226,49 @@ export function createDocsMarkdown(MarkdownIt: new (options?: object) => Markdow
   md.renderer.rules.link_open = (tokens, idx, options, env: DocsRenderEnv, self) => {
     const token = tokens[idx];
     const href = token.attrGet("href") || "";
-    if (env?.pages && href && !isExternalUrl(href) && !href.startsWith("#")) {
-      const hashIndex = href.indexOf("#");
-      const pathPart = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
-      const hash = hashIndex >= 0 ? href.slice(hashIndex) : "";
-      const decoded = safeDecode(pathPart);
-      if (isMarkdownName(decoded.split("?")[0])) {
-        const key = resolveRelativeKey(env.docDir, decoded);
-        const page = key ? env.pages.get(key) : undefined;
-        if (page) {
-          token.attrSet("href", `${encodeURIComponent(page)}${hash}`);
-          try {
-            return defaultLinkOpen(tokens, idx, options, env, self);
-          } finally {
-            token.attrSet("href", href);
-          }
-        }
-      }
+    const target = markdownLinkTarget(href, env);
+    if (target === null) return defaultLinkOpen(tokens, idx, options, env, self);
+    // 指向没发布的笔记：站点里没有这一页，只留链接文字（和没命中的 [[wikilink]] 一样不生成死链）
+    if (!target) return "";
+    token.attrSet("href", target);
+    try {
+      return defaultLinkOpen(tokens, idx, options, env, self);
+    } finally {
+      token.attrSet("href", href);
     }
-    return defaultLinkOpen(tokens, idx, options, env, self);
+  };
+  const defaultLinkClose =
+    md.renderer.rules.link_close ??
+    ((tokens: Token[], idx: number, options: object, _env: unknown, self: { renderToken: (t: Token[], i: number, o: object) => string }) =>
+      self.renderToken(tokens, idx, options));
+  md.renderer.rules.link_close = (tokens, idx, options, env: DocsRenderEnv, self) => {
+    // Markdown 链接不嵌套：往前最近的 link_open 就是配对的那个
+    for (let i = idx - 1; i >= 0; i -= 1) {
+      if (tokens[i].type !== "link_open") continue;
+      if (markdownLinkTarget(tokens[i].attrGet("href") || "", env) === "") return "";
+      break;
+    }
+    return defaultLinkClose(tokens, idx, options, env, self);
   };
   return md;
+}
+
+/**
+ * 相对的 .md 链接改写成什么：
+ * - null：不是站内 md 链接（外链、锚点、非 md 文件），照常渲染；
+ * - ""：md 链接，但目标不在这次发布里 → 只留文字；
+ * - 其它：改写后的 href（目标页面 + 原锚点）。
+ */
+function markdownLinkTarget(href: string, env: DocsRenderEnv | undefined): string | null {
+  if (!env?.pages || !href || isExternalUrl(href) || href.startsWith("#")) return null;
+  const hashIndex = href.indexOf("#");
+  const pathPart = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
+  const hash = hashIndex >= 0 ? href.slice(hashIndex) : "";
+  const decoded = safeDecode(pathPart);
+  if (!isMarkdownName(decoded.split("?")[0])) return null;
+  const key = resolveRelativeKey(env.docDir, decoded);
+  const page = key ? env.pages.get(key) : undefined;
+  return page ? `${encodeURIComponent(page)}${hash}` : "";
 }
 
 let markdownPromise: Promise<DocsMarkdown> | null = null;
@@ -339,11 +383,13 @@ export async function resolveDocImages(
   // 笔记所在目录及其上级，截止到范围目录（范围是根目录时只有根目录本身）
   const scopedAncestors = (dir: string) =>
     ancestorsOf(dir).filter((ancestor) => (scope ? ancestor === scope || ancestor.startsWith(`${scope}/`) : ancestor === ""));
+  // 引用并行查找，但同时发出的列目录 / 搜索请求最多 4 个
+  const ioLimit = pLimit(4);
   const listings = new Map<string, Promise<FileItem[]>>();
   const list = (dir: string) => {
     let pending = listings.get(dir);
     if (!pending) {
-      pending = io.listDir(dir).catch(() => [] as FileItem[]);
+      pending = ioLimit(() => io.listDir(dir)).catch(() => [] as FileItem[]);
       listings.set(dir, pending);
     }
     return pending;
@@ -363,85 +409,101 @@ export async function resolveDocImages(
     if (!pending) {
       if (searches >= DOCS_SEARCH_LOOKUPS) return Promise.resolve([]);
       searches += 1;
-      pending = io.search(name, `${scope}/`).catch(() => [] as FileItem[]);
+      const search = io.search;
+      pending = ioLimit(() => search(name, `${scope}/`)).catch(() => [] as FileItem[]);
       searchCache.set(name, pending);
     }
     return pending;
   };
 
+  type RefResult = { kind: "skip" } | { kind: "out" } | { kind: "missing" } | { kind: "found"; item: FileItem };
+
+  const resolveRef = async (doc: ParsedDoc, ref: ParsedDoc["refs"][number]): Promise<RefResult> => {
+    // 非栅格嵌入（![[笔记]]、pdf、svg…）本来就不复制、保留原文，不算「没找到」
+    if (!rasterExtension(ref.target)) return { kind: "skip" };
+    let found: FileItem | null = null;
+    if (ref.kind === "md") {
+      const key = resolveRelativeKey(doc.dir, ref.target);
+      // 越过网盘根目录的 ../ 或内部目录：同样是「所选文件夹之外」，不是「没找到」（#158）
+      if ((key && !inScope(key)) || (!key && escapesDrive(doc.dir, ref.target))) return { kind: "out" };
+      if (key) found = await fileAt(key);
+    } else {
+      const target = ref.target.replace(/^\/+/, "");
+      const candidates: string[] = [];
+      const relative = resolveRelativeKey(doc.dir, target);
+      if (inScope(relative)) candidates.push(relative);
+      for (const ancestor of scopedAncestors(doc.dir)) {
+        const key = resolveRelativeKey(ancestor, target);
+        if (inScope(key) && !candidates.includes(key)) candidates.push(key);
+      }
+      for (const key of candidates) {
+        found = await fileAt(key);
+        if (found) break;
+      }
+      if (!found && !target.includes("/")) {
+        outer: for (const ancestor of scopedAncestors(doc.dir)) {
+          for (const sub of ATTACHMENT_DIRS) {
+            const key = ancestor ? `${ancestor}/${sub}/${target}` : `${sub}/${target}`;
+            if (!inScope(key)) continue;
+            if (!(await hasSubdir(ancestor, sub))) continue;
+            found = await fileAt(key);
+            if (found) break outer;
+          }
+        }
+      }
+      if (!found) {
+        const base = target.split("/").pop() || target;
+        const matches = (await searchByName(base)).filter(
+          (item) =>
+            !item.isDir &&
+            item.name === base &&
+            (target.includes("/") ? item.key.endsWith(`/${target}`) || item.key === target : true) &&
+            inScope(item.key) &&
+            !item.key.startsWith("sites/")
+        );
+        // 优先离笔记最近的（共同目录前缀最长），再按路径短，最后按 key 排，结果稳定
+        const score = (key: string) => {
+          const a = doc.dir.split("/");
+          const b = key.split("/");
+          let common = 0;
+          while (common < a.length && common < b.length - 1 && a[common] === b[common]) common += 1;
+          return common;
+        };
+        matches.sort(
+          (x, y) =>
+            score(y.key) - score(x.key) || x.key.length - y.key.length || (x.key < y.key ? -1 : x.key > y.key ? 1 : 0)
+        );
+        found = matches[0] ?? null;
+      }
+    }
+    return found && rasterExtension(found.name) && inScope(found.key) ? { kind: "found", item: found } : { kind: "missing" };
+  };
+
+  // 各引用并行查找（列目录、搜索都有缓存）：搜索兜底不再一个接一个地等（#147）。
+  // 统计和图片顺序仍按笔记 / 引用的原始顺序汇总，结果与串行时一致。
+  const pending = new Map<string, Promise<RefResult>>();
+  const order: Array<{ id: string; result: Promise<RefResult> }> = [];
+  for (const doc of docs) {
+    for (const ref of doc.refs) {
+      const id = refId(ref.kind, doc.dir, ref.target);
+      if (pending.has(id)) continue;
+      const result = resolveRef(doc, ref);
+      pending.set(id, result);
+      order.push({ id, result });
+    }
+  }
+
   const byRef = new Map<string, string>();
   const images = new Map<string, FileItem>();
   let missing = 0;
   let outOfScope = 0;
-
-  for (const doc of docs) {
-    for (const ref of doc.refs) {
-      const id = refId(ref.kind, doc.dir, ref.target);
-      if (byRef.has(id)) continue;
-      let found: FileItem | null = null;
-      // 非栅格嵌入（![[笔记]]、pdf、svg…）本来就不复制、保留原文，不算「没找到」
-      if (!rasterExtension(ref.target)) continue;
-      {
-        if (ref.kind === "md") {
-          const key = resolveRelativeKey(doc.dir, ref.target);
-          if (key && !inScope(key)) {
-            outOfScope += 1;
-            continue;
-          }
-          if (key) found = await fileAt(key);
-        } else {
-          const target = ref.target.replace(/^\/+/, "");
-          const candidates: string[] = [];
-          const relative = resolveRelativeKey(doc.dir, target);
-          if (inScope(relative)) candidates.push(relative);
-          for (const ancestor of scopedAncestors(doc.dir)) {
-            const key = resolveRelativeKey(ancestor, target);
-            if (inScope(key) && !candidates.includes(key)) candidates.push(key);
-          }
-          for (const key of candidates) {
-            found = await fileAt(key);
-            if (found) break;
-          }
-          if (!found && !target.includes("/")) {
-            outer: for (const ancestor of scopedAncestors(doc.dir)) {
-              for (const sub of ATTACHMENT_DIRS) {
-                const key = ancestor ? `${ancestor}/${sub}/${target}` : `${sub}/${target}`;
-                if (!inScope(key)) continue;
-                if (!(await hasSubdir(ancestor, sub))) continue;
-                found = await fileAt(key);
-                if (found) break outer;
-              }
-            }
-          }
-          if (!found) {
-            const base = target.split("/").pop() || target;
-            const matches = (await searchByName(base)).filter(
-              (item) =>
-                !item.isDir &&
-                item.name === base &&
-                (target.includes("/") ? item.key.endsWith(`/${target}`) || item.key === target : true) &&
-                inScope(item.key) &&
-                !item.key.startsWith("sites/")
-            );
-            // 优先离笔记最近的（共同目录前缀最长），再按路径短
-            const score = (key: string) => {
-              const a = doc.dir.split("/");
-              const b = key.split("/");
-              let common = 0;
-              while (common < a.length && common < b.length - 1 && a[common] === b[common]) common += 1;
-              return common;
-            };
-            matches.sort((x, y) => score(y.key) - score(x.key) || x.key.length - y.key.length);
-            found = matches[0] ?? null;
-          }
-        }
-      }
-      if (found && rasterExtension(found.name) && inScope(found.key)) {
-        byRef.set(id, found.key);
-        if (!images.has(found.key)) images.set(found.key, found);
-      } else {
-        missing += 1;
-      }
+  for (const { id, result } of order) {
+    const outcome = await result;
+    if (outcome.kind === "out") outOfScope += 1;
+    else if (outcome.kind === "missing") missing += 1;
+    else if (outcome.kind === "found") {
+      byRef.set(id, outcome.item.key);
+      if (!images.has(outcome.item.key)) images.set(outcome.item.key, outcome.item);
     }
   }
   return { byRef, images: [...images.values()], missing, outOfScope };
@@ -460,6 +522,11 @@ export function desiredPageName(doc: { name: string }): string {
 export function isPageNameShortened(doc: { name: string }): boolean {
   const stem = stemOf(doc.name).trim() || "page";
   return desiredPageName(doc) !== `${stem}.html`;
+}
+
+/** 图片复制到 assets/ 时文件名是否会被缩短（服务端同样按 DOCS_PAGE_NAME_MAX 截短，#158）。 */
+export function isImageNameShortened(image: { name: string }): boolean {
+  return shortenFileName(image.name, DOCS_PAGE_NAME_MAX) !== image.name;
 }
 
 export interface RenderedDocsSite {

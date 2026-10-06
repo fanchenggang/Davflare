@@ -68,7 +68,12 @@ describe("writeEarlySiteManifest", () => {
 
 describe("docs publish", () => {
   function seed(bucket: InMemoryBucket) {
-    bucket.seed([{ key: "notes/a.png", body: "PNG", contentType: "image/png" }]);
+    // 服务端会 head 笔记源（#158），源笔记要真的存在
+    bucket.seed([
+      { key: "notes/a.png", body: "PNG", contentType: "image/png" },
+      { key: "notes/intro.md", body: "# intro" },
+      { key: "intro.md", body: "# intro" },
+    ]);
   }
 
   test("plan writes a docs manifest before any page or image lands", async () => {

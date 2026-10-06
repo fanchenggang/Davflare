@@ -52,7 +52,7 @@ Expect `OPTIONS 200` (with `cache-control` in `Access-Control-Allow-Headers`), `
 
 - Do not print, paste or commit `WEBDAV_PASSWORD`; the in-app card never shows it either.
 - Do not set a nested Remote Base Directory (the plugin rejects `/`).
-- Do not push files ≥ 100MB through WebDAV (413; over 100MiB Cloudflare answers with its generic 413 page).
+- Do not push files ≥ 100MB through WebDAV (413; over 100MB Cloudflare answers with its generic 413 page).
   Set Remotely Save's "Skip Large Files" below 100MB and use the web chunked uploader for big files.
 
 ## Done when

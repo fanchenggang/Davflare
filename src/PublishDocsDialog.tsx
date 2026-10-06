@@ -69,7 +69,7 @@ function PublishDocsDialog({
   const [progress, setProgress] = useState<DocsPublishProgress | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [publishedSlug, setPublishedSlug] = useState("");
-  const slugGuard = useSiteSlugGuard("docs", null);
+  const slugGuard = useSiteSlugGuard("docs", null, { slug, enabled: open && !busy && !resultUrl });
   const [publishedCount, setPublishedCount] = useState(0);
 
   const title = source ? (source.kind === "folder" ? source.folder.name : source.title) : "";
@@ -273,6 +273,11 @@ function PublishDocsDialog({
                 {prepared && prepared.shortened > 0 ? (
                   <Typography variant="body2" color="text.secondary">
                     {translate("publishDocsNamesShortened", { count: prepared.shortened })}
+                  </Typography>
+                ) : null}
+                {prepared && prepared.shortenedImages > 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {translate("publishDocsImageNamesShortened", { count: prepared.shortenedImages })}
                   </Typography>
                 ) : null}
                 {prepared ? (

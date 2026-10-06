@@ -50,8 +50,24 @@ function withSources(body: Record<string, unknown>): Record<string, unknown> {
   return { ...body, sources: body.pages.map((_, i) => (scope ? `${scope}/note-${i}.md` : `note-${i}.md`)) };
 }
 
-const docs = (bucket: AnyBucket, slug: string, body: Record<string, unknown>) =>
-  call(bucket, slug, { docs: withSources(body) });
+/** 服务端会 head 每个笔记源（#158），测试里把用到的源笔记先放进桶里；要测「源不存在」时直接用 call()。 */
+async function seedSources(bucket: AnyBucket, body: Record<string, unknown>) {
+  if (!Array.isArray(body.sources)) return;
+  for (const key of body.sources) {
+    if (typeof key !== "string" || !isPlainFileKey(key)) continue;
+    if ("raw" in bucket) {
+      if (!(await bucket.raw.head(key))) await bucket.raw.put(key, "# note");
+    } else {
+      bucket.seed([{ key, body: "# note" }]);
+    }
+  }
+}
+
+const docs = async (bucket: AnyBucket, slug: string, body: Record<string, unknown>) => {
+  const full = withSources(body);
+  await seedSources(bucket, full);
+  return call(bucket, slug, { docs: full });
+};
 
 type Plan = { planId: string; pages: string[]; images: string[]; total: number };
 
@@ -372,6 +388,26 @@ describe("docs publish: publish scope (#153)", () => {
       expect(res.status).toBe(400);
       expect(res.text).toBe("bad sources");
     }
+  });
+
+  test("#158: note sources must exist — a made-up .md path cannot widen the scope", async () => {
+    const bucket = new InMemoryBucket();
+    seedScope(bucket);
+    // 真笔记在 vault/notes/，另编一个不存在的 vault/x.md 想把范围撑到 vault/，从而带走 vault/secret.png
+    const widened = await call(bucket, "s", {
+      docs: { phase: "plan", pages: ["a.html", "x.html"], sources: ["vault/notes/a.md", "vault/x.md"], images: ["vault/secret.png"] },
+    });
+    expect(widened.status).toBe(409);
+    expect(widened.text).toBe("source missing: x.md");
+    const dup = await call(bucket, "s", {
+      docs: { phase: "plan", pages: ["a.html", "b.html"], sources: ["vault/notes/a.md", "vault/notes/a.md"], images: [] },
+    });
+    expect(dup.status).toBe(400);
+    expect(dup.text).toBe("duplicate sources");
+    const ok = await call(bucket, "s", {
+      docs: { phase: "plan", pages: ["a.html"], sources: ["vault/notes/a.md"], images: ["vault/notes/img/ok.png"] },
+    });
+    expect(ok.status).toBe(200);
   });
 
   test("images outside the notes' folder subtree are rejected", async () => {

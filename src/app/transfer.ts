@@ -143,11 +143,13 @@ export async function searchFiles(
   query: string,
   cursor?: string,
   limit = 100,
-  prefix?: string
+  prefix?: string,
+  options?: { exactName?: boolean }
 ): Promise<SearchResponse> {
   const params: Record<string, string> = { q: query, limit: String(limit) };
   if (cursor) params.cursor = cursor;
   if (prefix) params.prefix = prefix;
+  if (options?.exactName) params.match = "name";
   const res = await authFetch(`/api/search?${new URLSearchParams(params)}`);
   if (!res.ok) throw new Error("Search failed");
   const data = (await res.json()) as {
