@@ -103,6 +103,40 @@ describe("sites host: static serving", () => {
     ]);
   }
 
+  test("site content always revalidates; a matching ETag gets 304 without a body (#156)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const first = await siteRequest("/blog/app.js", defaultEnv(bucket));
+    const etag = first.headers.get("ETag")!;
+    expect(first.headers.get("Cache-Control")).toBe("public, no-cache");
+    const again = await siteRequest("/blog/app.js", defaultEnv(bucket), { headers: { "If-None-Match": etag } });
+    expect(again.status).toBe(304);
+    expect(await again.text()).toBe("");
+    expect(again.headers.get("ETag")).toBe(etag);
+    expect(again.headers.get("Cache-Control")).toBe("public, no-cache");
+    const weak = await siteRequest("/blog/app.js", defaultEnv(bucket), { headers: { "If-None-Match": `"x", W/${etag}` } });
+    expect(weak.status).toBe(304);
+    const stale = await siteRequest("/blog/app.js", defaultEnv(bucket), { headers: { "If-None-Match": '"old"' } });
+    expect(stale.status).toBe(200);
+  });
+
+  test("after a password is set, a revalidating cached copy gets 401, not 304 (#156)", async () => {
+    const bucket = new InMemoryBucket();
+    seedSite(bucket);
+    const first = await siteRequest("/blog/app.js", defaultEnv(bucket));
+    const etag = first.headers.get("ETag")!;
+    const passwordHash = await sha256Hex("gate");
+    bucket.seed([{ key: siteConfigKey("blog"), body: JSON.stringify({ slug: "blog", passwordHash }), contentType: "application/json" }]);
+    const revalidate = await siteRequest("/blog/app.js", defaultEnv(bucket), { headers: { "If-None-Match": etag } });
+    expect(revalidate.status).toBe(401);
+    const authed = await siteRequest("/blog/app.js", defaultEnv(bucket), {
+      headers: { "If-None-Match": etag, Authorization: `Basic ${utf8ToBase64(":gate")}` },
+    });
+    expect(authed.status).toBe(304);
+    expect(authed.headers.get("Cache-Control")).toBe("private, no-cache");
+    expect(authed.headers.get("Vary")).toBe("Authorization");
+  });
+
   test("exact object hit returns 200 with mime/nosniff/cache headers", async () => {
     const bucket = new InMemoryBucket();
     seedSite(bucket);
@@ -110,7 +144,7 @@ describe("sites host: static serving", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("text/javascript; charset=utf-8");
     expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(response.headers.get("Cache-Control")).toBe("public, no-cache");
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
     expect(response.headers.get("ETag")).toMatch(/^"/);
     expect(await response.text()).toBe("console.log(1)");
@@ -380,7 +414,7 @@ describe("sites host: static serving", () => {
     });
     expect(allowed.status).toBe(200);
     expect(await allowed.text()).toBe("console.log(1)");
-    expect(allowed.headers.get("Cache-Control")).toBe("private, max-age=60");
+    expect(allowed.headers.get("Cache-Control")).toBe("private, no-cache");
     expect(allowed.headers.get("Vary")).toBe("Authorization");
   });
 
@@ -414,7 +448,7 @@ describe("sites host: static serving", () => {
     seedSite(bucket);
     const response = await siteRequest("/blog/app.js", defaultEnv(bucket));
     expect(response.status).toBe(200);
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(response.headers.get("Cache-Control")).toBe("public, no-cache");
     expect(response.headers.get("Vary")).toBeNull();
   });
 

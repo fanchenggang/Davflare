@@ -100,7 +100,7 @@ async function serveSlugSite(
           { body: spaObject.body, httpEtag: spaObject.httpEtag },
           siteSpaKey(parsed.slug),
           method === "HEAD",
-          { privateCache }
+          { privateCache, ifNoneMatch: context.request.headers.get("If-None-Match") }
         );
       }
       return sitesNotFound();
@@ -119,7 +119,11 @@ async function serveSlugSite(
     { body: object.body, httpEtag: object.httpEtag },
     key,
     method === "HEAD",
-    { privateCache, download: await forcesDownload(key) }
+    {
+      privateCache,
+      download: await forcesDownload(key),
+      ifNoneMatch: context.request.headers.get("If-None-Match"),
+    }
   );
 }
 

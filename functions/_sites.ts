@@ -389,11 +389,22 @@ export function sitesNotFound(): Response {
   });
 }
 
+/** If-None-Match 是否命中当前 ETag（忽略弱校验前缀，支持逗号列表与 *）。 */
+export function etagMatches(ifNoneMatch: string | null | undefined, etag: string | undefined): boolean {
+  if (!ifNoneMatch || !etag) return false;
+  const strip = (value: string) => value.trim().replace(/^W\//, "");
+  const target = strip(etag);
+  return ifNoneMatch.split(",").some((candidate) => {
+    const value = candidate.trim();
+    return value === "*" || strip(value) === target;
+  });
+}
+
 export function sitesResponse(
   object: { body: ReadableStream | null; httpEtag?: string },
   key: string,
   head: boolean,
-  options?: { privateCache?: boolean; download?: boolean }
+  options?: { privateCache?: boolean; download?: boolean; ifNoneMatch?: string | null }
 ) {
   const headers = new Headers();
   headers.set("Content-Type", mimeForKey(key));
@@ -404,15 +415,27 @@ export function sitesResponse(
     headers.set("Content-Disposition", contentDisposition(key.split("/").pop() || "", "attachment"));
     headers.set("Content-Security-Policy", "sandbox");
   }
+  // 站点规则（访问密码、生成型站点的强制下载）随时可能变，缓存一律先回源确认（#156）：
+  // no-cache = 可以存，但每次使用前都要重新验证；配合 ETag，未变化时只回 304，不重传正文。
+  // 这样设密码 / 换站点类型后，边缘和浏览器里的旧副本不会再被直接用掉。
   if (options?.privateCache) {
     // Password-gated sites must not land in shared CDN caches.
-    headers.set("Cache-Control", "private, max-age=60");
+    headers.set("Cache-Control", "private, no-cache");
     headers.set("Vary", "Authorization");
   } else {
-    headers.set("Cache-Control", "public, max-age=60");
+    headers.set("Cache-Control", "public, no-cache");
   }
   headers.set("X-Robots-Tag", "noindex");
   if (object.httpEtag) headers.set("ETag", object.httpEtag);
+  if (etagMatches(options?.ifNoneMatch, object.httpEtag)) {
+    // 不返回正文：把 R2 的读取流关掉，免得悬着
+    try {
+      void object.body?.cancel().catch(() => undefined);
+    } catch {
+      // ignore
+    }
+    return new Response(null, { status: 304, headers });
+  }
   return new Response(head ? null : object.body, { status: 200, headers });
 }
 

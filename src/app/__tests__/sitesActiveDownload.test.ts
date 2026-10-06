@@ -137,6 +137,16 @@ describe("public directory site (kind dir)", () => {
     expectInline(await get(bucket.asBucket(), "/files/index.html"));
   });
 
+  test("304 revalidation keeps the attachment + sandbox headers (#156)", async () => {
+    const bucket = new InMemoryBucket();
+    seedDirSite(bucket);
+    const first = await get(bucket.asBucket(), "/files/x.svg");
+    const again = await get(bucket.asBucket(), "/files/x.svg", { headers: { "If-None-Match": first.headers.get("ETag")! } });
+    expect(again.status).toBe(304);
+    expect(again.headers.get("Content-Disposition")).toMatch(/^attachment/);
+    expect(again.headers.get("Content-Security-Policy")).toBe("sandbox");
+  });
+
   test("HEAD carries the same attachment headers", async () => {
     const bucket = new InMemoryBucket();
     seedDirSite(bucket);
@@ -184,7 +194,7 @@ describe("public directory site (kind dir)", () => {
     expect((await get(bucket.asBucket(), "/files/x.html")).status).toBe(401);
     const ok = await get(bucket.asBucket(), "/files/x.html", { headers: { Authorization: `Basic ${utf8ToBase64(":pw")}` } });
     expectDownload(ok, "x.html");
-    expect(ok.headers.get("Cache-Control")).toBe("private, max-age=60");
+    expect(ok.headers.get("Cache-Control")).toBe("private, no-cache");
   });
 
   test("custom hostname dir site applies the same policy", async () => {
