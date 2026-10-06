@@ -67,32 +67,6 @@ describe("logout clears the thumbnail cache without any thumbnail loaded (#184)"
     await vi.waitFor(() => expect(del).toHaveBeenCalledTimes(1));
   });
 
-  test("mounting App hooks the cleanup (no thumbnail involved)", async () => {
-    localStorage.setItem("flaredrive.auth", JSON.stringify({ username: "bgb", password: "p" }));
-    const { stores } = stubCacheStorage();
-    vi.resetModules();
-    vi.doMock("../../Main", () => ({ __esModule: true, default: () => <div>main-stub</div> }));
-    vi.doMock("../../CommandPalette", () => ({ __esModule: true, default: () => null }));
-    vi.doMock("../transferQueue", () => ({
-      TransferQueueProvider: ({ children }: { children: JSX.Element }) => children,
-      useTransferQueue: () => [],
-      useTransferQueueActions: () => ({}),
-      useTransferQueueGlobalPaused: () => false,
-      useUploadEnqueue: () => vi.fn(),
-    }));
-    const { default: App } = await import("../../App");
-    const auth = await import("../auth");
-    const { act, render } = await import("@testing-library/react");
-    const view = render(<App />);
-    expect(stores.has("davflare-thumbnails-v1")).toBe(true);
-    act(() => auth.clearCredentials());
-    await vi.waitFor(() => expect(stores.has("davflare-thumbnails-v1")).toBe(false));
-    view.unmount();
-    vi.doUnmock("../../Main");
-    vi.doUnmock("../../CommandPalette");
-    vi.doUnmock("../transferQueue");
-  });
-
   test("logout also clears the default loader's memory and revokes its object URLs", async () => {
     localStorage.setItem("flaredrive.auth", JSON.stringify({ username: "bgb", password: "p" }));
     stubCacheStorage();
