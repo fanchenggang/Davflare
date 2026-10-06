@@ -6,6 +6,7 @@ import {
 } from "./_images";
 import {
   indexFallbackKey,
+  isSiteFolderMarker,
   isSitesHost,
   loadSiteConfig,
   loadSlugForHostname,
@@ -80,8 +81,11 @@ async function serveSlugSite(
   }
 
   const key = parsed.key;
-  const object = await context.env.BUCKET.get(key);
-  if (!object && parsed.tryIndex) {
+  let object: R2ObjectBody | null = await context.env.BUCKET.get(key);
+  // 文件夹标记对象（MKCOL / 新建文件夹 / 上传 API 建的目录）按目录处理，绝不当空文件 200 返回（#157）
+  const folderMarker = isSiteFolderMarker(key, object);
+  if (folderMarker) object = null; // 标记对象是 0 字节，不读正文
+  if (!object && (parsed.tryIndex || folderMarker) && !key.endsWith("/")) {
     // `/{slug}/sub` 不是文件但 `sub/index.html` 存在：跳到 `/{slug}/sub/`，
     // 否则页面里的相对链接会按上一级目录解析（#145）。只需 head，不读正文。
     const indexHead = await context.env.BUCKET.head(indexFallbackKey(parsed.key));

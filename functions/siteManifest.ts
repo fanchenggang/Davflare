@@ -119,15 +119,16 @@ export function isActiveSiteFile(rel: string): boolean {
 /**
  * 生成型站点里这个相对路径是否必须以附件下载。
  * - 没有清单（普通静态站）：从不。
- * - 站点根 index.html：生成的首页（index.html 是保留名，用户文件不会占用），照常渲染。
+ * - 站点根 index.html（精确匹配，区分大小写）：生成的首页（index.html 是保留名，用户文件不会占用），照常渲染。
  * - 文档站：生成的 .html 页面照常渲染，其余 active 类型（svg/xml/js…）下载。
  * - 公开目录、相册、无法识别的 kind：所有 active 类型下载（宁严勿松）。
  * 非 active 类型（图片、pdf、文本…）本来就靠 nosniff 不会执行，保持内联，免得每个请求多读一次清单。
  */
 export function siteFileForcesDownload(kind: string | null, rel: string): boolean {
   if (!kind) return false;
+  // 只放行生成的首页本身（精确匹配）：手工放进去的 INDEX.HTML / Index.html 是另一个 R2 对象，照样下载
+  if (rel === "index.html") return false;
   const lower = rel.toLowerCase();
-  if (lower === "index.html") return false;
   if (!isActiveSiteFile(lower)) return false;
   if (kind === "docs" && /\.html?$/.test(lower)) return false;
   return true;

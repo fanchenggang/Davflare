@@ -77,7 +77,9 @@ describe("policy helpers", () => {
     expect(siteFileForcesDownload(null, "x.html")).toBe(false);
     for (const kind of ["dir", "album", "weird-future-kind"]) {
       expect(siteFileForcesDownload(kind, "index.html")).toBe(false);
-      expect(siteFileForcesDownload(kind, "INDEX.HTML")).toBe(false);
+      // 只放行生成的首页本身：手工放的 INDEX.HTML / Index.html 是另一个对象，必须下载
+      expect(siteFileForcesDownload(kind, "INDEX.HTML")).toBe(true);
+      expect(siteFileForcesDownload(kind, "Index.html")).toBe(true);
       expect(siteFileForcesDownload(kind, "x.html")).toBe(true);
       expect(siteFileForcesDownload(kind, "sub/index.html")).toBe(true);
       expect(siteFileForcesDownload(kind, "x.svg")).toBe(true);
@@ -118,6 +120,19 @@ describe("public directory site (kind dir)", () => {
       expectDownload(response, file.key);
       expect(await response.text()).toBe(file.body);
     }
+  });
+
+  test("a manually placed root INDEX.HTML is downloaded, only the generated index.html renders", async () => {
+    const bucket = new InMemoryBucket();
+    seedDirSite(bucket);
+    bucket.seed([
+      { key: "sites/files/INDEX.HTML", body: "<script>alert(1)</script>", contentType: "text/html" },
+      { key: "sites/files/Index.html", body: "<script>alert(2)</script>", contentType: "text/html" },
+    ]);
+    for (const name of ["INDEX.HTML", "Index.html"]) {
+      expectDownload(await get(bucket.asBucket(), `/files/${name}`), name);
+    }
+    expectInline(await get(bucket.asBucket(), "/files/index.html"));
   });
 
   test("HEAD carries the same attachment headers", async () => {

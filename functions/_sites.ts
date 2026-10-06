@@ -1,4 +1,5 @@
 import {
+  isCollectionObject,
   parseBasicAuthHeader,
   sha256Hex,
   timingSafeEqual,
@@ -333,6 +334,19 @@ export function parseSitesPath(
     key: `${SITES_PREFIX}${slug}/${file}`,
     tryIndex: !hasDot,
   };
+}
+
+/**
+ * 网盘里的「文件夹」对象（#157）：WebDAV MKCOL、网页「新建文件夹」、上传 API 建的目录标记
+ * （0 字节，Content-Type application/x-directory 或 resourcetype <collection />），
+ * 以及 S3 工具常见的以 `/` 结尾的 key。站点上它们是目录，绝不能当文件 200 返回。
+ */
+export function isSiteFolderMarker(
+  key: string,
+  object: { httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string> } | null
+): boolean {
+  if (!object) return false;
+  return key.endsWith("/") || isCollectionObject(object);
 }
 
 export function indexFallbackKey(key: string): string {
