@@ -144,10 +144,11 @@ export async function handleCollectCreate(
     httpMetadata: { contentType },
   });
   const at = new Date(now).toISOString();
+  let stale: Array<[string, string]> = [];
   const mutation = await mutateCollect<LimitCheck>(bucket, token, (fresh) => {
     const status = collectStatus(fresh, now);
     if (status !== "active") return { write: false, result: status };
-    prunePending(fresh, now);
+    stale = prunePending(fresh, now);
     const check = checkCreateLimits(fresh, size, now);
     if (check) return { write: false, result: check };
     fresh.pending[upload.uploadId] = { staging, name, size, contentType, at };
@@ -166,6 +167,8 @@ export async function handleCollectCreate(
     }
     return collectError(code, limitStatus(code));
   }
+  // 超过 24 小时未完成的上传已不占额度，顺手中止，别让分块在 R2 里再躺到 7 天自动清理
+  await abortStale(bucket, stale);
   return collectJson({
     uploadId: upload.uploadId,
     partSize: COLLECT_PART_SIZE,
@@ -287,6 +290,12 @@ async function deleteQuietly(bucket: R2Bucket, key: string) {
   }
 }
 
+async function abortStale(bucket: R2Bucket, stale: Array<[string, string]>) {
+  for (const [uploadId, staging] of stale) {
+    await abortCollectUpload(bucket, staging, uploadId);
+  }
+}
+
 async function dropPending(bucket: R2Bucket, token: string, uploadId: string) {
   await mutateCollect(bucket, token, (fresh) => {
     if (!hasOwn(fresh.pending, uploadId)) return { write: false, result: null };
@@ -338,6 +347,7 @@ export async function handleCollectComplete(
   }
 
   // 预占额度（实际大小）并移除 pending：并发 complete 不会一起越过总量
+  let stale: Array<[string, string]> = [];
   const reserve = await mutateCollect<CollectErrorCode | null>(bucket, token, (fresh) => {
     if (!hasOwn(fresh.pending, uploadId)) return { write: false, result: "unknown_upload" };
     const status = collectStatus(fresh, now);
@@ -350,7 +360,7 @@ export async function handleCollectComplete(
       return { write: false, result: "quota_exceeded" };
     }
     delete fresh.pending[uploadId];
-    prunePending(fresh, now);
+    stale = prunePending(fresh, now);
     fresh.usage.files += 1;
     fresh.usage.bytes += size;
     return { write: true, result: null };
@@ -371,6 +381,7 @@ export async function handleCollectComplete(
     return collectError("unknown_upload", 404);
   }
 
+  await abortStale(bucket, stale);
   const finalKey = await placeCollectedObject(
     bucket,
     record.folder,

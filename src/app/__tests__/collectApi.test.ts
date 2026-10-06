@@ -699,6 +699,41 @@ describe("limits", () => {
     expect(record(bucket, token).usage.files).toBe(200);
   });
 
+  test("stale (>24h) pending uploads are aborted in R2 when pruned", async () => {
+    const bucket = freshBucket();
+    const token = await newCollect(bucket);
+    const old = await createUpload(bucket, token, "old.bin", 3);
+    patchRecord(bucket, token, (r) => {
+      r.pending[old.body.uploadId].at = "2020-01-01T00:00:00.000Z";
+    });
+    const target = bucket.asBucket();
+    const aborted: string[] = [];
+    const raw = new Proxy(target, {
+      get(obj, prop, receiver) {
+        if (prop === "resumeMultipartUpload") {
+          return (key: string, uploadId: string) => {
+            const handle = target.resumeMultipartUpload(key, uploadId);
+            return {
+              ...handle,
+              uploadPart: handle.uploadPart.bind(handle),
+              complete: handle.complete.bind(handle),
+              abort: async () => {
+                aborted.push(uploadId);
+                return handle.abort();
+              },
+            };
+          };
+        }
+        const value = Reflect.get(obj, prop, receiver);
+        return typeof value === "function" ? value.bind(obj) : value;
+      },
+    }) as R2Bucket;
+    const fresh = await createUpload({ raw }, token, "new.bin", 3);
+    expect(fresh.response.status).toBe(200);
+    expect(aborted).toEqual([old.body.uploadId]);
+    expect(Object.keys(record(bucket, token).pending)).toEqual([fresh.body.uploadId]);
+  });
+
   test("too many concurrent uploads → 429", async () => {
     const bucket = freshBucket();
     const token = await newCollect(bucket);

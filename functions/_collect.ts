@@ -170,10 +170,16 @@ export function livePending(record: CollectRecord, now = Date.now()): CollectPen
   return Object.values(record.pending).filter((entry) => isPendingLive(entry, now));
 }
 
-export function prunePending(record: CollectRecord, now = Date.now()) {
+/** 移除超时的 pending，返回被移除的 [uploadId, staging]，调用方写回成功后据此中止分块上传 */
+export function prunePending(record: CollectRecord, now = Date.now()): Array<[string, string]> {
+  const pruned: Array<[string, string]> = [];
   for (const id of Object.keys(record.pending)) {
-    if (!isPendingLive(record.pending[id], now)) delete record.pending[id];
+    if (!isPendingLive(record.pending[id], now)) {
+      pruned.push([id, record.pending[id].staging]);
+      delete record.pending[id];
+    }
   }
+  return pruned;
 }
 
 /** 剩余额度（不含进行中的上传），页面展示用 */
