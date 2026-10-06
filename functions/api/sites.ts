@@ -452,7 +452,11 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
       ...manifestNames.map((name) => `${sitePrefix}${name}`),
       sitePublishPlanKey(slug),
     ]);
-    await recordSiteSource(env.BUCKET, slug, source);
+    // 之前有清单（生成型站点或放弃的发布）：服务规则变了，记下时间并入 Last-Modified（#173）。
+    // 否则直接放进 sites/ 的 html 会回到旧的修改时间，浏览器带 If-Modified-Since 拿到 304，
+    // 继续用「强制下载」时期的副本。
+    const hadManifest = previouslyOwned.some((rel) => manifestNames.includes(rel));
+    await recordSiteSource(env.BUCKET, slug, source, hadManifest ? { policyAt: new Date() } : {});
 
     return jsonResponse({
       slug,

@@ -104,11 +104,11 @@ Rules:
 
 ## Caching
 
-Site responses are `Cache-Control: public, no-cache` (`private, no-cache` behind a password): browsers and the edge revalidate every time and get a cheap `304` when nothing changed, so password, site-type and content changes apply on the next request. The serving rules (forced download, password) are part of the `ETag`, `Last-Modified` also covers the site's manifest, and html/svg/xml/js are sent with `CDN-Cache-Control: no-store`, so an old inline copy is never revalidated after a site switches to a docs site, public directory or album.
+Site responses are `Cache-Control: public, no-cache` (`private, no-cache` behind a password): browsers and the edge revalidate every time and get a cheap `304` when nothing changed, so password, site-type and content changes apply on the next request. The serving rules (forced download, password) are part of the `ETag`, `Last-Modified` also covers the site's manifest (and the moment a generated site was switched back to a plain one), and html/svg/xml/js are sent with `CDN-Cache-Control: no-store`, so an old inline copy is never revalidated after a site switches to a docs site, public directory or album.
 
 Two zone settings on the sites hostname can override this:
 
-- **Browser Cache TTL** (Caching → Configuration) defaults to 4 hours on many zones and rewrites `no-cache` on css/js/svg/images to `max-age=14400`, so visitors may not revalidate for hours. Set it to **Respect Existing Headers**, or add a Cache Rule for the sites hostname that does the same.
+- **Browser Cache TTL** (Caching → Configuration) defaults to 4 hours on many zones and rewrites `no-cache` on css/images/fonts to `max-age=14400`, so visitors may not revalidate for hours (html/svg/xml/js carry `CDN-Cache-Control: no-store` and keep `no-cache`). Set it to **Respect Existing Headers**, or add a Cache Rule for the sites hostname that does the same.
 - **Email Obfuscation** (Scrape Shield, on by default) strips `ETag` from HTML. Pages then revalidate with `Last-Modified` / `If-Modified-Since` instead, which still works; turn it off for the sites hostname if you prefer ETags.
 
 ## Security

@@ -11,6 +11,7 @@ import {
   loadSiteConfig,
   loadSlugForHostname,
   parseSitesRootPath,
+  siteConfigPolicyAt,
   siteNotFoundKey,
   sitePasswordAuthorized,
   siteSpaKey,
@@ -64,6 +65,7 @@ async function serveSlugSite(
   // Load config once up front so SPA/404 reuse it without a second R2 get.
   const config = await loadSiteConfig(context.env.BUCKET, parsed.slug);
   const passwordHash = config?.passwordHash;
+  const configPolicyAt = siteConfigPolicyAt(config);
   const privateCache = Boolean(passwordHash);
   if (passwordHash) {
     if (!(await sitePasswordAuthorized(context.request, passwordHash))) {
@@ -113,6 +115,7 @@ async function serveSlugSite(
             privateCache,
             ifNoneMatch: context.request.headers.get("If-None-Match"),
             ifModifiedSince: context.request.headers.get("If-Modified-Since"),
+            configPolicyAt,
           }
         );
       }
@@ -141,6 +144,8 @@ async function serveSlugSite(
       ifModifiedSince: context.request.headers.get("If-Modified-Since"),
       // active 类型读过清单：服务规则的修改时间并入 Last-Modified（#170）
       policyUpdatedAt: policyPromise ? (await policyPromise).updatedAt : null,
+      // 改回普通站时记下的时间（#173）：清单已删，靠它让 Last-Modified 不倒退
+      configPolicyAt,
     }
   );
 }

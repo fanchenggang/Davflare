@@ -37,6 +37,13 @@ export interface SiteConfig {
   /** 最近一次「从网盘文件夹发布」（普通静态站 / 公开目录）的源文件夹；发布前占用检查用（#151） */
   source?: string;
   stats?: SiteStats;
+  /**
+   * 服务规则最近一次变化的时间（ISO）：生成型站点（公开目录 / 相册 / 文档站）改回普通站、
+   * 清单被删掉时写入。Last-Modified 取 max(文件修改时间, 清单修改时间, policyAt)，
+   * 否则直接放进 sites/ 的 html 会回到旧的修改时间，浏览器拿 If-Modified-Since 得到 304，
+   * 继续用「强制下载」时期的旧副本（#173）。
+   */
+  policyAt?: string;
 }
 
 export const SITE_PASSWORD_MAX_LEN = 128;
@@ -87,6 +94,13 @@ export function siteNotFoundKey(slug: string): string {
   return `${SITES_PREFIX}${slug}/404.html`;
 }
 
+/** 配置里的 policyAt 解析成 Date；缺失或损坏为 null */
+export function siteConfigPolicyAt(config: SiteConfig | null | undefined): Date | null {
+  if (!config || typeof config.policyAt !== "string") return null;
+  const time = Date.parse(config.policyAt);
+  return Number.isFinite(time) ? new Date(time) : null;
+}
+
 export async function loadSiteConfig(
   bucket: R2Bucket,
   slug: string
@@ -109,14 +123,16 @@ export async function loadSiteConfig(
 export async function recordSiteSource(
   bucket: R2Bucket,
   slug: string,
-  source: string | null
+  source: string | null,
+  options: { policyAt?: Date } = {}
 ): Promise<void> {
   const existing = await loadSiteConfig(bucket, slug);
-  if (!existing && !source) return;
+  if (!existing && !source && !options.policyAt) return;
   const config: SiteConfig = { ...(existing || {}), slug };
-  if ((config.source || null) === source) return;
+  if ((config.source || null) === source && !options.policyAt) return;
   if (source) config.source = source;
   else delete config.source;
+  if (options.policyAt) config.policyAt = options.policyAt.toISOString();
   await bucket.put(siteConfigKey(slug), JSON.stringify(config), {
     httpMetadata: { contentType: "application/json" },
   });
@@ -436,6 +452,8 @@ export function sitesResponse(
     ifModifiedSince?: string | null;
     /** 服务规则（清单）的修改时间：Last-Modified 取它和文件本身的较新者（#170） */
     policyUpdatedAt?: Date | null;
+    /** 站点配置里的 policyAt（改回普通站的时间，#173）：同样并入 Last-Modified */
+    configPolicyAt?: Date | null;
   }
 ) {
   const headers = new Headers();
@@ -468,8 +486,8 @@ export function sitesResponse(
   });
   if (etag) headers.set("ETag", etag);
   // Last-Modified：Cloudflare 开着 Email Obfuscation 时会剥掉 HTML 的 ETag，浏览器只能靠它拿 304（#170）。
-  // 取文件和服务规则（清单）的较新者：站点换类型时清单会重写，旧副本不会被 304 续命。
-  const times = [object.uploaded, options?.policyUpdatedAt ?? undefined].filter(
+  // 取文件和服务规则（清单 / 配置里的 policyAt）的较新者：站点换类型时清单会重写或被删，旧副本不会被 304 续命。
+  const times = [object.uploaded, options?.policyUpdatedAt ?? undefined, options?.configPolicyAt ?? undefined].filter(
     (value): value is Date => value instanceof Date && Number.isFinite(value.getTime())
   );
   const lastModified = times.length ? new Date(Math.max(...times.map((value) => value.getTime()))) : null;

@@ -104,11 +104,11 @@ jobs:
 
 ## 缓存
 
-站点响应是 `Cache-Control: public, no-cache`（加了密码是 `private, no-cache`）：浏览器和边缘每次都回源确认，没变化时只回很小的 `304`，所以改密码、换站点类型、改内容在下一次请求就生效。服务规则（是否强制下载、是否有密码）编进了 `ETag`，`Last-Modified` 也包含站点清单的修改时间，html/svg/xml/js 还带 `CDN-Cache-Control: no-store`：站点换成文档站、公开目录或相册后，旧的内联副本不会再被 304 续用。
+站点响应是 `Cache-Control: public, no-cache`（加了密码是 `private, no-cache`）：浏览器和边缘每次都回源确认，没变化时只回很小的 `304`，所以改密码、换站点类型、改内容在下一次请求就生效。服务规则（是否强制下载、是否有密码）编进了 `ETag`，`Last-Modified` 也包含站点清单的修改时间（以及生成型站点改回普通站的时间），html/svg/xml/js 还带 `CDN-Cache-Control: no-store`：站点换成文档站、公开目录或相册后，旧的内联副本不会再被 304 续用。
 
 站点域名所在 zone 的两项设置会改写这些行为：
 
-- **Browser Cache TTL**（缓存 → 配置）很多 zone 默认 4 小时，会把 css/js/svg/图片的 `no-cache` 改写成 `max-age=14400`，访客浏览器可能几个小时不回源。请设成 **Respect Existing Headers（遵循现有标头）**，或者给站点域名加一条同样效果的 Cache Rule。
+- **Browser Cache TTL**（缓存 → 配置）很多 zone 默认 4 小时，会把 css/图片/字体的 `no-cache` 改写成 `max-age=14400`，访客浏览器可能几个小时不回源（html/svg/xml/js 带 `CDN-Cache-Control: no-store`，保持 `no-cache` 不变）。请设成 **Respect Existing Headers（遵循现有标头）**，或者给站点域名加一条同样效果的 Cache Rule。
 - **Email Obfuscation（电子邮件地址混淆）**（Scrape Shield，默认开启）会剥掉 HTML 的 `ETag`。页面改用 `Last-Modified` / `If-Modified-Since` 回源确认，仍然有效；想用 ETag 可以对站点域名关闭它。
 
 ## 安全
