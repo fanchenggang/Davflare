@@ -45,8 +45,9 @@ export function formatCollectSize(bytes: number): string {
     value /= 1024;
     unit += 1;
   }
-  const rounded = unit === 0 || value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
-  return `${rounded} ${units[unit]}`;
+  // 与网盘 humanReadableSize 一致：非 B 保留一位小数，避免 105MB≈100.1MiB 被显示成「100 MB」却被拒。
+  if (unit === 0) return `${Math.round(value)} ${units[unit]}`;
+  return `${value.toFixed(1)} ${units[unit]}`;
 }
 
 /** JSON 嵌入 <script type="application/json">：转义 < > & 与行分隔符，防止闭合标签注入 */
@@ -132,6 +133,7 @@ const UPLOAD_SCRIPT = `
   var btn = document.getElementById("start");
   var list = document.getElementById("list");
   var summary = document.getElementById("summary");
+  var limitsEl = document.getElementById("limits");
   var queue = [];
   var busy = false;
   document.getElementById("nojs").remove();
@@ -143,9 +145,13 @@ const UPLOAD_SCRIPT = `
     return text.replace(/\\{(\\w+)\\}/g, function (m, k) { return vars && vars[k] !== undefined ? String(vars[k]) : m; });
   }
   function size(n) {
-    var u = ["B", "KB", "MB", "GB"], i = 0;
-    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-    return (i === 0 || n >= 10 ? Math.round(n) : Math.round(n * 10) / 10) + " " + u[i];
+    var u = ["B", "KB", "MB", "GB"], i = 0, v = Math.max(0, n);
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return (i === 0 ? Math.round(v) : v.toFixed(1)) + " " + u[i];
+  }
+  function updateLimits() {
+    if (!limitsEl) return;
+    limitsEl.textContent = fmt(T.limitsTpl, { files: remainingFiles, bytes: size(remainingBytes) });
   }
   function errText(code) {
     return T.errors[code] || T.errors.generic;
@@ -222,6 +228,7 @@ const UPLOAD_SCRIPT = `
       }).then(function (res) { return res.json(); }).then(function (done) {
         remainingFiles = done.remainingFiles;
         remainingBytes = done.remainingBytes;
+        updateLimits();
       }, function (e) {
         json("/abort", { uploadId: created.uploadId }).catch(function () {});
         throw e;
@@ -382,6 +389,12 @@ export function renderCollectPage(
       done: t("collectPageDone"),
       allDone: t("collectPageAllDone"),
       someFailed: t("collectPageSomeFailed"),
+      // files/bytes 留给上传脚本在用量变化后回填；maxFile 固定。
+      limitsTpl: t("collectPageLimits", {
+        maxFile: formatCollectSize(record.limits.maxFileBytes),
+        files: "{files}",
+        bytes: "{bytes}",
+      }),
       errors,
     },
   };
@@ -393,7 +406,7 @@ export function renderCollectPage(
     <p>${escapeCollectHtml(t("collectPageIntro"))}</p>
 ${note}    <dl class="meta">
       <div><dt>${escapeCollectHtml(t("collectPageExpires"))}</dt><dd><time id="expires" datetime="${escapeCollectHtml(expires.toISOString())}">${escapeCollectHtml(expiresFallback)}</time></dd></div>
-      <div><dt>${escapeCollectHtml(t("collectPageLimitsLabel"))}</dt><dd>${escapeCollectHtml(
+      <div><dt>${escapeCollectHtml(t("collectPageLimitsLabel"))}</dt><dd id="limits">${escapeCollectHtml(
         t("collectPageLimits", {
           maxFile: formatCollectSize(record.limits.maxFileBytes),
           files: remaining.files,

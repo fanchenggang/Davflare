@@ -899,6 +899,11 @@ const entries: Record<string, DictionaryEntry> = {
     en: "No request links yet. Choose “Request files” from a folder's menu to create one.",
   },
   collectDisable: { zh: "停用", en: "Disable" },
+  collectDisableConfirmTitle: { zh: "停用收集链接？", en: "Disable this request link?" },
+  collectDisableConfirmMsg: {
+    zh: "停用后不能恢复，拿到链接的人将无法再上传。已上传的文件不受影响。",
+    en: "This can't be undone. Anyone with the link will no longer be able to upload. Files already uploaded stay put.",
+  },
   collectDisabledToast: { zh: "收集链接已停用", en: "Request link disabled" },
   collectDeletedToast: { zh: "收集链接已删除", en: "Request link deleted" },
   collectStatusActive: { zh: "收集中", en: "Open" },

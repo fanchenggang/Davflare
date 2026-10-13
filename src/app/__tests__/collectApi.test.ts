@@ -292,6 +292,11 @@ describe("anonymous upload page", () => {
     const data = JSON.parse(doc.getElementById("collect-data")!.textContent!);
     expect(data).toMatchObject({ base: `/collect/${token}`, partSize: COLLECT_PART_SIZE, remainingFiles: 200 });
     expect(JSON.stringify(data)).not.toContain("private-tax-2026");
+    expect(html).toContain('id="limits"');
+    expect(html).toContain("updateLimits");
+    expect(data.t.limitsTpl).toContain("{files}");
+    expect(data.t.limitsTpl).toContain("{bytes}");
+    expect(html).toMatch(/v\.toFixed\(1\)/);
 
     const en = await (await anon(bucket, token, { headers: { "Accept-Language": "en-US" } })).text();
     expect(en).toContain("Upload files");
@@ -1145,7 +1150,10 @@ describe("pure helpers", () => {
     expect(isForbiddenCollectFolder("a/_$flaredrive$/b")).toBe(true);
     expect(formatCollectSize(0)).toBe("0 B");
     expect(formatCollectSize(1536)).toBe("1.5 KB");
-    expect(formatCollectSize(100 * 1024 * 1024)).toBe("100 MB");
+    expect(formatCollectSize(100 * 1024 * 1024)).toBe("100.0 MB");
+    // 105e6 ≈ 100.1 MiB：一位小数避免显示成「100 MB」却被 100MiB 上限拒绝
+    expect(formatCollectSize(105_000_000)).toBe("100.1 MB");
+    expect(formatCollectSize(11_000_000)).toBe("10.5 MB");
     expect(safeJsonForScript({ a: "</script><b>&\u2028" })).not.toMatch(/[<>&\u2028]/);
   });
 });

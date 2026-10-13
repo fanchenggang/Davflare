@@ -74,6 +74,7 @@ function CollectDialog({
       } catch {
         onNotify(translate("collectLinkCreatedNoCopy"), "success");
       }
+      onClose();
     } catch (error) {
       onNotify(errorMessage(error), "error");
     } finally {

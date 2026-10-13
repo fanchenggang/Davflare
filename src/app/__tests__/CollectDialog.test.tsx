@@ -68,7 +68,8 @@ describe("CollectDialog", () => {
     mockList.mockResolvedValue([info(), info({ token: "t2", folder: "other", url: "u2" })]);
     mockCreate.mockResolvedValue(info({ token: "t3", url: "https://drive.example/collect/t3", note: "hw" }));
     const onNotify = vi.fn();
-    render(<CollectDialog open folder={folder} onClose={vi.fn()} onNotify={onNotify} />);
+    const onClose = vi.fn();
+    render(<CollectDialog open folder={folder} onClose={onClose} onNotify={onNotify} />);
     expect(screen.getByText(translate("collectDialogTitle", { name: "inbox" }))).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("https://drive.example/collect/t1")).toBeInTheDocument());
     expect(screen.queryByText("u2")).not.toBeInTheDocument();
@@ -82,6 +83,7 @@ describe("CollectDialog", () => {
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith(translate("collectLinkCreated"), "success"));
     expect(writeText).toHaveBeenCalledWith("https://drive.example/collect/t3");
     expect(screen.getByText("https://drive.example/collect/t3")).toBeInTheDocument();
+    expect(onClose).toHaveBeenCalled();
   });
 
   test("clipboard failure still reports creation; create error notifies", async () => {
@@ -89,14 +91,17 @@ describe("CollectDialog", () => {
     writeText.mockRejectedValue(new Error("denied"));
     mockCreate.mockResolvedValueOnce(info({ token: "t9" }));
     const onNotify = vi.fn();
-    render(<CollectDialog open folder={folder} onClose={vi.fn()} onNotify={onNotify} />);
+    const onClose = vi.fn();
+    render(<CollectDialog open folder={folder} onClose={onClose} onNotify={onNotify} />);
     fireEvent.click(screen.getByText(strings.createCollectLink));
     await waitFor(() =>
       expect(onNotify).toHaveBeenCalledWith(translate("collectLinkCreatedNoCopy"), "success")
     );
+    expect(onClose).toHaveBeenCalledTimes(1);
     mockCreate.mockRejectedValueOnce(new Error("boom"));
     fireEvent.click(screen.getByText(strings.createCollectLink));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("boom", "error"));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   test("list load failure notifies", async () => {
@@ -104,6 +109,22 @@ describe("CollectDialog", () => {
     const onNotify = vi.fn();
     render(<CollectDialog open folder={folder} onClose={vi.fn()} onNotify={onNotify} />);
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("nope", "error"));
+  });
+
+
+  test("reopening dialog reloads usage from server", async () => {
+    mockList
+      .mockResolvedValueOnce([info({ usage: { files: 0, bytes: 0 } })])
+      .mockResolvedValueOnce([info({ usage: { files: 5, bytes: 1024 } })]);
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <CollectDialog open folder={folder} onClose={onClose} onNotify={vi.fn()} />
+    );
+    await waitFor(() => expect(screen.getByText(/0\/200/)).toBeInTheDocument());
+    rerender(<CollectDialog open={false} folder={folder} onClose={onClose} onNotify={vi.fn()} />);
+    rerender(<CollectDialog open folder={folder} onClose={onClose} onNotify={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(/5\/200/)).toBeInTheDocument());
+    expect(mockList).toHaveBeenCalledTimes(2);
   });
 
   test("closed dialog does not load", () => {
@@ -130,8 +151,16 @@ describe("CollectLinkList actions (via CollectLinksSection)", () => {
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith(translate("linkCopied"), "success"));
 
     fireEvent.click(screen.getByText(strings.collectDisable));
+    expect(mockDisable).not.toHaveBeenCalled();
+    expect(screen.getByText(strings.collectDisableConfirmTitle)).toBeInTheDocument();
+    // ConfirmDialog：确认按钮文案仍是「停用」；点对话框里那个
+    fireEvent.click(within(screen.getByRole("dialog")).getByText(strings.collectDisable));
     await waitFor(() => expect(mockDisable).toHaveBeenCalledWith("t1"));
     await waitFor(() => expect(screen.getByText(strings.collectStatusDisabled)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText(strings.collectDisableConfirmTitle)).not.toBeInTheDocument()
+    );
+    // 列表项上的停用按钮随 status=disabled 消失（确认框动画结束后再断言）
     expect(screen.queryByText(strings.collectDisable)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByText(strings.delete)[1]);
@@ -151,9 +180,25 @@ describe("CollectLinkList actions (via CollectLinksSection)", () => {
     fireEvent.click(screen.getByText(strings.copy));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith(translate("copyFailed2"), "error"));
     fireEvent.click(screen.getByText(strings.collectDisable));
+    fireEvent.click(within(screen.getByRole("dialog")).getByText(strings.collectDisable));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("d-fail", "error"));
     fireEvent.click(screen.getByText(strings.delete));
     await waitFor(() => expect(onNotify).toHaveBeenCalledWith("x-fail", "error"));
+  });
+
+
+  test("disable confirm cancel does not call API", async () => {
+    mockList.mockResolvedValue([info()]);
+    const onNotify = vi.fn();
+    render(<CollectLinksSection onNotify={onNotify} />);
+    await waitFor(() => expect(screen.getByText(strings.collectDisable)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(strings.collectDisable));
+    expect(screen.getByText(strings.collectDisableConfirmTitle)).toBeInTheDocument();
+    fireEvent.click(screen.getByText(strings.cancel));
+    await waitFor(() =>
+      expect(screen.queryByText(strings.collectDisableConfirmTitle)).not.toBeInTheDocument()
+    );
+    expect(mockDisable).not.toHaveBeenCalled();
   });
 
   test("empty hint and inline load failure", async () => {
