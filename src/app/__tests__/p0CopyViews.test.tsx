@@ -57,6 +57,8 @@ describe("P0 copy: Settings / Sites / Images", () => {
     expect(screen.getByText(strings.flagImageHost)).toBeInTheDocument();
     expect(screen.getByTestId("mcp-export-card")).toBeInTheDocument();
     expect(screen.getByText(strings.mcpExportTitle)).toBeInTheDocument();
+    expect(screen.getByTestId("backup-cron-card")).toBeInTheDocument();
+    expect(screen.getByText(strings.backupCronTitle)).toBeInTheDocument();
   });
 
   test("Sites view is blunt when SITES_HOST is missing", async () => {

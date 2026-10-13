@@ -1,0 +1,15 @@
+# Davflare scheduled backup — paste into `crontab -e`
+# Credentials: run `davflare login` once, OR source ~/.config/davflare/env
+# (see env.example). Do NOT put DAVFLARE_KEY / fd_… into this file.
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Daily 03:00 — push local Documents → remote backups/daily
+0 3 * * * davflare sync push ~/Documents backups/daily >>~/logs/davflare-sync.log 2>&1
+
+# Daily 03:30 — pull remote → local (remote wins)
+30 3 * * * davflare sync pull ~/Documents backups/daily >>~/logs/davflare-pull.log 2>&1
+
+# Alternative: load env file instead of config.json
+# 0 3 * * * . "$HOME/.config/davflare/env" && davflare sync push ~/Documents backups/daily >>~/logs/davflare-sync.log 2>&1

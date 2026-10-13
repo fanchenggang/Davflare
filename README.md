@@ -31,6 +31,7 @@ Share (expiry + extract code):
 - Chunked web uploads, folders, search, drag-and-drop, image/video/PDF thumbnails
 - Share links with expiry or forever, extract code, folder zip; zero-JS preview for media/PDF, monospace preview + copy for `text/plain`
 - **Quick paste**: toolbar paste → `.txt` + existing shares (expiry / extract code) — a self-hosted Pastebin
+- **Scheduled backup**: Settings card copies safe `davflare sync` crontab lines; examples + GitHub Actions
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
 - API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (25 tools)
@@ -91,6 +92,17 @@ The landing page shows a monospace preview with one-click copy, plus `.txt` down
 
 From scripts: `PUT /webdav/.../note.txt` then `POST /api/shares`; `Content-Type: text/plain` shares get the paste landing automatically.
 
+
+## Free R2 backup in 10 minutes (scheduled sync)
+
+Use existing `davflare-cli` sync — no new APIs.
+
+1. `npm i -g davflare-cli` then `davflare login --server https://<your-host>` (or set secrets `DAVFLARE_SERVER` / `DAVFLARE_KEY` in CI).
+2. Open `#/settings` → **Scheduled backup** → copy a **push** or **pull** crontab line (keys stay in `~/.config/davflare`, never in the line).
+3. `crontab -e` and paste; or copy [`agents/examples/backup-cron/github-actions-backup.yml`](agents/examples/backup-cron/github-actions-backup.yml) into your repo workflows.
+
+Samples: [`agents/examples/backup-cron/`](agents/examples/backup-cron/). Sync semantics: [cli/README.md](cli/README.md).
+
 ## Documentation
 
 | Topic | Link |
@@ -101,7 +113,7 @@ From scripts: `PUT /webdav/.../note.txt` then `POST /api/shares`; `Content-Type:
 | Static sites & image host | [docs/sites.md](docs/sites.md) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
 | Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
-| CLI (`davflare-cli`) | [cli/README.md](cli/README.md) |
+| CLI (`davflare-cli`); scheduled backup (crontab + Actions) | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |
 | Chrome extension (install + bookmarks) | [extension/README.md](extension/README.md) |
 | Bookmark portability | [docs/bookmarks-portability.md](docs/bookmarks-portability.md) |
 | Testing | [TESTING.md](TESTING.md) · [TEST_CASES.md](TEST_CASES.md) |

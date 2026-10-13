@@ -1,0 +1,54 @@
+# Copy to your repo as .github/workflows/davflare-backup.yml
+# Secrets (Settings → Secrets and variables → Actions):
+#   DAVFLARE_SERVER  e.g. https://drive.example.com
+#   DAVFLARE_KEY     API key from Davflare Settings (fd_…)
+# Optional: commit a small local folder and push it, or check out a backup
+# artifact. This sample sync-pushes ./backup-src → remote backups/gha.
+name: Davflare scheduled backup
+
+on:
+  schedule:
+    # 03:15 UTC daily — adjust for your timezone
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.DAVFLARE_SERVER != '' && secrets.DAVFLARE_KEY != '' }}
+    steps:
+      - name: Skip (secrets not configured)
+        if: env.HAS_SECRETS != 'true'
+        run: |
+          echo "::notice title=Davflare backup skipped::Add repository secrets DAVFLARE_SERVER and DAVFLARE_KEY, then re-run."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_SECRETS == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_SECRETS == 'true'
+        with:
+          node-version: "20"
+
+      - name: Install davflare-cli
+        if: env.HAS_SECRETS == 'true'
+        run: npm install -g davflare-cli
+
+      - name: Prepare local tree
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          mkdir -p backup-src
+          if [ -z "$(ls -A backup-src 2>/dev/null)" ]; then
+            echo "backup $(date -u +%Y-%m-%dT%H:%M:%SZ)" > backup-src/README.txt
+          fi
+
+      - name: Sync push to Davflare
+        if: env.HAS_SECRETS == 'true'
+        env:
+          DAVFLARE_SERVER: ${{ secrets.DAVFLARE_SERVER }}
+          DAVFLARE_KEY: ${{ secrets.DAVFLARE_KEY }}
+        run: davflare sync push ./backup-src backups/gha

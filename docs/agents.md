@@ -1,6 +1,6 @@
 # Davflare agent layouts (v2)
 
-Repo-only demos (not the R2 tree): [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook; [`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) — Obsidian (Remotely Save) sync setup and WebDAV self-check; [`agents/examples/mcp-export/`](../agents/examples/mcp-export/) — Cursor / Claude Desktop MCP client configs (env placeholders only).
+Repo-only demos (not the R2 tree): [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook; [`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) — Obsidian (Remotely Save) sync setup and WebDAV self-check; [`agents/examples/mcp-export/`](../agents/examples/mcp-export/) — Cursor / Claude Desktop MCP client configs (env placeholders only); [`agents/examples/backup-cron/`](../agents/examples/backup-cron/) — crontab + GitHub Actions for `davflare sync` (secrets `DAVFLARE_SERVER` / `DAVFLARE_KEY`, no live keys in files).
 
 Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v2 adds MCP `pull` / `push` that walk this tree (the web UI still works). No file watcher. Secrets are not stored as files.
 

@@ -241,6 +241,32 @@ const entries: Record<string, DictionaryEntry> = {
   mcpExportDownloaded: { zh: "配置已下载", en: "Config downloaded" },
   mcpExportCopyFailed: { zh: "复制失败", en: "Copy failed" },
   mcpExportDownloadFailed: { zh: "下载失败", en: "Download failed" },
+  backupCronTitle: {
+    zh: "定时备份",
+    en: "Scheduled backup",
+  },
+  backupCronHint: {
+    zh: "一键复制 davflare sync push|pull 的 crontab 行。复用现有 CLI，不新增接口。",
+    en: "Copy crontab lines for davflare sync push|pull. Reuses the existing CLI — no new APIs.",
+  },
+  backupCronEnvHint: {
+    zh: "密钥不要写进 crontab：先 davflare login（写入 ~/.config/davflare/config.json），或把 {serverEnv} / {keyEnv} 放进 ~/.config/davflare/env（chmod 600）。",
+    en: "Never put keys in crontab: run davflare login (~/.config/davflare/config.json), or export {serverEnv} / {keyEnv} in ~/.config/davflare/env (chmod 600).",
+  },
+  backupCronPushTitle: { zh: "本地 → 云端（push）", en: "Local → cloud (push)" },
+  backupCronPullTitle: { zh: "云端 → 本地（pull）", en: "Cloud → local (pull)" },
+  backupCronFullTitle: { zh: "完整模板（含说明）", en: "Full template (with comments)" },
+  backupCronFullHint: {
+    zh: "含 login / env 说明、push 与 pull 示例。粘贴进 crontab -e 前请改本地与远端路径。",
+    en: "Includes login/env notes plus push and pull samples. Edit local/remote paths before crontab -e.",
+  },
+  backupCronCopyPush: { zh: "复制 push 行", en: "Copy push line" },
+  backupCronCopyPull: { zh: "复制 pull 行", en: "Copy pull line" },
+  backupCronCopyFull: { zh: "复制完整模板", en: "Copy full template" },
+  backupCronPushCopied: { zh: "push crontab 已复制", en: "push crontab copied" },
+  backupCronPullCopied: { zh: "pull crontab 已复制", en: "pull crontab copied" },
+  backupCronFullCopied: { zh: "备份 crontab 模板已复制", en: "Backup crontab template copied" },
+  backupCronCopyFailed: { zh: "复制失败", en: "Copy failed" },
   setupTitle: { zh: "部署检查", en: "Setup checklist" },
   setupHint: {
     zh: "部署后快速确认 R2、WebDAV、功能开关、SITES_HOST 与 MCP。全部适用项通过后可复制 Cursor mcp.json（Bearer 占位符）。",

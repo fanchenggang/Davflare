@@ -67,6 +67,13 @@ davflare sites publish ./dist --slug blog
 - `pull`：远端新增/变更 → 下载；**remote wins**。
 - `--delete`：额外删除目标端多出的文件（默认保留）。建议先 `--dry-run`。
 
+## 定时备份（crontab / GitHub Actions）
+
+设置页 **定时备份** 可一键复制 crontab；仓库样例见 [`agents/examples/backup-cron/`](../agents/examples/backup-cron/)。
+
+- 交互机：`davflare login` → 凭据在 `~/.config/davflare/config.json`，crontab **不要**写 Key。
+- CI：Secrets `DAVFLARE_SERVER` + `DAVFLARE_KEY`（与上方环境变量同名），参考样例 workflow。
+
 ## 测试
 
 ```bash

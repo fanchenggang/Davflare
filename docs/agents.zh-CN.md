@@ -1,6 +1,6 @@
 # Davflare Agent 目录约定（v2）
 
-仓库示例（不在 R2 树里）：[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本；[`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) —— Obsidian（Remotely Save）同步配置与 WebDAV 自检；[`agents/examples/mcp-export/`](../agents/examples/mcp-export/) —— Cursor / Claude Desktop MCP 客户端配置（仅环境变量占位）。
+仓库示例（不在 R2 树里）：[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本；[`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) —— Obsidian（Remotely Save）同步配置与 WebDAV 自检；[`agents/examples/mcp-export/`](../agents/examples/mcp-export/) —— Cursor / Claude Desktop MCP 客户端配置（仅环境变量占位）；[`agents/examples/backup-cron/`](../agents/examples/backup-cron/) —— `davflare sync` 的 crontab + GitHub Actions（Secrets：`DAVFLARE_SERVER` / `DAVFLARE_KEY`，文件里不写明文密钥）。
 
 把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v2 增加 MCP `pull` / `push` 自动走这棵树（网页端仍可用）。不做文件监听。密钥不当文件存。
 

@@ -31,6 +31,7 @@
 - 网页端分片上传、文件夹、搜索、拖放，以及图片 / 视频 / PDF 缩略图
 - 分享链接（限时或永久）、提取码、文件夹 zip；落地页对图片/音视频/PDF 零脚本预览，对 `text/plain` 等宽预览 + 一键复制
 - **文本快传 Paste**：顶栏一键粘贴文本 → `.txt` + 现有分享（过期/提取码），可当自建 Pastebin
+- **定时备份**：设置页一键复制安全的 `davflare sync` crontab；附带示例与 GitHub Actions
 - 回收站，保留天数可配（`TRASH_RETENTION_DAYS`）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端）
 - API Key 支持脚本上传 / 下载 / 同步，远程 MCP 在 `/mcp`（25 个工具）
@@ -91,6 +92,17 @@
 
 脚本侧仍可用：`PUT /webdav/.../note.txt` 后 `POST /api/shares`，落地页对 `Content-Type: text/plain` 自动走等宽预览。
 
+
+## 10 分钟把 R2 当成免费备份盘（定时同步）
+
+复用现有 `davflare-cli` 的 sync，不新增接口。
+
+1. `npm i -g davflare-cli`，再 `davflare login --server https://<你的域名>`（CI 则用 Secrets：`DAVFLARE_SERVER` / `DAVFLARE_KEY`）。
+2. 打开 `#/settings` → **定时备份** → 复制 **push** 或 **pull** 的 crontab 行（密钥只在 `~/.config/davflare`，不进复制文本）。
+3. `crontab -e` 粘贴；或把 [`agents/examples/backup-cron/github-actions-backup.yml`](agents/examples/backup-cron/github-actions-backup.yml) 拷进你仓库的 workflows。
+
+样例：[`agents/examples/backup-cron/`](agents/examples/backup-cron/)。同步语义见 [cli/README.md](cli/README.md)。
+
 ## 文档
 
 | 主题 | 链接 |
@@ -101,7 +113,7 @@
 | 静态站点与图床 | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
 | Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
-| 命令行（`davflare-cli`） | [cli/README.md](cli/README.md) |
+| 命令行（`davflare-cli`）；定时备份（crontab + Actions） | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |
 | Chrome 扩展（安装 + 书签） | [extension/README.zh-CN.md](extension/README.zh-CN.md) |
 | 书签可移植性 | [docs/bookmarks-portability.zh-CN.md](docs/bookmarks-portability.zh-CN.md) |
 | 测试 | [TESTING.md](TESTING.md) · [TEST_CASES.md](TEST_CASES.md) |

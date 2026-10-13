@@ -16,6 +16,7 @@ import { FeatureFlagName, FeatureFlags, useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
 import { strings } from "./app/strings";
 import { errorMessage } from "./app/utils";
+import BackupCronCard from "./BackupCronCard";
 import McpExportCard from "./McpExportCard";
 
 const SWITCHES: Array<{
@@ -135,6 +136,7 @@ function SettingsView({
           </Box>
         ))}
         <McpExportCard onNotify={onNotify} />
+        <BackupCronCard onNotify={onNotify} />
       </Stack>
     </Box>
   );
