@@ -165,6 +165,9 @@ export class DavflareClient {
       return;
     }
     // 单发原始体模式：path=目标目录 + X-File-Name=文件名
+    // Node fetch 的头值必须是 ByteString（码点 ≤255）。中文等非 Latin-1 文件名
+    // 直接塞进头会抛「Cannot convert argument to a ByteString」。统一百分号编码，
+    // 服务端 /api/upload 会 decodeURIComponent（ASCII 名 encode 后不变）。
     const slash = remoteKey.lastIndexOf("/");
     const folder = slash >= 0 ? remoteKey.slice(0, slash + 1) : "";
     const fileName = slash >= 0 ? remoteKey.slice(slash + 1) : remoteKey;
@@ -174,7 +177,7 @@ export class DavflareClient {
       headers: {
         Authorization: `Bearer ${this.key}`,
         "Content-Type": "application/octet-stream",
-        "X-File-Name": fileName,
+        "X-File-Name": encodeURIComponent(fileName),
       },
       body: new Uint8Array(body),
     });

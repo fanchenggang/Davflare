@@ -282,6 +282,42 @@ describe("single-shot upload (POST /api/upload)", () => {
     const body = (await response.json()) as { name: string };
     expect(body.name).toBe("name .txt");
   });
+
+  test("percent-encoded X-File-Name (CLI Node ByteString) decodes to Chinese name", async () => {
+    const bucket = newBucket();
+    await seedApiKey(bucket);
+    const encoded = encodeURIComponent("空.txt");
+    const response = await onRequestPost(
+      makeContext(
+        authed("/api/upload?path=dir&overwrite=1", "POST", "你好", {
+          "X-File-Name": encoded,
+        }),
+        makeEnv(bucket)
+      )
+    );
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { key: string; name: string };
+    expect(body.name).toBe("空.txt");
+    expect(body.key).toBe("dir/空.txt");
+    expect(new TextDecoder().decode(bucket.rawBytes("dir/空.txt"))).toBe("你好");
+  });
+
+  test("invalid percent sequence in X-File-Name falls back to literal name", async () => {
+    const bucket = newBucket();
+    await seedApiKey(bucket);
+    // %ZZ 非法 → decodeURIComponent 抛错 → 保留原文（ASCII，Node Request 可构造）
+    const response = await onRequestPost(
+      makeContext(
+        authed("/api/upload?path=dir&overwrite=1", "POST", "hi", {
+          "X-File-Name": "file%ZZname.txt",
+        }),
+        makeEnv(bucket)
+      )
+    );
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { name: string };
+    expect(body.name).toBe("file%ZZname.txt");
+  });
 });
 
 describe("multipart upload (uploads / part / complete / abort)", () => {

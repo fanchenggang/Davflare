@@ -40,7 +40,15 @@ function normalizeFolder(raw: string | null): string | Response {
 }
 
 function sanitizeFileName(name: string) {
-  const cleaned = name.replace(/\\/g, "/").split("/").pop() || "";
+  // CLI / 脚本可能对 X-File-Name 做百分号编码（Node fetch 不接受非 Latin-1 头值）。
+  // 原始 UTF-8（如 curl）没有 %XX 时 decodeURIComponent 是恒等；非法序列则回退原文。
+  let decoded = name;
+  try {
+    decoded = decodeURIComponent(name);
+  } catch {
+    decoded = name;
+  }
+  const cleaned = decoded.replace(/\\/g, "/").split("/").pop() || "";
   return cleaned.replace(/[\u0000-\u001f]/g, "").trim();
 }
 
