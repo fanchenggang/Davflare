@@ -156,7 +156,7 @@ describe("uploadFile（单发小文件）", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("中文等非 ASCII 文件名用 UTF-8'' 百分号编码（避免 Node ByteString 报错）", async () => {
+  it("中文等非 ASCII 文件名对 X-File-Name 百分号编码（避免 Node ByteString 报错）", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "davflare-up-"));
     const local = path.join(dir, "空 格 文件 上传.txt");
     fs.writeFileSync(local, "你好");
@@ -170,7 +170,7 @@ describe("uploadFile（单发小文件）", () => {
     const [input, init] = fetchMock.mock.calls[0];
     const url = new URL(String(input));
     expect(url.searchParams.get("path")).toBe("dir/");
-    expect(init.headers["X-File-Name"]).toBe(`UTF-8''${encodeURIComponent("空.txt")}`);
+    expect(init.headers["X-File-Name"]).toBe(encodeURIComponent("空.txt"));
     // 头值必须是 ByteString：每个码点 ≤ 255
     for (const ch of init.headers["X-File-Name"] as string) {
       expect(ch.charCodeAt(0)).toBeLessThanOrEqual(255);

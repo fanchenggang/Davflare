@@ -40,16 +40,17 @@ function normalizeFolder(raw: string | null): string | Response {
 }
 
 function sanitizeFileName(name: string) {
-  // CLI 对非 Latin-1 名发 `UTF-8''` + encodeURIComponent（Node ByteString 限制）。
-  // 无此外缀时保持原文，文件名里的字面量 %2e / %25 不会被二次解码。
+  // CLI 可能对 X-File-Name 做百分号编码（Node fetch ByteString）。仅当
+  // encodeURIComponent(decoded) === name 时才接受 decode，字面量 "%2e" 保持原样；
+  // 原始 UTF-8（curl）不变。非法 % 序列 → 保留原文。
   let decoded = name;
-  const rfc5987 = /^UTF-8''(.+)$/i.exec(name);
-  if (rfc5987) {
-    try {
-      decoded = decodeURIComponent(rfc5987[1]);
-    } catch {
-      decoded = name;
+  try {
+    const once = decodeURIComponent(name);
+    if (encodeURIComponent(once) === name) {
+      decoded = once;
     }
+  } catch {
+    decoded = name;
   }
   const cleaned = decoded.replace(/\\/g, "/").split("/").pop() || "";
   return cleaned.replace(/[\u0000-\u001f]/g, "").trim();
