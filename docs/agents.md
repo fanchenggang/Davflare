@@ -1,6 +1,6 @@
 # Davflare agent layouts (v2)
 
-Repo-only demo (not the R2 tree): [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook; [`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) — Obsidian (Remotely Save) sync setup and WebDAV self-check.
+Repo-only demos (not the R2 tree): [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook; [`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) — Obsidian (Remotely Save) sync setup and WebDAV self-check; [`agents/examples/mcp-export/`](../agents/examples/mcp-export/) — Cursor / Claude Desktop MCP client configs (env placeholders only).
 
 Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v2 adds MCP `pull` / `push` that walk this tree (the web UI still works). No file watcher. Secrets are not stored as files.
 
@@ -75,6 +75,20 @@ Safe remote `mcp.json` (store this, not a live key):
 The depth-1 `list` + `download` / `upload` recipe still works if you need it. MCP uploads over 1 MiB auto-chunk (cap 25 MB); bigger files go through the web UI or davflare-cli.
 
 v3 may add other agents and conflict policy. Do not auto-sync and do not watch the local disk.
+
+
+## 2 minutes: connect Davflare to an AI assistant
+
+Use the existing same-origin `POST /mcp` and an API key. **No new APIs.** Prefer Settings → **Connect Claude / Cursor MCP** (copy or download). Keys stay in environment variables — never in the downloaded file.
+
+1. Open `#/settings`. Leave **API Key** and **MCP** on. Create a key (shown once).
+2. On the **Connect Claude / Cursor MCP** card:
+   - **Cursor:** copy/download `mcp.json` → save as `~/.cursor/mcp.json` or `<repo>/.cursor/mcp.json`.
+   - **Claude Desktop:** copy/download `claude_desktop_config.json` and merge the `davflare` entry into your Claude config (macOS `~/Library/Application Support/Claude/claude_desktop_config.json`, Windows `%APPDATA%\Claude\claude_desktop_config.json`). Claude Desktop is stdio-only, so the export bridges remote `/mcp` with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote).
+3. Set `DAVFLARE_API_KEY` to your key (`export DAVFLARE_API_KEY=fd_…` before launching the client). Cursor reads `${env:DAVFLARE_API_KEY}` from `mcp.json`; Claude Desktop / `mcp-remote` expands `${DAVFLARE_API_KEY}` in the header arg.
+4. Fully restart the client. Ask it to list Davflare tools (`tools/list`) or open [`agents/examples/hello-site/`](../agents/examples/hello-site/).
+
+Static samples: [`agents/examples/mcp-export/`](../agents/examples/mcp-export/). The in-browser playground at `#/mcp` still helps smoke-test a key before you wire a desktop client.
 
 ## Web UI
 

@@ -16,6 +16,7 @@ import { FeatureFlagName, FeatureFlags, useFeatures } from "./app/features";
 import { NotifyFn } from "./app/notify";
 import { strings } from "./app/strings";
 import { errorMessage } from "./app/utils";
+import McpExportCard from "./McpExportCard";
 
 const SWITCHES: Array<{
   key: FeatureFlagName;
@@ -133,6 +134,7 @@ function SettingsView({
             />
           </Box>
         ))}
+        <McpExportCard onNotify={onNotify} />
       </Stack>
     </Box>
   );

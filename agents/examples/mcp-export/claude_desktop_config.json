@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "davflare": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://drive.example.com/mcp",
+        "--header",
+        "Authorization:Bearer ${DAVFLARE_API_KEY}"
+      ]
+    }
+  }
+}

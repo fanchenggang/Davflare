@@ -185,6 +185,43 @@ const entries: Record<string, DictionaryEntry> = {
     zh: "MCP 依赖 API Key 开关：若 API Key 关闭，即使 MCP 开关打开，/mcp 也是 404。",
     en: "MCP depends on the API Key switch: if Key is off, /mcp is 404 even if MCP is on.",
   },
+  mcpExportTitle: {
+    zh: "接入 Claude / Cursor MCP",
+    en: "Connect Claude / Cursor MCP",
+  },
+  mcpExportHint: {
+    zh: "用现有同源 /mcp + API Key，一键导出客户端配置。不新增接口。下载文件里只有环境变量占位，不会写入明文密钥。",
+    en: "Export client configs for the existing same-origin /mcp + API Key. No new APIs. Downloads use env placeholders only — never a live key.",
+  },
+  mcpExportEnvHint: {
+    zh: "先在设置里打开 MCP 与 API Key 并创建密钥，再把 {env} 设成该密钥（Cursor 配置里写 ${env:{env}}；Claude Desktop 需在启动前导出同名环境变量）。",
+    en: "Turn on MCP + API Key in Settings and create a key, then set {env} to that key (Cursor config uses ${env:{env}}; Claude Desktop: export the same env var before launch).",
+  },
+  mcpExportCursorTitle: { zh: "Cursor", en: "Cursor" },
+  mcpExportCursorHint: {
+    zh: "保存为 ~/.cursor/mcp.json 或仓库内 .cursor/mcp.json，重启 Cursor。",
+    en: "Save as ~/.cursor/mcp.json or <repo>/.cursor/mcp.json, then restart Cursor.",
+  },
+  mcpExportClaudeTitle: { zh: "Claude Desktop", en: "Claude Desktop" },
+  mcpExportClaudeHint: {
+    zh: "Claude Desktop 配置只支持本地 stdio：用 mcp-remote 桥接远程 /mcp。合并进 claude_desktop_config.json 后完全退出再打开 Claude。",
+    en: "Claude Desktop config is stdio-only: bridge remote /mcp with mcp-remote. Merge into claude_desktop_config.json, then fully quit and reopen Claude.",
+  },
+  mcpExportCopyCursor: { zh: "复制 Cursor 配置", en: "Copy Cursor config" },
+  mcpExportDownloadCursor: { zh: "下载 mcp.json", en: "Download mcp.json" },
+  mcpExportCopyClaude: { zh: "复制 Claude 配置", en: "Copy Claude config" },
+  mcpExportDownloadClaude: {
+    zh: "下载 claude_desktop_config.json",
+    en: "Download claude_desktop_config.json",
+  },
+  mcpExportCursorCopied: { zh: "Cursor mcp.json 已复制", en: "Cursor mcp.json copied" },
+  mcpExportClaudeCopied: {
+    zh: "Claude Desktop 配置已复制",
+    en: "Claude Desktop config copied",
+  },
+  mcpExportDownloaded: { zh: "配置已下载", en: "Config downloaded" },
+  mcpExportCopyFailed: { zh: "复制失败", en: "Copy failed" },
+  mcpExportDownloadFailed: { zh: "下载失败", en: "Download failed" },
   setupTitle: { zh: "部署检查", en: "Setup checklist" },
   setupHint: {
     zh: "部署后快速确认 R2、WebDAV、功能开关、SITES_HOST 与 MCP。全部适用项通过后可复制 Cursor mcp.json（Bearer 占位符）。",

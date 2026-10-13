@@ -275,7 +275,7 @@ Cursor（`mcp.json`）：
 
 ### 用 Cursor 试 MCP
 
-网页试玩台：打开 `#/mcp`（`#/settings` 也有入口），粘贴 API Key，点「列出工具」（`tools/list`）与「试一下」（只读 `list` 根目录），两项通过后复制 Cursor `mcp.json`。仍走现有 `POST /mcp`，不新增接口。
+网页试玩台：打开 `#/mcp`（`#/settings` 也有入口），粘贴 API Key，点「列出工具」（`tools/list`）与「试一下」（只读 `list` 根目录），两项通过后复制 Cursor `mcp.json`。桌面客户端不想粘贴明文密钥时，用设置页 → **接入 Claude / Cursor MCP**（环境变量占位；Cursor `mcp.json` + Claude Desktop `mcp-remote` 桥接）。仍走现有 `POST /mcp`，不新增接口。
 
 1. `#/settings` 保持 **API Key**、**MCP**、**静态站点** 打开，创建一把密钥。
 2. 粘贴到 Cursor 的 `mcp.json`（换成你的域名和密钥）——与上方 JSON 相同。

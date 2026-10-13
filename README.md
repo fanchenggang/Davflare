@@ -69,6 +69,19 @@ Tested (local `wrangler pages dev` plus the same `webdav` client the plugin uses
 
 Limits: each file must be under 100MB (Cloudflare's request body limit). Requests over 100MB are stopped by Cloudflare with its generic 413 page, so set Remotely Save's **Skip Large Files** threshold below 100MB. Remotely Save syncs a rename as "delete old file + upload new file".
 
+
+## Connect Claude / Cursor MCP in 2 minutes
+
+Point Cursor or Claude Desktop at the same-origin `POST /mcp` with an API key. No new APIs.
+
+1. Deploy Davflare, open `#/settings`, leave **API Key** and **MCP** on, create a key.
+2. On the **Connect Claude / Cursor MCP** card, copy or download:
+   - **Cursor** → `mcp.json` (`url` + `Authorization: Bearer ${env:DAVFLARE_API_KEY}`)
+   - **Claude Desktop** → `claude_desktop_config.json` (`mcp-remote` bridge; set `DAVFLARE_API_KEY` in the environment before launch)
+3. Restart the client and ask it to call `tools/list`.
+
+Details and samples: [docs/agents.md#2-minutes-connect-davflare-to-an-ai-assistant](docs/agents.md#2-minutes-connect-davflare-to-an-ai-assistant) · [`agents/examples/mcp-export/`](agents/examples/mcp-export/).
+
 ## Documentation
 
 | Topic | Link |
@@ -78,7 +91,7 @@ Limits: each file must be under 100MB (Cloudflare's request body limit). Request
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
 | Static sites & image host | [docs/sites.md](docs/sites.md) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
-| Agent layouts (`pull` / `push`) | [docs/agents.md](docs/agents.md) |
+| Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | CLI (`davflare-cli`) | [cli/README.md](cli/README.md) |
 | Chrome extension (install + bookmarks) | [extension/README.md](extension/README.md) |
 | Bookmark portability | [docs/bookmarks-portability.md](docs/bookmarks-portability.md) |

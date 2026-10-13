@@ -1,6 +1,6 @@
 # Davflare Agent 目录约定（v2）
 
-仓库示例（不在 R2 树里）：[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本；[`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) —— Obsidian（Remotely Save）同步配置与 WebDAV 自检。
+仓库示例（不在 R2 树里）：[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本；[`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) —— Obsidian（Remotely Save）同步配置与 WebDAV 自检；[`agents/examples/mcp-export/`](../agents/examples/mcp-export/) —— Cursor / Claude Desktop MCP 客户端配置（仅环境变量占位）。
 
 把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v2 增加 MCP `pull` / `push` 自动走这棵树（网页端仍可用）。不做文件监听。密钥不当文件存。
 
@@ -75,6 +75,20 @@ Cursor 的 `mcp.json` 支持在 `headers` / `url` 里写 `${env:NAME}`。用这�
 需要时仍可用 Depth-1 的 `list` + `download` / `upload`。MCP 上传超过 1 MiB 会自动分块（上限 25 MB）；再大走网页端或 davflare-cli。
 
 v3 可能再接其它 agent 和冲突策略。不要自动同步、不要监听本地磁盘。
+
+
+## 2 分钟把 Davflare 接到 AI 助手
+
+复用现有同源 `POST /mcp` 和 API Key，**不新增接口**。优先用设置页 → **接入 Claude / Cursor MCP**（复制或下载）。密钥只放环境变量，不要写进下载文件。
+
+1. 打开 `#/settings`，保持 **API Key** 与 **MCP** 开启，创建一把密钥（只显示一次）。
+2. 在 **接入 Claude / Cursor MCP** 卡片上：
+   - **Cursor：** 复制/下载 `mcp.json`，保存为 `~/.cursor/mcp.json` 或仓库内 `.cursor/mcp.json`。
+   - **Claude Desktop：** 复制/下载 `claude_desktop_config.json`，把 `davflare` 段合并进 Claude 配置（macOS `~/Library/Application Support/Claude/claude_desktop_config.json`，Windows `%APPDATA%\Claude\claude_desktop_config.json`）。Claude Desktop 只支持本地 stdio，因此导出用 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) 桥接远程 `/mcp`。
+3. 把 `DAVFLARE_API_KEY` 设成你的密钥（启动客户端前 `export DAVFLARE_API_KEY=fd_…`）。Cursor 读取 `mcp.json` 里的 `${env:DAVFLARE_API_KEY}`；Claude Desktop / `mcp-remote` 在 header 参数里展开 `${DAVFLARE_API_KEY}`。
+4. 完全退出并重新打开客户端。让它列出 Davflare 工具（`tools/list`），或打开 [`agents/examples/hello-site/`](../agents/examples/hello-site/)。
+
+静态样例：[`agents/examples/mcp-export/`](../agents/examples/mcp-export/)。浏览器试玩台 `#/mcp` 仍可用来先冒烟测一把密钥，再接到桌面客户端。
 
 ## 网页端
 

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "davflare": {
+      "url": "https://drive.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:DAVFLARE_API_KEY}"
+      }
+    }
+  }
+}

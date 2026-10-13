@@ -69,6 +69,19 @@
 
 限制：单个文件需小于 100MB（Cloudflare 单次请求体上限）。超过 100MB 的请求会被 Cloudflare 直接拦下、返回它的通用 413 页面，所以请在 Remotely Save 设置里把「跳过大文件」（Skip Large Files）阈值设到 100MB 以下；Remotely Save 把改名同步为「删除旧文件 + 上传新文件」。
 
+
+## 2 分钟把 Davflare 接到 Claude / Cursor
+
+把 Cursor 或 Claude Desktop 接到同源 `POST /mcp`，用一把 API Key 即可，不新增接口。
+
+1. 部署 Davflare，打开 `#/settings`，保持 **API Key** 与 **MCP** 开启，创建一把密钥。
+2. 在 **接入 Claude / Cursor MCP** 卡片上复制或下载：
+   - **Cursor** → `mcp.json`（`url` + `Authorization: Bearer ${env:DAVFLARE_API_KEY}`）
+   - **Claude Desktop** → `claude_desktop_config.json`（`mcp-remote` 桥接；启动前把 `DAVFLARE_API_KEY` 写进环境变量）
+3. 重启客户端，让它调用 `tools/list`。
+
+说明与样例：[docs/agents.zh-CN.md#2-分钟把-davflare-接到-ai-助手](docs/agents.zh-CN.md#2-分钟把-davflare-接到-ai-助手) · [`agents/examples/mcp-export/`](agents/examples/mcp-export/)。
+
 ## 文档
 
 | 主题 | 链接 |
@@ -78,7 +91,7 @@
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | 静态站点与图床 | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
-| Agent 目录（`pull` / `push`） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) |
+| Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | 命令行（`davflare-cli`） | [cli/README.md](cli/README.md) |
 | Chrome 扩展（安装 + 书签） | [extension/README.zh-CN.md](extension/README.zh-CN.md) |
 | 书签可移植性 | [docs/bookmarks-portability.zh-CN.md](docs/bookmarks-portability.zh-CN.md) |
