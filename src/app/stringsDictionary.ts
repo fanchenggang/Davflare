@@ -267,6 +267,40 @@ const entries: Record<string, DictionaryEntry> = {
   backupCronPullCopied: { zh: "pull crontab 已复制", en: "pull crontab copied" },
   backupCronFullCopied: { zh: "备份 crontab 模板已复制", en: "Backup crontab template copied" },
   backupCronCopyFailed: { zh: "复制失败", en: "Copy failed" },
+  imageHostExportTitle: {
+    zh: "图床客户端（PicGo / ShareX / Typora）",
+    en: "Image host clients (PicGo / ShareX / Typora)",
+  },
+  imageHostExportHint: {
+    zh: "复用现有 POST /api/images 与 API Key，不新增接口。公开地址来自响应里的 https://<SITES_HOST>/i/{id}。",
+    en: "Reuses existing POST /api/images and API keys — no new APIs. Public URL comes from the response as https://<SITES_HOST>/i/{id}.",
+  },
+  imageHostExportKeyHint: {
+    zh: "导出内容用占位符 {placeholder}，导入前换成网页端创建的 fd_… 密钥。",
+    en: "Exports use placeholder {placeholder}; replace it with your fd_… key from the web UI before importing.",
+  },
+  imageHostExportShareXTitle: { zh: "ShareX", en: "ShareX" },
+  imageHostExportShareXHint: {
+    zh: "下载 .sxcu 后用记事本替换 YOUR_API_KEY，再双击导入 ShareX「自定义图床」。",
+    en: "Download the .sxcu, replace YOUR_API_KEY in a text editor, then double-click to import into ShareX Custom uploaders.",
+  },
+  imageHostExportTyporaTitle: { zh: "Typora 自定义命令", en: "Typora custom command" },
+  imageHostExportTyporaHint: {
+    zh: "偏好设置 → 图像 → 上传服务选「Custom Command」，粘贴下面一行（$1 为本地路径；先把 YOUR_API_KEY 换成真密钥）。",
+    en: "Preferences → Image → Upload services → Custom Command; paste the one-liner ($1 is the file path; replace YOUR_API_KEY first).",
+  },
+  imageHostExportPicGoHint: {
+    zh: "PicGo / PicList：安装仓库内 picgo-plugin-davflare（本地导入或 npm publish 后 picgo install），填站点地址与 API Key。",
+    en: "PicGo / PicList: install picgo-plugin-davflare from this repo (local import, or picgo install after npm publish); set site URL + API Key.",
+  },
+  imageHostExportCopyShareX: { zh: "复制 ShareX 配置", en: "Copy ShareX config" },
+  imageHostExportDownloadShareX: { zh: "下载 .sxcu", en: "Download .sxcu" },
+  imageHostExportCopyTypora: { zh: "复制 Typora 命令", en: "Copy Typora command" },
+  imageHostExportShareXCopied: { zh: "ShareX 配置已复制", en: "ShareX config copied" },
+  imageHostExportTyporaCopied: { zh: "Typora 命令已复制", en: "Typora command copied" },
+  imageHostExportDownloaded: { zh: "配置已下载", en: "Config downloaded" },
+  imageHostExportCopyFailed: { zh: "复制失败", en: "Copy failed" },
+  imageHostExportDownloadFailed: { zh: "下载失败", en: "Download failed" },
   setupTitle: { zh: "部署检查", en: "Setup checklist" },
   setupHint: {
     zh: "部署后快速确认 R2、WebDAV、功能开关、SITES_HOST 与 MCP。全部适用项通过后可复制 Cursor mcp.json（Bearer 占位符）。",

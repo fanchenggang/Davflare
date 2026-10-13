@@ -1,0 +1,15 @@
+{
+  "Version": "15.0.0",
+  "Name": "Davflare",
+  "DestinationType": "ImageUploader",
+  "RequestMethod": "POST",
+  "RequestURL": "https://drive.example.com/api/images",
+  "Headers": {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "X-Api-Key": "YOUR_API_KEY",
+    "X-File-Name": "{filename}"
+  },
+  "Body": "Binary",
+  "URL": "{json:url}",
+  "ErrorMessage": "{response}"
+}

@@ -105,6 +105,20 @@ Use existing `davflare-cli` sync — no new APIs.
 
 Samples: [`agents/examples/backup-cron/`](agents/examples/backup-cron/). Sync semantics: [cli/README.md](cli/README.md).
 
+## Markdown image host in 10 minutes
+
+Turn your R2 bucket into a private Markdown image host (PicGo / ShareX / Typora). Reuses `POST /api/images` — **no new APIs**.
+
+1. Deploy with `SITES_HOST`, leave **API Key** and **Image host** on, create a key (`fd_…`).
+2. Open `#/settings` → **Image host clients**:
+   - **ShareX** — download `.sxcu`, replace `YOUR_API_KEY`, import.
+   - **Typora** — copy the one-line Custom Command curl (replace the key; `$1` is the file).
+   - **PicGo / PicList** — install [`picgo-plugin-davflare`](picgo-plugin-davflare/) (local folder, or `picgo install picgo-plugin-davflare` after the owner publishes to npm).
+3. Upload a test image; public URL is `https://<SITES_HOST>/i/{id}`.
+
+Details: [docs/sites.md#markdown-image-host-in-10-minutes](docs/sites.md#markdown-image-host-in-10-minutes) · [`agents/examples/image-host-export/`](agents/examples/image-host-export/) · [`picgo-plugin-davflare/`](picgo-plugin-davflare/).
+
+
 ## Documentation
 
 | Topic | Link |
@@ -112,7 +126,7 @@ Samples: [`agents/examples/backup-cron/`](agents/examples/backup-cron/). Sync se
 | Deploy, env vars, feature switches, post-deploy `#/setup` checklist; MCP playground `#/mcp` | [docs/deploy.md](docs/deploy.md) · [docs/API.md](docs/API.md) |
 | WebDAV clients & limits; **compatibility matrix + litmus** | [docs/webdav.md](docs/webdav.md) · [docs/webdav-clients.md](docs/webdav-clients.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
-| Static sites & image host | [docs/sites.md](docs/sites.md) |
+| Static sites & image host; **PicGo / ShareX / Typora export** | [docs/sites.md](docs/sites.md) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
 | Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | CLI (`davflare-cli`); scheduled backup (crontab + Actions) | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

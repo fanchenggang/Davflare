@@ -105,6 +105,20 @@
 
 样例：[`agents/examples/backup-cron/`](agents/examples/backup-cron/)。同步语义见 [cli/README.md](cli/README.md)。
 
+## 10 分钟把 R2 变成 Markdown 图床
+
+把 R2 当成私有 Markdown 图床（PicGo / ShareX / Typora）。复用 `POST /api/images`，**不新增接口**。
+
+1. 部署并配置 `SITES_HOST`，保持 **API Key** 与 **图床** 开启，创建一把密钥（`fd_…`）。
+2. 打开 `#/settings` → **图床客户端**：
+   - **ShareX** — 下载 `.sxcu`，替换 `YOUR_API_KEY` 后导入。
+   - **Typora** — 复制一行 Custom Command 的 curl（先换密钥；`$1` 为本地文件）。
+   - **PicGo / PicList** — 安装 [`picgo-plugin-davflare`](picgo-plugin-davflare/)（本地目录，或仓库主人 npm publish 后 `picgo install picgo-plugin-davflare`）。
+3. 上传一张测试图；公开地址为 `https://<SITES_HOST>/i/{id}`。
+
+说明：[docs/sites.zh-CN.md#10-分钟把-r2-变成-markdown-图床](docs/sites.zh-CN.md#10-分钟把-r2-变成-markdown-图床) · [`agents/examples/image-host-export/`](agents/examples/image-host-export/) · [`picgo-plugin-davflare/`](picgo-plugin-davflare/)。
+
+
 ## 文档
 
 | 主题 | 链接 |
@@ -112,7 +126,7 @@
 | 部署、环境变量、功能开关、部署后 `#/setup` 检查清单；MCP 试玩台 `#/mcp` | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) · [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | WebDAV 客户端与限制；**兼容实测表 + litmus** | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) · [docs/webdav-clients.zh-CN.md](docs/webdav-clients.zh-CN.md) |
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
-| 静态站点与图床 | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) |
+| 静态站点与图床；**PicGo / ShareX / Typora 导出** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
 | Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | 命令行（`davflare-cli`）；定时备份（crontab + Actions） | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

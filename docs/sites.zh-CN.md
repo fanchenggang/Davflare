@@ -128,6 +128,26 @@ jobs:
 - 所有 slug 共用站点域（`sites.domain/a/` 和 `/b/`）。自己用没问题；不要在同一站点域托管别人不可信的 HTML。
 - 不要把 API 密钥写进上传的 HTML。
 
+## 10 分钟把 R2 变成 Markdown 图床
+
+Markdown 编辑器用同一套 `POST /api/images` + API Key —— **不新增接口**。
+
+1. 绑定 `SITES_HOST`，在 `#/settings` 保持 **API Key** 与 **图床** 开启，创建密钥。
+2. 在 **图床客户端** 卡片导出（或拷贝 [`agents/examples/image-host-export/`](../agents/examples/image-host-export/)）：
+   - **ShareX** — `.sxcu`（Binary 体、`Authorization` / `X-Api-Key`、`X-File-Name: {filename}`、URL `{json:url}`）。导入前把 `YOUR_API_KEY` 换成真密钥。
+   - **Typora** — Custom Command 一行（`curl` + `sed` 打印 `url`）；`$1` 为本地路径。
+   - **PicGo / PicList** — [`picgo-plugin-davflare`](../picgo-plugin-davflare/)：填站点地址（网盘源）与 API Key。可从本目录本地安装；仓库主人在该包执行 `npm publish` 后也可用 `picgo install picgo-plugin-davflare`（**禁止机器人代发**）。
+3. 上传一张测试图；公开地址为 `https://<SITES_HOST>/i/{id}`（API 还返回 Markdown `![](url)`）。
+
+原始 curl（与 Typora / 脚本相同）：
+
+```bash
+curl -X POST "https://<你的域名>/api/images" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "X-File-Name: shot.png" \
+  --data-binary @shot.png
+```
+
 ## 图床界面
 
 在网盘界面（`#/images`）拖放上传图片，复制公开 URL 或 Markdown `![](url)`，列出并删除。对象存在 `_$flaredrive$/img/{id}`，`{id}` 为不可猜测的随机值，不是原文件名。公开地址仅为 `https://<SITES_HOST>/i/{id}`（`SITES_HOST` 不含协议）。SVG 以附件下发（`Content-Disposition: attachment` + `nosniff`），不会当成可执行页面打开。

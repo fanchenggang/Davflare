@@ -153,6 +153,35 @@ describe("images", () => {
     expect(((await response.json()) as { contentType: string }).contentType).toBe("image/png");
   });
 
+  test("POST：百分号编码的 X-File-Name（PicGo/CLI）会解码；字面量 %2e 保持原样", async () => {
+    const bucket = new InMemoryBucket();
+    const encoded = encodeURIComponent("截图.png");
+    const response = await imagesOnPost(
+      makeContext(
+        request("/api/images", "POST", {
+          body: PNG_BYTES,
+          headers: { "Content-Type": "image/png", "X-File-Name": encoded },
+        }),
+        makeEnv(bucket, { SITES_HOST: "img.example.com" })
+      )
+    );
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { name: string };
+    expect(body.name).toBe("截图.png");
+
+    const literal = await imagesOnPost(
+      makeContext(
+        request("/api/images", "POST", {
+          body: PNG_BYTES,
+          headers: { "Content-Type": "image/png", "X-File-Name": "a%2eb.png" },
+        }),
+        makeEnv(bucket)
+      )
+    );
+    expect(literal.status).toBe(201);
+    expect(((await literal.json()) as { name: string }).name).toBe("a%2eb.png");
+  });
+
   test("POST 校验：空文件 400 / 非 4xx 之外的类型 400 / 超 20MB 413", async () => {
     const bucket = new InMemoryBucket();
     const env = makeEnv(bucket);

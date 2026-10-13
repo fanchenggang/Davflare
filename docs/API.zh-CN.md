@@ -221,6 +221,8 @@ curl -X DELETE "https://<your-domain.com>/api/images?id=<id>" \
 
 公开地址：`https://<SITES_HOST>/i/{id}`。SVG 响应带 `Content-Disposition: attachment` 与 `X-Content-Type-Options: nosniff`。
 
+Markdown 编辑器：设置页 **图床客户端** 可导出 ShareX `.sxcu` 与 Typora 一行 curl（占位符 `YOUR_API_KEY`）。PicGo / PicList：[`picgo-plugin-davflare`](../picgo-plugin-davflare/)。见 [sites.zh-CN.md](./sites.zh-CN.md#10-分钟把-r2-变成-markdown-图床)。
+
 ### MCP
 
 同源 Streamable HTTP MCP：`POST /mcp`（JSON-RPC 2.0）。鉴权与其它开放接口相同（`Authorization: Bearer <apiKey>` 或 `X-Api-Key`；不走网页会话，无 OAuth）。**MCP 依赖 API Key 开关** —— API Key 关闭（或 MCP 关闭）时 `/mcp` 返回 **404**。密钥缺失或无效返回 **HTTP 401**。工具：`list`、`upload`、`download`、`zip`、`mkdir`、`delete`、`search`、`move`、`copy`、`stat`、`share_create`、`share_list`、`share_revoke`、`trash_list`、`trash_restore`、`trash_empty`、`sites_list`、`sites_config`、`sites_delete`、`pull`、`push`、`publish_site`、`image_upload`、`image_list`、`image_delete`（包装上方 Open API）。超过 1 MiB 的上传自动改走分块（上限 **25 MB**；再大返回工具错误，请用网页端或 davflare-cli）。下载超过 1 MiB 用 `part` / `partSize` 分页。`zip` 走 `/api/archive` 打包目录（base64；同样 1 MiB / `part` 分页；硬上限 25 MB —— 再大请用 curl 调 `/api/archive`）。`delete` 默认进回收站；`hard=true` 为永久删除。可用 `trash_list` / `trash_restore` 捞回；`trash_empty` 永久清空回收站。`sites_*` 管理 `sites/` 下的静态站；`upload` / `delete` 也可以直接操作 `sites/<slug>/`。`pull` 走 `agents/{global|agent|agent/project}/{skills|rules|mcp}/` 并返回分层文件（合并：project 覆盖 agent 覆盖 global）；大文件与 `download` 一样分页。`push` 写入该树（`mcp.json` 只能用 `${env:...}`，不要明文密钥）。`publish_site` 把网盘目录同步到 `sites/{slug}/`（同名覆盖，不删 SPA 配置；站点开关关闭时 404）。 `image_upload` / `image_list` / `image_delete` 包装 `/api/images`（公开地址 `https://<SITES_HOST>/i/{id}` 和 Markdown；上限 20 MB；图床开关关闭时 404）。

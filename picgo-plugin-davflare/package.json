@@ -1,0 +1,43 @@
+{
+  "name": "picgo-plugin-davflare",
+  "version": "0.1.0",
+  "description": "PicGo / PicList uploader for Davflare image host (POST /api/images → https://<SITES_HOST>/i/{id})",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test/index.test.js"
+  },
+  "keywords": [
+    "picgo",
+    "picgo-plugin",
+    "piclist",
+    "davflare",
+    "uploader",
+    "cloudflare",
+    "r2"
+  ],
+  "author": "Davflare",
+  "license": "MIT",
+  "homepage": "https://github.com/fanchenggang/Davflare/tree/main/picgo-plugin-davflare",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fanchenggang/Davflare.git",
+    "directory": "picgo-plugin-davflare"
+  },
+  "bugs": {
+    "url": "https://github.com/fanchenggang/Davflare/issues"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "peerDependencies": {
+    "picgo": ">=1.5.0"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -25,9 +25,21 @@ interface ImagesEnv {
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 function sanitizeName(name: string) {
-  const cleaned = name.replace(/\\/g, "/").split("/").pop() || "";
+  // CLI / PicGo may percent-encode X-File-Name (Node fetch ByteString). Same rule as /api/upload:
+  // only decode when encodeURIComponent(decoded) === name; raw UTF-8 (curl) stays unchanged.
+  let decoded = name;
+  try {
+    const once = decodeURIComponent(name);
+    if (encodeURIComponent(once) === name) {
+      decoded = once;
+    }
+  } catch {
+    decoded = name;
+  }
+  const cleaned = decoded.replace(/\\/g, "/").split("/").pop() || "";
   return cleaned.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 200);
 }
+
 
 interface ImageRecord {
   id: string;

@@ -128,6 +128,26 @@ Two zone settings on the sites hostname can override this:
 - All slugs share the sites origin (`sites.domain/a/` and `/b/`). Fine for one owner; do not host untrusted third-party HTML on the same sites host.
 - Do not put API keys in the uploaded HTML.
 
+## Markdown image host in 10 minutes
+
+Use the same `POST /api/images` + API Key from Markdown editors — **no new APIs**.
+
+1. Bind `SITES_HOST`, leave **API Key** and **Image host** on in `#/settings`, create a key.
+2. Export clients from the **Image host clients** card (or copy from [`agents/examples/image-host-export/`](../agents/examples/image-host-export/)):
+   - **ShareX** — `.sxcu` with Binary body, `Authorization` / `X-Api-Key`, `X-File-Name: {filename}`, URL `{json:url}`. Replace `YOUR_API_KEY` before import.
+   - **Typora** — Custom Command one-liner (`curl` + `sed` to print `url`); `$1` is the local path.
+   - **PicGo / PicList** — [`picgo-plugin-davflare`](../picgo-plugin-davflare/): set Site URL (drive origin) + API Key. Local install from the folder, or `picgo install picgo-plugin-davflare` after the repo owner runs `npm publish` in that package (**bots must not publish**).
+3. Upload once; expect `https://<SITES_HOST>/i/{id}` (and Markdown `![](url)` from the API response).
+
+Raw curl (same as Typora / scripts):
+
+```bash
+curl -X POST "https://<your-domain.com>/api/images" \
+  -H "Authorization: Bearer <apiKey>" \
+  -H "X-File-Name: shot.png" \
+  --data-binary @shot.png
+```
+
 ## Image host UI
 
 Upload images in the drive UI (`#/images`): drag/drop, copy the public URL or Markdown `![](url)`, list and delete. Blobs live at `_$flaredrive$/img/{id}` with an unguessable id (not the original filename). Public URL is only `https://<SITES_HOST>/i/{id}` (no scheme in `SITES_HOST`). SVG is served as a download (`Content-Disposition: attachment` + `nosniff`), never as a navigable document.
