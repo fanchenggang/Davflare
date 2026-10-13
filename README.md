@@ -4,6 +4,8 @@
 
 [![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to%20Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) · [Deploy guide](docs/deploy.md)
 
+[![WebDAV litmus](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml/badge.svg)](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml)
+
 Cloudflare R2 file manager on **Cloudflare Pages** (API via Pages Functions) — free 10 GB storage and 100,000 invocations per day. [R2 pricing](https://developers.cloudflare.com/r2/platform/pricing/)
 
 > **Pages, not Workers.** This repo sets `pages_build_output_dir` in `wrangler.toml` and has no Worker `main`. Do **not** use the [Workers Deploy to Cloudflare](https://deploy.workers.cloudflare.com/) button or `wrangler deploy` — that looks for a Worker entry point and fails with «entry point not configured».
@@ -108,7 +110,7 @@ Samples: [`agents/examples/backup-cron/`](agents/examples/backup-cron/). Sync se
 | Topic | Link |
 | --- | --- |
 | Deploy, env vars, feature switches, post-deploy `#/setup` checklist; MCP playground `#/mcp` | [docs/deploy.md](docs/deploy.md) · [docs/API.md](docs/API.md) |
-| WebDAV clients & limits | [docs/webdav.md](docs/webdav.md) |
+| WebDAV clients & limits; **compatibility matrix + litmus** | [docs/webdav.md](docs/webdav.md) · [docs/webdav-clients.md](docs/webdav-clients.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
 | Static sites & image host | [docs/sites.md](docs/sites.md) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |

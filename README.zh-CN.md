@@ -4,6 +4,8 @@
 
 [![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to%20Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) · [部署说明](docs/deploy.zh-CN.md)
 
+[![WebDAV litmus](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml/badge.svg)](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml)
+
 基于 **Cloudflare Pages**（API 走 Pages Functions）的 R2 网盘 —— 免费 10 GB 存储、每天 10 万次调用。[R2 定价](https://developers.cloudflare.com/r2/platform/pricing/)
 
 > **这是 Pages，不是 Workers。** 本仓库在 `wrangler.toml` 里配置了 `pages_build_output_dir`，没有 Worker `main`。请**不要**用 [Workers 一键部署按钮](https://deploy.workers.cloudflare.com/) 或 `wrangler deploy`——那会去找 Worker 入口，并报 «entry point not configured / entry point 没有配置」。
@@ -108,7 +110,7 @@
 | 主题 | 链接 |
 | --- | --- |
 | 部署、环境变量、功能开关、部署后 `#/setup` 检查清单；MCP 试玩台 `#/mcp` | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) · [docs/API.zh-CN.md](docs/API.zh-CN.md) |
-| WebDAV 客户端与限制 | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) |
+| WebDAV 客户端与限制；**兼容实测表 + litmus** | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) · [docs/webdav-clients.zh-CN.md](docs/webdav-clients.zh-CN.md) |
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | 静态站点与图床 | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |

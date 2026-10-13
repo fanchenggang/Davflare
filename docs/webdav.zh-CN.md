@@ -20,3 +20,6 @@
 
 部署与环境变量见 [deploy.zh-CN.md](./deploy.zh-CN.md)。
 
+## 客户端兼容实测
+
+实测表（rclone、litmus、Remotely Save、Legado 等）与 litmus CI 见 [webdav-clients.zh-CN.md](./webdav-clients.zh-CN.md)。

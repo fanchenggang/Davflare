@@ -20,3 +20,6 @@ The in-app WebDAV panel shows URL, username, and whether public-read is on. It d
 
 Deploy / env vars: [deploy.md](./deploy.md).
 
+## Client compatibility
+
+Measured client matrix (rclone, litmus, Remotely Save, Legado, …) and litmus CI: [webdav-clients.md](./webdav-clients.md).

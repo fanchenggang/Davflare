@@ -28,7 +28,8 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "build:extension": "vite build --config vite.extension.config.ts",
-    "test:e2e": "bash scripts/run-e2e.sh"
+    "test:e2e": "bash scripts/run-e2e.sh",
+    "test:litmus": "bash scripts/run-litmus.sh"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260905.1",
