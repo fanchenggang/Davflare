@@ -73,6 +73,9 @@ const PAGE_TEXT = {
     title: "文件分享",
     download: "下载",
     preview: "在线预览",
+    copy: "复制全文",
+    copied: "已复制",
+    truncated: "内容较长，仅预览前一部分；完整内容请下载 .txt。",
     sizeLabel: "大小",
     sharedAtLabel: "分享时间",
     folderBadge: "文件夹（zip 下载）",
@@ -86,6 +89,9 @@ const PAGE_TEXT = {
     title: "Shared file",
     download: "Download",
     preview: "Preview",
+    copy: "Copy all",
+    copied: "Copied",
+    truncated: "Preview shows the beginning only — download the .txt for the full text.",
     sizeLabel: "Size",
     sharedAtLabel: "Shared at",
     folderBadge: "Folder (zip download)",
@@ -130,15 +136,28 @@ button { width: 100%; border: 0; border-radius: 8px; padding: 11px 12px;
 .btn { display: block; margin-top: 20px; border-radius: 8px; padding: 11px 12px;
   background: #f38020; color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer;
   text-align: center; text-decoration: none; }
+.btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.btn-row .btn, .btn-row button.copy { flex: 1 1 140px; margin-top: 0; width: auto; }
+button.copy { border: 1px solid rgba(28, 22, 16, .16); border-radius: 8px; padding: 11px 12px;
+  background: transparent; color: inherit; font-weight: 600; font-size: 1rem; cursor: pointer; }
+button.copy:hover { background: rgba(243, 128, 32, .1); }
+.card.paste { width: min(94vw, 720px); }
+.paste-body { margin: 0; max-height: 60vh; overflow: auto; padding: 14px 16px;
+  border-radius: 8px; background: rgba(243, 128, 32, .06);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: .88rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.hint { font-size: .82rem; color: rgba(26, 23, 20, .58); margin: 10px 0 0; }
 button:hover, .btn:hover { background: #d96e12; }
 @media (prefers-color-scheme: dark) {
   body { background: #171310; color: #f1ece5; }
   .card { background: #211c17; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
   .badge { color: #ff9a45; background: rgba(243, 128, 32, .2); }
   .bmark { color: #ff9a45; }
-  p, .meta dt { color: rgba(241, 236, 229, .66); }
+  p, .meta dt, .hint { color: rgba(241, 236, 229, .66); }
   input { border-color: rgba(255, 255, 255, .18); }
   .preview iframe { background: #171310; }
+  button.copy { border-color: rgba(255, 255, 255, .18); }
+  button.copy:hover { background: rgba(243, 128, 32, .18); }
 }
 `;
 
@@ -174,9 +193,19 @@ function previewKind(contentType: string): "image" | "video" | "audio" | "embed"
   if (t.startsWith("image/")) return "image";
   if (t.startsWith("video/")) return "video";
   if (t.startsWith("audio/")) return "audio";
+  // text/plain gets an inline monospace paste preview on the landing page
+  if (isPlainText(contentType)) return null;
   if (t === "application/pdf" || t.startsWith("text/")) return "embed";
   return null;
 }
+
+/** text/plain (+ optional charset) — Paste / notepad shares */
+function isPlainText(contentType: string): boolean {
+  return contentType.split(";")[0].trim().toLowerCase() === "text/plain";
+}
+
+/** Cap inline paste preview so huge notes still get a fast landing page */
+const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 
 function formatSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "";
@@ -221,6 +250,9 @@ type LandingPage = {
   createdAt: string | null;
   downloadHref: string;
   previewHref: string;
+  /** Escaped-ready raw text for text/plain paste preview (already decoded) */
+  textBody?: string | null;
+  textTruncated?: boolean;
 };
 
 function renderLandingPage(options: LandingPage) {
@@ -229,11 +261,54 @@ function renderLandingPage(options: LandingPage) {
   const badge = options.isDir ? t.folderBadge : typeLabel(options.contentType, options.lang);
   const created = options.createdAt ? formatUtcDate(options.createdAt) : "";
   const kind = options.isDir ? null : previewKind(options.contentType);
+  const showPaste = typeof options.textBody === "string";
+  const pasteMarkup = showPaste
+    ? `<h2 class="ptitle">${t.preview}</h2>
+  <pre id="paste-body" class="paste-body">${escapeHtml(options.textBody!)}</pre>
+  ${options.textTruncated ? `<p class="hint">${t.truncated}</p>` : ""}`
+    : "";
   const previewMarkup =
-    kind && options.previewHref
+    !showPaste && kind && options.previewHref
       ? `<h2 class="ptitle">${t.preview}</h2>
   <div class="preview">${previewElement(kind, options.previewHref, options.name, t.preview)}</div>`
       : "";
+  const actions = showPaste
+    ? `<div class="btn-row">
+    <button type="button" class="copy" id="paste-copy" data-copied="${escapeHtml(t.copied)}">${t.copy}</button>
+    <a class="btn" href="${escapeHtml(options.downloadHref)}" download>${t.download}</a>
+  </div>
+  <script>
+(function () {
+  var btn = document.getElementById("paste-copy");
+  var pre = document.getElementById("paste-body");
+  if (!btn || !pre) return;
+  var label = btn.textContent;
+  var copied = btn.getAttribute("data-copied") || "Copied";
+  function ok() {
+    btn.textContent = copied;
+    setTimeout(function () { btn.textContent = label; }, 1500);
+  }
+  function fallback() {
+    var range = document.createRange();
+    range.selectNodeContents(pre);
+    var sel = window.getSelection();
+    if (!sel) return;
+    sel.removeAllRanges();
+    sel.addRange(range);
+    try { document.execCommand("copy"); ok(); } catch (e) {}
+    sel.removeAllRanges();
+  }
+  btn.addEventListener("click", function () {
+    var text = pre.textContent || "";
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(ok).catch(fallback);
+    } else {
+      fallback();
+    }
+  });
+})();
+  </script>`
+    : `<a class="btn" href="${escapeHtml(options.downloadHref)}" download>${t.download}</a>`;
   const html = `<!DOCTYPE html>
 <html lang="${options.lang === "zh" ? "zh-CN" : "en"}">
 <head>
@@ -244,7 +319,7 @@ function renderLandingPage(options: LandingPage) {
   <style>${PAGE_CSS}</style>
 </head>
 <body>
-  <main class="card">
+  <main class="card${showPaste ? " paste" : ""}">
     <header class="bmark"><img src="/favicon.png" alt="" width="20" height="20">Davflare</header>
     <span class="badge">${escapeHtml(badge)}</span>
     <h1>${name}</h1>
@@ -252,8 +327,9 @@ function renderLandingPage(options: LandingPage) {
       ${options.size !== null ? `<div><dt>${t.sizeLabel}</dt><dd>${escapeHtml(formatSize(options.size))}</dd></div>` : ""}
       ${created ? `<div><dt>${t.sharedAtLabel}</dt><dd>${escapeHtml(created)}</dd></div>` : ""}
     </dl>
+    ${pasteMarkup}
     ${previewMarkup}
-    <a class="btn" href="${escapeHtml(options.downloadHref)}" download>${t.download}</a>
+    ${actions}
   </main>
 </body>
 </html>`;
@@ -457,15 +533,36 @@ export const onRequestGet: PagesFunction<ShareEnv> = async (context) => {
   if (!wantsDownload && !wantsRaw) {
     const head = await env.BUCKET.head(metadata.key);
     if (head === null) return new Response("File not found", { status: 404 });
+    const contentType = head.httpMetadata?.contentType || "application/octet-stream";
+    let textBody: string | null = null;
+    let textTruncated = false;
+    if (isPlainText(contentType)) {
+      if (head.size <= TEXT_PREVIEW_MAX_BYTES) {
+        const full = await env.BUCKET.get(metadata.key);
+        if (full === null) return new Response("File not found", { status: 404 });
+        textBody = await full.text();
+      } else {
+        const partial = await env.BUCKET.get(metadata.key, {
+          range: { offset: 0, length: TEXT_PREVIEW_MAX_BYTES },
+        });
+        if (partial === null || !("text" in partial)) {
+          return new Response("File not found", { status: 404 });
+        }
+        textBody = await partial.text();
+        textTruncated = true;
+      }
+    }
     return renderLandingPage({
       lang: acceptLanguage(request),
       name,
       isDir: false,
-      contentType: head.httpMetadata?.contentType || "application/octet-stream",
+      contentType,
       size: head.size,
       createdAt: metadata.createdAt ?? null,
       downloadHref,
       previewHref: actionHref(request, token, { raw: "1" }),
+      textBody,
+      textTruncated,
     });
   }
 

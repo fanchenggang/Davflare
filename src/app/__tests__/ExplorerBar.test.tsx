@@ -21,6 +21,7 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof ExplorerBar>> 
     onUploadFolder: vi.fn(),
     onCreateFolder: vi.fn(),
     onOpenTextPad: vi.fn(),
+    onOpenPasteShare: vi.fn(),
     onPaste: vi.fn(),
     canPaste: false,
     clipboardCount: 0,
@@ -92,6 +93,8 @@ describe("ExplorerBar", () => {
     const { props } = renderBar();
     fireEvent.click(screen.getByText(strings.openTextPad));
     expect(props.onOpenTextPad).toHaveBeenCalled();
+    fireEvent.click(screen.getByText(strings.pasteShareTitle));
+    expect(props.onOpenPasteShare).toHaveBeenCalled();
     fireEvent.click(screen.getByText(strings.webdav));
     expect(props.onOpenWebDav).toHaveBeenCalled();
     fireEvent.click(screen.getByText(strings.api));

@@ -141,7 +141,7 @@ curl -X DELETE "https://<your-domain.com>/api/delete?path=folder/sub" \
 
 `POST /api/shares` 也接受文件夹 key，带不带尾斜杠均可（`"文件夹"` 与 `"文件夹/"` 指向同一目标，与 `/api/archive` 一致）。与文件分享一致，直接打开链接显示落地页（标注「文件夹（zip 下载）」）；点页面上的下载按钮，或直接请求 `GET /share/<token>?download=1`，会把整棵子树以 zip 流式下载（以该文件夹为根；提取码和过期时间照常生效）。分享管理（GET/POST/DELETE /api/shares）同时接受网页会话（Basic）和 API key。
 
-`GET /share/<token>`（无需鉴权）默认返回**服务端渲染、零脚本的落地页**（`prefers-color-scheme` 亮暗双套，语言跟随 `Accept-Language`）：文件名、类型、大小、分享时间，可预览类型还带在线预览（`<img>` / `<video>` / `<audio>` / `<iframe>`）；页面里的下载按钮指向 `?download=1`。同一 URL 上的查询参数：
+`GET /share/<token>`（无需鉴权）默认返回**服务端渲染的落地页**（`prefers-color-scheme` 亮暗双套，语言跟随 `Accept-Language`）：文件名、类型、大小、分享时间；图片/音视频/PDF 以及非 plain 的 `text/*` 用零脚本预览（`<img>` / `<video>` / `<audio>` / `<iframe>`）；**`text/plain` 改为等宽 `<pre>` 预览 + 一键复制**（截断上限约 512 KiB，完整内容请 `?download=1`），下载按钮仍指向 `?download=1`。网页「文本快传」即：写入 `.txt` 再 `POST /api/shares`，不新增接口。同一 URL 上的查询参数：
 
 - `?download=1` —— 原始字节 + `Content-Disposition: attachment`（ASCII `filename=` 回退 + UTF-8 `filename*`，`curl -OJ` 按文件名保存而不是 token；文件夹名为 `<文件夹名>.zip`）。**以前直接从分享链接下载的脚本必须改用这个参数** —— 文件和文件夹都一样（文件夹返回 `application/zip`；文件夹没有预览，`?raw=1` 同样返回 zip）。
 - `?raw=1` —— 原始字节内联返回（`Content-Disposition: inline`），仅对可预览类型（图片/音视频/PDF/文本）；其他类型仍是附件下载。响应保留既有安全加固 —— `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` —— 并支持 `Range`（视频拖动/断点续传）。

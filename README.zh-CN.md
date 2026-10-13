@@ -29,7 +29,8 @@
 ## 功能
 
 - 网页端分片上传、文件夹、搜索、拖放，以及图片 / 视频 / PDF 缩略图
-- 分享链接（限时或永久）、提取码、文件夹 zip，以及零脚本落地页
+- 分享链接（限时或永久）、提取码、文件夹 zip；落地页对图片/音视频/PDF 零脚本预览，对 `text/plain` 等宽预览 + 一键复制
+- **文本快传 Paste**：顶栏一键粘贴文本 → `.txt` + 现有分享（过期/提取码），可当自建 Pastebin
 - 回收站，保留天数可配（`TRASH_RETENTION_DAYS`）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端）
 - API Key 支持脚本上传 / 下载 / 同步，远程 MCP 在 `/mcp`（25 个工具）
@@ -81,6 +82,14 @@
 3. 重启客户端，让它调用 `tools/list`。
 
 说明与样例：[docs/agents.zh-CN.md#2-分钟把-davflare-接到-ai-助手](docs/agents.zh-CN.md#2-分钟把-davflare-接到-ai-助手) · [`agents/examples/mcp-export/`](agents/examples/mcp-export/)。
+
+## 10 分钟自建 Pastebin（文本快传）
+
+网页端顶栏点 **文本快传**（移动端在「创建」菜单里）：粘贴文本 → 选过期时间与可选提取码 → 生成分享链接。文件会写成当前目录下的 `.txt`，再走现有 `/api/shares`，**不新增 API**。
+
+打开链接即可等宽预览全文、一键复制，或下载 `.txt`。有提取码时先输入提取码（与普通分享相同）。适合临时传代码片段、日志、会议纪要——搜索「Cloudflare R2 自建 Pastebin」时正好能用上。
+
+脚本侧仍可用：`PUT /webdav/.../note.txt` 后 `POST /api/shares`，落地页对 `Content-Type: text/plain` 自动走等宽预览。
 
 ## 文档
 

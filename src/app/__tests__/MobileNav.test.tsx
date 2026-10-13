@@ -27,6 +27,7 @@ describe("MobileNav", () => {
         onUploadFolder={vi.fn()}
         onCreateFolder={vi.fn()}
         onOpenTextPad={vi.fn()}
+        onOpenPasteShare={vi.fn()}
       />
     );
     expect(container).toBeEmptyDOMElement();
@@ -42,6 +43,7 @@ describe("MobileNav", () => {
         onUploadFolder={vi.fn()}
         onCreateFolder={vi.fn()}
         onOpenTextPad={vi.fn()}
+        onOpenPasteShare={vi.fn()}
       />
     );
     fireEvent.click(screen.getByLabelText(strings.files));
@@ -59,6 +61,7 @@ describe("MobileNav", () => {
         onUploadFolder={onUploadFolder}
         onCreateFolder={vi.fn()}
         onOpenTextPad={vi.fn()}
+        onOpenPasteShare={vi.fn()}
       />
     );
     fireEvent.click(screen.getByLabelText(strings.upload));
@@ -70,9 +73,10 @@ describe("MobileNav", () => {
     expect(onUploadFolder).toHaveBeenCalled();
   });
 
-  test("创建菜单选择新建文件夹/记事本", () => {
+  test("创建菜单选择新建文件夹/记事本/文本快传", () => {
     const onCreateFolder = vi.fn();
     const onOpenTextPad = vi.fn();
+    const onOpenPasteShare = vi.fn();
     render(
       <MobileNav
         visible
@@ -81,6 +85,7 @@ describe("MobileNav", () => {
         onUploadFolder={vi.fn()}
         onCreateFolder={onCreateFolder}
         onOpenTextPad={onOpenTextPad}
+        onOpenPasteShare={onOpenPasteShare}
       />
     );
     fireEvent.click(screen.getByLabelText(strings.create));
@@ -90,6 +95,10 @@ describe("MobileNav", () => {
     fireEvent.click(screen.getByLabelText(strings.create));
     fireEvent.click(screen.getByText(strings.openTextPad));
     expect(onOpenTextPad).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText(strings.create));
+    fireEvent.click(screen.getByText(strings.pasteShareTitle));
+    expect(onOpenPasteShare).toHaveBeenCalled();
   });
 
   test("有上传任务时展示进度环", () => {
@@ -104,6 +113,7 @@ describe("MobileNav", () => {
         onUploadFolder={vi.fn()}
         onCreateFolder={vi.fn()}
         onOpenTextPad={vi.fn()}
+        onOpenPasteShare={vi.fn()}
       />
     );
     expect(container.querySelector(".MuiCircularProgress-root")).not.toBeNull();

@@ -29,7 +29,8 @@ Share (expiry + extract code):
 ## Features
 
 - Chunked web uploads, folders, search, drag-and-drop, image/video/PDF thumbnails
-- Share links with expiry or forever, extract code, folder zip, and a zero-JS landing page
+- Share links with expiry or forever, extract code, folder zip; zero-JS preview for media/PDF, monospace preview + copy for `text/plain`
+- **Quick paste**: toolbar paste → `.txt` + existing shares (expiry / extract code) — a self-hosted Pastebin
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
 - API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (25 tools)
@@ -82,6 +83,14 @@ Point Cursor or Claude Desktop at the same-origin `POST /mcp` with an API key. N
 
 Details and samples: [docs/agents.md#2-minutes-connect-davflare-to-an-ai-assistant](docs/agents.md#2-minutes-connect-davflare-to-an-ai-assistant) · [`agents/examples/mcp-export/`](agents/examples/mcp-export/).
 
+## 10-minute self-hosted Pastebin (Quick paste)
+
+In the web UI, open **Quick paste** from the toolbar (or the mobile Create menu): paste text → pick expiry and an optional extract code → get a share link. Davflare writes a `.txt` in the current folder and reuses `POST /api/shares` — **no new API**.
+
+The landing page shows a monospace preview with one-click copy, plus `.txt` download. Extract codes work like any other share. Handy for code snippets, logs, or notes when people search for a private Pastebin on Cloudflare R2.
+
+From scripts: `PUT /webdav/.../note.txt` then `POST /api/shares`; `Content-Type: text/plain` shares get the paste landing automatically.
+
 ## Documentation
 
 | Topic | Link |
@@ -106,3 +115,4 @@ Details and samples: [docs/agents.md#2-minutes-connect-davflare-to-an-ai-assista
 ## License
 
 [MIT](./LICENSE)
+

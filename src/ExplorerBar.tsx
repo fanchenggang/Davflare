@@ -22,6 +22,7 @@ import {
   CreateNewFolder as CreateNewFolderIcon,
   GridView as GridViewIcon,
   NoteAdd as NoteAddIcon,
+  ContentPasteGo as PasteShareIcon,
   Sort as SortIcon,
   DensityMedium as DensityMediumIcon,
   DensitySmall as DensitySmallIcon,
@@ -55,6 +56,7 @@ function ExplorerBar({
   onUploadFolder,
   onCreateFolder,
   onOpenTextPad,
+  onOpenPasteShare,
   onPaste,
   canPaste,
   clipboardCount,
@@ -80,6 +82,7 @@ function ExplorerBar({
   onUploadFolder: () => void;
   onCreateFolder: () => void;
   onOpenTextPad: () => void;
+  onOpenPasteShare: () => void;
   onPaste: () => void;
   canPaste: boolean;
   clipboardCount: number;
@@ -296,6 +299,14 @@ function ExplorerBar({
               onClick={onOpenTextPad}
             >
               {strings.openTextPad}
+            </Button>
+            <Button
+              size="small"
+              startIcon={<PasteShareIcon />}
+              onClick={onOpenPasteShare}
+              data-testid="paste-share-open"
+            >
+              {strings.pasteShareTitle}
             </Button>
             {canPaste && (
               <Button

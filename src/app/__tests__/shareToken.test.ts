@@ -318,9 +318,12 @@ describe("share landing page (GET default)", () => {
     expect(html).toContain("11 B");
     expect(html).toContain("2026-01-01 00:00 UTC");
     expect(html).toContain(`href="/share/tok1?download=1"`);
-    // text/plain 属于可预览类型：iframe 内嵌 raw 链接
-    expect(html).toContain(`src="/share/tok1?raw=1"`);
-    expect(html).toContain("<iframe");
+    // text/plain：等宽预览 + 一键复制（不再用 iframe）
+    expect(html).toContain('id="paste-body"');
+    expect(html).toContain("Hello World");
+    expect(html).toContain('id="paste-copy"');
+    expect(html).not.toContain("<iframe");
+    expect(html).toContain("Copy all");
   });
 
   test("escapes hostile filenames in the landing page", async () => {
@@ -343,6 +346,39 @@ describe("share landing page (GET default)", () => {
     const html = await response.text();
     expect(html).toContain("下载");
     expect(html).toContain("文件分享");
+  });
+
+  test("text/plain paste preview escapes HTML and keeps download", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([{ key: "note.txt", body: '<script>alert(1)</script> & "x"', contentType: "text/plain" }]);
+    seedShare(bucket, "paste1", {
+      key: "note.txt",
+      name: "note.txt",
+      isDir: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    const response = await callShareGet(bucket, "paste1", "", { "Accept-Language": "en" });
+    const html = await response.text();
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("Copy all");
+    expect(html).toContain('href="/share/paste1?download=1"');
+    expect(html).toContain('class="card paste"');
+  });
+
+  test("non-plain text still uses iframe preview", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([{ key: "doc.md", body: "# hi", contentType: "text/markdown" }]);
+    seedShare(bucket, "md1", {
+      key: "doc.md",
+      name: "doc.md",
+      isDir: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    const html = await (await callShareGet(bucket, "md1")).text();
+    expect(html).toContain("<iframe");
+    expect(html).toContain('src="/share/md1?raw=1"');
+    expect(html).not.toContain('id="paste-body"');
   });
 });
 

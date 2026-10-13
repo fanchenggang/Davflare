@@ -35,6 +35,7 @@ import SettingsView from "./SettingsView";
 import SetupView from "./SetupView";
 import McpPlaygroundView from "./McpPlaygroundView";
 import TextPadDrawer from "./TextPadDrawer";
+import PasteDialog from "./PasteDialog";
 import TrashView from "./TrashView";
 import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
@@ -128,6 +129,7 @@ function Main({
   const [searchScope, setSearchScope] = useState<SearchScope>("folder");
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showTextPadDrawer, setShowTextPadDrawer] = useState(false);
+  const [showPasteDialog, setShowPasteDialog] = useState(false);
   const [showWebDav, setShowWebDav] = useState(false);
   const [typeFilter, setTypeFilter] = useState<FileTypeFilter>("all");
   const [showHidden, setShowHidden] = usePersistedState(
@@ -607,6 +609,7 @@ function Main({
           onUploadFolder={openFolderPicker}
           onCreateFolder={() => setShowCreateFolder(true)}
           onOpenTextPad={() => setShowTextPadDrawer(true)}
+          onOpenPasteShare={() => setShowPasteDialog(true)}
           onPaste={handlePaste}
           canPaste={canPaste}
           clipboardCount={clipboard?.keys.length ?? 0}
@@ -798,6 +801,14 @@ function Main({
         onUpload={loadListing}
       />
 
+      <PasteDialog
+        open={showPasteDialog}
+        cwd={cwd}
+        onClose={() => setShowPasteDialog(false)}
+        onNotify={onNotify}
+        onCreated={loadListing}
+      />
+
       <FileActionSheet
         file={contextMenu?.file ?? null}
         anchorPosition={
@@ -968,6 +979,7 @@ function Main({
         onUploadFolder={openFolderPicker}
         onCreateFolder={() => setShowCreateFolder(true)}
         onOpenTextPad={() => setShowTextPadDrawer(true)}
+        onOpenPasteShare={() => setShowPasteDialog(true)}
       />
 
       <MultiSelectToolbar

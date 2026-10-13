@@ -7,6 +7,7 @@ import {
   CreateNewFolder as CreateNewFolderIcon,
   Folder as FolderIcon,
   NoteAdd as NoteAddIcon,
+  ContentPasteGo as PasteShareIcon,
 } from "@mui/icons-material";
 
 import { useTransferQueue } from "./app/transferQueue";
@@ -79,6 +80,7 @@ function MobileNav({
   onUploadFolder,
   onCreateFolder,
   onOpenTextPad,
+  onOpenPasteShare,
 }: {
   visible: boolean;
   filesActive?: boolean;
@@ -87,6 +89,7 @@ function MobileNav({
   onUploadFolder: () => void;
   onCreateFolder: () => void;
   onOpenTextPad: () => void;
+  onOpenPasteShare: () => void;
 }) {
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [createAnchor, setCreateAnchor] = useState<null | HTMLElement>(null);
@@ -206,6 +209,16 @@ function MobileNav({
         >
           <NoteAddIcon fontSize="small" sx={{ mr: 1 }} />
           {strings.openTextPad}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setCreateAnchor(null);
+            onOpenPasteShare();
+          }}
+          data-testid="paste-share-open-mobile"
+        >
+          <PasteShareIcon fontSize="small" sx={{ mr: 1 }} />
+          {strings.pasteShareTitle}
         </MenuItem>
       </Menu>
     </>
