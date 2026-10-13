@@ -31,9 +31,9 @@ npm run test:litmus
 SKIP_BUILD=1 npm run test:litmus
 ```
 
-工作流：[`.github/workflows/litmus.yml`](../.github/workflows/litmus.yml) —— 安装 `litmus`，构建 Pages，起 `wrangler pages dev`，跑 `TESTS="basic copymove props"`。
+CI：现有 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 的 **E2E** job 在 `api-e2e.sh` 之后跑 litmus（`TESTS="basic copymove props"`；自动 `apt install litmus`）。本地：`npm run test:litmus` 或 `npm run test:e2e`。
 
-README 上的徽章跟这个工作流。
+README 徽章跟 CI 工作流（标签 **WebDAV litmus**）。
 
 ### litmus 已知缺口
 

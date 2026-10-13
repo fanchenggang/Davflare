@@ -20,8 +20,14 @@ WEBDAV_PASS="${WEBDAV_PASS:-fd-litmus-pass}"
 TESTS="${TESTS:-basic copymove props}"
 
 if ! command -v litmus >/dev/null 2>&1; then
-  echo "需要 litmus（Debian/Ubuntu: sudo apt-get install -y litmus）"
-  exit 1
+  if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
+    echo "== apt install litmus =="
+    sudo apt-get update -qq
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq litmus
+  else
+    echo "需要 litmus（Debian/Ubuntu: sudo apt-get install -y litmus）"
+    exit 1
+  fi
 fi
 
 if ! command -v npx >/dev/null 2>&1; then

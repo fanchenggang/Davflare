@@ -31,9 +31,9 @@ npm run test:litmus
 SKIP_BUILD=1 npm run test:litmus
 ```
 
-Workflow: [`.github/workflows/litmus.yml`](../.github/workflows/litmus.yml) — installs `litmus`, builds the Pages app, starts `wrangler pages dev`, runs `TESTS="basic copymove props"`.
+CI: the existing [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) **E2E** job runs litmus after `api-e2e.sh` (`TESTS="basic copymove props"`; auto `apt install litmus`). Local: `npm run test:litmus` or `npm run test:e2e`.
 
-Badge on the README tracks that workflow.
+README badge tracks the CI workflow (label **WebDAV litmus**).
 
 ### Known litmus gaps
 

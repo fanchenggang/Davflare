@@ -4,7 +4,7 @@
 
 [![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to%20Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) · [Deploy guide](docs/deploy.md)
 
-[![WebDAV litmus](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml/badge.svg)](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml)
+[![WebDAV litmus](https://img.shields.io/github/actions/workflow/status/fanchenggang/Davflare/ci.yml?branch=main&label=WebDAV%20litmus)](https://github.com/fanchenggang/Davflare/actions/workflows/ci.yml)
 
 Cloudflare R2 file manager on **Cloudflare Pages** (API via Pages Functions) — free 10 GB storage and 100,000 invocations per day. [R2 pricing](https://developers.cloudflare.com/r2/platform/pricing/)
 

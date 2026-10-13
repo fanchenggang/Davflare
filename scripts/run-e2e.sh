@@ -77,3 +77,26 @@ fi
 
 echo "== 运行 api-e2e.sh =="
 BASE="$BASE" WEBDAV_USER="$WEBDAV_USER" WEBDAV_PASS="$WEBDAV_PASS" SITES_HOST="$SITES_HOST" bash scripts/api-e2e.sh
+
+echo "== litmus (basic / copymove / props) =="
+# 复用已起的 wrangler；SKIP_BUILD=1 且不另起进程 —— 直接对本机 BASE 跑 litmus
+if ! command -v litmus >/dev/null 2>&1; then
+  echo "== apt install litmus =="
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq litmus
+fi
+LITMUS_DIR=$(mktemp -d /tmp/fd-litmus-XXXXXX)
+set +e
+(
+  cd "$LITMUS_DIR"
+  TESTS="${LITMUS_TESTS:-basic copymove props}" litmus "$BASE/webdav/" "$WEBDAV_USER" "$WEBDAV_PASS"
+)
+LITMUS_STATUS=$?
+set -e
+rm -rf "$LITMUS_DIR"
+curl -s --noproxy '*' -o /dev/null -u "$WEBDAV_USER:$WEBDAV_PASS" -X DELETE "$BASE/webdav/litmus/" || true
+if [ "$LITMUS_STATUS" != "0" ]; then
+  echo "litmus failed with status $LITMUS_STATUS"
+  exit "$LITMUS_STATUS"
+fi
+echo "== litmus OK =="

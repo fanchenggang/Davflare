@@ -4,7 +4,7 @@
 
 [![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to%20Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) · [部署说明](docs/deploy.zh-CN.md)
 
-[![WebDAV litmus](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml/badge.svg)](https://github.com/fanchenggang/Davflare/actions/workflows/litmus.yml)
+[![WebDAV litmus](https://img.shields.io/github/actions/workflow/status/fanchenggang/Davflare/ci.yml?branch=main&label=WebDAV%20litmus)](https://github.com/fanchenggang/Davflare/actions/workflows/ci.yml)
 
 基于 **Cloudflare Pages**（API 走 Pages Functions）的 R2 网盘 —— 免费 10 GB 存储、每天 10 万次调用。[R2 定价](https://developers.cloudflare.com/r2/platform/pricing/)
 
