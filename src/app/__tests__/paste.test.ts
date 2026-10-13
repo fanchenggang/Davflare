@@ -43,6 +43,7 @@ describe("paste helpers", () => {
     expect(sanitizePasteFilename("note")).toBe("note.txt");
     expect(sanitizePasteFilename("a/b\\c.md")).toBe("a_b_c.md.txt");
     expect(sanitizePasteFilename("hello.TXT")).toBe("hello.TXT");
+    expect(sanitizePasteFilename("   ")).toMatch(/^paste-\d{8}-\d{6}\.txt$/);
   });
 
   test("joinCwdKey joins cwd and filename", () => {
@@ -67,6 +68,11 @@ describe("uploadPlainText", () => {
   test("失败抛错", async () => {
     mockAuthFetch.mockError(500, "boom");
     await expect(uploadPlainText("a.txt", "x")).rejects.toThrow("boom");
+  });
+
+  test("失败无正文时用默认文案", async () => {
+    mockAuthFetch.mockError(500, "");
+    await expect(uploadPlainText("a.txt", "x")).rejects.toThrow(/上传文本失败|Failed to upload/);
   });
 });
 
@@ -100,5 +106,19 @@ describe("createPasteShare", () => {
     await expect(
       createPasteShare({ cwd: "", text: "x".repeat(PASTE_MAX_CHARS + 1) })
     ).rejects.toThrow(/过长|too long/i);
+  });
+
+  test("未指定文件名时自动生成", async () => {
+    mockAuthFetch.mockOk({});
+    mockCreateShare.mockResolvedValue({
+      token: "t",
+      key: "auto.txt",
+      name: "auto.txt",
+      expiresAt: null,
+      createdAt: "",
+      url: "https://x/share/t",
+    });
+    const result = await createPasteShare({ cwd: "", text: "auto" });
+    expect(result.key).toMatch(/^paste-\d{8}-\d{6}\.txt$/);
   });
 });
