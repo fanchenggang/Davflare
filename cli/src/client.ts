@@ -57,6 +57,17 @@ export class ApiError extends Error {
   }
 }
 
+
+/** Node fetch 要求头值为 ByteString；非 Latin-1 用 RFC 5987 百分号编码。 */
+function headerFileName(name: string): string {
+  for (let i = 0; i < name.length; i++) {
+    if (name.charCodeAt(i) > 255) {
+      return `UTF-8''${encodeURIComponent(name)}`;
+    }
+  }
+  return name;
+}
+
 export class DavflareClient {
   constructor(
     private readonly server: string,
@@ -166,8 +177,9 @@ export class DavflareClient {
     }
     // 单发原始体模式：path=目标目录 + X-File-Name=文件名
     // Node fetch 的头值必须是 ByteString（码点 ≤255）。中文等非 Latin-1 文件名
-    // 直接塞进头会抛「Cannot convert argument to a ByteString」。统一百分号编码，
-    // 服务端 /api/upload 会 decodeURIComponent（ASCII 名 encode 后不变）。
+    // 直接塞进头会抛「Cannot convert argument to a ByteString」。仅在需要时用
+    // RFC 5987 风格 `UTF-8''` + encodeURIComponent；ASCII（含字面量 %2e）原样发送，
+    // 避免二次解码破坏「path 只解码一次」约定。
     const slash = remoteKey.lastIndexOf("/");
     const folder = slash >= 0 ? remoteKey.slice(0, slash + 1) : "";
     const fileName = slash >= 0 ? remoteKey.slice(slash + 1) : remoteKey;
@@ -177,7 +189,7 @@ export class DavflareClient {
       headers: {
         Authorization: `Bearer ${this.key}`,
         "Content-Type": "application/octet-stream",
-        "X-File-Name": encodeURIComponent(fileName),
+        "X-File-Name": headerFileName(fileName),
       },
       body: new Uint8Array(body),
     });

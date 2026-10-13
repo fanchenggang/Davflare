@@ -283,10 +283,10 @@ describe("single-shot upload (POST /api/upload)", () => {
     expect(body.name).toBe("name .txt");
   });
 
-  test("percent-encoded X-File-Name (CLI Node ByteString) decodes to Chinese name", async () => {
+  test("RFC 5987 UTF-8'' X-File-Name (CLI Node ByteString) decodes to Chinese name", async () => {
     const bucket = newBucket();
     await seedApiKey(bucket);
-    const encoded = encodeURIComponent("空.txt");
+    const encoded = `UTF-8''${encodeURIComponent("空.txt")}`;
     const response = await onRequestPost(
       makeContext(
         authed("/api/upload?path=dir&overwrite=1", "POST", "你好", {
@@ -302,21 +302,21 @@ describe("single-shot upload (POST /api/upload)", () => {
     expect(new TextDecoder().decode(bucket.rawBytes("dir/空.txt"))).toBe("你好");
   });
 
-  test("invalid percent sequence in X-File-Name falls back to literal name", async () => {
+  test("literal %2e in X-File-Name is not percent-decoded (path decode-once)", async () => {
     const bucket = newBucket();
     await seedApiKey(bucket);
-    // %ZZ 非法 → decodeURIComponent 抛错 → 保留原文（ASCII，Node Request 可构造）
     const response = await onRequestPost(
       makeContext(
-        authed("/api/upload?path=dir&overwrite=1", "POST", "hi", {
-          "X-File-Name": "file%ZZname.txt",
+        authed("/api/upload?path=dir&overwrite=1", "POST", "dot", {
+          "X-File-Name": "%2e",
         }),
         makeEnv(bucket)
       )
     );
     expect(response.status).toBe(201);
-    const body = (await response.json()) as { name: string };
-    expect(body.name).toBe("file%ZZname.txt");
+    const body = (await response.json()) as { name: string; key: string };
+    expect(body.name).toBe("%2e");
+    expect(body.key).toBe("dir/%2e");
   });
 });
 
