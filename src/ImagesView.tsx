@@ -23,14 +23,16 @@ import ConfirmDialog from "./ConfirmDialog";
 import EmptyState from "./EmptyState";
 import { useFeatures } from "./app/features";
 import { HostedImage, deleteImage, listImages, uploadImage } from "./app/images";
+import { isTypingTarget } from "./app/interaction";
 import { NotifyFn } from "./app/notify";
+import {
+  collectClipboardFiles,
+  isPasteImageFile,
+  namePastedFile,
+  uploadPastedImagesToHost,
+} from "./app/pasteImageHost";
 import { strings, translate } from "./app/strings";
 import { errorMessage, humanReadableSize } from "./app/utils";
-
-function isImageFile(file: File) {
-  if (file.type.startsWith("image/")) return true;
-  return /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i.test(file.name);
-}
 
 function ImagesView({
   onNotify,
@@ -63,8 +65,31 @@ function ImagesView({
     })();
   }, [load]);
 
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const pasted = collectClipboardFiles(event.clipboardData?.items);
+      if (!pasted.length) return;
+      event.preventDefault();
+      const images = pasted.map(namePastedFile).filter(isPasteImageFile);
+      if (!images.length) {
+        onNotify(strings.notAnImage, "error");
+        return;
+      }
+      void uploadPastedImagesToHost({
+        files: images,
+        onNotify,
+        onUploaded: (created) => {
+          setImages((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+        },
+      });
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [onNotify]);
+
   const uploadFiles = async (files: File[]) => {
-    const imagesOnly = files.filter(isImageFile);
+    const imagesOnly = files.filter(isPasteImageFile);
     if (imagesOnly.length === 0) {
       onNotify(strings.notAnImage, "error");
       return;

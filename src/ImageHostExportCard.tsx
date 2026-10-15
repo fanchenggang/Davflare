@@ -68,10 +68,18 @@ function ImageHostExportCard({
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {strings.imageHostExportHint}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {translate("imageHostExportKeyHint", {
           placeholder: IMAGE_HOST_API_KEY_PLACEHOLDER,
         })}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{ mb: 1.5 }}
+        data-testid="image-host-paste-hint"
+      >
+        {strings.pasteImageHostHint}
       </Typography>
 
       <Stack spacing={1.5}>

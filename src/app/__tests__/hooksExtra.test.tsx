@@ -9,6 +9,7 @@ import { useKeyboardShortcuts, KeyboardShortcutsParams } from "../useKeyboardSho
 import { useMultiSelect } from "../useMultiSelect";
 import { useDragDropUpload } from "../useDragDropUpload";
 import { usePasteUpload } from "../usePasteUpload";
+import { uploadPastedImagesToHost } from "../pasteImageHost";
 import { transferKeys, useUploadInputs } from "../useUploadInputs";
 import { useTransferQueue, useUploadEnqueue } from "../transferQueue";
 import { collectFilesFromDataTransfer, copyPaste, fetchPath } from "../transfer";
@@ -24,6 +25,14 @@ vi.mock("../transfer", () => ({
   copyPaste: vi.fn(),
   fetchPath: vi.fn(),
 }));
+
+vi.mock("../pasteImageHost", async () => {
+  const actual = await vi.importActual<typeof import("../pasteImageHost")>("../pasteImageHost");
+  return {
+    ...actual,
+    uploadPastedImagesToHost: vi.fn().mockResolvedValue([]),
+  };
+});
 
 const mockCollect = collectFilesFromDataTransfer as unknown as Mock;
 const mockFetchPath = fetchPath as unknown as Mock;
@@ -423,9 +432,31 @@ describe("useDragDropUpload", () => {
 });
 
 describe("usePasteUpload", () => {
-  function setup(enqueue = vi.fn(), onNotify = vi.fn()) {
+  const mockHostUpload = uploadPastedImagesToHost as unknown as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockHostUpload.mockReset();
+    mockHostUpload.mockResolvedValue([]);
+  });
+
+  function setup(
+    enqueue = vi.fn(),
+    onNotify = vi.fn(),
+    extras: {
+      imageHostEnabled?: boolean;
+      alsoSaveImagesToCwd?: boolean;
+      enqueueToCwd?: typeof enqueue | undefined;
+    } = {}
+  ) {
+    const enqueueToCwd = "enqueueToCwd" in extras ? extras.enqueueToCwd : enqueue;
     renderHook(() =>
-      usePasteUpload({ active: true, enqueueToCwd: enqueue, onNotify })
+      usePasteUpload({
+        active: true,
+        enqueueToCwd,
+        onNotify,
+        imageHostEnabled: extras.imageHostEnabled ?? false,
+        alsoSaveImagesToCwd: extras.alsoSaveImagesToCwd ?? false,
+      })
     );
     return { enqueue, onNotify };
   }
@@ -437,7 +468,7 @@ describe("usePasteUpload", () => {
     return event;
   }
 
-  test("剪贴板文件入队；普通命名保留、无名图片盖时间戳", () => {
+  test("图床关闭：剪贴板文件入队；普通命名保留、无名图片盖时间戳", () => {
     const { enqueue, onNotify } = setup();
     const named = new File(["a"], "photo.jpg", { type: "image/jpeg" });
     const generic = new File(["b"], "image.png", { type: "image/png" });
@@ -456,6 +487,46 @@ describe("usePasteUpload", () => {
     expect(queued[1].name).not.toBe("image.png");
     expect(queued[1].type).toBe("image/png");
     expect(onNotify).toHaveBeenCalled();
+    expect(mockHostUpload).not.toHaveBeenCalled();
+  });
+
+  test("图床开启：图片走 POST /api/images，并可同时入队当前目录", async () => {
+    const enqueue = vi.fn();
+    const onNotify = vi.fn();
+    setup(enqueue, onNotify, { imageHostEnabled: true, alsoSaveImagesToCwd: true });
+    const img = new File(["b"], "image.png", { type: "image/png" });
+    const txt = new File(["t"], "note.txt", { type: "text/plain" });
+    await act(async () => {
+      window.dispatchEvent(
+        pasteEvent([
+          { kind: "file", getAsFile: () => img },
+          { kind: "file", getAsFile: () => txt },
+        ])
+      );
+    });
+    expect(mockHostUpload).toHaveBeenCalledTimes(1);
+    const hostFiles = mockHostUpload.mock.calls[0][0].files as File[];
+    expect(hostFiles).toHaveLength(1);
+    expect(hostFiles[0].type).toBe("image/png");
+    // images + others each enqueue once
+    expect(enqueue).toHaveBeenCalled();
+    const allQueued = enqueue.mock.calls.flatMap((c) => c[0] as File[]);
+    expect(allQueued.some((f) => f.type === "image/png")).toBe(true);
+    expect(allQueued.some((f) => f.name === "note.txt")).toBe(true);
+  });
+
+  test("图床开启且无 enqueue：只上传图床", async () => {
+    const onNotify = vi.fn();
+    setup(vi.fn(), onNotify, {
+      imageHostEnabled: true,
+      alsoSaveImagesToCwd: false,
+      enqueueToCwd: undefined,
+    });
+    const img = new File(["b"], "shot.png", { type: "image/png" });
+    await act(async () => {
+      window.dispatchEvent(pasteEvent([{ kind: "file", getAsFile: () => img }]));
+    });
+    expect(mockHostUpload).toHaveBeenCalledTimes(1);
   });
 
   test("无剪贴板数据 / 无文件 / 输入框聚焦时不动作", () => {

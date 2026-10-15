@@ -177,8 +177,8 @@ const entries: Record<string, DictionaryEntry> = {
   imagesSection: { zh: "图床", en: "Images" },
   imagesTitle: { zh: "图床", en: "Image host" },
   imagesHint: {
-    zh: "拖放图片上传。公开地址只在站点域名：https://<SITES_HOST>/i/{id}",
-    en: "Drop images to upload. Public URLs live only on the sites host: https://<SITES_HOST>/i/{id}",
+    zh: "拖放或 Ctrl/Cmd+V 粘贴截图上传。公开地址只在站点域名：https://<SITES_HOST>/i/{id}",
+    en: "Drop or Ctrl/Cmd+V paste a screenshot to upload. Public URLs live only on the sites host: https://<SITES_HOST>/i/{id}",
   },
   imagesHostMissing: { zh: "未配置 SITES_HOST，公开地址打不开", en: "SITES_HOST is not set — public URLs will not open" },
   imagesHostMissingHint: {
@@ -186,7 +186,7 @@ const entries: Record<string, DictionaryEntry> = {
     en: "Bind a custom domain to this Pages project AND set the Pages env SITES_HOST (hostname only, no https://), then redeploy. Until then public image URLs will not open.",
   },
   emptyImages: { zh: "还没有图片", en: "No images yet" },
-  emptyImagesHint: { zh: "把图片拖到这里，或点击上传", en: "Drop an image here, or click upload" },
+  emptyImagesHint: { zh: "把图片拖到这里、粘贴截图，或点击上传", en: "Drop an image, paste a screenshot, or click upload" },
   uploadImages: { zh: "上传图片", en: "Upload images" },
   copyImageUrl: { zh: "复制链接", en: "Copy URL" },
   copyImageMarkdown: { zh: "复制 Markdown", en: "Copy Markdown" },
@@ -200,6 +200,22 @@ const entries: Record<string, DictionaryEntry> = {
   notAnImage: { zh: "只能上传图片文件", en: "Only image files can be uploaded" },
   imageUrlCopied: { zh: "链接已复制", en: "URL copied" },
   imageMarkdownCopied: { zh: "Markdown 已复制", en: "Markdown copied" },
+  pasteImageHostUploaded: {
+    zh: "已上传到图床：{name}",
+    en: "Uploaded to image host: {name}",
+  },
+  pasteImageHostUploadedCopied: {
+    zh: "已上传到图床，链接已复制：{name}",
+    en: "Uploaded to image host — URL copied: {name}",
+  },
+  pasteImageHostUploadedNoUrl: {
+    zh: "已上传到图床：{name}（未配置 SITES_HOST，暂无公开链接）",
+    en: "Uploaded to image host: {name} (SITES_HOST unset — no public URL yet)",
+  },
+  pasteImageHostHint: {
+    zh: "文件管理器或本页也可 Ctrl/Cmd+V 粘贴截图：两秒拿到 CDN 链（复用 POST /api/images，不新增接口）。",
+    en: "In the file manager or here, Ctrl/Cmd+V a screenshot to get a CDN URL in seconds (reuses POST /api/images — no new API).",
+  },
   mcpRequiresApiKey: {
     zh: "MCP 依赖 API Key 开关：若 API Key 关闭，即使 MCP 开关打开，/mcp 也是 404。",
     en: "MCP depends on the API Key switch: if Key is off, /mcp is 404 even if MCP is on.",
@@ -272,8 +288,8 @@ const entries: Record<string, DictionaryEntry> = {
     en: "Image host clients (PicGo / ShareX / Typora)",
   },
   imageHostExportHint: {
-    zh: "复用现有 POST /api/images 与 API Key，不新增接口。公开地址来自响应里的 https://<SITES_HOST>/i/{id}。",
-    en: "Reuses existing POST /api/images and API keys — no new APIs. Public URL comes from the response as https://<SITES_HOST>/i/{id}.",
+    zh: "复用现有 POST /api/images 与 API Key，不新增接口。公开地址来自响应里的 https://<SITES_HOST>/i/{id}。也可在本页或文件管理器 Ctrl/Cmd+V 粘贴截图，两秒拿 CDN 链。",
+    en: "Reuses existing POST /api/images and API keys — no new APIs. Public URL comes from the response as https://<SITES_HOST>/i/{id}. Or Ctrl/Cmd+V a screenshot here or in the file manager for a CDN URL in seconds.",
   },
   imageHostExportKeyHint: {
     zh: "导出内容用占位符 {placeholder}，导入前换成网页端创建的 fd_… 密钥。",

@@ -33,6 +33,7 @@ Share (expiry + extract code):
 - Chunked web uploads, folders, search, drag-and-drop, image/video/PDF thumbnails
 - Share links with expiry or forever, extract code, folder zip; zero-JS preview for media/PDF, monospace preview + copy for `text/plain`
 - **Quick paste**: toolbar paste → `.txt` + existing shares (expiry / extract code) — a self-hosted Pastebin
+- **Paste screenshot → CDN**: Ctrl/Cmd+V in the file manager, Image host page, or Settings — uploads via `POST /api/images`, toast copies `https://<SITES_HOST>/i/{id}`
 - **Scheduled backup**: Settings card copies safe `davflare sync` crontab lines; examples + GitHub Actions
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
@@ -105,6 +106,14 @@ Use existing `davflare-cli` sync — no new APIs.
 
 Samples: [`agents/examples/backup-cron/`](agents/examples/backup-cron/). Sync semantics: [cli/README.md](cli/README.md).
 
+## Paste a screenshot, get a CDN link in two seconds
+
+In the **file manager**, **`#/images`**, or **`#/settings`** (Image host clients card), press **Ctrl/Cmd+V** with a screenshot on the clipboard. Davflare uploads via existing `POST /api/images` — **no new API** — then toasts a one-click copy of `https://<SITES_HOST>/i/{id}`. In the file manager the same paste also queues the file into the current folder.
+
+Text Quick paste stays on the toolbar button (clipboard text → share). Image paste never opens the text Paste dialog.
+
+Sample notes: [`agents/examples/paste-image-host/`](agents/examples/paste-image-host/).
+
 ## Markdown image host in 10 minutes
 
 Turn your R2 bucket into a private Markdown image host (PicGo / ShareX / Typora). Reuses `POST /api/images` — **no new APIs**.
@@ -114,7 +123,7 @@ Turn your R2 bucket into a private Markdown image host (PicGo / ShareX / Typora)
    - **ShareX** — download `.sxcu`, replace `YOUR_API_KEY`, import.
    - **Typora** — copy the one-line Custom Command curl (replace the key; `$1` is the file).
    - **PicGo / PicList** — install [`picgo-plugin-davflare`](picgo-plugin-davflare/) (local folder, or `picgo install picgo-plugin-davflare` after the owner publishes to npm).
-3. Upload a test image; public URL is `https://<SITES_HOST>/i/{id}`.
+3. Upload a test image (or **Ctrl/Cmd+V** a screenshot in the file manager / `#/images` / Settings); public URL is `https://<SITES_HOST>/i/{id}`.
 
 Details: [docs/sites.md#markdown-image-host-in-10-minutes](docs/sites.md#markdown-image-host-in-10-minutes) · [`agents/examples/image-host-export/`](agents/examples/image-host-export/) · [`picgo-plugin-davflare/`](picgo-plugin-davflare/).
 
@@ -126,7 +135,7 @@ Details: [docs/sites.md#markdown-image-host-in-10-minutes](docs/sites.md#markdow
 | Deploy, env vars, feature switches, post-deploy `#/setup` checklist; MCP playground `#/mcp` | [docs/deploy.md](docs/deploy.md) · [docs/API.md](docs/API.md) |
 | WebDAV clients & limits; **compatibility matrix + litmus** | [docs/webdav.md](docs/webdav.md) · [docs/webdav-clients.md](docs/webdav-clients.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
-| Static sites & image host; **PicGo / ShareX / Typora export** | [docs/sites.md](docs/sites.md) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
+| Static sites & image host; **paste screenshot / PicGo / ShareX / Typora** | [docs/sites.md](docs/sites.md) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
 | Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | CLI (`davflare-cli`); scheduled backup (crontab + Actions) | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

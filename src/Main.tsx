@@ -395,9 +395,11 @@ function Main({
   });
 
   usePasteUpload({
-    active: route.kind === "folder",
-    enqueueToCwd,
+    active: route.kind === "folder" || route.kind === "settings",
+    enqueueToCwd: route.kind === "folder" ? enqueueToCwd : undefined,
     onNotify,
+    imageHostEnabled: flags.imageHost,
+    alsoSaveImagesToCwd: route.kind === "folder",
   });
 
   const dropActive = useDragDropUpload({

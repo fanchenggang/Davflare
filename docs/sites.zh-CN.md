@@ -148,6 +148,10 @@ curl -X POST "https://<你的域名>/api/images" \
   --data-binary @shot.png
 ```
 
+## 粘贴截图上图床
+
+在文件管理器、`#/images` 或 `#/settings`（图床客户端）按 **Ctrl/Cmd+V**：剪贴板图片走现有 `POST /api/images`，toast 一键复制 `https://<SITES_HOST>/i/{id}`。文件管理器里同一张图还会入队当前目录。与顶栏「文本快传」不冲突（文本走按钮）。样例：[agents/examples/paste-image-host/](../agents/examples/paste-image-host/)。
+
 ## 图床界面
 
 在网盘界面（`#/images`）拖放上传图片，复制公开 URL 或 Markdown `![](url)`，列出并删除。对象存在 `_$flaredrive$/img/{id}`，`{id}` 为不可猜测的随机值，不是原文件名。公开地址仅为 `https://<SITES_HOST>/i/{id}`（`SITES_HOST` 不含协议）。SVG 以附件下发（`Content-Disposition: attachment` + `nosniff`），不会当成可执行页面打开。

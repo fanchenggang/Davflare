@@ -148,6 +148,10 @@ curl -X POST "https://<your-domain.com>/api/images" \
   --data-binary @shot.png
 ```
 
+## Paste screenshot → image host
+
+In the file manager, `#/images`, or `#/settings` (Image host clients), press **Ctrl/Cmd+V**: clipboard images go through existing `POST /api/images`, and the toast one-click-copies `https://<SITES_HOST>/i/{id}`. In the file manager the same paste also queues into the current folder. Does not conflict with toolbar Quick paste (text). Sample: [agents/examples/paste-image-host/](../agents/examples/paste-image-host/).
+
 ## Image host UI
 
 Upload images in the drive UI (`#/images`): drag/drop, copy the public URL or Markdown `![](url)`, list and delete. Blobs live at `_$flaredrive$/img/{id}` with an unguessable id (not the original filename). Public URL is only `https://<SITES_HOST>/i/{id}` (no scheme in `SITES_HOST`). SVG is served as a download (`Content-Disposition: attachment` + `nosniff`), never as a navigable document.
