@@ -27,6 +27,15 @@ vi.mock("../sites", async () => {
 const mockFetch = fetchPath as unknown as ReturnType<typeof vi.fn>;
 const mockPublish = publishPodcastSite as unknown as ReturnType<typeof vi.fn>;
 
+const folder = {
+  key: "shows",
+  name: "shows",
+  isDir: true,
+  size: 0,
+  uploaded: "2026-01-01T00:00:00.000Z",
+  contentType: "application/x-directory",
+};
+
 describe("PublishPodcastDialog", () => {
   beforeEach(() => {
     setLang("en");
@@ -37,7 +46,7 @@ describe("PublishPodcastDialog", () => {
     });
   });
 
-  test("loads media, publishes, shows feed URL", async () => {
+  test("loads media, publishes, shows feed URL and copies again", async () => {
     mockFetch.mockResolvedValue([
       {
         key: "shows/ep1.mp3",
@@ -65,28 +74,87 @@ describe("PublishPodcastDialog", () => {
     });
     const onNotify = vi.fn();
     render(
-      <PublishPodcastDialog
-        open
-        folder={{
-          key: "shows",
-          name: "shows",
-          isDir: true,
-          size: 0,
-          uploaded: "2026-01-01T00:00:00.000Z",
-          contentType: "application/x-directory",
-        }}
-        onClose={vi.fn()}
-        onNotify={onNotify}
-      />
+      <PublishPodcastDialog open folder={folder} onClose={vi.fn()} onNotify={onNotify} />
     );
     const submit = await screen.findByRole("button", { name: /Publish|发布/i });
     await waitFor(() => expect(submit).not.toBeDisabled());
     fireEvent.click(submit);
     await waitFor(() => expect(mockPublish).toHaveBeenCalled());
-    const args = mockPublish.mock.calls[0];
-    expect(args[1]).toEqual(["shows/ep1.mp3"]);
+    expect(mockPublish.mock.calls[0][1]).toEqual(["shows/ep1.mp3"]);
     expect(await screen.findByTestId("podcast-feed-url")).toHaveValue(
       "https://sites.example.com/show/feed.xml"
     );
+    fireEvent.click(screen.getByRole("button", { name: /Copy feed|复制 feed/i }));
+    await waitFor(() =>
+      expect(onNotify).toHaveBeenCalledWith(expect.stringMatching(/copied|已复制/i), "success")
+    );
+  });
+
+  test("blocks when folder has no media", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        key: "shows/note.txt",
+        name: "note.txt",
+        isDir: false,
+        size: 1,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "text/plain",
+      },
+    ]);
+    render(
+      <PublishPodcastDialog open folder={folder} onClose={vi.fn()} onNotify={vi.fn()} />
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/no top-level audio|没有音视频/i)).toBeTruthy()
+    );
+    expect(screen.getByRole("button", { name: /Publish|发布/i })).toBeDisabled();
+  });
+
+  test("shows error when publish fails", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        key: "shows/ep1.mp3",
+        name: "ep1.mp3",
+        isDir: false,
+        size: 10,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "audio/mpeg",
+      },
+    ]);
+    mockPublish.mockRejectedValue(new Error("nope"));
+    render(
+      <PublishPodcastDialog open folder={folder} onClose={vi.fn()} onNotify={vi.fn()} />
+    );
+    const submit = await screen.findByRole("button", { name: /Publish|发布/i });
+    await waitFor(() => expect(submit).not.toBeDisabled());
+    fireEvent.click(submit);
+    expect(await screen.findByText("nope")).toBeTruthy();
+  });
+
+  test("shows load failure", async () => {
+    mockFetch.mockRejectedValue(new Error("network"));
+    render(
+      <PublishPodcastDialog open folder={folder} onClose={vi.fn()} onNotify={vi.fn()} />
+    );
+    expect(await screen.findByText(/Failed to read|读取文件夹失败/i)).toBeTruthy();
+  });
+
+  test("editing slug clears error state", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        key: "shows/ep1.mp3",
+        name: "ep1.mp3",
+        isDir: false,
+        size: 10,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "audio/mpeg",
+      },
+    ]);
+    render(
+      <PublishPodcastDialog open folder={folder} onClose={vi.fn()} onNotify={vi.fn()} />
+    );
+    const input = await screen.findByLabelText(/Site address|站点地址|地址/i);
+    fireEvent.change(input, { target: { value: "my-show" } });
+    expect((input as HTMLInputElement).value).toBe("my-show");
   });
 });

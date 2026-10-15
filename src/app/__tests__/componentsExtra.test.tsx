@@ -205,6 +205,7 @@ describe("FileActionSheet", () => {
     expect(screen.getByText(strings.publishAsSite)).toBeInTheDocument();
     expect(screen.getByText(strings.publishAsDir)).toBeInTheDocument();
     expect(screen.getByText(strings.publishAsDocs)).toBeInTheDocument();
+    expect(screen.getByText(strings.publishAsPodcast)).toBeInTheDocument();
   });
 
   test(".md 文件显示发布为文档站，普通文件不显示", () => {
@@ -253,6 +254,22 @@ describe("FileActionSheet", () => {
     );
     expect(screen.queryByText(strings.publishAsSite)).not.toBeInTheDocument();
     expect(screen.queryByText(strings.publishAsDir)).not.toBeInTheDocument();
+  });
+
+  test("目录发布为播客触发 onAction", async () => {
+    const onAction = vi.fn();
+    const dir = { ...file, isDir: true, key: "d", name: "d" };
+    render(
+      <FileActionSheet
+        file={dir}
+        anchorPosition={{ top: 10, left: 20 }}
+        onClose={vi.fn()}
+        onAction={onAction}
+        sitesEnabled
+      />
+    );
+    fireEvent.click(screen.getByText(strings.publishAsPodcast));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith("publishPodcast", dir));
   });
 
   test("收集文件只对文件夹显示", async () => {
