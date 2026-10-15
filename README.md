@@ -34,6 +34,7 @@ Share (expiry + extract code):
 - Share links with expiry or forever, extract code, folder zip; zero-JS preview for media/PDF, monospace preview + copy for `text/plain`
 - **Quick paste**: toolbar paste → `.txt` + existing shares (expiry / extract code) — a self-hosted Pastebin
 - **Paste screenshot → CDN**: Ctrl/Cmd+V in the file manager, Image host page, or Settings — uploads via `POST /api/images`, toast copies `https://<SITES_HOST>/i/{id}`
+- **Podcast / RSS**: publish an audio/video folder to `sites/{slug}/` with `feed.xml` + a simple player page — subscribe in any podcast app
 - **Scheduled backup**: Settings card copies safe `davflare sync` crontab lines; examples + GitHub Actions
 - Recycle bin with configurable retention (`TRASH_RETENTION_DAYS`)
 - WebDAV Class 1/2 at `/webdav` (toggleable without affecting the web UI)
@@ -106,6 +107,16 @@ Use existing `davflare-cli` sync — no new APIs.
 
 Samples: [`agents/examples/backup-cron/`](agents/examples/backup-cron/). Sync semantics: [cli/README.md](cli/README.md).
 
+## Podcast RSS in 10 minutes
+
+Select a folder of audio/video files → **Publish as podcast / RSS**. Davflare copies media into `sites/{slug}/`, writes **RSS 2.0** `feed.xml` (enclosures on `SITES_HOST`), and a simple list player page. Reuses the existing static-site publish flow — **no new API**.
+
+1. Deploy with `SITES_HOST`, leave **Sites** on.
+2. In the file manager, open a folder of `.mp3` / `.m4a` / `.mp4` / … (or select the folder) → **Publish as podcast / RSS**.
+3. Copy `https://<SITES_HOST>/{slug}/feed.xml` into Apple Podcasts / AntennaPod / Overcast / …
+
+Distinct from album, docs site, public directory, and nav site. Sample: [`agents/examples/podcast-rss/`](agents/examples/podcast-rss/).
+
 ## Paste a screenshot, get a CDN link in two seconds
 
 In the **file manager**, **`#/images`**, or **`#/settings`** (Image host clients card), press **Ctrl/Cmd+V** with a screenshot on the clipboard. Davflare uploads via existing `POST /api/images` — **no new API** — then toasts a one-click copy of `https://<SITES_HOST>/i/{id}`. In the file manager the same paste also queues the file into the current folder.
@@ -135,7 +146,7 @@ Details: [docs/sites.md#markdown-image-host-in-10-minutes](docs/sites.md#markdow
 | Deploy, env vars, feature switches, post-deploy `#/setup` checklist; MCP playground `#/mcp` | [docs/deploy.md](docs/deploy.md) · [docs/API.md](docs/API.md) |
 | WebDAV clients & limits; **compatibility matrix + litmus** | [docs/webdav.md](docs/webdav.md) · [docs/webdav-clients.md](docs/webdav-clients.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
-| Static sites & image host; **paste screenshot / PicGo / ShareX / Typora** | [docs/sites.md](docs/sites.md) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
+| Static sites & image host; **podcast RSS / paste screenshot / PicGo** | [docs/sites.md](docs/sites.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
 | Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | CLI (`davflare-cli`); scheduled backup (crontab + Actions) | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

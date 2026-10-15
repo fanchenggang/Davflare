@@ -148,6 +148,10 @@ curl -X POST "https://<your-domain.com>/api/images" \
   --data-binary @shot.png
 ```
 
+## Podcast / RSS from a media folder
+
+Select an audio/video folder → **Publish as podcast / RSS**. Writes `sites/{slug}/feed.xml` (RSS 2.0 enclosures on `SITES_HOST`) plus a list player page. Same `POST /api/sites` surface as album/dir/docs — **no new API**. Sample: [agents/examples/podcast-rss/](../agents/examples/podcast-rss/).
+
 ## Paste screenshot → image host
 
 In the file manager, `#/images`, or `#/settings` (Image host clients), press **Ctrl/Cmd+V**: clipboard images go through existing `POST /api/images`, and the toast one-click-copies `https://<SITES_HOST>/i/{id}`. In the file manager the same paste also queues into the current folder. Does not conflict with toolbar Quick paste (text). Sample: [agents/examples/paste-image-host/](../agents/examples/paste-image-host/).

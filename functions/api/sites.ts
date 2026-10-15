@@ -19,15 +19,24 @@ import {
   ALBUM_MANIFEST_NAME,
   albumNameCandidate,
   checkAlbumLimits,
+  checkPodcastLimits,
   isSafeManifestRel,
+  mediaExtension,
+  mediaMimeType,
   pageLabel,
   pageLang,
   parseNavPayload,
+  PODCAST_FEED_NAME,
+  podcastNameCandidate,
+  podcastPublicBase,
   rasterExtension,
   renderAlbumPage,
   renderNavPage,
+  renderPodcastFeed,
+  renderPodcastPage,
 } from "../sitePages";
 import {
+  SITE_MANIFEST_NAME,
   SITE_MANIFEST_NAMES,
   deleteKeysInChunks,
   loadOwnedSiteRels,
@@ -307,6 +316,205 @@ async function publishAlbum(
   });
 }
 
+
+async function publishPodcast(
+  env: SitesApiEnv,
+  slug: string,
+  podcast: unknown
+): Promise<Response> {
+  const flags = await loadFeatureFlags(env.BUCKET);
+  if (!flags.sites) return featureDisabledResponse();
+  if (podcast === null || typeof podcast !== "object" || Array.isArray(podcast)) {
+    return textResponse("bad podcast", 400);
+  }
+  const body = podcast as { lang?: unknown; title?: string; description?: string; files?: unknown };
+  if (!Array.isArray(body.files)) return textResponse("bad podcast", 400);
+  if (body.files.length > 5000) return textResponse("bad podcast", 400);
+
+  const lang = pageLang(body.lang);
+  const titleRaw = typeof body.title === "string" ? body.title.trim() : "";
+  const title = (titleRaw || pageLabel(lang, "sitePodcastHeading")).slice(0, 200);
+  const description =
+    typeof body.description === "string" ? body.description.trim().slice(0, 1000) : "";
+
+  const seen = new Set<string>();
+  const media: Array<{ key: string; name: string }> = [];
+  for (const item of body.files) {
+    if (typeof item !== "string") return textResponse("bad podcast", 400);
+    const key = normalizeFileKey(item);
+    if (key instanceof Response) return key;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const base = key.split("/").pop() || "";
+    if (!mediaExtension(base)) continue;
+    media.push({ key, name: base });
+  }
+
+  const limited = checkPodcastLimits(media.length, 0);
+  if (!limited.ok && limited.error.startsWith("podcast episode limit exceeded")) {
+    return textResponse(limited.error, 400);
+  }
+  if (!limited.ok && limited.error === "no podcast media") {
+    return textResponse(limited.error, 400);
+  }
+
+  let bytes = 0;
+  const sized: Array<{ key: string; name: string; size: number; uploaded: string; contentType: string }> =
+    [];
+  for (const file of media) {
+    const head = await env.BUCKET.head(file.key);
+    if (head === null) return textResponse("podcast file not found", 404);
+    if (isCollectionObject(head)) continue;
+    bytes += head.size;
+    const uploaded =
+      head.uploaded instanceof Date && !Number.isNaN(head.uploaded.getTime())
+        ? head.uploaded.toISOString()
+        : new Date(0).toISOString();
+    const contentType =
+      head.httpMetadata?.contentType ||
+      head.customMetadata?.contentType ||
+      mediaMimeType(file.name);
+    sized.push({ ...file, size: head.size, uploaded, contentType });
+    const after = checkPodcastLimits(sized.length, bytes);
+    if (!after.ok && after.error.startsWith("podcast size limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+    if (!after.ok && after.error.startsWith("podcast episode limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+  }
+  const finalLimits = checkPodcastLimits(sized.length, bytes);
+  if (!finalLimits.ok) return textResponse(finalLimits.error, 400);
+
+  // 新到旧，方便 RSS / 播放页
+  sized.sort((a, b) => b.uploaded.localeCompare(a.uploaded) || a.name.localeCompare(b.name));
+
+  const prefix = `${SITES_PREFIX}${slug}/`;
+  const manifestKey = `${prefix}${SITE_MANIFEST_NAME}`;
+  const indexKey = `${prefix}index.html`;
+  const feedKey = `${prefix}${PODCAST_FEED_NAME}`;
+  const oldRels = await loadOwnedSiteRels(env.BUCKET, prefix);
+  const manifestKeys = new Set<string>();
+  for (const rel of oldRels) {
+    if (!isSafeManifestRel(rel)) continue;
+    manifestKeys.add(`${prefix}${rel}`);
+  }
+
+  const used = new Set<string>();
+  const planned: Array<{
+    key: string;
+    name: string;
+    size: number;
+    uploaded: string;
+    contentType: string;
+  }> = [];
+  for (const file of sized) {
+    let chosen: string | null = null;
+    for (let attempt = 1; attempt <= 10000; attempt += 1) {
+      const candidate = podcastNameCandidate(file.name, attempt);
+      if (!candidate) continue;
+      if (used.has(candidate.toLowerCase())) continue;
+      const dest = `${prefix}${candidate}`;
+      const head = await env.BUCKET.head(dest);
+      if (head !== null && !manifestKeys.has(dest)) continue;
+      chosen = candidate;
+      break;
+    }
+    if (!chosen) return textResponse("bad podcast", 400);
+    used.add(chosen.toLowerCase());
+    planned.push({ ...file, name: chosen });
+  }
+
+  const sourceKeys = new Set(planned.map((file) => file.key));
+  const newKeys = new Set<string>([indexKey, feedKey, manifestKey]);
+  for (const file of planned) newKeys.add(`${prefix}${file.name}`);
+
+  await writeEarlySiteManifest(env.BUCKET, prefix, "podcast", [
+    ...oldRels,
+    ...planned.map((file) => file.name),
+    "index.html",
+    PODCAST_FEED_NAME,
+  ]);
+
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !sourceKeys.has(key))
+  );
+
+  const sitesHost = normalizeSitesHost(env.SITES_HOST) || null;
+  const base = podcastPublicBase(sitesHost, slug);
+  const episodes = [];
+  for (const file of planned) {
+    const dest = `${prefix}${file.name}`;
+    const error = await copyObject(env.BUCKET, file.key, dest, { overwrite: true });
+    if (error) return error;
+    episodes.push({
+      name: file.name,
+      size: file.size,
+      uploaded: file.uploaded,
+      contentType: file.contentType,
+      url: base ? `${base}/${encodeURIComponent(file.name)}` : encodeURIComponent(file.name),
+    });
+  }
+
+  await recordSiteSource(env.BUCKET, slug, null);
+  const feedHref = base ? `${base}/${PODCAST_FEED_NAME}` : PODCAST_FEED_NAME;
+  const html = renderPodcastPage({ lang, title, feedHref, episodes });
+  await putGeneratedSiteIndex(env.BUCKET, prefix, html);
+  const feed = renderPodcastFeed({
+    lang,
+    title,
+    description,
+    slug,
+    sitesHost,
+    episodes,
+  });
+  await env.BUCKET.put(feedKey, feed, {
+    httpMetadata: { contentType: "application/rss+xml; charset=utf-8" },
+  });
+  const manifestFiles = [
+    ...planned.map((file) => file.name),
+    "index.html",
+    PODCAST_FEED_NAME,
+    SITE_MANIFEST_NAME,
+  ];
+  await env.BUCKET.put(
+    manifestKey,
+    JSON.stringify({ version: 1, kind: "podcast", files: manifestFiles }),
+    { httpMetadata: { contentType: "application/json; charset=utf-8" } }
+  );
+
+  // 清掉相册清单（若从相册 slug 接管）
+  await deleteKeysInChunks(
+    env.BUCKET,
+    SITE_MANIFEST_NAMES.filter((name) => name !== SITE_MANIFEST_NAME).map(
+      (name) => `${prefix}${name}`
+    )
+  );
+
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !newKeys.has(key))
+  );
+
+  return jsonResponse({
+    slug,
+    kind: "podcast",
+    copied: planned.length,
+    bytes,
+    feed: PODCAST_FEED_NAME,
+    sitesHost,
+  });
+}
+
 export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
   if (!(await isSessionOrKeyAuthorized(
@@ -390,6 +598,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     hostname?: string | null;
     nav?: unknown;
     album?: unknown;
+    podcast?: unknown;
     dir?: unknown;
     docs?: unknown;
   };
@@ -473,6 +682,9 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, "album")) {
     return publishAlbum(env, slug, body.album);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "podcast")) {
+    return publishPodcast(env, slug, body.podcast);
   }
   if (Object.prototype.hasOwnProperty.call(body, "dir")) {
     const flags = await loadFeatureFlags(env.BUCKET);

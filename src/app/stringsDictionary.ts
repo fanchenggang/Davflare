@@ -826,6 +826,68 @@ const entries: Record<string, DictionaryEntry> = {
   publishAlbumDone: { zh: "相册已发布（{count} 张）", en: "Album published ({count} image(s))" },
   publishAlbumPublishing: { zh: "正在发布…", en: "Publishing…" },
   publishAlbumFailed: { zh: "发布相册失败", en: "Failed to publish album" },
+  // —— 播客 / RSS ——
+  sitePodcastHeading: { zh: "播客", en: "Podcast" },
+  sitePodcastEmpty: { zh: "还没有节目", en: "No episodes yet" },
+  sitePodcastCount: { zh: "{count} 集", en: "{count} episode(s)" },
+  sitePodcastFeedLink: { zh: "RSS 订阅", en: "RSS feed" },
+  sitePodcastFeedHint: {
+    zh: "把 feed.xml 地址加到播客客户端即可收听",
+    en: "Add the feed.xml URL in a podcast app to subscribe",
+  },
+  sitePodcastDescription: {
+    zh: "{title} — 由 Davflare 发布",
+    en: "{title} — published with Davflare",
+  },
+  siteKindPodcast: { zh: "播客", en: "podcast" },
+  publishAsPodcast: { zh: "发布为播客 / RSS", en: "Publish as podcast / RSS" },
+  publishPodcastTitle: { zh: "发布为播客 / RSS", en: "Publish as podcast / RSS" },
+  publishPodcastLoading: { zh: "正在读取文件夹…", en: "Reading folder…" },
+  publishPodcastLoadFailed: { zh: "读取文件夹失败", en: "Failed to read the folder" },
+  publishPodcastSummary: {
+    zh: "当前层 {count} 个音视频，共 {size}。将复制到 sites/{slug}/，生成 feed.xml（RSS 2.0）与列表播放页。",
+    en: "{count} top-level audio/video file(s), {size} total. Copied into sites/{slug}/ with feed.xml (RSS 2.0) and a list player page.",
+  },
+  publishPodcastIgnored: {
+    zh: "已忽略 {count} 个非音视频文件。",
+    en: "Ignored {count} non-media file(s).",
+  },
+  publishPodcastSubdirs: {
+    zh: "子文件夹不会发布（{count} 个）。",
+    en: "Subfolders are not published ({count}).",
+  },
+  publishPodcastHint: {
+    zh: "与相册 / 文档站 / 公开目录 / 导航站不同：面向播客客户端，enclosure 直链 SITES_HOST 上的媒体。发布的是副本；更新请重新发布。",
+    en: "Unlike album / docs / public directory / nav sites: built for podcast apps, with enclosures pointing at media on SITES_HOST. Published files are copies — republish to update.",
+  },
+  publishPodcastSlugHint: {
+    zh: "公开地址：https://<SITES_HOST>/{slug}/feed.xml",
+    en: "Public URL: https://<SITES_HOST>/{slug}/feed.xml",
+  },
+  publishPodcastNoMedia: {
+    zh: "这个文件夹当前层没有音视频，无法发布播客。",
+    en: "This folder has no top-level audio/video files. Cannot publish a podcast.",
+  },
+  publishPodcastTooMany: {
+    zh: "音视频 {count} 个，超过上限 {max} 集，未发布。",
+    en: "{count} media files exceed the limit of {max} episodes. Nothing was published.",
+  },
+  publishPodcastTooLarge: {
+    zh: "音视频共 {size}，超过上限 {max}，未发布。",
+    en: "Media total {size}, over the {max} limit. Nothing was published.",
+  },
+  publishPodcastDone: {
+    zh: "播客已发布（{count} 集）",
+    en: "Podcast published ({count} episode(s))",
+  },
+  publishPodcastDoneCopied: {
+    zh: "播客已发布（{count} 集），feed 链接已复制",
+    en: "Podcast published ({count} episode(s)) — feed URL copied",
+  },
+  publishPodcastFailed: { zh: "发布播客失败", en: "Failed to publish podcast" },
+  publishPodcastFeedUrl: { zh: "RSS 地址", en: "RSS feed URL" },
+  publishPodcastCopyFeed: { zh: "复制 feed 地址", en: "Copy feed URL" },
+  publishPodcastOpenPage: { zh: "打开播放页", en: "Open player page" },
   // —— 公开目录（站点页 + 网盘对话框）——
   siteDirCount: { zh: "{count} 个文件 · 共 {size}", en: "{count} file(s) · {size} total" },
   siteDirName: { zh: "文件名", en: "Name" },

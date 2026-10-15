@@ -1,4 +1,4 @@
-// 生成型站点（相册 / 公开目录 / 文档站）的通用清单。
+// 生成型站点（相册 / 公开目录 / 文档站 / 播客）的通用清单。
 // 清单记录「这次发布写进 sites/{slug}/ 的相对路径」；再次发布同一 slug 时只删除清单里列过的路径，
 // 不在清单里的用户文件原样保留（相册 #142 的覆盖语义）。
 // 相册沿用历史文件名 .davflare-album.json（已发布的相册需要继续被识别），其它 kind 用 .davflare-manifest.json；
@@ -16,7 +16,7 @@ export function isSafeManifestRel(rel: string): boolean {
   return true;
 }
 
-export type SiteManifestKind = "album" | "dir" | "docs";
+export type SiteManifestKind = "album" | "dir" | "docs" | "podcast";
 
 export const SITE_MANIFEST_NAME = ".davflare-manifest.json";
 export const SITE_MANIFEST_NAMES = [SITE_MANIFEST_NAME, ALBUM_MANIFEST_NAME] as const;
@@ -29,7 +29,11 @@ export function manifestNameForKind(kind: SiteManifestKind): string {
 
 export function isReservedSiteName(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower === "index.html" || SITE_MANIFEST_NAMES.some((reserved) => reserved === lower);
+  return (
+    lower === "index.html" ||
+    lower === "feed.xml" ||
+    SITE_MANIFEST_NAMES.some((reserved) => reserved === lower)
+  );
 }
 
 export function parseSiteManifest(
@@ -132,6 +136,8 @@ export function siteFileForcesDownload(
   if (!kind) return false;
   // 只放行生成的首页本身（精确匹配）：手工放进去的 INDEX.HTML / Index.html 是另一个 R2 对象，照样下载
   if (rel === "index.html") return false;
+  // 播客 RSS：feed.xml 必须可被播客客户端直接拉取（不能 Content-Disposition: attachment）
+  if (kind === "podcast" && rel === "feed.xml") return false;
   const lower = rel.toLowerCase();
   if (!isActiveSiteFile(lower)) return false;
   // 文档站只放行清单里列出的生成页面（#160）：手工放进去或发布途中放进去的其它 html 一律下载
@@ -139,7 +145,7 @@ export function siteFileForcesDownload(
   return true;
 }
 
-const KIND_STRICTNESS: Record<string, number> = { docs: 1, album: 2, dir: 3 };
+const KIND_STRICTNESS: Record<string, number> = { docs: 1, album: 2, podcast: 2, dir: 3 };
 
 function stricterKind(a: string | null, b: string | null): string | null {
   if (!a) return b;

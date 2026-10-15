@@ -708,3 +708,232 @@ export function renderDocsIndex(options: {
 </div>`;
   return docShell(lang, options.siteTitle, body);
 }
+
+// ---------------------------------------------------------------- 播客 / RSS
+
+/** 单集上限：与相册同量级；总大小对齐公开目录（音视频更大）。 */
+export const PODCAST_MAX_EPISODES = 200;
+export const PODCAST_MAX_BYTES = 2 * 1024 * 1024 * 1024;
+export const PODCAST_FEED_NAME = "feed.xml";
+
+const MEDIA_AUDIO_EXTS = new Set(["mp3", "m4a", "aac", "ogg", "opus", "wav", "flac"]);
+const MEDIA_VIDEO_EXTS = new Set(["mp4", "m4v", "webm", "mov", "mkv"]);
+const MEDIA_MIME: Record<string, string> = {
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  ogg: "audio/ogg",
+  opus: "audio/ogg",
+  wav: "audio/wav",
+  flac: "audio/flac",
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  mkv: "video/x-matroska",
+};
+
+export function mediaExtension(filename: string): string | null {
+  const base = filename.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "";
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return null;
+  const ext = base.slice(dot + 1).toLowerCase();
+  if (MEDIA_AUDIO_EXTS.has(ext) || MEDIA_VIDEO_EXTS.has(ext)) return ext;
+  return null;
+}
+
+export function isMediaFileName(filename: string): boolean {
+  return mediaExtension(filename) !== null;
+}
+
+export function mediaMimeType(filename: string): string {
+  const ext = mediaExtension(filename);
+  return (ext && MEDIA_MIME[ext]) || "application/octet-stream";
+}
+
+export function isAudioFileName(filename: string): boolean {
+  const ext = mediaExtension(filename);
+  return Boolean(ext && MEDIA_AUDIO_EXTS.has(ext));
+}
+
+/** attempt 从 1 起；保留 index.html / feed.xml / 清单名。 */
+export function podcastNameCandidate(filename: string, attempt: number): string | null {
+  const ext = mediaExtension(filename);
+  if (!ext || !Number.isInteger(attempt) || attempt < 1 || attempt > 10000) return null;
+  const stem = albumStem(filename, ext);
+  const name = attempt === 1 ? `${stem}.${ext}` : `${stem}-${attempt}.${ext}`;
+  const lower = name.toLowerCase();
+  if (
+    lower === "index.html" ||
+    lower === PODCAST_FEED_NAME ||
+    lower === ALBUM_MANIFEST_NAME ||
+    lower === ".davflare-manifest.json"
+  ) {
+    return null;
+  }
+  if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
+  return name;
+}
+
+export function checkPodcastLimits(
+  count: number,
+  bytes: number
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isFinite(count) || count <= 0) return { ok: false, error: "no podcast media" };
+  if (count > PODCAST_MAX_EPISODES) {
+    return {
+      ok: false,
+      error: `podcast episode limit exceeded: ${count} > ${PODCAST_MAX_EPISODES}`,
+    };
+  }
+  if (!Number.isFinite(bytes) || bytes < 0) return { ok: false, error: "bad podcast" };
+  if (bytes > PODCAST_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `podcast size limit exceeded: ${bytes} > ${PODCAST_MAX_BYTES}`,
+    };
+  }
+  return { ok: true };
+}
+
+export type PodcastEpisode = {
+  name: string;
+  size: number;
+  uploaded: string;
+  contentType: string;
+  /** 绝对或相对的媒体 URL（enclosure / 播放器用） */
+  url: string;
+};
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+    .replace(/\u0000/g, "");
+}
+
+function rfc822Date(value: string): string {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return new Date(0).toUTCString();
+  return new Date(time).toUTCString();
+}
+
+/** 频道页 link / enclosure 基址：有 SITES_HOST 时 https://host/slug */
+export function podcastPublicBase(sitesHost: string | null, slug: string): string | null {
+  const host = (sitesHost || "").trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  if (!host || !slug) return null;
+  return `https://${host}/${slug}`;
+}
+
+export function renderPodcastFeed(options: {
+  lang: PageLang;
+  title: string;
+  description?: string;
+  slug: string;
+  sitesHost: string | null;
+  episodes: PodcastEpisode[];
+}): string {
+  if (options.episodes.length > PODCAST_MAX_EPISODES) {
+    throw new Error(
+      `podcast episode limit exceeded: ${options.episodes.length} > ${PODCAST_MAX_EPISODES}`
+    );
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const base = podcastPublicBase(options.sitesHost, options.slug);
+  const channelLink = base ? `${base}/` : "";
+  const feedLink = base ? `${base}/${PODCAST_FEED_NAME}` : PODCAST_FEED_NAME;
+  const desc =
+    (options.description || "").trim() ||
+    pageLabel(lang, "sitePodcastDescription", { title: options.title });
+  const lastBuild =
+    options.episodes[0]?.uploaded != null
+      ? rfc822Date(options.episodes[0].uploaded)
+      : new Date().toUTCString();
+  const items = options.episodes
+    .map((ep) => {
+      const url = ep.url || (base ? `${base}/${encodeURIComponent(ep.name)}` : ep.name);
+      const title = ep.name.replace(/\.[^.]+$/, "") || ep.name;
+      return `    <item>
+      <title>${escapeXml(title)}</title>
+      <link>${escapeXml(url)}</link>
+      <guid isPermaLink="true">${escapeXml(url)}</guid>
+      <pubDate>${escapeXml(rfc822Date(ep.uploaded))}</pubDate>
+      <enclosure url="${escapeXml(url)}" length="${Math.max(0, Math.floor(ep.size))}" type="${escapeXml(
+        ep.contentType || mediaMimeType(ep.name)
+      )}"/>
+    </item>`;
+    })
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>${escapeXml(options.title)}</title>
+    <link>${escapeXml(channelLink || feedLink)}</link>
+    <description>${escapeXml(desc)}</description>
+    <language>${lang === "zh" ? "zh-cn" : "en-us"}</language>
+    <lastBuildDate>${escapeXml(lastBuild)}</lastBuildDate>
+${items}
+  </channel>
+</rss>
+`;
+}
+
+export function renderPodcastPage(options: {
+  lang: PageLang;
+  title: string;
+  feedHref: string;
+  episodes: PodcastEpisode[];
+}): string {
+  if (options.episodes.length > PODCAST_MAX_EPISODES) {
+    throw new Error(
+      `podcast episode limit exceeded: ${options.episodes.length} > ${PODCAST_MAX_EPISODES}`
+    );
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const rows = options.episodes
+    .map((ep) => {
+      const href = escapeHtml(ep.url || encodeURIComponent(ep.name));
+      const name = escapeHtml(ep.name);
+      const size = escapeHtml(formatSiteBytes(ep.size));
+      const time = formatSiteTime(ep.uploaded);
+      const audio = isAudioFileName(ep.name);
+      const player = audio
+        ? `<audio controls preload="none" src="${href}"></audio>`
+        : `<video controls preload="none" src="${href}" style="max-width:100%;max-height:220px;border-radius:10px;background:#000"></video>`;
+      return `<li class="episode">
+  <div class="ep-head"><a href="${href}">${name}</a><span class="ep-meta">${size}${
+        time ? ` · <time datetime="${escapeHtml(time.iso)}">${escapeHtml(time.text)}</time>` : ""
+      }</span></div>
+  ${player}
+</li>`;
+    })
+    .join("\n");
+  const body = `<section class="card">
+  <h1>${escapeHtml(options.title)}</h1>
+  <p class="meta">${escapeHtml(
+    pageLabel(lang, "sitePodcastCount", { count: options.episodes.length })
+  )}</p>
+  <p class="meta"><a class="feed" href="${escapeHtml(options.feedHref)}">${escapeHtml(
+    pageLabel(lang, "sitePodcastFeedLink")
+  )}</a> · ${escapeHtml(pageLabel(lang, "sitePodcastFeedHint"))}</p>
+  ${
+    rows
+      ? `<ol class="episodes">${rows}</ol>`
+      : `<p class="empty">${escapeHtml(pageLabel(lang, "sitePodcastEmpty"))}</p>`
+  }
+</section>
+<style>
+.episodes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.episode { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.ep-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; margin-bottom: 8px; }
+.ep-head a { color: inherit; text-decoration: none; font-weight: 600; word-break: break-all; }
+.ep-head a:hover { color: var(--brand); }
+.ep-meta { color: var(--muted); font-size: .85rem; }
+a.feed { color: var(--brand); font-weight: 600; }
+audio { width: 100%; }
+</style>`;
+  return docShell(lang, options.title, body);
+}

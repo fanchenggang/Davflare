@@ -9,9 +9,15 @@ import {
   DIR_MAX_FILES,
   DOCS_MAX_BYTES,
   DOCS_MAX_FILES,
+  PODCAST_FEED_NAME,
+  PODCAST_MAX_BYTES,
+  PODCAST_MAX_EPISODES,
   checkAlbumLimits,
   checkDirLimits,
+  checkPodcastLimits,
+  isMediaFileName,
   isRasterFileName,
+  podcastPublicBase,
 } from "../../functions/sitePages";
 import {
   DocsLookupIO,
@@ -40,6 +46,10 @@ export {
   DIR_MAX_FILES,
   DOCS_MAX_BYTES,
   DOCS_MAX_FILES,
+  PODCAST_FEED_NAME,
+  PODCAST_MAX_BYTES,
+  PODCAST_MAX_EPISODES,
+  isMediaFileName,
   isRasterFileName,
 };
 
@@ -122,7 +132,7 @@ export async function deleteSite(slug: string, options?: { purge?: boolean }): P
 }
 
 /** 发布时这次属于哪种站点：普通文件夹复制 / 相册 / 公开目录 / 文档站 */
-export type SitePublishKind = "static" | "album" | "dir" | "docs";
+export type SitePublishKind = "static" | "album" | "dir" | "docs" | "podcast";
 
 export interface SiteSlugCheck {
   slug: string;
@@ -145,6 +155,7 @@ function siteKindLabel(kind: string | null): string {
   if (kind === "album") return translate("siteKindAlbum");
   if (kind === "dir") return translate("siteKindDir");
   if (kind === "docs") return translate("siteKindDocs");
+  if (kind === "podcast") return translate("siteKindPodcast");
   return translate("siteKindUnknown");
 }
 
@@ -164,7 +175,7 @@ export function siteSlugConflictMessage(
   if (check.kind !== kind) {
     return translate("siteSlugTakenKind", { slug: check.slug, kind: siteKindLabel(check.kind) });
   }
-  if (kind === "album" || kind === "docs") return null;
+  if (kind === "album" || kind === "docs" || kind === "podcast") return null;
   if (check.source && source && check.source === source) return null;
   if (check.source && source && check.source !== source) {
     return translate("siteSlugTakenSource", { slug: check.slug, source: check.source });
@@ -234,7 +245,7 @@ export async function publishSite(
 
 export interface PublishGeneratedResult {
   slug: string;
-  kind: "nav" | "album" | "dir" | "docs";
+  kind: "nav" | "album" | "dir" | "docs" | "podcast";
   copied: number;
   sitesHost: string | null;
   count?: number;
@@ -325,6 +336,68 @@ export async function publishAlbumSite(
   }
   return response.json();
 }
+export function partitionMediaFiles(items: FileItem[]): { media: FileItem[]; ignored: number } {
+  const media = items.filter((item) => !item.isDir && isMediaFileName(item.name));
+  return { media, ignored: items.length - media.length };
+}
+
+export function podcastPublishBlockReason(media: FileItem[]): string | null {
+  const bytes = albumSelectionBytes(media);
+  const verdict = checkPodcastLimits(media.length, bytes);
+  if (verdict.ok) return null;
+  if (verdict.error === "no podcast media") return translate("publishPodcastNoMedia");
+  if (verdict.error.startsWith("podcast episode limit exceeded")) {
+    return translate("publishPodcastTooMany", { count: media.length, max: PODCAST_MAX_EPISODES });
+  }
+  if (verdict.error.startsWith("podcast size limit exceeded")) {
+    return translate("publishPodcastTooLarge", {
+      size: humanReadableSize(bytes),
+      max: humanReadableSize(PODCAST_MAX_BYTES),
+    });
+  }
+  return translate("publishPodcastFailed");
+}
+
+export interface PublishPodcastResult extends PublishGeneratedResult {
+  feed?: string;
+}
+
+/** 把选中的音视频复制进 sites/{slug}/，生成 feed.xml + 播放页。 */
+export async function publishPodcastSite(
+  slug: string,
+  files: string[],
+  options?: { lang?: Lang; title?: string; description?: string }
+): Promise<PublishPodcastResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const response = await authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      slug: normalizedSlug,
+      podcast: {
+        lang: options?.lang,
+        title: options?.title,
+        description: options?.description,
+        files,
+      },
+    }),
+  });
+  if (!response.ok) {
+    const text = (await response.text()) || translate("publishPodcastFailed");
+    throw new Error(text);
+  }
+  return response.json();
+}
+
+/** 播客 RSS 地址：https://<SITES_HOST>/{slug}/feed.xml */
+export function podcastFeedUrl(sitesHost: string | null, slug: string): string | null {
+  const base = podcastPublicBase(sitesHost, slug);
+  return base ? `${base}/${PODCAST_FEED_NAME}` : null;
+}
+
 
 /** 公开目录客户端分批大小：每批约 50 个文件，串行发送。 */
 export const DIR_PUBLISH_BATCH = 50;

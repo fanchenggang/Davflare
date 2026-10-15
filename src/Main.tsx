@@ -25,6 +25,7 @@ import PathBar, { SearchScope } from "./PathBar";
 import RenameDialog from "./RenameDialog";
 import PublishSiteDialog from "./PublishSiteDialog";
 import PublishAlbumDialog from "./PublishAlbumDialog";
+import PublishPodcastDialog from "./PublishPodcastDialog";
 import PublishDirDialog from "./PublishDirDialog";
 import PublishDocsDialog, { DocsPublishSource } from "./PublishDocsDialog";
 import { isMarkdownName } from "./app/docsSite";
@@ -151,6 +152,7 @@ function Main({
   const [collectTarget, setCollectTarget] = useState<FileItem | null>(null);
   const [publishTarget, setPublishTarget] = useState<FileItem | null>(null);
   const [publishDirTarget, setPublishDirTarget] = useState<FileItem | null>(null);
+  const [publishPodcastTarget, setPublishPodcastTarget] = useState<FileItem | null>(null);
   const [publishDocsSource, setPublishDocsSource] = useState<DocsPublishSource | null>(null);
   const [albumTarget, setAlbumTarget] = useState<{
     images: FileItem[];
@@ -435,6 +437,8 @@ function Main({
             return;
           }
           window.setTimeout(() => setPublishTarget(file), 50);
+        } else if (action === "publishPodcast") {
+          if (file.isDir) window.setTimeout(() => setPublishPodcastTarget(file), 50);
         } else if (action === "publishDir") {
           if (!file.isDir) {
             onNotify(translate("publishSiteOnlyFolder"), "error");
@@ -879,6 +883,12 @@ function Main({
         onNotify={onNotify}
       />
 
+      <PublishPodcastDialog
+        open={Boolean(publishPodcastTarget)}
+        folder={publishPodcastTarget}
+        onClose={() => setPublishPodcastTarget(null)}
+        onNotify={onNotify}
+      />
       <PublishDirDialog
         open={Boolean(publishDirTarget)}
         folder={publishDirTarget}
@@ -1097,6 +1107,16 @@ function Main({
             images,
             ignored: ignored + (selectedKeys.length - selected.length),
           });
+        }}
+        canPublishPodcast={
+          flags.sites &&
+          selectedKeys.length === 1 &&
+          Boolean(files.find((item) => item.key === selectedKeys[0])?.isDir)
+        }
+        onPublishPodcast={() => {
+          if (selectedKeys.length !== 1) return;
+          const file = files.find((item) => item.key === selectedKeys[0]);
+          if (file?.isDir) setPublishPodcastTarget(file);
         }}
       />
     </Box>

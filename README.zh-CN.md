@@ -34,6 +34,7 @@
 - 分享链接（限时或永久）、提取码、文件夹 zip；落地页对图片/音视频/PDF 零脚本预览，对 `text/plain` 等宽预览 + 一键复制
 - **文本快传 Paste**：顶栏一键粘贴文本 → `.txt` + 现有分享（过期/提取码），可当自建 Pastebin
 - **粘贴截图上图床**：文件管理器 / 图床页 / 设置页 Ctrl/Cmd+V → 走现有 `POST /api/images`，toast 一键复制 `https://<SITES_HOST>/i/{id}`
+- **播客 / RSS**：选中音视频文件夹发布到 `sites/{slug}/`，生成 `feed.xml` + 列表播放页，播客客户端可订阅
 - **定时备份**：设置页一键复制安全的 `davflare sync` crontab；附带示例与 GitHub Actions
 - 回收站，保留天数可配（`TRASH_RETENTION_DAYS`）
 - WebDAV Class 1/2，路径 `/webdav`（可关闭，不影响网页端）
@@ -106,6 +107,16 @@
 
 样例：[`agents/examples/backup-cron/`](agents/examples/backup-cron/)。同步语义见 [cli/README.md](cli/README.md)。
 
+## 十分钟挂上播客客户端
+
+选中一个音视频文件夹 → **发布为播客 / RSS**。Davflare 把媒体复制进 `sites/{slug}/`，写出 **RSS 2.0** 的 `feed.xml`（enclosure 直链 `SITES_HOST`）和简易列表播放页。复用现有静态站发布流程，**不新增 API**。
+
+1. 部署并配置 `SITES_HOST`，保持 **站点** 开启。
+2. 文件管理器里打开含 `.mp3` / `.m4a` / `.mp4` 等的文件夹（或选中该文件夹）→ **发布为播客 / RSS**。
+3. 复制 `https://<SITES_HOST>/{slug}/feed.xml`，粘贴到 Apple 播客 / AntennaPod / 小宇宙 等客户端。
+
+与相册、文档站、公开目录、导航站入口与文案均分开。样例：[`agents/examples/podcast-rss/`](agents/examples/podcast-rss/)。
+
 ## 粘贴截图，两秒拿 CDN 链
 
 在**文件管理器**、**`#/images` 图床页**或**`#/settings`（图床客户端卡片）**按 **Ctrl/Cmd+V**，剪贴板里是截图就会上传到现有 `POST /api/images`——**不新增接口**——toast 一键复制 `https://<SITES_HOST>/i/{id}`。在文件管理器里同一张图还会入队到当前目录。
@@ -135,7 +146,7 @@
 | 部署、环境变量、功能开关、部署后 `#/setup` 检查清单；MCP 试玩台 `#/mcp` | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) · [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | WebDAV 客户端与限制；**兼容实测表 + litmus** | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) · [docs/webdav-clients.zh-CN.md](docs/webdav-clients.zh-CN.md) |
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
-| 静态站点与图床；**粘贴截图 / PicGo / ShareX / Typora** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
+| 静态站点与图床；**播客 RSS / 粘贴截图 / PicGo** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
 | Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | 命令行（`davflare-cli`）；定时备份（crontab + Actions） | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

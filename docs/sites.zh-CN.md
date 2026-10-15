@@ -148,6 +148,10 @@ curl -X POST "https://<你的域名>/api/images" \
   --data-binary @shot.png
 ```
 
+## 文件夹一键发播客 / RSS
+
+选中音视频文件夹 → **发布为播客 / RSS**。写出 `sites/{slug}/feed.xml`（RSS 2.0，enclosure 直链 `SITES_HOST`）与列表播放页。与相册/公开目录/文档站同一 `POST /api/sites`，**不新增接口**。样例：[agents/examples/podcast-rss/](../agents/examples/podcast-rss/)。
+
 ## 粘贴截图上图床
 
 在文件管理器、`#/images` 或 `#/settings`（图床客户端）按 **Ctrl/Cmd+V**：剪贴板图片走现有 `POST /api/images`，toast 一键复制 `https://<SITES_HOST>/i/{id}`。文件管理器里同一张图还会入队当前目录。与顶栏「文本快传」不冲突（文本走按钮）。样例：[agents/examples/paste-image-host/](../agents/examples/paste-image-host/)。

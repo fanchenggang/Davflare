@@ -225,6 +225,13 @@ describe("album and docs sites", () => {
     expectDownload(await get(bucket.asBucket(), "/pics/old.html"), "old.html");
   });
 
+  test("podcast: index and feed.xml render; other xml downloads", () => {
+    expect(siteFileForcesDownload("podcast", "index.html")).toBe(false);
+    expect(siteFileForcesDownload("podcast", "feed.xml")).toBe(false);
+    expect(siteFileForcesDownload("podcast", "notes.xml")).toBe(true);
+    expect(siteFileForcesDownload("podcast", "clip.mp3")).toBe(false);
+  });
+
   test("docs: generated html pages render; svg/js download", async () => {
     const bucket = new InMemoryBucket();
     bucket.seed([
