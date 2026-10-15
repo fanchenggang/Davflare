@@ -28,8 +28,26 @@ describe("images client", () => {
     const [url, init] = mockAuthFetch.mock.calls[0];
     expect(url).toBe("/api/images");
     expect(init.method).toBe("POST");
-    expect(init.headers["X-File-Name"]).toBe("a.png");
+    expect(init.headers["X-File-Name"]).toBe(encodeURIComponent("a.png"));
     expect(init.body).toBe(file);
+  });
+
+  test("uploadImage percent-encodes non-ASCII X-File-Name (paste 粘贴图片…)", async () => {
+    // Regression #201: raw Chinese in Headers throws non ISO-8859-1 before POST leaves.
+    mockAuthFetch.mockOk({ id: "y", name: "粘贴图片 20261015-120000.png", url: "https://cdn.example/i/y" }, 201);
+    const name = "粘贴图片 20261015-120000.png";
+    const file = new File([new Uint8Array([1, 2, 3])], name, { type: "image/png" });
+    await uploadImage(file);
+    const [, init] = mockAuthFetch.mock.calls[0];
+    const header = init.headers["X-File-Name"] as string;
+    expect(header).toBe(encodeURIComponent(name));
+    expect(header).not.toBe(name);
+    // Must be constructible as browser Headers (ByteString / ISO-8859-1 only).
+    expect(() => new Headers({ "X-File-Name": header })).not.toThrow();
+    expect(() => new Headers({ "X-File-Name": name })).toThrow(/ISO-8859-1|ByteString|code point/i);
+    for (const ch of header) {
+      expect(ch.charCodeAt(0)).toBeLessThanOrEqual(255);
+    }
   });
 
   test("deleteImage DELETEs by id", async () => {

@@ -23,9 +23,12 @@ export async function listImages(): Promise<ImagesResponse> {
 }
 
 export async function uploadImage(file: File): Promise<HostedImage> {
+  // Browser Headers / fetch require ByteString (ISO-8859-1). Chinese paste names
+  // like「粘贴图片 ….png」must be percent-encoded; backend images.ts decodes when
+  // encodeURIComponent(decoded) === header (same as CLI #192 / PicGo #198).
   const response = await authFetch("/api/images", {
     method: "POST",
-    headers: { "X-File-Name": file.name },
+    headers: { "X-File-Name": encodeURIComponent(file.name) },
     body: file,
   });
   if (!response.ok) {
