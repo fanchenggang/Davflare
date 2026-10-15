@@ -370,10 +370,8 @@ async function publishPodcast(
       head.uploaded instanceof Date && !Number.isNaN(head.uploaded.getTime())
         ? head.uploaded.toISOString()
         : new Date(0).toISOString();
-    const contentType =
-      head.httpMetadata?.contentType ||
-      head.customMetadata?.contentType ||
-      mediaMimeType(file.name);
+    // 已知音视频扩展名一律按扩展名映射（#203）：上传方常写成 application/octet-stream
+    const contentType = mediaMimeType(file.name);
     sized.push({ ...file, size: head.size, uploaded, contentType });
     const after = checkPodcastLimits(sized.length, bytes);
     if (!after.ok && after.error.startsWith("podcast size limit exceeded")) {
@@ -450,7 +448,10 @@ async function publishPodcast(
   const episodes = [];
   for (const file of planned) {
     const dest = `${prefix}${file.name}`;
-    const error = await copyObject(env.BUCKET, file.key, dest, { overwrite: true });
+    const error = await copyObject(env.BUCKET, file.key, dest, {
+      overwrite: true,
+      httpMetadata: { contentType: file.contentType },
+    });
     if (error) return error;
     episodes.push({
       name: file.name,

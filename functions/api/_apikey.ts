@@ -442,7 +442,7 @@ export async function copyObject(
   bucket: R2Bucket,
   from: string,
   to: string,
-  options?: { overwrite?: boolean }
+  options?: { overwrite?: boolean; httpMetadata?: R2HTTPMetadata }
 ): Promise<Response | null> {
   if (!options?.overwrite) {
     const dest = await bucket.head(to);
@@ -456,7 +456,7 @@ export async function copyObject(
     return textResponse("只能操作文件，不能操作目录", 400);
   }
   await bucket.put(to, source.body, {
-    httpMetadata: source.httpMetadata,
+    httpMetadata: options?.httpMetadata ?? source.httpMetadata,
     customMetadata: source.customMetadata,
   });
   return null;

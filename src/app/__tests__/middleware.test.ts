@@ -90,6 +90,9 @@ describe("sites path parsing (parseSitesPath / helpers)", () => {
     expect(mimeForKey("sites/x/index.html")).toBe("text/html; charset=utf-8");
     expect(mimeForKey("sites/x/app.js")).toBe("text/javascript; charset=utf-8");
     expect(mimeForKey("sites/x/data.weird")).toBe("application/octet-stream");
+    expect(mimeForKey("sites/x/ep.mp3")).toBe("audio/mpeg");
+    expect(mimeForKey("sites/x/ep.m4a")).toBe("audio/mp4");
+    expect(mimeForKey("sites/x/ep.mp4")).toBe("video/mp4");
     expect(siteConfigKey("blog")).toBe("_$flaredrive$/sites/blog.json");
   });
 });
@@ -102,6 +105,35 @@ describe("sites host: static serving", () => {
       { key: `sites/${slug}/data.bin`, body: "\x00\x01", contentType: "application/octet-stream" },
     ]);
   }
+
+  test("podcast media is served with extension MIME, not stored octet-stream (#203)", async () => {
+    const bucket = new InMemoryBucket();
+    bucket.seed([
+      {
+        key: "sites/show/ep1.mp3",
+        body: "ID3fake",
+        contentType: "application/octet-stream",
+      },
+      {
+        key: "sites/show/clip.m4a",
+        body: "m4afake",
+        contentType: "application/octet-stream",
+      },
+      {
+        key: "sites/show/clip.mp4",
+        body: "mp4fake",
+        contentType: "application/octet-stream",
+      },
+    ]);
+    const mp3 = await siteRequest("/show/ep1.mp3", defaultEnv(bucket));
+    expect(mp3.status).toBe(200);
+    expect(mp3.headers.get("Content-Type")).toBe("audio/mpeg");
+    expect(mp3.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    const m4a = await siteRequest("/show/clip.m4a", defaultEnv(bucket));
+    expect(m4a.headers.get("Content-Type")).toBe("audio/mp4");
+    const mp4 = await siteRequest("/show/clip.mp4", defaultEnv(bucket));
+    expect(mp4.headers.get("Content-Type")).toBe("video/mp4");
+  });
 
   test("site content always revalidates; a matching ETag gets 304 without a body (#156)", async () => {
     const bucket = new InMemoryBucket();

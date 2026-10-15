@@ -34,12 +34,13 @@ describe("sites API podcast publish", () => {
       {
         key: "shows/ep1.mp3",
         body: "ID3audio",
-        contentType: "audio/mpeg",
+        // 上传常写成 octet-stream；发布应按扩展名纠正（#203）
+        contentType: "application/octet-stream",
       },
       {
         key: "shows/ep2.mp4",
         body: "ftypmp4",
-        contentType: "video/mp4",
+        contentType: "application/octet-stream",
       },
       { key: "shows/readme.txt", body: "ignore me", contentType: "text/plain" },
     ]);
@@ -76,7 +77,14 @@ describe("sites API podcast publish", () => {
     const feedText = await feed!.text();
     expect(feedText).toContain("<rss version=\"2.0\">");
     expect(feedText).toContain("https://sites.example.com/my-show/ep1.mp3");
+    expect(feedText).toContain('type="audio/mpeg"');
+    expect(feedText).toContain('type="video/mp4"');
     expect(feed!.httpMetadata?.contentType).toContain("rss+xml");
+
+    const ep1 = await bucket.asBucket().head("sites/my-show/ep1.mp3");
+    expect(ep1?.httpMetadata?.contentType).toBe("audio/mpeg");
+    const ep2 = await bucket.asBucket().head("sites/my-show/ep2.mp4");
+    expect(ep2?.httpMetadata?.contentType).toBe("video/mp4");
 
     const index = await bucket.asBucket().get("sites/my-show/index.html");
     expect(index).not.toBeNull();

@@ -91,6 +91,12 @@ describe("static sites host routing", () => {
     expect(mimeForKey("sites/a/index.html")).toMatch(/^text\/html/);
     expect(mimeForKey("sites/a/app.js")).toMatch(/javascript/);
     expect(mimeForKey("sites/a/noext")).toBe("application/octet-stream");
+    // #203 podcast / media
+    expect(mimeForKey("sites/show/ep1.mp3")).toBe("audio/mpeg");
+    expect(mimeForKey("sites/show/clip.m4a")).toBe("audio/mp4");
+    expect(mimeForKey("sites/show/clip.MP4")).toBe("video/mp4");
+    expect(mimeForKey("sites/show/clip.webm")).toBe("video/webm");
+    expect(mimeForKey("sites/show/clip.flac")).toBe("audio/flac");
   });
 
   test("slug validation shared with API layer", () => {
