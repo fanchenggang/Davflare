@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import PublishDownloadsDialog from "../../PublishDownloadsDialog";
 import { fetchPath } from "../transfer";
-import { publishDownloadsSite } from "../sites";
+import { checkSiteSlug, publishDownloadsSite } from "../sites";
 import { setLang } from "../strings";
 
 vi.mock("../transfer", () => ({
@@ -26,6 +26,7 @@ vi.mock("../sites", async () => {
 
 const mockFetch = fetchPath as unknown as ReturnType<typeof vi.fn>;
 const mockPublish = publishDownloadsSite as unknown as ReturnType<typeof vi.fn>;
+const mockCheck = checkSiteSlug as unknown as ReturnType<typeof vi.fn>;
 
 const folder = {
   key: "rel",
@@ -41,6 +42,13 @@ describe("PublishDownloadsDialog", () => {
     setLang("en");
     mockFetch.mockReset();
     mockPublish.mockReset();
+    mockCheck.mockReset();
+    mockCheck.mockResolvedValue({
+      slug: "rel",
+      exists: false,
+      kind: null,
+      source: null,
+    });
     Object.assign(navigator, {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
@@ -215,5 +223,64 @@ describe("PublishDownloadsDialog", () => {
       expect(onNotify).toHaveBeenCalledWith(expect.stringMatching(/SITES_HOST|未配置/i), "info")
     );
     expect(screen.queryByTestId("downloads-page-url")).toBeNull();
+  });
+
+  test("shows subdirs and ignored hints", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        key: "rel/app.zip",
+        name: "app.zip",
+        isDir: false,
+        size: 10,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "application/zip",
+      },
+      {
+        key: "rel/.DS_Store",
+        name: ".DS_Store",
+        isDir: false,
+        size: 1,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "application/octet-stream",
+      },
+      {
+        key: "rel/nested",
+        name: "nested",
+        isDir: true,
+        size: 0,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "application/x-directory",
+      },
+    ]);
+    render(
+      <PublishDownloadsDialog open folder={folder} onClose={vi.fn()} onNotify={vi.fn()} />
+    );
+    await waitFor(() => expect(screen.getByText(/subfolder|子文件夹/i)).toBeTruthy());
+    expect(screen.getByText(/ignored|忽略/i)).toBeTruthy();
+  });
+
+  test("existing slug shows overwrite label", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        key: "rel/app.zip",
+        name: "app.zip",
+        isDir: false,
+        size: 10,
+        uploaded: "2026-01-01T00:00:00.000Z",
+        contentType: "application/zip",
+      },
+    ]);
+    mockCheck.mockResolvedValue({
+      slug: "rel",
+      exists: true,
+      kind: "static",
+      source: "other",
+    });
+    render(
+      <PublishDownloadsDialog open folder={folder} onClose={vi.fn()} onNotify={vi.fn()} />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Overwrite|覆盖/i })).toBeTruthy()
+    );
   });
 });
