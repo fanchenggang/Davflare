@@ -135,6 +135,29 @@ describe("MultiSelectToolbar", () => {
     expect(onPublishDocs).toHaveBeenCalled();
   });
 
+  test("canPublishDownloads 控制软件下载页按钮", () => {
+    const onPublishDownloads = vi.fn();
+    const { rerender } = render(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["dir"]}
+        onPublishDownloads={onPublishDownloads}
+        canPublishDownloads={false}
+      />
+    );
+    expect(screen.getByText(strings.publishAsDownloads).closest("button")).toBeDisabled();
+    rerender(
+      <MultiSelectToolbar
+        {...props}
+        selectedKeys={["dir"]}
+        onPublishDownloads={onPublishDownloads}
+        canPublishDownloads
+      />
+    );
+    fireEvent.click(screen.getByText(strings.publishAsDownloads));
+    expect(onPublishDownloads).toHaveBeenCalled();
+  });
+
   test("发布为公开目录与静态站共用 canPublish，且紧跟静态站按钮", () => {
     const onPublishDir = vi.fn();
     const { rerender } = render(

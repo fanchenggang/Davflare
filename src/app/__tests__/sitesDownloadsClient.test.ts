@@ -6,6 +6,7 @@ import {
   downloadsPublishBlockReason,
   partitionDownloadsFiles,
   publishDownloadsSite,
+  siteSlugConflictMessage,
 } from "../sites";
 import { setLang } from "../strings";
 import { asAuthFetchMock } from "../testUtils";
@@ -38,12 +39,13 @@ describe("downloads client helpers", () => {
     const { assets, readme, ignored } = partitionDownloadsFiles([
       file("app.zip"),
       file("README.md"),
+      file("readme.markdown"),
       file(".DS_Store"),
       { ...file("folder"), isDir: true, name: "folder", key: "rel/folder" },
     ]);
     expect(assets.map((a) => a.name)).toEqual(["app.zip"]);
     expect(readme?.name).toBe("README.md");
-    expect(ignored).toBe(2);
+    expect(ignored).toBe(3);
   });
 
   test("downloadsPublishBlockReason", () => {
@@ -51,6 +53,8 @@ describe("downloads client helpers", () => {
     expect(downloadsPublishBlockReason([file("a.zip")])).toBeNull();
     const many = Array.from({ length: DOWNLOADS_MAX_FILES + 1 }, (_, i) => file(`f${i}.zip`));
     expect(downloadsPublishBlockReason(many)).toMatch(/超过上限|exceed/);
+    const huge = [file("big.zip", 256 * 1024 * 1024 + 1)];
+    expect(downloadsPublishBlockReason(huge)).toMatch(/超过上限|too large|exceed/i);
   });
 
   test("publishDownloadsSite POSTs downloads payload", async () => {
@@ -83,5 +87,22 @@ describe("downloads client helpers", () => {
     await expect(publishDownloadsSite("BAD", ["a.zip"])).rejects.toThrow();
     mockAuthFetch.mockError(500, "boom");
     await expect(publishDownloadsSite("ok", ["a.zip"])).rejects.toThrow("boom");
+  });
+
+  test("siteSlugConflictMessage allows same-kind downloads republish", () => {
+    expect(
+      siteSlugConflictMessage(
+        { slug: "rel", exists: true, kind: "downloads", source: null },
+        "downloads",
+        null
+      )
+    ).toBeNull();
+    expect(
+      siteSlugConflictMessage(
+        { slug: "rel", exists: true, kind: "podcast", source: null },
+        "downloads",
+        null
+      )
+    ).toMatch(/占用|taken|播客|podcast/i);
   });
 });

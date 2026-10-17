@@ -597,6 +597,15 @@ describe("Main 多选工具栏", () => {
     await waitFor(() => expect(screen.getByText("publish-dir-stub:docs")).toBeInTheDocument());
   });
 
+  test("单选文件夹 → 发布为软件下载页", async () => {
+    renderMain();
+    await waitFor(() => expect(screen.getByText("docs")).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText(translate("selectFileLabel", { name: "docs" })));
+    const toolbar = document.querySelector(".MuiToolbar-root")!;
+    fireEvent.click(within(toolbar as HTMLElement).getByRole("button", { name: strings.publishAsDownloads }));
+    await waitFor(() => expect(screen.getByText("publish-downloads-stub:docs")).toBeInTheDocument());
+  });
+
 describe("Main 空目录入口", () => {
   test("空目录展示上传/新建入口，上传按钮触发文件选择并入队", async () => {
     mockFetchPath.mockResolvedValue([]);
