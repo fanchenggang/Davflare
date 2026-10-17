@@ -888,6 +888,70 @@ const entries: Record<string, DictionaryEntry> = {
   publishPodcastFeedUrl: { zh: "RSS 地址", en: "RSS feed URL" },
   publishPodcastCopyFeed: { zh: "复制 feed 地址", en: "Copy feed URL" },
   publishPodcastOpenPage: { zh: "打开播放页", en: "Open player page" },
+
+  // —— 软件下载页 / Releases ——
+  siteDownloadsHeading: { zh: "下载", en: "Downloads" },
+  siteDownloadsEmpty: { zh: "还没有可下载的文件。", en: "No downloadable files yet." },
+  siteDownloadsCount: { zh: "{count} 个文件 · 共 {size}", en: "{count} file(s) · {size} total" },
+  siteDownloadsName: { zh: "文件名", en: "Name" },
+  siteDownloadsSize: { zh: "大小", en: "Size" },
+  siteDownloadsSha256: { zh: "SHA-256", en: "SHA-256" },
+  siteDownloadsDownload: { zh: "下载", en: "Download" },
+  siteDownloadsNotes: { zh: "更新说明", en: "Release notes" },
+  siteKindDownloads: { zh: "软件下载页", en: "download page" },
+  publishAsDownloads: { zh: "发布为软件下载页", en: "Publish as download page" },
+  publishDownloadsTitle: { zh: "发布为软件下载页", en: "Publish as download page" },
+  publishDownloadsLoading: { zh: "正在读取文件夹…", en: "Reading folder…" },
+  publishDownloadsLoadFailed: { zh: "读取文件夹失败", en: "Failed to read the folder" },
+  publishDownloadsSummary: {
+    zh: "当前层 {count} 个文件，共 {size}。将复制到 sites/{slug}/，生成带文件名 / 大小 / SHA-256 的下载页。",
+    en: "{count} top-level file(s), {size} total. Copied into sites/{slug}/ with a download page listing name, size, and SHA-256.",
+  },
+  publishDownloadsReadme: {
+    zh: "将把同目录 README.md 渲染为更新说明。",
+    en: "README.md in this folder will be rendered as release notes.",
+  },
+  publishDownloadsIgnored: {
+    zh: "已忽略 {count} 个文件（隐藏文件等）。",
+    en: "Ignored {count} file(s) (hidden files, etc.).",
+  },
+  publishDownloadsSubdirs: {
+    zh: "子文件夹不会发布（{count} 个）。",
+    en: "Subfolders are not published ({count}).",
+  },
+  publishDownloadsHint: {
+    zh: "与公开目录 / 相册 / 文档站 / 播客 / 导航站不同：面向「R2 上的 Releases」——列出校验和，可选 README 更新说明。发布的是副本；更新请重新发布。",
+    en: "Unlike public directory / album / docs / podcast / nav: built as “Releases on R2” — checksums, optional README notes. Published files are copies — republish to update.",
+  },
+  publishDownloadsSlugHint: {
+    zh: "公开地址：https://<SITES_HOST>/{slug}/",
+    en: "Public URL: https://<SITES_HOST>/{slug}/",
+  },
+  publishDownloadsNoAssets: {
+    zh: "这个文件夹当前层没有可发布的安装包/文件，无法发布下载页。",
+    en: "This folder has no top-level installers/files. Cannot publish a download page.",
+  },
+  publishDownloadsTooMany: {
+    zh: "文件 {count} 个，超过上限 {max} 个，未发布。",
+    en: "{count} files exceed the limit of {max}. Nothing was published.",
+  },
+  publishDownloadsTooLarge: {
+    zh: "文件共 {size}，超过上限 {max}（需计算 SHA-256），未发布。",
+    en: "Files total {size}, over the {max} limit (SHA-256 is computed on publish). Nothing was published.",
+  },
+  publishDownloadsDone: {
+    zh: "下载页已发布（{count} 个文件）",
+    en: "Download page published ({count} file(s))",
+  },
+  publishDownloadsDoneCopied: {
+    zh: "下载页已发布（{count} 个文件），链接已复制",
+    en: "Download page published ({count} file(s)) — URL copied",
+  },
+  publishDownloadsFailed: { zh: "发布下载页失败", en: "Failed to publish download page" },
+  publishDownloadsPageUrl: { zh: "下载页地址", en: "Download page URL" },
+  publishDownloadsCopyUrl: { zh: "复制链接", en: "Copy URL" },
+  publishDownloadsOpenPage: { zh: "打开下载页", en: "Open download page" },
+
   // —— 公开目录（站点页 + 网盘对话框）——
   siteDirCount: { zh: "{count} 个文件 · 共 {size}", en: "{count} file(s) · {size} total" },
   siteDirName: { zh: "文件名", en: "Name" },

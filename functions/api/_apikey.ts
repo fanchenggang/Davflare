@@ -53,6 +53,13 @@ export async function sha256Hex(value: string) {
     .join("");
 }
 
+export async function sha256Bytes(data: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export function timingSafeEqual(a: string, b: string) {
   if (a.length !== b.length) return false;
   let diff = 0;

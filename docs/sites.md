@@ -148,6 +148,11 @@ curl -X POST "https://<your-domain.com>/api/images" \
   --data-binary @shot.png
 ```
 
+
+## Software download page (“Releases on R2”)
+
+Select an installer/zip folder → **Publish as download page**. Writes `sites/{slug}/index.html` listing **filename, size, SHA-256**; optional sibling `README.md` becomes release notes. Same `POST /api/sites` surface as album/dir/docs/podcast (`downloads` payload) — **no new API**. Sample: [agents/examples/folder-downloads/](../agents/examples/folder-downloads/).
+
 ## Podcast / RSS from a media folder
 
 Select an audio/video folder → **Publish as podcast / RSS**. Writes `sites/{slug}/feed.xml` (RSS 2.0 enclosures on `SITES_HOST`) plus a list player page. Same `POST /api/sites` surface as album/dir/docs — **no new API**. Sample: [agents/examples/podcast-rss/](../agents/examples/podcast-rss/).

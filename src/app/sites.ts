@@ -9,12 +9,17 @@ import {
   DIR_MAX_FILES,
   DOCS_MAX_BYTES,
   DOCS_MAX_FILES,
+  DOWNLOADS_MAX_BYTES,
+  DOWNLOADS_MAX_FILES,
   PODCAST_FEED_NAME,
   PODCAST_MAX_BYTES,
   PODCAST_MAX_EPISODES,
   checkAlbumLimits,
   checkDirLimits,
+  checkDownloadsLimits,
   checkPodcastLimits,
+  isDownloadsAssetName,
+  isDownloadsReadmeName,
   isMediaFileName,
   isRasterFileName,
   podcastPublicBase,
@@ -46,9 +51,13 @@ export {
   DIR_MAX_FILES,
   DOCS_MAX_BYTES,
   DOCS_MAX_FILES,
+  DOWNLOADS_MAX_BYTES,
+  DOWNLOADS_MAX_FILES,
   PODCAST_FEED_NAME,
   PODCAST_MAX_BYTES,
   PODCAST_MAX_EPISODES,
+  isDownloadsAssetName,
+  isDownloadsReadmeName,
   isMediaFileName,
   isRasterFileName,
 };
@@ -132,7 +141,7 @@ export async function deleteSite(slug: string, options?: { purge?: boolean }): P
 }
 
 /** 发布时这次属于哪种站点：普通文件夹复制 / 相册 / 公开目录 / 文档站 */
-export type SitePublishKind = "static" | "album" | "dir" | "docs" | "podcast";
+export type SitePublishKind = "static" | "album" | "dir" | "docs" | "podcast" | "downloads";
 
 export interface SiteSlugCheck {
   slug: string;
@@ -156,6 +165,7 @@ function siteKindLabel(kind: string | null): string {
   if (kind === "dir") return translate("siteKindDir");
   if (kind === "docs") return translate("siteKindDocs");
   if (kind === "podcast") return translate("siteKindPodcast");
+  if (kind === "downloads") return translate("siteKindDownloads");
   return translate("siteKindUnknown");
 }
 
@@ -175,7 +185,7 @@ export function siteSlugConflictMessage(
   if (check.kind !== kind) {
     return translate("siteSlugTakenKind", { slug: check.slug, kind: siteKindLabel(check.kind) });
   }
-  if (kind === "album" || kind === "docs" || kind === "podcast") return null;
+  if (kind === "album" || kind === "docs" || kind === "podcast" || kind === "downloads") return null;
   if (check.source && source && check.source === source) return null;
   if (check.source && source && check.source !== source) {
     return translate("siteSlugTakenSource", { slug: check.slug, source: check.source });
@@ -245,7 +255,7 @@ export async function publishSite(
 
 export interface PublishGeneratedResult {
   slug: string;
-  kind: "nav" | "album" | "dir" | "docs" | "podcast";
+  kind: "nav" | "album" | "dir" | "docs" | "podcast" | "downloads";
   copied: number;
   sitesHost: string | null;
   count?: number;
@@ -397,6 +407,78 @@ export function podcastFeedUrl(sitesHost: string | null, slug: string): string |
   const base = podcastPublicBase(sitesHost, slug);
   return base ? `${base}/${PODCAST_FEED_NAME}` : null;
 }
+
+export function partitionDownloadsFiles(items: FileItem[]): {
+  assets: FileItem[];
+  readme: FileItem | null;
+  ignored: number;
+} {
+  const assets: FileItem[] = [];
+  let readme: FileItem | null = null;
+  let ignored = 0;
+  for (const item of items) {
+    if (item.isDir) {
+      ignored += 1;
+      continue;
+    }
+    if (isDownloadsReadmeName(item.name)) {
+      if (!readme) readme = item;
+      else ignored += 1;
+      continue;
+    }
+    if (isDownloadsAssetName(item.name)) assets.push(item);
+    else ignored += 1;
+  }
+  return { assets, readme, ignored };
+}
+
+export function downloadsPublishBlockReason(assets: FileItem[]): string | null {
+  const bytes = albumSelectionBytes(assets);
+  const verdict = checkDownloadsLimits(assets.length, bytes);
+  if (verdict.ok) return null;
+  if (verdict.error === "no downloads assets") return translate("publishDownloadsNoAssets");
+  if (verdict.error.startsWith("downloads file limit exceeded")) {
+    return translate("publishDownloadsTooMany", { count: assets.length, max: DOWNLOADS_MAX_FILES });
+  }
+  if (verdict.error.startsWith("downloads size limit exceeded")) {
+    return translate("publishDownloadsTooLarge", {
+      size: humanReadableSize(bytes),
+      max: humanReadableSize(DOWNLOADS_MAX_BYTES),
+    });
+  }
+  return translate("publishDownloadsFailed");
+}
+
+/** 把选中安装包复制进 sites/{slug}/，生成带 SHA-256 的下载页；可选 README.md。 */
+export async function publishDownloadsSite(
+  slug: string,
+  files: string[],
+  options?: { lang?: Lang; title?: string; readmeKey?: string | null }
+): Promise<PublishGeneratedResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const response = await authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      slug: normalizedSlug,
+      downloads: {
+        lang: options?.lang,
+        title: options?.title,
+        files,
+        readmeKey: options?.readmeKey || undefined,
+      },
+    }),
+  });
+  if (!response.ok) {
+    const text = (await response.text()) || translate("publishDownloadsFailed");
+    throw new Error(text);
+  }
+  return response.json();
+}
+
 
 
 /** 公开目录客户端分批大小：每批约 50 个文件，串行发送。 */

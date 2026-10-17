@@ -161,3 +161,8 @@ curl -X POST "https://<你的域名>/api/images" \
 在网盘界面（`#/images`）拖放上传图片，复制公开 URL 或 Markdown `![](url)`，列出并删除。对象存在 `_$flaredrive$/img/{id}`，`{id}` 为不可猜测的随机值，不是原文件名。公开地址仅为 `https://<SITES_HOST>/i/{id}`（`SITES_HOST` 不含协议）。SVG 以附件下发（`Content-Disposition: attachment` + `nosniff`），不会当成可执行页面打开。
 
 站点域名上先匹配 `/i/{id}`，再走 slug 静态站。图床开关与站点开关独立：站点关、图床开 → slug 404 但 `/i/{id}` 可用；图床关 → 即使站点开，`/i/*` 也是 404。未配置 `SITES_HOST` 时开关仍在，界面会提示先绑定该域名。
+
+## 软件下载页（「R2 上的 Releases」）
+
+选中安装包/zip 文件夹 → **发布为软件下载页**。写出 `sites/{slug}/index.html`，列出 **文件名、大小、SHA-256**；同目录 `README.md` 可选渲染为更新说明。与相册/公开目录/文档站/播客同一 `POST /api/sites`（`downloads` 载荷），**不新增接口**。样例：[agents/examples/folder-downloads/](../agents/examples/folder-downloads/)。
+

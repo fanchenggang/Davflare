@@ -19,7 +19,13 @@ import {
   ALBUM_MANIFEST_NAME,
   albumNameCandidate,
   checkAlbumLimits,
+  checkDownloadsLimits,
   checkPodcastLimits,
+  downloadsMimeType,
+  downloadsNameCandidate,
+  downloadsPublicBase,
+  isDownloadsAssetName,
+  isDownloadsReadmeName,
   isSafeManifestRel,
   mediaExtension,
   mediaMimeType,
@@ -31,9 +37,11 @@ import {
   podcastPublicBase,
   rasterExtension,
   renderAlbumPage,
+  renderDownloadsPage,
   renderNavPage,
   renderPodcastFeed,
   renderPodcastPage,
+  renderReleaseNotesMarkdown,
 } from "../sitePages";
 import {
   SITE_MANIFEST_NAME,
@@ -60,6 +68,7 @@ import {
   normalizeFileKey,
   resolveAsDirectory,
   textResponse,
+  sha256Bytes,
 } from "./_apikey";
 
 interface SitesApiEnv {
@@ -516,6 +525,207 @@ async function publishPodcast(
   });
 }
 
+
+async function publishDownloads(
+  env: SitesApiEnv,
+  slug: string,
+  downloads: unknown
+): Promise<Response> {
+  const flags = await loadFeatureFlags(env.BUCKET);
+  if (!flags.sites) return featureDisabledResponse();
+  if (downloads === null || typeof downloads !== "object" || Array.isArray(downloads)) {
+    return textResponse("bad downloads", 400);
+  }
+  const body = downloads as { lang?: unknown; title?: string; files?: unknown; readmeKey?: unknown };
+  if (!Array.isArray(body.files)) return textResponse("bad downloads", 400);
+  if (body.files.length > 5000) return textResponse("bad downloads", 400);
+
+  const lang = pageLang(body.lang);
+  const titleRaw = typeof body.title === "string" ? body.title.trim() : "";
+  const title = (titleRaw || pageLabel(lang, "siteDownloadsHeading")).slice(0, 200);
+
+  const seen = new Set<string>();
+  const assets: Array<{ key: string; name: string }> = [];
+  for (const item of body.files) {
+    if (typeof item !== "string") return textResponse("bad downloads", 400);
+    const key = normalizeFileKey(item);
+    if (key instanceof Response) return key;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const base = key.split("/").pop() || "";
+    if (!isDownloadsAssetName(base)) continue;
+    assets.push({ key, name: base });
+  }
+
+  const limited = checkDownloadsLimits(assets.length, 0);
+  if (!limited.ok && limited.error.startsWith("downloads file limit exceeded")) {
+    return textResponse(limited.error, 400);
+  }
+  if (!limited.ok && limited.error === "no downloads assets") {
+    return textResponse(limited.error, 400);
+  }
+
+  let readmeText: string | null = null;
+  const readmeKeyRaw = typeof body.readmeKey === "string" ? body.readmeKey.trim() : "";
+  if (readmeKeyRaw) {
+    const readmeKey = normalizeFileKey(readmeKeyRaw);
+    if (readmeKey instanceof Response) return readmeKey;
+    const readmeObj = await env.BUCKET.get(readmeKey);
+    if (readmeObj === null) return textResponse("downloads readme not found", 404);
+    if (isCollectionObject(readmeObj)) return textResponse("bad downloads", 400);
+    const name = readmeKey.split("/").pop() || "";
+    if (!isDownloadsReadmeName(name)) return textResponse("bad downloads readme", 400);
+    readmeText = await readmeObj.text();
+  }
+
+  let bytes = 0;
+  const sized: Array<{ key: string; name: string; size: number; uploaded: string; contentType: string }> =
+    [];
+  for (const file of assets) {
+    const head = await env.BUCKET.head(file.key);
+    if (head === null) return textResponse("downloads file not found", 404);
+    if (isCollectionObject(head)) continue;
+    bytes += head.size;
+    const uploaded =
+      head.uploaded instanceof Date && !Number.isNaN(head.uploaded.getTime())
+        ? head.uploaded.toISOString()
+        : new Date(0).toISOString();
+    const contentType = downloadsMimeType(file.name);
+    sized.push({ ...file, size: head.size, uploaded, contentType });
+    const after = checkDownloadsLimits(sized.length, bytes);
+    if (!after.ok && after.error.startsWith("downloads size limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+    if (!after.ok && after.error.startsWith("downloads file limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+  }
+  const finalLimits = checkDownloadsLimits(sized.length, bytes);
+  if (!finalLimits.ok) return textResponse(finalLimits.error, 400);
+
+  sized.sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+
+  const prefix = `${SITES_PREFIX}${slug}/`;
+  const manifestKey = `${prefix}${SITE_MANIFEST_NAME}`;
+  const indexKey = `${prefix}index.html`;
+  const oldRels = await loadOwnedSiteRels(env.BUCKET, prefix);
+  const manifestKeys = new Set<string>();
+  for (const rel of oldRels) {
+    if (!isSafeManifestRel(rel)) continue;
+    manifestKeys.add(`${prefix}${rel}`);
+  }
+
+  const used = new Set<string>();
+  const planned: Array<{
+    key: string;
+    name: string;
+    size: number;
+    uploaded: string;
+    contentType: string;
+  }> = [];
+  for (const file of sized) {
+    let chosen: string | null = null;
+    for (let attempt = 1; attempt <= 10000; attempt += 1) {
+      const candidate = downloadsNameCandidate(file.name, attempt);
+      if (!candidate) continue;
+      if (used.has(candidate.toLowerCase())) continue;
+      const dest = `${prefix}${candidate}`;
+      const head = await env.BUCKET.head(dest);
+      if (head !== null && !manifestKeys.has(dest)) continue;
+      chosen = candidate;
+      break;
+    }
+    if (!chosen) return textResponse("bad downloads", 400);
+    used.add(chosen.toLowerCase());
+    planned.push({ ...file, name: chosen });
+  }
+
+  const sourceKeys = new Set(planned.map((file) => file.key));
+  const newKeys = new Set<string>([indexKey, manifestKey]);
+  for (const file of planned) newKeys.add(`${prefix}${file.name}`);
+
+  await writeEarlySiteManifest(env.BUCKET, prefix, "downloads", [
+    ...oldRels,
+    ...planned.map((file) => file.name),
+    "index.html",
+  ]);
+
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !sourceKeys.has(key))
+  );
+
+  const sitesHost = normalizeSitesHost(env.SITES_HOST) || null;
+  const base = downloadsPublicBase(sitesHost, slug);
+  const published: Array<{
+    name: string;
+    size: number;
+    sha256: string;
+    uploaded: string;
+    contentType: string;
+    url: string;
+  }> = [];
+  for (const file of planned) {
+    const dest = `${prefix}${file.name}`;
+    const source = await env.BUCKET.get(file.key);
+    if (source === null) return textResponse("downloads file not found", 404);
+    if (isCollectionObject(source)) return textResponse("bad downloads", 400);
+    const buffer = await source.arrayBuffer();
+    const sha256 = await sha256Bytes(buffer);
+    await env.BUCKET.put(dest, new Uint8Array(buffer), {
+      httpMetadata: { contentType: file.contentType },
+      customMetadata: source.customMetadata,
+    });
+    published.push({
+      name: file.name,
+      size: file.size,
+      sha256,
+      uploaded: file.uploaded,
+      contentType: file.contentType,
+      url: base ? `${base}/${encodeURIComponent(file.name)}` : encodeURIComponent(file.name),
+    });
+  }
+
+  await recordSiteSource(env.BUCKET, slug, null);
+  const readmeHtml = readmeText != null ? renderReleaseNotesMarkdown(readmeText) : null;
+  const html = renderDownloadsPage({ lang, title, files: published, readmeHtml });
+  await putGeneratedSiteIndex(env.BUCKET, prefix, html);
+  const manifestFiles = [...planned.map((file) => file.name), "index.html", SITE_MANIFEST_NAME];
+  await env.BUCKET.put(
+    manifestKey,
+    JSON.stringify({ version: 1, kind: "downloads", files: manifestFiles }),
+    { httpMetadata: { contentType: "application/json; charset=utf-8" } }
+  );
+
+  await deleteKeysInChunks(
+    env.BUCKET,
+    SITE_MANIFEST_NAMES.filter((name) => name !== SITE_MANIFEST_NAME).map(
+      (name) => `${prefix}${name}`
+    )
+  );
+
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !newKeys.has(key))
+  );
+
+  return jsonResponse({
+    slug,
+    kind: "downloads",
+    copied: planned.length,
+    bytes,
+    sitesHost,
+  });
+}
+
 export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
   if (!(await isSessionOrKeyAuthorized(
@@ -600,6 +810,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     nav?: unknown;
     album?: unknown;
     podcast?: unknown;
+    downloads?: unknown;
     dir?: unknown;
     docs?: unknown;
   };
@@ -686,6 +897,9 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, "podcast")) {
     return publishPodcast(env, slug, body.podcast);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "downloads")) {
+    return publishDownloads(env, slug, body.downloads);
   }
   if (Object.prototype.hasOwnProperty.call(body, "dir")) {
     const flags = await loadFeatureFlags(env.BUCKET);

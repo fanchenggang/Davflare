@@ -232,6 +232,13 @@ describe("album and docs sites", () => {
     expect(siteFileForcesDownload("podcast", "clip.mp3")).toBe(false);
   });
 
+  test("downloads: index renders; active leftovers download", () => {
+    expect(siteFileForcesDownload("downloads", "index.html")).toBe(false);
+    expect(siteFileForcesDownload("downloads", "app.zip")).toBe(false);
+    expect(siteFileForcesDownload("downloads", "evil.html")).toBe(true);
+    expect(siteFileForcesDownload("downloads", "x.svg")).toBe(true);
+  });
+
   test("docs: generated html pages render; svg/js download", async () => {
     const bucket = new InMemoryBucket();
     bucket.seed([

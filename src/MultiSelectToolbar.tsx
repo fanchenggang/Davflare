@@ -18,6 +18,7 @@ import {
   FolderShared as PublishDirIcon,
   MenuBook as PublishDocsIcon,
   Podcasts as PublishPodcastIcon,
+  Inventory2 as PublishDownloadsIcon,
 } from "@mui/icons-material";
 
 function ActionButton({
@@ -67,6 +68,8 @@ function MultiSelectToolbar({
   canPublishAlbum = false,
   onPublishPodcast,
   canPublishPodcast = false,
+  onPublishDownloads,
+  canPublishDownloads = false,
 }: {
   selectedKeys: string[];
   onClose: () => void;
@@ -90,6 +93,9 @@ function MultiSelectToolbar({
   /** 发布为播客：单选文件夹且当前层有音视频时可用。 */
   onPublishPodcast?: () => void;
   canPublishPodcast?: boolean;
+  /** 发布为软件下载页：单选文件夹。 */
+  onPublishDownloads?: () => void;
+  canPublishDownloads?: boolean;
 }) {
   const count = selectedKeys.length;
 
@@ -194,6 +200,14 @@ function MultiSelectToolbar({
             label={strings.publishAsPodcast}
             disabled={!canPublishPodcast}
             onClick={onPublishPodcast}
+          />
+        ) : null}
+        {onPublishDownloads ? (
+          <ActionButton
+            icon={<PublishDownloadsIcon />}
+            label={strings.publishAsDownloads}
+            disabled={!canPublishDownloads}
+            onClick={onPublishDownloads}
           />
         ) : null}
         <ActionButton

@@ -16,7 +16,7 @@ export function isSafeManifestRel(rel: string): boolean {
   return true;
 }
 
-export type SiteManifestKind = "album" | "dir" | "docs" | "podcast";
+export type SiteManifestKind = "album" | "dir" | "docs" | "podcast" | "downloads";
 
 export const SITE_MANIFEST_NAME = ".davflare-manifest.json";
 export const SITE_MANIFEST_NAMES = [SITE_MANIFEST_NAME, ALBUM_MANIFEST_NAME] as const;
@@ -145,7 +145,7 @@ export function siteFileForcesDownload(
   return true;
 }
 
-const KIND_STRICTNESS: Record<string, number> = { docs: 1, album: 2, podcast: 2, dir: 3 };
+const KIND_STRICTNESS: Record<string, number> = { docs: 1, album: 2, podcast: 2, downloads: 2, dir: 3 };
 
 function stricterKind(a: string | null, b: string | null): string | null {
   if (!a) return b;

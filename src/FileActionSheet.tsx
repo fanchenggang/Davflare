@@ -25,6 +25,7 @@ import {
   FolderShared as PublishDirIcon,
   MenuBook as PublishDocsIcon,
   Podcasts as PublishPodcastIcon,
+  Inventory2 as PublishDownloadsIcon,
   DriveFolderUpload as CollectIcon,
 } from "@mui/icons-material";
 import { isMarkdownName } from "./app/docsSite";
@@ -44,6 +45,7 @@ export type FileAction =
   | "publishDir"
   | "publishDocs"
   | "publishPodcast"
+  | "publishDownloads"
   | "copy"
   | "cut"
   | "delete";
@@ -94,6 +96,13 @@ const ACTIONS: Array<{
     dirsOnly: true,
     sitesOnly: true,
   },
+  {
+    id: "publishDownloads",
+    labelKey: "publishAsDownloads",
+    icon: <PublishDownloadsIcon />,
+    dirsOnly: true,
+    sitesOnly: true,
+  },
   { id: "copy", labelKey: "copy", icon: <CopyIcon /> },
   { id: "cut", labelKey: "cut", icon: <CutIcon /> },
   { id: "delete", labelKey: "delete", icon: <DeleteIcon /> },
@@ -136,7 +145,8 @@ function FileActionSheet({
       action === "publishSite" ||
       action === "publishDir" ||
       action === "publishDocs" ||
-      action === "publishPodcast";
+      action === "publishPodcast" ||
+      action === "publishDownloads";
     if (openDialog) window.setTimeout(() => onAction(action, target), 0);
     else onAction(action, target);
   };

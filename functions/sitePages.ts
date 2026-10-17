@@ -937,3 +937,308 @@ audio { width: 100%; }
 </style>`;
   return docShell(lang, options.title, body);
 }
+
+// —— 软件下载页 / Releases（kind: downloads）——
+export const DOWNLOADS_MAX_FILES = 100;
+export const DOWNLOADS_MAX_BYTES = 256 * 1024 * 1024;
+export const DOWNLOADS_README_MAX_CHARS = 100_000;
+
+const DOWNLOADS_MIME: Record<string, string> = {
+  zip: "application/zip",
+  "7z": "application/x-7z-compressed",
+  rar: "application/vnd.rar",
+  tar: "application/x-tar",
+  gz: "application/gzip",
+  tgz: "application/gzip",
+  bz2: "application/x-bzip2",
+  xz: "application/x-xz",
+  exe: "application/vnd.microsoft.portable-executable",
+  msi: "application/x-msi",
+  msix: "application/msix",
+  dmg: "application/x-apple-diskimage",
+  pkg: "application/octet-stream",
+  appimage: "application/octet-stream",
+  deb: "application/vnd.debian.binary-package",
+  rpm: "application/x-rpm",
+  apk: "application/vnd.android.package-archive",
+  ipa: "application/octet-stream",
+  jar: "application/java-archive",
+  nupkg: "application/octet-stream",
+  vsix: "application/octet-stream",
+  flatpak: "application/vnd.flatpak",
+  snap: "application/octet-stream",
+};
+
+/** 同目录 README.md / README.markdown 作更新说明，不进下载列表。 */
+export function isDownloadsReadmeName(filename: string): boolean {
+  return /^readme\.(md|markdown)$/i.test(filename.trim());
+}
+
+/** 顶层可发布资源：普通文件；跳过 README、隐藏文件。 */
+export function isDownloadsAssetName(filename: string): boolean {
+  const name = filename.trim();
+  if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) return false;
+  if (name.startsWith(".")) return false;
+  if (isDownloadsReadmeName(name)) return false;
+  return true;
+}
+
+export function downloadsMimeType(filename: string): string {
+  const base = filename.split(/[/\\]/).pop() || filename;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return "application/octet-stream";
+  const ext = base.slice(dot + 1).toLowerCase();
+  return DOWNLOADS_MIME[ext] || "application/octet-stream";
+}
+
+/** attempt 从 1 起；保留 index.html / 清单名。 */
+export function downloadsNameCandidate(filename: string, attempt: number): string | null {
+  if (!isDownloadsAssetName(filename) || !Number.isInteger(attempt) || attempt < 1 || attempt > 10000) {
+    return null;
+  }
+  const base = filename.split(/[/\\]/).pop() || filename;
+  const dot = base.lastIndexOf(".");
+  const hasExt = dot > 0 && dot < base.length - 1;
+  const ext = hasExt ? base.slice(dot + 1) : "";
+  const stem = hasExt ? albumStem(base, ext) : albumStem(`${base}.bin`, "bin");
+  const name =
+    attempt === 1
+      ? hasExt
+        ? `${stem}.${ext}`
+        : stem
+      : hasExt
+        ? `${stem}-${attempt}.${ext}`
+        : `${stem}-${attempt}`;
+  const lower = name.toLowerCase();
+  if (
+    lower === "index.html" ||
+    lower === ALBUM_MANIFEST_NAME ||
+    lower === ".davflare-manifest.json" ||
+    isDownloadsReadmeName(name)
+  ) {
+    return null;
+  }
+  if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
+  return name;
+}
+
+export function checkDownloadsLimits(
+  count: number,
+  bytes: number
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isFinite(count) || count <= 0) return { ok: false, error: "no downloads assets" };
+  if (count > DOWNLOADS_MAX_FILES) {
+    return {
+      ok: false,
+      error: `downloads file limit exceeded: ${count} > ${DOWNLOADS_MAX_FILES}`,
+    };
+  }
+  if (!Number.isFinite(bytes) || bytes < 0) return { ok: false, error: "bad downloads" };
+  if (bytes > DOWNLOADS_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `downloads size limit exceeded: ${bytes} > ${DOWNLOADS_MAX_BYTES}`,
+    };
+  }
+  return { ok: true };
+}
+
+export type DownloadsAsset = {
+  name: string;
+  size: number;
+  sha256: string;
+  uploaded: string;
+  contentType: string;
+  url: string;
+};
+
+/** Reuse podcastPublicBase for https://host/slug */
+export const downloadsPublicBase = podcastPublicBase;
+
+/**
+ * 极简 Markdown → HTML（无原始 HTML、无脚本）。用于 README 更新说明。
+ * 支持：#/##/###、段落、列表、- *、有序、**粗**、*斜*、`码`、```围栏、[链](http)、---。
+ */
+export function renderReleaseNotesMarkdown(source: string): string {
+  const raw = source.replace(/\r\n/g, "\n").replace(/\u0000/g, "").slice(0, DOWNLOADS_README_MAX_CHARS);
+  const lines = raw.split("\n");
+  const parts: string[] = [];
+  let i = 0;
+  let inCode = false;
+  let codeLang = "";
+  let codeLines: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (!listType || listItems.length === 0) {
+      listType = null;
+      listItems = [];
+      return;
+    }
+    const tag = listType;
+    parts.push(`<${tag}>${listItems.map((item) => `<li>${item}</li>`).join("")}</${tag}>`);
+    listType = null;
+    listItems = [];
+  };
+
+  const inline = (text: string): string => {
+    let out = escapeHtml(text);
+    out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+    out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>");
+    out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, label: string, href: string) => {
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
+    return out;
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (inCode) {
+      if (/^```/.test(line)) {
+        parts.push(
+          `<pre><code${codeLang ? ` class="language-${escapeHtml(codeLang)}"` : ""}>${escapeHtml(
+            codeLines.join("\n")
+          )}</code></pre>`
+        );
+        inCode = false;
+        codeLang = "";
+        codeLines = [];
+      } else {
+        codeLines.push(line);
+      }
+      i += 1;
+      continue;
+    }
+    const fence = line.match(/^```([\w-]*)\s*$/);
+    if (fence) {
+      flushList();
+      inCode = true;
+      codeLang = fence[1] || "";
+      codeLines = [];
+      i += 1;
+      continue;
+    }
+    if (/^(\*\s*\*\s*\*|-{3,}|_{3,})\s*$/.test(line)) {
+      flushList();
+      parts.push("<hr/>");
+      i += 1;
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushList();
+      const level = heading[1].length;
+      parts.push(`<h${level}>${inline(heading[2].trim())}</h${level}>`);
+      i += 1;
+      continue;
+    }
+    const ul = line.match(/^[-*]\s+(.+)$/);
+    if (ul) {
+      if (listType && listType !== "ul") flushList();
+      listType = "ul";
+      listItems.push(inline(ul[1]));
+      i += 1;
+      continue;
+    }
+    const ol = line.match(/^\d+[.)]\s+(.+)$/);
+    if (ol) {
+      if (listType && listType !== "ol") flushList();
+      listType = "ol";
+      listItems.push(inline(ol[1]));
+      i += 1;
+      continue;
+    }
+    if (!line.trim()) {
+      flushList();
+      i += 1;
+      continue;
+    }
+    flushList();
+    parts.push(`<p>${inline(line.trim())}</p>`);
+    i += 1;
+  }
+  flushList();
+  if (inCode) {
+    parts.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+  }
+  return parts.join("\n");
+}
+
+export function renderDownloadsPage(options: {
+  lang: PageLang;
+  title: string;
+  files: DownloadsAsset[];
+  readmeHtml?: string | null;
+}): string {
+  if (options.files.length > DOWNLOADS_MAX_FILES) {
+    throw new Error(
+      `downloads file limit exceeded: ${options.files.length} > ${DOWNLOADS_MAX_FILES}`
+    );
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const files = options.files.filter((file) => file.name);
+  const total = files.reduce((sum, file) => sum + (Number.isFinite(file.size) ? file.size : 0), 0);
+  const rows = files
+    .map((file) => {
+      const name = escapeHtml(file.name);
+      const href = escapeHtml(file.url || encodeURIComponent(file.name));
+      const size = escapeHtml(formatSiteBytes(file.size));
+      const sha = escapeHtml(file.sha256);
+      return `<tr>
+  <td class="name"><a href="${href}" download="${name}">${name}</a></td>
+  <td class="num">${size}</td>
+  <td class="hash"><code title="${sha}">${sha}</code></td>
+  <td class="num"><a class="dl" href="${href}" download="${name}">${escapeHtml(
+        pageLabel(lang, "siteDownloadsDownload")
+      )}</a></td>
+</tr>`;
+    })
+    .join("\n");
+  const table = rows
+    ? `<table class="files"><thead><tr>
+  <th>${escapeHtml(pageLabel(lang, "siteDownloadsName"))}</th>
+  <th class="num">${escapeHtml(pageLabel(lang, "siteDownloadsSize"))}</th>
+  <th>${escapeHtml(pageLabel(lang, "siteDownloadsSha256"))}</th>
+  <th class="num"></th>
+</tr></thead><tbody>${rows}</tbody></table>`
+    : `<p class="empty">${escapeHtml(pageLabel(lang, "siteDownloadsEmpty"))}</p>`;
+  const notes =
+    options.readmeHtml && options.readmeHtml.trim()
+      ? `<section class="card notes"><h2>${escapeHtml(
+          pageLabel(lang, "siteDownloadsNotes")
+        )}</h2><article class="md">${options.readmeHtml}</article></section>`
+      : "";
+  const body = `<section class="card">
+  <h1>${escapeHtml(options.title)}</h1>
+  <p class="meta">${escapeHtml(
+    pageLabel(lang, "siteDownloadsCount", { count: files.length, size: formatSiteBytes(total) })
+  )}</p>
+  ${table}
+</section>
+${notes}
+<style>
+.files td.hash { font-size: .78rem; word-break: break-all; max-width: 28rem; }
+.files td.hash code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--hover); padding: .15em .4em; border-radius: 6px;
+}
+.notes { margin-top: 16px; }
+.notes h2 { font-size: 1.05rem; margin: 0 0 10px; }
+.notes .md > *:first-child { margin-top: 0; }
+.notes .md p { margin: 0 0 .8em; }
+.notes .md ul, .notes .md ol { margin: 0 0 .8em; padding-left: 1.3em; }
+.notes .md pre {
+  background: var(--hover); padding: 12px 14px; border-radius: 10px; overflow: auto;
+}
+.notes .md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em;
+  background: var(--hover); padding: .1em .35em; border-radius: 5px;
+}
+.notes .md pre code { background: transparent; padding: 0; }
+.notes .md a { color: var(--brand); }
+.notes .md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+</style>`;
+  return docShell(lang, options.title, body);
+}
