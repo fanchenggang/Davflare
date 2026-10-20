@@ -1,0 +1,20 @@
+{
+  "name": "Davflare Upload",
+  "description": "POST /api/upload into mobile/",
+  "client": "HTTP Shortcuts",
+  "method": "POST",
+  "url": "https://drive.example.com/api/upload?path=mobile%2F",
+  "headers": {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "X-Api-Key": "YOUR_API_KEY",
+    "X-File-Name": "{{file.name}}"
+  },
+  "body": "binary",
+  "fileSource": "share-sheet",
+  "notes": [
+    "Replace YOUR_API_KEY with your fd_\u2026 key from the Davflare web UI.",
+    "In HTTP Shortcuts: New shortcut \u2192 Request \u2192 Method POST \u2192 URL above \u2192 Headers \u2192 Body = File (from share / file picker).",
+    "Or: Import / Export \u2192 Import from cURL and paste the curl one-liner from Settings.",
+    "File lands in the folder given by ?path= (uniqueNames on collision unless overwrite=1)."
+  ]
+}

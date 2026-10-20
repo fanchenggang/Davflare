@@ -131,13 +131,37 @@ async function cacheGet(id: string): Promise<Blob | null> {
   }
 }
 
+async function blobToResponseBody(blob: Blob): Promise<BodyInit> {
+  // undici / some jsdom builds reject `new Response(blob)` ("object.stream is
+  // not a function"). Prefer ArrayBuffer; fall back to FileReader for jsdom
+  // Blobs that lack arrayBuffer().
+  if (typeof blob.arrayBuffer === "function") {
+    try {
+      return await blob.arrayBuffer();
+    } catch {
+      // fall through
+    }
+  }
+  if (typeof FileReader !== "undefined") {
+    return await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () =>
+        reject(reader.error ?? new Error("FileReader failed"));
+      reader.readAsArrayBuffer(blob);
+    });
+  }
+  return blob;
+}
+
 async function cachePut(id: string, blob: Blob): Promise<void> {
   if (typeof caches === "undefined") return;
   try {
     const cache = await caches.open(CACHE_NAME);
+    const body = await blobToResponseBody(blob);
     await cache.put(
       cacheRequestUrl(id),
-      new Response(blob, { headers: { "Content-Type": "image/png" } })
+      new Response(body, { headers: { "Content-Type": "image/png" } })
     );
   } catch {
     // 配额不足 / 隐私模式：只是下次要重新生成

@@ -129,6 +129,14 @@
 
 与相册、文档站、公开目录、导航站入口与文案均分开。样例：[`agents/examples/podcast-rss/`](agents/examples/podcast-rss/)。
 
+## 手机 30 秒丢进免费 R2（iOS 快捷指令 / Android）
+
+从系统分享菜单把照片或文件丢进免费 R2。打开 `#/settings` → **手机一键上传（iOS 快捷指令 / Android）**：复制填好的上传地址 / 鉴权头，自建一条 iOS 快捷指令（或把 curl 粘进 Android HTTP Shortcuts）。复用现有 `POST /api/upload`（网盘目录）与 `POST /api/images`（公开 CDN）——**不新增接口 / MCP**。
+
+与 WebDAV 挂载、PicGo/ShareX、粘贴截图上图床、文件收集链接均不重复。
+
+样例：[`agents/examples/mobile-upload/`](agents/examples/mobile-upload/)。
+
 ## 粘贴截图，两秒拿 CDN 链
 
 在**文件管理器**、**`#/images` 图床页**或**`#/settings`（图床客户端卡片）**按 **Ctrl/Cmd+V**，剪贴板里是截图就会上传到现有 `POST /api/images`——**不新增接口**——toast 一键复制 `https://<SITES_HOST>/i/{id}`。在文件管理器里同一张图还会入队到当前目录。
@@ -158,7 +166,7 @@
 | 部署、环境变量、功能开关、部署后 `#/setup` 检查清单；MCP 试玩台 `#/mcp` | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) · [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | WebDAV 客户端与限制；**兼容实测表 + litmus** | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) · [docs/webdav-clients.zh-CN.md](docs/webdav-clients.zh-CN.md) |
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
-| 静态站点与图床；**播客 RSS / 软件下载页 / 粘贴截图 / PicGo** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) |
+| 静态站点与图床；**播客 RSS / 软件下载页 / 粘贴截图 / PicGo / 手机上传** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
 | Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | 命令行（`davflare-cli`）；定时备份（crontab + Actions） | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

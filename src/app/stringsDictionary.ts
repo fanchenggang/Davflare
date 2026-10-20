@@ -1176,6 +1176,64 @@ const entries: Record<string, DictionaryEntry> = {
   createCollectFailed: { zh: "创建收集链接失败", en: "Failed to create request link" },
   disableCollectFailed: { zh: "停用收集链接失败", en: "Failed to disable request link" },
   deleteCollectFailed: { zh: "删除收集链接失败", en: "Failed to delete request link" },
+  mobileUploadTitle: {
+    zh: "手机一键上传（iOS 快捷指令 / Android）",
+    en: "Phone upload (iOS Shortcuts / Android)",
+  },
+  mobileUploadHint: {
+    zh: "分享菜单把文件丢进免费 R2：复用现有 POST /api/upload（网盘目录）或 POST /api/images（公开 CDN）。不新增接口 / MCP。",
+    en: "Share Sheet → free R2. Reuses existing POST /api/upload (drive folder) or POST /api/images (public CDN). No new APIs / MCP.",
+  },
+  mobileUploadKeyHint: {
+    zh: "导出内容用占位符 {placeholder}，在快捷指令 / HTTP Shortcuts 里换成网页端创建的 fd_… 密钥。",
+    en: "Exports use placeholder {placeholder}; replace it with your fd_… key from the web UI inside Shortcuts / HTTP Shortcuts.",
+  },
+  mobileUploadPathLabel: { zh: "目标文件夹", en: "Target folder" },
+  mobileUploadPathHint: {
+    zh: "写入 /api/upload?path=…；空则根目录。图床模式忽略此路径。",
+    en: "Used as /api/upload?path=…; empty = bucket root. Image-host mode ignores this path.",
+  },
+  mobileUploadValuesTitle: { zh: "填入值", en: "Values to paste" },
+  mobileUploadValuesHint: {
+    zh: "复制站点、上传地址与鉴权头，贴进快捷指令「获取 URL 内容」或 Android HTTP Shortcuts。",
+    en: "Copy origin, upload URL, and auth headers into Shortcuts “Get Contents of URL” or Android HTTP Shortcuts.",
+  },
+  mobileUploadIosTitle: { zh: "iOS 快捷指令", en: "iOS Shortcuts" },
+  mobileUploadIosHint: {
+    zh: "官方无法在仓库里附带 .shortcut 二进制；按下述步骤自建一条，约 30 秒。",
+    en: "Apple Shortcuts binaries aren’t shipped in-repo; build one from these steps (~30 seconds).",
+  },
+  mobileUploadIosRecipe: {
+    zh: "1. 打开「快捷指令」→ ＋新建 → 右上角「…」→ 打开「显示在分享表单」，接收「文件」与「图像」。\n2. 添加「快捷指令输入」（或「获取文件」）拿到分享进来的文件。\n3. 添加「获取 URL 内容」：\n   · URL：{uploadUrl}\n   · 方法：POST\n   · 请求体：文件（选上一步）\n   · 标头 Authorization：Bearer {placeholder}\n   · 标头 X-Api-Key：{placeholder}\n   · 标头 X-File-Name：分享文件的名称（可用「获取文件的详情」）\n4. 把 {placeholder} 换成网页「API」创建的 fd_… 密钥。\n5. 在照片 / 文件 App 点分享 → 「上传到 Davflare」试传；文件出现在目标文件夹。\n\n若只要公开图床链：把 URL 换成 {imagesUrl}（同样的鉴权与 X-File-Name），响应 JSON 的 url 即 https://<SITES_HOST>/i/<id>。",
+    en: "1. Open Shortcuts → + → … → enable Show in Share Sheet; accept Files and Images.\n2. Add Shortcut Input (or Get File) for the shared item.\n3. Add Get Contents of URL:\n   · URL: {uploadUrl}\n   · Method: POST\n   · Request Body: File (from the previous step)\n   · Header Authorization: Bearer {placeholder}\n   · Header X-Api-Key: {placeholder}\n   · Header X-File-Name: the shared file’s name (Get Details of Files)\n4. Replace {placeholder} with your fd_… key from the web API page.\n5. In Photos / Files, Share → your shortcut; the file lands in the target folder.\n\nFor a public image CDN URL instead: use {imagesUrl} with the same auth + X-File-Name; JSON url is https://<SITES_HOST>/i/<id>.",
+  },
+  mobileUploadAndroidTitle: {
+    zh: "Android（HTTP Shortcuts / curl）",
+    en: "Android (HTTP Shortcuts / curl)",
+  },
+  mobileUploadAndroidHint: {
+    zh: "用下方 recipe JSON 对照新建，或把 curl 粘进 HTTP Shortcuts「从 cURL 导入」。Tasker 等同理。",
+    en: "Recreate from the recipe JSON, or paste the curl into HTTP Shortcuts “Import from cURL”. Same idea in Tasker.",
+  },
+  mobileUploadCopyValues: { zh: "复制填入值", en: "Copy values" },
+  mobileUploadCopyUploadUrl: { zh: "复制上传 URL", en: "Copy upload URL" },
+  mobileUploadCopyImagesUrl: { zh: "复制图床 URL", en: "Copy images URL" },
+  mobileUploadCopyIos: { zh: "复制 iOS 步骤", en: "Copy iOS steps" },
+  mobileUploadCopyAndroid: { zh: "复制 Android recipe", en: "Copy Android recipe" },
+  mobileUploadDownloadAndroid: { zh: "下载 Android JSON", en: "Download Android JSON" },
+  mobileUploadCopyCurl: { zh: "复制上传 curl", en: "Copy upload curl" },
+  mobileUploadCopyImagesCurl: { zh: "复制图床 curl", en: "Copy images curl" },
+  mobileUploadValuesCopied: { zh: "填入值已复制", en: "Values copied" },
+  mobileUploadUploadUrlCopied: { zh: "上传 URL 已复制", en: "Upload URL copied" },
+  mobileUploadImagesUrlCopied: { zh: "图床 URL 已复制", en: "Images URL copied" },
+  mobileUploadIosCopied: { zh: "iOS 步骤已复制", en: "iOS steps copied" },
+  mobileUploadAndroidCopied: { zh: "Android recipe 已复制", en: "Android recipe copied" },
+  mobileUploadCurlCopied: { zh: "上传 curl 已复制", en: "Upload curl copied" },
+  mobileUploadImagesCurlCopied: { zh: "图床 curl 已复制", en: "Images curl copied" },
+  mobileUploadDownloaded: { zh: "配置已下载", en: "Config downloaded" },
+  mobileUploadCopyFailed: { zh: "复制失败", en: "Copy failed" },
+  mobileUploadDownloadFailed: { zh: "下载失败", en: "Download failed" },
 };
+
 
 export default entries;
