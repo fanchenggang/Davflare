@@ -119,6 +119,16 @@
 
 与公开目录、相册、文档站、播客 RSS、导航站入口与文案均分开。样例：[`agents/examples/folder-downloads/`](agents/examples/folder-downloads/)。
 
+## 十分钟挂上 PDF 资料库 / 电子书架
+
+选中一个 PDF（可选 EPUB）文件夹 → **发布为 PDF 资料库**。Davflare 把文件复制进 `sites/{slug}/`，生成带 **文件名、大小、浏览器打开/下载** 的书架页；源文件若已有缩略图会复制为封面。复制 `https://<SITES_HOST>/{slug}/`。复用现有静态站发布流程，**不新增 API**。
+
+1. 部署并配置 `SITES_HOST`，保持 **站点** 开启。
+2. 文件管理器里打开含 `.pdf` / `.epub` 的文件夹（或选中该文件夹）→ **发布为 PDF 资料库**。
+3. 复制 `https://<SITES_HOST>/{slug}/` 发给别人即可。
+
+与软件下载页、文档站、相册、播客 RSS、公开目录、导航站入口与文案均分开。样例：[`agents/examples/folder-bookshelf/`](agents/examples/folder-bookshelf/)。
+
 ## 十分钟挂上播客客户端
 
 选中一个音视频文件夹 → **发布为播客 / RSS**。Davflare 把媒体复制进 `sites/{slug}/`，写出 **RSS 2.0** 的 `feed.xml`（enclosure 直链 `SITES_HOST`）和简易列表播放页。复用现有静态站发布流程，**不新增 API**。
@@ -166,7 +176,7 @@
 | 部署、环境变量、功能开关、部署后 `#/setup` 检查清单；MCP 试玩台 `#/mcp` | [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md) · [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | WebDAV 客户端与限制；**兼容实测表 + litmus** | [docs/webdav.zh-CN.md](docs/webdav.zh-CN.md) · [docs/webdav-clients.zh-CN.md](docs/webdav-clients.zh-CN.md) |
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
-| 静态站点与图床；**播客 RSS / 软件下载页 / 粘贴截图 / PicGo / 手机上传** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
+| 静态站点与图床；**播客 RSS / 软件下载页 / 粘贴截图 / PicGo / 手机上传** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/folder-bookshelf/](agents/examples/folder-bookshelf/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
 | Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | 命令行（`davflare-cli`）；定时备份（crontab + Actions） | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

@@ -1242,3 +1242,188 @@ ${notes}
 </style>`;
   return docShell(lang, options.title, body);
 }
+
+// —— PDF 资料库 / 电子书架（kind: bookshelf）——
+export const BOOKSHELF_MAX_FILES = 200;
+export const BOOKSHELF_MAX_BYTES = 512 * 1024 * 1024;
+
+const BOOKSHELF_MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  epub: "application/epub+zip",
+};
+
+const BOOKSHELF_EXTS = new Set(Object.keys(BOOKSHELF_MIME));
+
+/** 顶层 PDF / EPUB（可选）才进书架；跳过隐藏文件与其它类型。 */
+export function isBookshelfAssetName(filename: string): boolean {
+  const name = filename.trim();
+  if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) return false;
+  if (name.startsWith(".")) return false;
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0 || dot === name.length - 1) return false;
+  return BOOKSHELF_EXTS.has(name.slice(dot + 1).toLowerCase());
+}
+
+export function bookshelfMimeType(filename: string): string {
+  const base = filename.split(/[/\\]/).pop() || filename;
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return "application/octet-stream";
+  const ext = base.slice(dot + 1).toLowerCase();
+  return BOOKSHELF_MIME[ext] || "application/octet-stream";
+}
+
+/** attempt 从 1 起；保留 index.html / 清单名 / covers/。 */
+export function bookshelfNameCandidate(filename: string, attempt: number): string | null {
+  if (!isBookshelfAssetName(filename) || !Number.isInteger(attempt) || attempt < 1 || attempt > 10000) {
+    return null;
+  }
+  const base = filename.split(/[/\\]/).pop() || filename;
+  const dot = base.lastIndexOf(".");
+  const ext = base.slice(dot + 1).toLowerCase();
+  const stem = albumStem(base, ext);
+  const name = attempt === 1 ? `${stem}.${ext}` : `${stem}-${attempt}.${ext}`;
+  const lower = name.toLowerCase();
+  if (
+    lower === "index.html" ||
+    lower === ALBUM_MANIFEST_NAME ||
+    lower === ".davflare-manifest.json" ||
+    lower === "feed.xml" ||
+    lower.startsWith("covers/")
+  ) {
+    return null;
+  }
+  if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
+  return name;
+}
+
+/** 封面相对路径：covers/{stem}.png */
+export function bookshelfCoverRel(publishedName: string): string {
+  const base = publishedName.split(/[/\\]/).pop() || publishedName;
+  const dot = base.lastIndexOf(".");
+  const hasExt = dot > 0 && dot < base.length - 1;
+  const ext = hasExt ? base.slice(dot + 1).toLowerCase() : "bin";
+  const stem = albumStem(hasExt ? base : `${base}.bin`, ext);
+  return `covers/${stem}.png`;
+}
+
+export function checkBookshelfLimits(
+  count: number,
+  bytes: number
+): { ok: true } | { ok: false; error: string } {
+  if (!Number.isFinite(count) || count <= 0) return { ok: false, error: "no bookshelf assets" };
+  if (count > BOOKSHELF_MAX_FILES) {
+    return {
+      ok: false,
+      error: `bookshelf file limit exceeded: ${count} > ${BOOKSHELF_MAX_FILES}`,
+    };
+  }
+  if (!Number.isFinite(bytes) || bytes < 0) return { ok: false, error: "bad bookshelf" };
+  if (bytes > BOOKSHELF_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `bookshelf size limit exceeded: ${bytes} > ${BOOKSHELF_MAX_BYTES}`,
+    };
+  }
+  return { ok: true };
+}
+
+export type BookshelfAsset = {
+  name: string;
+  size: number;
+  uploaded: string;
+  contentType: string;
+  url: string;
+  /** 相对站点根的封面图；没有缩略图时为 null */
+  cover: string | null;
+};
+
+/** Reuse podcastPublicBase for https://host/slug */
+export const bookshelfPublicBase = podcastPublicBase;
+
+export function renderBookshelfPage(options: {
+  lang: PageLang;
+  title: string;
+  files: BookshelfAsset[];
+}): string {
+  if (options.files.length > BOOKSHELF_MAX_FILES) {
+    throw new Error(
+      `bookshelf file limit exceeded: ${options.files.length} > ${BOOKSHELF_MAX_FILES}`
+    );
+  }
+  const lang = options.lang === "zh" ? "zh" : "en";
+  const files = options.files.filter((file) => file.name);
+  const total = files.reduce((sum, file) => sum + (Number.isFinite(file.size) ? file.size : 0), 0);
+  const cards = files
+    .map((file) => {
+      const name = escapeHtml(file.name);
+      const href = escapeHtml(file.url || encodeURIComponent(file.name));
+      const size = escapeHtml(formatSiteBytes(file.size));
+      const cover = file.cover
+        ? `<img class="cover" src="${escapeHtml(file.cover)}" alt="" loading="lazy" />`
+        : `<div class="cover placeholder" aria-hidden="true">${escapeHtml(
+            pageLabel(lang, "siteBookshelfNoCover")
+          )}</div>`;
+      return `<article class="book">
+  <a class="cover-link" href="${href}" target="_blank" rel="noopener noreferrer">${cover}</a>
+  <div class="info">
+    <h2 class="title"><a href="${href}" target="_blank" rel="noopener noreferrer">${name}</a></h2>
+    <p class="size">${size}</p>
+    <p class="actions">
+      <a class="open" href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+        pageLabel(lang, "siteBookshelfOpen")
+      )}</a>
+      <a class="dl" href="${href}" download="${name}">${escapeHtml(
+        pageLabel(lang, "siteBookshelfDownload")
+      )}</a>
+    </p>
+  </div>
+</article>`;
+    })
+    .join("\n");
+  const grid = cards
+    ? `<div class="shelf">${cards}</div>`
+    : `<p class="empty">${escapeHtml(pageLabel(lang, "siteBookshelfEmpty"))}</p>`;
+  const body = `<section class="card">
+  <h1>${escapeHtml(options.title)}</h1>
+  <p class="meta">${escapeHtml(
+    pageLabel(lang, "siteBookshelfCount", { count: files.length, size: formatSiteBytes(total) })
+  )}</p>
+  ${grid}
+</section>
+<style>
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 14px;
+}
+.book {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--hover); border-radius: 14px; padding: 10px;
+  border: 1px solid var(--line);
+}
+.cover-link { display: block; text-decoration: none; color: inherit; }
+.cover {
+  display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover;
+  border-radius: 10px; background: var(--paper);
+}
+.cover.placeholder {
+  display: flex; align-items: center; justify-content: center;
+  font-size: .78rem; color: var(--muted); text-align: center; padding: 8px;
+}
+.info .title {
+  font-size: .92rem; margin: 0; line-height: 1.35;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.info .title a { color: inherit; text-decoration: none; }
+.info .title a:hover { color: var(--brand); }
+.info .size { margin: 0; color: var(--muted); font-size: .8rem; }
+.info .actions {
+  margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 8px; font-size: .82rem;
+}
+.info .actions a {
+  color: var(--brand); text-decoration: none; font-weight: 600;
+}
+.info .actions a:hover { text-decoration: underline; }
+</style>`;
+  return docShell(lang, options.title, body);
+}

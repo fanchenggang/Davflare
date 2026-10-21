@@ -166,3 +166,7 @@ curl -X POST "https://<你的域名>/api/images" \
 
 选中安装包/zip 文件夹 → **发布为软件下载页**。写出 `sites/{slug}/index.html`，列出 **文件名、大小、SHA-256**；同目录 `README.md` 可选渲染为更新说明。与相册/公开目录/文档站/播客同一 `POST /api/sites`（`downloads` 载荷），**不新增接口**。样例：[agents/examples/folder-downloads/](../agents/examples/folder-downloads/)。
 
+## PDF 资料库 / 电子书架
+
+选中 PDF（可选 EPUB）文件夹 → **发布为 PDF 资料库**。写出 `sites/{slug}/index.html` 书架页（文件名、大小、浏览器打开/下载；有缩略图时复制为封面）。与相册/公开目录/文档站/播客/软件下载页同一 `POST /api/sites`（`bookshelf` 载荷），**不新增接口**。样例：[agents/examples/folder-bookshelf/](../agents/examples/folder-bookshelf/)。
+

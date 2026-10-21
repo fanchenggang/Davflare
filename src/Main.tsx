@@ -27,6 +27,7 @@ import PublishSiteDialog from "./PublishSiteDialog";
 import PublishAlbumDialog from "./PublishAlbumDialog";
 import PublishPodcastDialog from "./PublishPodcastDialog";
 import PublishDownloadsDialog from "./PublishDownloadsDialog";
+import PublishBookshelfDialog from "./PublishBookshelfDialog";
 import PublishDirDialog from "./PublishDirDialog";
 import PublishDocsDialog, { DocsPublishSource } from "./PublishDocsDialog";
 import { isMarkdownName } from "./app/docsSite";
@@ -155,6 +156,7 @@ function Main({
   const [publishDirTarget, setPublishDirTarget] = useState<FileItem | null>(null);
   const [publishPodcastTarget, setPublishPodcastTarget] = useState<FileItem | null>(null);
   const [publishDownloadsTarget, setPublishDownloadsTarget] = useState<FileItem | null>(null);
+  const [publishBookshelfTarget, setPublishBookshelfTarget] = useState<FileItem | null>(null);
   const [publishDocsSource, setPublishDocsSource] = useState<DocsPublishSource | null>(null);
   const [albumTarget, setAlbumTarget] = useState<{
     images: FileItem[];
@@ -443,6 +445,8 @@ function Main({
           if (file.isDir) window.setTimeout(() => setPublishPodcastTarget(file), 50);
         } else if (action === "publishDownloads") {
           if (file.isDir) window.setTimeout(() => setPublishDownloadsTarget(file), 50);
+        } else if (action === "publishBookshelf") {
+          if (file.isDir) window.setTimeout(() => setPublishBookshelfTarget(file), 50);
         } else if (action === "publishDir") {
           if (!file.isDir) {
             onNotify(translate("publishSiteOnlyFolder"), "error");
@@ -899,6 +903,12 @@ function Main({
         onClose={() => setPublishDownloadsTarget(null)}
         onNotify={onNotify}
       />
+      <PublishBookshelfDialog
+        open={Boolean(publishBookshelfTarget)}
+        folder={publishBookshelfTarget}
+        onClose={() => setPublishBookshelfTarget(null)}
+        onNotify={onNotify}
+      />
       <PublishDirDialog
         open={Boolean(publishDirTarget)}
         folder={publishDirTarget}
@@ -1137,6 +1147,16 @@ function Main({
           if (selectedKeys.length !== 1) return;
           const file = files.find((item) => item.key === selectedKeys[0]);
           if (file?.isDir) setPublishDownloadsTarget(file);
+        }}
+        canPublishBookshelf={
+          flags.sites &&
+          selectedKeys.length === 1 &&
+          Boolean(files.find((item) => item.key === selectedKeys[0])?.isDir)
+        }
+        onPublishBookshelf={() => {
+          if (selectedKeys.length !== 1) return;
+          const file = files.find((item) => item.key === selectedKeys[0]);
+          if (file?.isDir) setPublishBookshelfTarget(file);
         }}
       />
     </Box>

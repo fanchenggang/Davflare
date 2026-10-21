@@ -952,6 +952,62 @@ const entries: Record<string, DictionaryEntry> = {
   publishDownloadsCopyUrl: { zh: "复制链接", en: "Copy URL" },
   publishDownloadsOpenPage: { zh: "打开下载页", en: "Open download page" },
 
+  siteBookshelfHeading: { zh: "资料库", en: "Library" },
+  siteBookshelfEmpty: { zh: "还没有可打开的文件。", en: "No books yet." },
+  siteBookshelfCount: { zh: "{count} 本 · 共 {size}", en: "{count} item(s) · {size} total" },
+  siteBookshelfOpen: { zh: "打开", en: "Open" },
+  siteBookshelfDownload: { zh: "下载", en: "Download" },
+  siteBookshelfNoCover: { zh: "无封面", en: "No cover" },
+  siteKindBookshelf: { zh: "PDF 资料库", en: "PDF library" },
+  publishAsBookshelf: { zh: "发布为 PDF 资料库", en: "Publish as PDF library" },
+  publishBookshelfTitle: { zh: "发布为 PDF 资料库", en: "Publish as PDF library" },
+  publishBookshelfLoading: { zh: "正在读取文件夹…", en: "Reading folder…" },
+  publishBookshelfLoadFailed: { zh: "读取文件夹失败", en: "Failed to read the folder" },
+  publishBookshelfSummary: {
+    zh: "将发布 {count} 个 PDF/EPUB（共 {size}）到 {slug}",
+    en: "Will publish {count} PDF/EPUB file(s) ({size}) to {slug}",
+  },
+  publishBookshelfIgnored: {
+    zh: "已忽略 {count} 个非 PDF/EPUB 文件",
+    en: "Ignored {count} non-PDF/EPUB file(s)",
+  },
+  publishBookshelfSubdirs: {
+    zh: "已跳过 {count} 个子文件夹（只发布当前层）",
+    en: "Skipped {count} subfolder(s) (top level only)",
+  },
+  publishBookshelfHint: {
+    zh: "生成书架页：文件名、大小、浏览器打开/下载；有缩略图时用作封面。复用现有静态站发布，不新增接口。",
+    en: "Builds a bookshelf page with name, size, open/download; existing thumbnails become covers. Reuses static-site publish — no new API.",
+  },
+  publishBookshelfSlugHint: {
+    zh: "地址只含小写字母、数字和连字符",
+    en: "Slug: lowercase letters, digits, and hyphens",
+  },
+  publishBookshelfNoAssets: {
+    zh: "当前层没有可发布的 PDF/EPUB",
+    en: "No top-level PDF/EPUB files to publish",
+  },
+  publishBookshelfTooMany: {
+    zh: "文件数 {count} 超过上限 {max}",
+    en: "{count} files exceed the limit of {max}",
+  },
+  publishBookshelfTooLarge: {
+    zh: "总大小 {size} 超过上限 {max}",
+    en: "Total size {size} exceeds the limit of {max}",
+  },
+  publishBookshelfDone: {
+    zh: "已发布 {count} 个文件到资料库",
+    en: "Published {count} file(s) to the library",
+  },
+  publishBookshelfDoneCopied: {
+    zh: "已发布 {count} 个文件，链接已复制",
+    en: "Published {count} file(s); link copied",
+  },
+  publishBookshelfFailed: { zh: "发布资料库失败", en: "Failed to publish PDF library" },
+  publishBookshelfPageUrl: { zh: "资料库地址", en: "Library URL" },
+  publishBookshelfCopyUrl: { zh: "复制链接", en: "Copy URL" },
+  publishBookshelfOpenPage: { zh: "打开资料库", en: "Open library" },
+
   // —— 公开目录（站点页 + 网盘对话框）——
   siteDirCount: { zh: "{count} 个文件 · 共 {size}", en: "{count} file(s) · {size} total" },
   siteDirName: { zh: "文件名", en: "Name" },

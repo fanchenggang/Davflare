@@ -9,15 +9,19 @@ import {
   DIR_MAX_FILES,
   DOCS_MAX_BYTES,
   DOCS_MAX_FILES,
+  BOOKSHELF_MAX_BYTES,
+  BOOKSHELF_MAX_FILES,
   DOWNLOADS_MAX_BYTES,
   DOWNLOADS_MAX_FILES,
   PODCAST_FEED_NAME,
   PODCAST_MAX_BYTES,
   PODCAST_MAX_EPISODES,
   checkAlbumLimits,
+  checkBookshelfLimits,
   checkDirLimits,
   checkDownloadsLimits,
   checkPodcastLimits,
+  isBookshelfAssetName,
   isDownloadsAssetName,
   isDownloadsReadmeName,
   isMediaFileName,
@@ -47,6 +51,8 @@ import { encodeKey, humanReadableSize } from "./utils";
 export {
   ALBUM_MAX_BYTES,
   ALBUM_MAX_IMAGES,
+  BOOKSHELF_MAX_BYTES,
+  BOOKSHELF_MAX_FILES,
   DIR_MAX_BYTES,
   DIR_MAX_FILES,
   DOCS_MAX_BYTES,
@@ -56,6 +62,7 @@ export {
   PODCAST_FEED_NAME,
   PODCAST_MAX_BYTES,
   PODCAST_MAX_EPISODES,
+  isBookshelfAssetName,
   isDownloadsAssetName,
   isDownloadsReadmeName,
   isMediaFileName,
@@ -141,7 +148,7 @@ export async function deleteSite(slug: string, options?: { purge?: boolean }): P
 }
 
 /** 发布时这次属于哪种站点：普通文件夹复制 / 相册 / 公开目录 / 文档站 */
-export type SitePublishKind = "static" | "album" | "dir" | "docs" | "podcast" | "downloads";
+export type SitePublishKind = "static" | "album" | "dir" | "docs" | "podcast" | "downloads" | "bookshelf";
 
 export interface SiteSlugCheck {
   slug: string;
@@ -166,6 +173,7 @@ function siteKindLabel(kind: string | null): string {
   if (kind === "docs") return translate("siteKindDocs");
   if (kind === "podcast") return translate("siteKindPodcast");
   if (kind === "downloads") return translate("siteKindDownloads");
+  if (kind === "bookshelf") return translate("siteKindBookshelf");
   return translate("siteKindUnknown");
 }
 
@@ -185,7 +193,7 @@ export function siteSlugConflictMessage(
   if (check.kind !== kind) {
     return translate("siteSlugTakenKind", { slug: check.slug, kind: siteKindLabel(check.kind) });
   }
-  if (kind === "album" || kind === "docs" || kind === "podcast" || kind === "downloads") return null;
+  if (kind === "album" || kind === "docs" || kind === "podcast" || kind === "downloads" || kind === "bookshelf") return null;
   if (check.source && source && check.source === source) return null;
   if (check.source && source && check.source !== source) {
     return translate("siteSlugTakenSource", { slug: check.slug, source: check.source });
@@ -255,7 +263,7 @@ export async function publishSite(
 
 export interface PublishGeneratedResult {
   slug: string;
-  kind: "nav" | "album" | "dir" | "docs" | "podcast" | "downloads";
+  kind: "nav" | "album" | "dir" | "docs" | "podcast" | "downloads" | "bookshelf";
   copied: number;
   sitesHost: string | null;
   count?: number;
@@ -480,6 +488,70 @@ export async function publishDownloadsSite(
 }
 
 
+
+
+export function partitionBookshelfFiles(items: FileItem[]): {
+  assets: FileItem[];
+  ignored: number;
+} {
+  const assets: FileItem[] = [];
+  let ignored = 0;
+  for (const item of items) {
+    if (item.isDir) {
+      ignored += 1;
+      continue;
+    }
+    if (isBookshelfAssetName(item.name)) assets.push(item);
+    else ignored += 1;
+  }
+  return { assets, ignored };
+}
+
+export function bookshelfPublishBlockReason(assets: FileItem[]): string | null {
+  const bytes = albumSelectionBytes(assets);
+  const verdict = checkBookshelfLimits(assets.length, bytes);
+  if (verdict.ok) return null;
+  if (verdict.error === "no bookshelf assets") return translate("publishBookshelfNoAssets");
+  if (verdict.error.startsWith("bookshelf file limit exceeded")) {
+    return translate("publishBookshelfTooMany", { count: assets.length, max: BOOKSHELF_MAX_FILES });
+  }
+  if (verdict.error.startsWith("bookshelf size limit exceeded")) {
+    return translate("publishBookshelfTooLarge", {
+      size: humanReadableSize(bytes),
+      max: humanReadableSize(BOOKSHELF_MAX_BYTES),
+    });
+  }
+  return translate("publishBookshelfFailed");
+}
+
+/** 把选中 PDF/EPUB 复制进 sites/{slug}/，生成书架页；有缩略图时复制为封面。 */
+export async function publishBookshelfSite(
+  slug: string,
+  files: string[],
+  options?: { lang?: Lang; title?: string }
+): Promise<PublishGeneratedResult> {
+  const normalizedSlug = slug.trim().toLowerCase();
+  if (!isValidSiteSlug(normalizedSlug)) {
+    throw new Error(translate("publishSiteBadSlug"));
+  }
+  const response = await authFetch("/api/sites", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      slug: normalizedSlug,
+      bookshelf: {
+        lang: options?.lang,
+        title: options?.title,
+        files,
+      },
+    }),
+  });
+  if (!response.ok) {
+    const text = (await response.text()) || translate("publishBookshelfFailed");
+    throw new Error(text);
+  }
+  return response.json();
+}
 
 /** 公开目录客户端分批大小：每批约 50 个文件，串行发送。 */
 export const DIR_PUBLISH_BATCH = 50;

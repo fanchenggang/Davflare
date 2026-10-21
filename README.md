@@ -34,6 +34,7 @@ Share (expiry + extract code):
 - Share links with expiry or forever, extract code, folder zip; zero-JS preview for media/PDF, monospace preview + copy for `text/plain`
 - **Quick paste**: toolbar paste → `.txt` + existing shares (expiry / extract code) — a self-hosted Pastebin
 - **Paste screenshot → CDN**: Ctrl/Cmd+V in the file manager, Image host page, or Settings — uploads via `POST /api/images`, toast copies `https://<SITES_HOST>/i/{id}`
+- **PDF library / bookshelf**: publish a PDF/EPUB folder to `sites/{slug}/` with open/download + optional covers
 - **Podcast / RSS**: publish an audio/video folder to `sites/{slug}/` with `feed.xml` + a simple player page — subscribe in any podcast app
 - **Download page / Releases on R2**: publish an installer/zip folder to `sites/{slug}/` with name, size, SHA-256 (optional README notes)
 - **Scheduled backup**: Settings card copies safe `davflare sync` crontab lines; examples + GitHub Actions
@@ -119,6 +120,16 @@ Select a folder of installers / zips → **Publish as download page**. Davflare 
 
 Distinct from public directory, album, docs, podcast RSS, and nav site. Sample: [`agents/examples/folder-downloads/`](agents/examples/folder-downloads/).
 
+## PDF library / ebook bookshelf in 10 minutes
+
+Select a folder of PDFs (optional EPUBs) → **Publish as PDF library**. Davflare copies files into `sites/{slug}/`, builds a bookshelf page with **filename, size, open-in-browser / download**; existing thumbnails become covers. Copy `https://<SITES_HOST>/{slug}/`. Reuses the existing static-site publish flow — **no new API**.
+
+1. Deploy with `SITES_HOST` and keep **Sites** enabled.
+2. In the file manager, open a folder of `.pdf` / `.epub` (or select the folder) → **Publish as PDF library**.
+3. Copy `https://<SITES_HOST>/{slug}/` and share it.
+
+Distinct from download page, docs site, album, podcast RSS, public directory, and nav site. Sample: [`agents/examples/folder-bookshelf/`](agents/examples/folder-bookshelf/).
+
 ## Podcast RSS in 10 minutes
 
 Select a folder of audio/video files → **Publish as podcast / RSS**. Davflare copies media into `sites/{slug}/`, writes **RSS 2.0** `feed.xml` (enclosures on `SITES_HOST`), and a simple list player page. Reuses the existing static-site publish flow — **no new API**.
@@ -166,7 +177,7 @@ Details: [docs/sites.md#markdown-image-host-in-10-minutes](docs/sites.md#markdow
 | Deploy, env vars, feature switches, post-deploy `#/setup` checklist; MCP playground `#/mcp` | [docs/deploy.md](docs/deploy.md) · [docs/API.md](docs/API.md) |
 | WebDAV clients & limits; **compatibility matrix + litmus** | [docs/webdav.md](docs/webdav.md) · [docs/webdav-clients.md](docs/webdav-clients.md) |
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
-| Static sites & image host; **podcast RSS / download page / paste screenshot / PicGo / phone upload** | [docs/sites.md](docs/sites.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
+| Static sites & image host; **podcast RSS / download page / paste screenshot / PicGo / phone upload** | [docs/sites.md](docs/sites.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/folder-bookshelf/](agents/examples/folder-bookshelf/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
 | Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | CLI (`davflare-cli`); scheduled backup (crontab + Actions) | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |

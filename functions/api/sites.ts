@@ -19,11 +19,17 @@ import {
   ALBUM_MANIFEST_NAME,
   albumNameCandidate,
   checkAlbumLimits,
+  checkBookshelfLimits,
   checkDownloadsLimits,
   checkPodcastLimits,
+  bookshelfCoverRel,
+  bookshelfMimeType,
+  bookshelfNameCandidate,
+  bookshelfPublicBase,
   downloadsMimeType,
   downloadsNameCandidate,
   downloadsPublicBase,
+  isBookshelfAssetName,
   isDownloadsAssetName,
   isDownloadsReadmeName,
   isSafeManifestRel,
@@ -37,12 +43,14 @@ import {
   podcastPublicBase,
   rasterExtension,
   renderAlbumPage,
+  renderBookshelfPage,
   renderDownloadsPage,
   renderNavPage,
   renderPodcastFeed,
   renderPodcastPage,
   renderReleaseNotesMarkdown,
 } from "../sitePages";
+import { isValidThumbnailDigest, thumbnailObjectKey } from "../webdav/davUtil";
 import {
   SITE_MANIFEST_NAME,
   SITE_MANIFEST_NAMES,
@@ -726,6 +734,228 @@ async function publishDownloads(
   });
 }
 
+
+async function publishBookshelf(
+  env: SitesApiEnv,
+  slug: string,
+  bookshelf: unknown
+): Promise<Response> {
+  const flags = await loadFeatureFlags(env.BUCKET);
+  if (!flags.sites) return featureDisabledResponse();
+  if (bookshelf === null || typeof bookshelf !== "object" || Array.isArray(bookshelf)) {
+    return textResponse("bad bookshelf", 400);
+  }
+  const body = bookshelf as { lang?: unknown; title?: string; files?: unknown };
+  if (!Array.isArray(body.files)) return textResponse("bad bookshelf", 400);
+  if (body.files.length > 5000) return textResponse("bad bookshelf", 400);
+
+  const lang = pageLang(body.lang);
+  const titleRaw = typeof body.title === "string" ? body.title.trim() : "";
+  const title = (titleRaw || pageLabel(lang, "siteBookshelfHeading")).slice(0, 200);
+
+  const seen = new Set<string>();
+  const assets: Array<{ key: string; name: string }> = [];
+  for (const item of body.files) {
+    if (typeof item !== "string") return textResponse("bad bookshelf", 400);
+    const key = normalizeFileKey(item);
+    if (key instanceof Response) return key;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const base = key.split("/").pop() || "";
+    if (!isBookshelfAssetName(base)) continue;
+    assets.push({ key, name: base });
+  }
+
+  const limited = checkBookshelfLimits(assets.length, 0);
+  if (!limited.ok && limited.error.startsWith("bookshelf file limit exceeded")) {
+    return textResponse(limited.error, 400);
+  }
+  if (!limited.ok && limited.error === "no bookshelf assets") {
+    return textResponse(limited.error, 400);
+  }
+
+  let bytes = 0;
+  const sized: Array<{
+    key: string;
+    name: string;
+    size: number;
+    uploaded: string;
+    contentType: string;
+    thumbnail: string | null;
+  }> = [];
+  for (const file of assets) {
+    const head = await env.BUCKET.head(file.key);
+    if (head === null) return textResponse("bookshelf file not found", 404);
+    if (isCollectionObject(head)) continue;
+    bytes += head.size;
+    const uploaded =
+      head.uploaded instanceof Date && !Number.isNaN(head.uploaded.getTime())
+        ? head.uploaded.toISOString()
+        : new Date(0).toISOString();
+    const contentType = bookshelfMimeType(file.name);
+    const rawThumb = head.customMetadata?.thumbnail;
+    const thumbnail = isValidThumbnailDigest(rawThumb) ? rawThumb : null;
+    sized.push({ ...file, size: head.size, uploaded, contentType, thumbnail });
+    const after = checkBookshelfLimits(sized.length, bytes);
+    if (!after.ok && after.error.startsWith("bookshelf size limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+    if (!after.ok && after.error.startsWith("bookshelf file limit exceeded")) {
+      return textResponse(after.error, 400);
+    }
+  }
+  const finalLimits = checkBookshelfLimits(sized.length, bytes);
+  if (!finalLimits.ok) return textResponse(finalLimits.error, 400);
+
+  sized.sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+
+  const prefix = `${SITES_PREFIX}${slug}/`;
+  const manifestKey = `${prefix}${SITE_MANIFEST_NAME}`;
+  const indexKey = `${prefix}index.html`;
+  const oldRels = await loadOwnedSiteRels(env.BUCKET, prefix);
+  const manifestKeys = new Set<string>();
+  for (const rel of oldRels) {
+    if (!isSafeManifestRel(rel)) continue;
+    manifestKeys.add(`${prefix}${rel}`);
+  }
+
+  const used = new Set<string>();
+  const planned: Array<{
+    key: string;
+    name: string;
+    size: number;
+    uploaded: string;
+    contentType: string;
+    thumbnail: string | null;
+    coverRel: string | null;
+  }> = [];
+  for (const file of sized) {
+    let chosen: string | null = null;
+    for (let attempt = 1; attempt <= 10000; attempt += 1) {
+      const candidate = bookshelfNameCandidate(file.name, attempt);
+      if (!candidate) continue;
+      if (used.has(candidate.toLowerCase())) continue;
+      const dest = `${prefix}${candidate}`;
+      const head = await env.BUCKET.head(dest);
+      if (head !== null && !manifestKeys.has(dest)) continue;
+      chosen = candidate;
+      break;
+    }
+    if (!chosen) return textResponse("bad bookshelf", 400);
+    used.add(chosen.toLowerCase());
+    const coverRel = file.thumbnail ? bookshelfCoverRel(chosen) : null;
+    if (coverRel) used.add(coverRel.toLowerCase());
+    planned.push({ ...file, name: chosen, coverRel });
+  }
+
+  const sourceKeys = new Set(planned.map((file) => file.key));
+  const newKeys = new Set<string>([indexKey, manifestKey]);
+  for (const file of planned) {
+    newKeys.add(`${prefix}${file.name}`);
+    if (file.coverRel) newKeys.add(`${prefix}${file.coverRel}`);
+  }
+
+  await writeEarlySiteManifest(env.BUCKET, prefix, "bookshelf", [
+    ...oldRels,
+    ...planned.map((file) => file.name),
+    ...planned.filter((file) => file.coverRel).map((file) => file.coverRel!),
+    "index.html",
+  ]);
+
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !sourceKeys.has(key))
+  );
+
+  const sitesHost = normalizeSitesHost(env.SITES_HOST) || null;
+  const base = bookshelfPublicBase(sitesHost, slug);
+  const published: Array<{
+    name: string;
+    size: number;
+    uploaded: string;
+    contentType: string;
+    url: string;
+    cover: string | null;
+  }> = [];
+  const writtenCovers: string[] = [];
+  for (const file of planned) {
+    const dest = `${prefix}${file.name}`;
+    const source = await env.BUCKET.get(file.key);
+    if (source === null) return textResponse("bookshelf file not found", 404);
+    if (isCollectionObject(source)) return textResponse("bad bookshelf", 400);
+    const buffer = await source.arrayBuffer();
+    await env.BUCKET.put(dest, new Uint8Array(buffer), {
+      httpMetadata: { contentType: file.contentType },
+      customMetadata: source.customMetadata,
+    });
+
+    let coverUrl: string | null = null;
+    if (file.thumbnail && file.coverRel) {
+      const thumbObj = await env.BUCKET.get(thumbnailObjectKey(file.thumbnail));
+      if (thumbObj !== null && !isCollectionObject(thumbObj)) {
+        const coverBuf = await thumbObj.arrayBuffer();
+        await env.BUCKET.put(`${prefix}${file.coverRel}`, new Uint8Array(coverBuf), {
+          httpMetadata: { contentType: "image/png" },
+        });
+        writtenCovers.push(file.coverRel);
+        coverUrl = encodeURI(file.coverRel);
+      }
+    }
+
+    published.push({
+      name: file.name,
+      size: file.size,
+      uploaded: file.uploaded,
+      contentType: file.contentType,
+      url: base ? `${base}/${encodeURIComponent(file.name)}` : encodeURIComponent(file.name),
+      cover: coverUrl,
+    });
+  }
+
+  await recordSiteSource(env.BUCKET, slug, null);
+  const html = renderBookshelfPage({ lang, title, files: published });
+  await putGeneratedSiteIndex(env.BUCKET, prefix, html);
+  const manifestFiles = [
+    ...planned.map((file) => file.name),
+    ...writtenCovers,
+    "index.html",
+    SITE_MANIFEST_NAME,
+  ];
+  await env.BUCKET.put(
+    manifestKey,
+    JSON.stringify({ version: 1, kind: "bookshelf", files: manifestFiles }),
+    { httpMetadata: { contentType: "application/json; charset=utf-8" } }
+  );
+
+  await deleteKeysInChunks(
+    env.BUCKET,
+    SITE_MANIFEST_NAMES.filter((name) => name !== SITE_MANIFEST_NAME).map(
+      (name) => `${prefix}${name}`
+    )
+  );
+
+  await deleteSiteKeys(
+    env.BUCKET,
+    prefix,
+    oldRels
+      .filter((rel) => isSafeManifestRel(rel))
+      .map((rel) => `${prefix}${rel}`)
+      .filter((key) => key.startsWith(prefix) && !newKeys.has(key))
+  );
+
+  return jsonResponse({
+    slug,
+    kind: "bookshelf",
+    copied: planned.length,
+    bytes,
+    sitesHost,
+  });
+}
+
 export const onRequestGet: PagesFunction<SitesApiEnv> = async (context) => {
   const { request, env } = context;
   if (!(await isSessionOrKeyAuthorized(
@@ -811,6 +1041,7 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
     album?: unknown;
     podcast?: unknown;
     downloads?: unknown;
+    bookshelf?: unknown;
     dir?: unknown;
     docs?: unknown;
   };
@@ -900,6 +1131,9 @@ export const onRequestPost: PagesFunction<SitesApiEnv> = async (context) => {
   }
   if (Object.prototype.hasOwnProperty.call(body, "downloads")) {
     return publishDownloads(env, slug, body.downloads);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "bookshelf")) {
+    return publishBookshelf(env, slug, body.bookshelf);
   }
   if (Object.prototype.hasOwnProperty.call(body, "dir")) {
     const flags = await loadFeatureFlags(env.BUCKET);

@@ -153,6 +153,10 @@ curl -X POST "https://<your-domain.com>/api/images" \
 
 Select an installer/zip folder → **Publish as download page**. Writes `sites/{slug}/index.html` listing **filename, size, SHA-256**; optional sibling `README.md` becomes release notes. Same `POST /api/sites` surface as album/dir/docs/podcast (`downloads` payload) — **no new API**. Sample: [agents/examples/folder-downloads/](../agents/examples/folder-downloads/).
 
+## PDF library / ebook bookshelf
+
+Select a PDF (optional EPUB) folder → **Publish as PDF library**. Writes `sites/{slug}/index.html` listing **filename, size, open-in-browser / download**; existing thumbnails become covers. Same `POST /api/sites` surface (`bookshelf` payload) — **no new API**. Sample: [agents/examples/folder-bookshelf/](../agents/examples/folder-bookshelf/).
+
 ## Podcast / RSS from a media folder
 
 Select an audio/video folder → **Publish as podcast / RSS**. Writes `sites/{slug}/feed.xml` (RSS 2.0 enclosures on `SITES_HOST`) plus a list player page. Same `POST /api/sites` surface as album/dir/docs — **no new API**. Sample: [agents/examples/podcast-rss/](../agents/examples/podcast-rss/).
