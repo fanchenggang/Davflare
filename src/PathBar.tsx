@@ -16,8 +16,11 @@ import {
   ContentCopy as ContentCopyIcon,
   ExpandMore as ExpandMoreIcon,
   Folder as FolderIcon,
+  PushPinOutlined,
+  PushPin,
 } from "@mui/icons-material";
 
+import { normalizeFolderPath, useFolderShortcuts } from "./app/shortcuts";
 import { NotifyFn } from "./app/notify";
 import { warmShadow } from "./app/theme";
 import { strings, translate } from "./app/strings";
@@ -43,6 +46,8 @@ function PathBar({
   searchQuery: string;
   onNotify: NotifyFn;
 }) {
+  const shortcuts = useFolderShortcuts();
+  const pinned = shortcuts.items.some(item => item.path === normalizeFolderPath(cwd));
   const parts = cwd.replace(/\/$/, "").split("/").filter(Boolean);
   const atRoot = parts.length === 0;
   const pathText = atRoot ? "/" : `/${parts.join("/")}/`;
@@ -120,6 +125,11 @@ function PathBar({
             )
           )}
         </Breadcrumbs>
+        <Tooltip title={pinned ? strings.removeShortcut : strings.addShortcut}>
+          <IconButton size="small" aria-label={pinned ? strings.removeShortcut : strings.addShortcut} onClick={() => shortcuts.toggle(cwd, cwd.split("/").filter(Boolean).pop() || strings.allFiles)} color={pinned ? "primary" : "default"}>
+            {pinned ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+          </IconButton>
+        </Tooltip>
         <IconButton
           size="small"
           aria-label={strings.copyPath}

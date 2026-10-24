@@ -551,13 +551,13 @@ function FileGrid({
         boxSizing: "border-box",
         padding: density === "compact" ? 1 : 1.5,
         paddingTop: "44px",
-        paddingBottom: density === "compact" ? 6 : 10,
+        paddingBottom: density === "compact" ? 5 : 6,
         cursor: "pointer",
         border: (theme) =>
           isSelected(file)
             ? `2px solid ${theme.palette.primary.main}`
             : `1px solid ${theme.palette.divider}`,
-        borderRadius: 2,
+        borderRadius: 1.5,
         backgroundColor: isSelected(file)
           ? "action.selected"
           : "background.paper",

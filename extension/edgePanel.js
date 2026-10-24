@@ -67,26 +67,23 @@
   };
   var t = COPY[(navigator.language || "en").toLowerCase().indexOf("zh") === 0 ? "zh" : "en"];
 
-  var SUCCESS_COLOR = "#2e7d4f";
-  var ERROR_COLOR = "#c4472c";
 
   var CSS_TEXT =
     ":host{all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;" +
     "pointer-events:none;" +
-    /* token palette mirrored from tokens.css (light) */
-    "--edge-paper:#ffffff;--edge-text:#1a1714;--edge-muted:rgba(26,23,20,0.64);" +
-    "--edge-line:rgba(28,22,16,0.08);--edge-line-strong:rgba(28,22,16,0.14);" +
-    "--edge-orange:#f38020;--edge-orange-soft:rgba(243,128,32,0.12);" +
-    "--edge-field:#faf8f4;--edge-shadow:0 4px 8px rgba(26,23,20,0.06),0 24px 56px rgba(26,23,20,0.18);" +
+    "--edge-paper:#ffffff;--edge-text:#20242c;--edge-muted:rgba(32,36,44,0.64);" +
+    "--edge-line:rgba(32,36,44,0.08);--edge-line-strong:rgba(32,36,44,0.14);" +
+    "--edge-orange:#bf510d;--edge-on-orange:#ffffff;--edge-orange-soft:rgba(243,128,32,0.12);" +
+    "--edge-field:#f5f6f8;--edge-ok:#247348;--edge-err:#b6382a;--edge-shadow:0 12px 40px rgba(32,36,44,0.14);" +
     "font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;}" +
-    "@media (prefers-color-scheme:dark){:host{" +
-    "--edge-paper:#221e17;--edge-text:#f0ece4;--edge-muted:rgba(240,236,228,0.6);" +
-    "--edge-line:rgba(240,236,228,0.13);--edge-line-strong:rgba(240,236,228,0.2);" +
-    "--edge-orange:#f79b45;--edge-orange-soft:rgba(247,155,69,0.16);" +
-    "--edge-field:#191611;--edge-shadow:0 4px 8px rgba(0,0,0,0.35),0 24px 56px rgba(0,0,0,0.55);}}" +
+    ":host([data-theme='dark']){" +
+    "--edge-paper:#1c2027;--edge-text:#edf0f5;--edge-muted:rgba(237,240,245,0.66);" +
+    "--edge-line:rgba(255,255,255,0.09);--edge-line-strong:rgba(255,255,255,0.2);" +
+    "--edge-orange:#ff9a45;--edge-on-orange:#13161b;--edge-orange-soft:rgba(243,128,32,0.22);" +
+    "--edge-field:#171b21;--edge-ok:#71ce9a;--edge-err:#ff9b89;--edge-shadow:0 12px 40px rgba(0,0,0,0.5);}" +
     "*{box-sizing:border-box;pointer-events:auto;}" +
     ".handle{position:fixed;top:40%;width:40px;height:40px;border-radius:50%;border:none;" +
-    "background:var(--edge-orange);color:#fff;cursor:pointer;display:flex;align-items:center;" +
+    "background:var(--edge-orange);color:var(--edge-on-orange);cursor:pointer;display:flex;align-items:center;" +
     "justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.2),0 10px 28px rgba(0,0,0,0.24);" +
     "transition:transform 160ms cubic-bezier(0.2,0.7,0.3,1);padding:0;}" +
     ".handle:hover{transform:scale(1.08);}" +
@@ -118,8 +115,8 @@
     "box-shadow:0 0 0 3px var(--edge-orange-soft);}" +
     ".fieldArea{resize:vertical;min-height:44px;}" +
     ".status{font-size:11px;margin:8px 2px 0;min-height:14px;line-height:1.4;}" +
-    ".status.ok{color:" + SUCCESS_COLOR + ";}" +
-    ".status.err{color:" + ERROR_COLOR + ";}" +
+    ".status.ok{color:var(--edge-ok);}" +
+    ".status.err{color:var(--edge-err);}" +
     ".status.trash{color:var(--edge-muted);}" +
     ".panelFoot{display:flex;align-items:center;justify-content:space-between;" +
     "margin-top:10px;gap:8px;}" +
@@ -129,10 +126,11 @@
     ".sideBtn:hover{border-color:var(--edge-line-strong);color:var(--edge-text);}" +
     ".sideBtn.active{background:var(--edge-orange-soft);border-color:var(--edge-orange);" +
     "color:var(--edge-orange);font-weight:600;}" +
-    ".saveBtn{background:var(--edge-orange);color:#fff;border:none;border-radius:10px;" +
+    ".saveBtn{background:var(--edge-orange);color:var(--edge-on-orange);border:none;border-radius:10px;" +
     "font-size:12px;font-weight:600;padding:7px 16px;cursor:pointer;}" +
     ".saveBtn:hover{filter:brightness(1.05);}" +
     ".saveBtn[disabled]{opacity:0.6;cursor:default;}" +
+    "button:focus-visible{outline:2px solid var(--edge-orange);outline-offset:3px;}" +
     "@media (prefers-reduced-motion:reduce){.handle,.panel{transition:none !important;}}";
 
   var BOOKMARK_SVG =
@@ -142,6 +140,27 @@
 
   var host = document.createElement("div");
   host.id = "davflare-edge-panel-host";
+  var themePreference = "system";
+  var appearanceRevision = 0;
+  var themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+  function applyAppearance() { host.dataset.theme = themePreference === "system" ? (themeMedia.matches ? "dark" : "light") : themePreference; }
+  function appearanceChanged(changes, area) {
+    if (area === "local" && changes["davflare.themeMode"]) {
+      appearanceRevision++;
+      var value = changes["davflare.themeMode"].newValue;
+      themePreference = value === "light" || value === "dark" ? value : "system";
+      applyAppearance();
+    }
+  }
+  applyAppearance();
+  themeMedia.addEventListener("change", applyAppearance);
+  chrome.storage.onChanged.addListener(appearanceChanged);
+  chrome.storage.local.get(["davflare.themeMode"]).then(function (stored) {
+    if (appearanceRevision) return;
+    var value = stored["davflare.themeMode"];
+    themePreference = value === "light" || value === "dark" ? value : "system";
+    applyAppearance();
+  }).catch(function () { /* use system appearance */ });
   var shadow = host.attachShadow({ mode: "closed" });
   var style = document.createElement("style");
   style.textContent = CSS_TEXT;
@@ -454,6 +473,8 @@
     // instead of leaving it until the next reload.
     if (msg && msg.type === "davflare-edge-remove") {
       removed = true;
+      themeMedia.removeEventListener("change", applyAppearance);
+      chrome.storage.onChanged.removeListener(appearanceChanged);
       closePanel();
       if (host.parentNode) host.parentNode.removeChild(host);
       window.__davflareEdgePanelLoaded = false;

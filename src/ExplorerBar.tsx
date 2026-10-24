@@ -16,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  MoreHoriz,
   ArrowDropDown as ArrowDropDownIcon,
   CloudUpload as CloudUploadIcon,
   ContentPaste as PasteIcon,
@@ -32,6 +33,8 @@ import {
   ViewList as ViewListIcon,
 } from "@mui/icons-material";
 
+import QuickAccessMenu from "./QuickAccessMenu";
+import { FolderShortcut } from "./app/shortcuts";
 import { useFeatures } from "./app/features";
 import { Density, FileTypeFilter, SortField, SortPref, ViewMode } from "./app/prefs";
 import { RecentEntry } from "./app/recent";
@@ -50,6 +53,8 @@ const TYPE_FILTERS: Array<{ value: FileTypeFilter; labelKey: string }> = [
 ];
 
 function ExplorerBar({
+  showSections = true,
+  onOpenShortcut,
   section,
   onSectionChange,
   onUploadFile,
@@ -76,6 +81,8 @@ function ExplorerBar({
   recents,
   onOpenRecent,
 }: {
+  showSections?: boolean;
+  onOpenShortcut?: (item: FolderShortcut) => void;
   section: ExplorerSection;
   onSectionChange: (section: ExplorerSection) => void;
   onUploadFile: () => void;
@@ -102,6 +109,7 @@ function ExplorerBar({
   recents: RecentEntry[];
   onOpenRecent: (entry: RecentEntry) => void;
 }) {
+  const [secondaryAnchor, setSecondaryAnchor] = useState<HTMLElement | null>(null);
   const [uploadAnchor, setUploadAnchor] = useState<null | HTMLElement>(null);
   const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
   const [recentAnchor, setRecentAnchor] = useState<null | HTMLElement>(null);
@@ -135,7 +143,7 @@ function ExplorerBar({
           gap: 1,
         }}
       >
-        <ToggleButtonGroup
+        {showSections && <ToggleButtonGroup
           exclusive
           size="small"
           value={section}
@@ -144,6 +152,9 @@ function ExplorerBar({
           }}
           aria-label={strings.pageSwitch}
           sx={{
+            maxWidth: "100%",
+            overflowX: "auto",
+            flexShrink: 1,
             backgroundColor: "background.default",
             "& .MuiToggleButton-root": {
               border: "none",
@@ -176,14 +187,15 @@ function ExplorerBar({
           <ToggleButton value="trash" aria-label={strings.trash}>
             {strings.trash}
           </ToggleButton>
-        </ToggleButtonGroup>
+        </ToggleButtonGroup>}
 
+        {showSections && onOpenShortcut && <QuickAccessMenu onOpen={onOpenShortcut} />}
         <Button
           size="small"
           variant="text"
           startIcon={<HistoryIcon />}
           onClick={(event) => setRecentAnchor(event.currentTarget)}
-          sx={{ color: "text.secondary" }}
+          sx={{ color: "text.secondary", display: { xs: "none", sm: "inline-flex" } }}
         >
           {strings.recent}
         </Button>
@@ -218,7 +230,7 @@ function ExplorerBar({
             variant="text"
             startIcon={<WebDavIcon />}
             onClick={onOpenWebDav}
-            sx={{ color: "text.secondary" }}
+            sx={{ color: "text.secondary", display: { xs: "none", sm: "inline-flex" } }}
           >
             {strings.webdav}
           </Button>
@@ -229,12 +241,18 @@ function ExplorerBar({
             variant="text"
             startIcon={<ApiIcon />}
             onClick={onOpenApi}
-            sx={{ color: "text.secondary" }}
+            sx={{ color: "text.secondary", display: { xs: "none", sm: "inline-flex" } }}
           >
             {strings.api}
           </Button>
         )}
 
+        <IconButton aria-label={strings.more} onClick={event => setSecondaryAnchor(event.currentTarget)} sx={{ display: { sm: "none" } }}><MoreHoriz /></IconButton>
+        <Menu open={Boolean(secondaryAnchor)} anchorEl={secondaryAnchor} onClose={() => setSecondaryAnchor(null)}>
+          <MenuItem onClick={() => { setRecentAnchor(secondaryAnchor); setSecondaryAnchor(null); }}>{strings.recent}</MenuItem>
+          {flags.webdav && <MenuItem onClick={() => { setSecondaryAnchor(null); onOpenWebDav(); }}>{strings.webdav}</MenuItem>}
+          {flags.apiKey && <MenuItem onClick={() => { setSecondaryAnchor(null); onOpenApi(); }}>{strings.api}</MenuItem>}
+        </Menu>
         {inFolder && (
           <Box
             sx={{

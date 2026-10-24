@@ -1,7 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createRoot, Root } from "react-dom/client";
-import { Box, Button, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  CssBaseline,
+  ThemeProvider,
+  Typography,
+  useMediaQuery,
+} from "@mui/material";
 import App from "../App";
+import { createAppTheme } from "../app/theme";
+import { ThemeModePreference } from "../app/prefs";
 import {
   clearCredentials,
   getCredentials,
@@ -47,6 +56,18 @@ function instanceOrigin(instanceUrl: string): string | null {
 }
 
 function DriveGate({ origin }: { origin: string }) {
+  const [themeMode, setThemeMode] = useState<ThemeModePreference>(
+    () => window.DavflareTheme?.getPreference() ?? "system",
+  );
+  useEffect(
+    () =>
+      window.DavflareTheme?.subscribe((preference) => setThemeMode(preference)),
+    [],
+  );
+  const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  const effectiveMode =
+    themeMode === "system" ? (prefersDark ? "dark" : "light") : themeMode;
+  const theme = useMemo(() => createAppTheme(effectiveMode), [effectiveMode]);
   const [state, setState] = useState<"checking" | "need" | "ready">("checking");
   const pattern = `${origin}/*`;
 
@@ -65,43 +86,55 @@ function DriveGate({ origin }: { origin: string }) {
     };
   }, [pattern]);
 
-  if (state === "ready") return <App />;
+  if (state === "ready")
+    return (
+      <App
+        layout="embedded"
+        themeMode={themeMode}
+        onThemeModeChange={(mode) => {
+          void window.DavflareTheme?.setPreference(mode);
+        }}
+      />
+    );
   const copy = COPY[lang];
   return (
-    <Box
-      sx={{
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: 3,
-      }}
-    >
-      <Box sx={{ maxWidth: 420, textAlign: "center" }}>
-        <Typography variant="h6" gutterBottom>
-          {state === "checking" ? "…" : copy.grantTitle}
-        </Typography>
-        {state === "need" && (
-          <>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              {copy.grantBody}
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => {
-                // chrome.permissions.request 必须由用户手势触发,只能放在点击里
-                chrome.permissions
-                  .request({ origins: [pattern] })
-                  .then((granted) => setState(granted ? "ready" : "need"))
-                  .catch(() => {});
-              }}
-            >
-              {copy.grantButton}
-            </Button>
-          </>
-        )}
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box
+        sx={{
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          p: 3,
+        }}
+      >
+        <Box sx={{ maxWidth: 420, textAlign: "center" }}>
+          <Typography variant="h6" gutterBottom>
+            {state === "checking" ? "…" : copy.grantTitle}
+          </Typography>
+          {state === "need" && (
+            <>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                {copy.grantBody}
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  // chrome.permissions.request 必须由用户手势触发,只能放在点击里
+                  chrome.permissions
+                    .request({ origins: [pattern] })
+                    .then((granted) => setState(granted ? "ready" : "need"))
+                    .catch(() => {});
+                }}
+              >
+                {copy.grantButton}
+              </Button>
+            </>
+          )}
+        </Box>
       </Box>
-    </Box>
+    </ThemeProvider>
   );
 }
 
@@ -177,6 +210,11 @@ function reload() {
 
 declare global {
   interface Window {
+    DavflareTheme?: {
+      getPreference(): ThemeModePreference;
+      setPreference(mode: ThemeModePreference): Promise<void>;
+      subscribe(callback: (mode: ThemeModePreference) => void): () => void;
+    };
     DavflareDrive?: {
       mount(target: HTMLElement, instanceUrl: string): void;
       reload(): void;

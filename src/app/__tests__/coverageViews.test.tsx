@@ -604,3 +604,13 @@ describe("SitesView leftovers", () => {
     expect(screen.getByText("blog")).toBeInTheDocument();
   });
 });
+
+
+test("appearance settings select all supported modes without deselecting the active one", () => {
+  mockUseFeatures.mockReturnValue({flags:DEFAULT_FEATURE_FLAGS,sitesHost:"sites.test",updateFlags:vi.fn()});
+  const onChange=vi.fn();
+  render(<SettingsView onNotify={vi.fn()} themeMode="system" onThemeModeChange={onChange} />);
+  fireEvent.click(screen.getByRole("button",{name:strings.themeLight}));expect(onChange).toHaveBeenLastCalledWith("light");
+  fireEvent.click(screen.getByRole("button",{name:strings.themeDark}));expect(onChange).toHaveBeenLastCalledWith("dark");
+  fireEvent.click(screen.getByRole("button",{name:strings.themeSystem}));expect(onChange).toHaveBeenCalledTimes(2);
+});

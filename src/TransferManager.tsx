@@ -9,6 +9,9 @@ import {
   LinearProgress,
   Stack,
   Typography,
+  Tabs,
+  Tab,
+  Box,
 } from "@mui/material";
 import {
   Cancel as CancelIcon,
@@ -49,6 +52,14 @@ function statusLabel(task: TransferTask) {
   }
 }
 
+export type TransferFilter = "all" | "active" | "failed" | "completed";
+export function filterTransfers(tasks: TransferTask[], filter: TransferFilter) {
+  if (filter === "all") return tasks;
+  return tasks.filter(task => filter === "active"
+    ? ["pending", "in-progress", "paused"].includes(task.status)
+    : task.status === filter);
+}
+
 interface SpeedSample {
   loaded: number;
   time: number;
@@ -66,6 +77,15 @@ function TransferManager({
   const globalPaused = useTransferQueueGlobalPaused();
   const actions = useTransferQueueActions();
   const tasks = transferQueue;
+  const [filter, setFilter] = useState<TransferFilter>("all");
+  const retried = useRef(new WeakSet<TransferTask>());
+  const retryTask = (task: TransferTask) => {
+    if (task.status !== "failed" || retried.current.has(task)) return;
+    retried.current.add(task);
+    actions.retry(task.id);
+  };
+  const visibleTasks = filterTransfers(tasks, filter);
+  const filterLabels: Array<[TransferFilter, string]> = [["all", strings.transferAll], ["active", strings.transferActive], ["failed", strings.transferFailed], ["completed", strings.transferCompleted]];
   const [, setTick] = useState(0);
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
@@ -137,6 +157,9 @@ function TransferManager({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{strings.transfers}</DialogTitle>
+      <Tabs value={filter} onChange={(_, value: TransferFilter) => setFilter(value)} variant="scrollable" scrollButtons="auto" aria-label={strings.transfers} sx={{ px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+        {filterLabels.map(([value, label]) => <Tab key={value} value={value} label={`${label} (${filterTransfers(tasks, value).length})`} />)}
+      </Tabs>
       <DialogContent sx={{ padding: 0 }}>
         {tasks.length === 0 ? (
           <Typography
@@ -159,7 +182,8 @@ function TransferManager({
               {overallSpeed > 0 && taskStatusText(overallSpeed, overallEta)}
             </Typography>
             <Stack spacing={2}>
-              {tasks.map((task) => {
+              {!visibleTasks.length && <Box sx={{ py: 4, textAlign: "center", color: "text.secondary" }}>{strings.noMatchingTransfers}</Box>}
+              {visibleTasks.map((task) => {
                 const speed = humanReadableSpeed(speedOf(task));
                 const unknownSize =
                   task.total === 0 && task.status === "in-progress";
@@ -203,9 +227,7 @@ function TransferManager({
                       variant={
                         unknownSize ? "indeterminate" : "determinate"
                       }
-                      value={
-                        task.total > 0 ? (task.loaded / task.total) * 100 : 0
-                      }
+                      value={task.total > 0 ? Math.min(100, (task.loaded / task.total) * 100) : task.status === "completed" ? 100 : 0}
                     />
                     {task.error && (
                       <Typography variant="caption" color="error">
@@ -218,7 +240,7 @@ function TransferManager({
                           size="small"
                           variant="contained"
                           startIcon={<RefreshIcon />}
-                          onClick={() => actions.retry(task.id)}
+                          onClick={() => retryTask(task)}
                         >
                           {strings.retry}
                         </Button>
@@ -253,7 +275,7 @@ function TransferManager({
                             startIcon={<CancelIcon />}
                             onClick={() => actions.cancel(task.id)}
                           >
-                            {strings.delete}
+                            {strings.cancelTransfer}
                           </Button>
                         )}
                     </Stack>
@@ -265,6 +287,7 @@ function TransferManager({
         )}
       </DialogContent>
       <DialogActions>
+        <Button startIcon={<RefreshIcon />} disabled={!tasks.some(task => task.status === "failed")} onClick={() => tasks.filter(task => task.status === "failed").forEach(retryTask)}>{strings.retryAllFailed}</Button>
         {tasks.some((task) => task.type === "upload") && (
           <Button
             startIcon={globalPaused ? <ResumeAllIcon /> : <PauseAllIcon />}

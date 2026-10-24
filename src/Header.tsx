@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  Menu as MenuIcon,
   AccountCircle as AccountCircleIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
@@ -44,6 +45,7 @@ function Header({
   themeMode,
   onThemeModeChange,
   elevated = false,
+  onOpenNavigation,
 }: {
   search: string;
   onSearchChange: (search: string) => void;
@@ -56,6 +58,7 @@ function Header({
   themeMode: ThemeModePreference;
   onThemeModeChange: (mode: ThemeModePreference) => void;
   elevated?: boolean;
+  onOpenNavigation?: () => void;
 }) {
   const [accountAnchor, setAccountAnchor] = useState<null | HTMLElement>(null);
   const [themeAnchor, setThemeAnchor] = useState<null | HTMLElement>(null);
@@ -105,10 +108,12 @@ function Header({
         zIndex: Z_INDEX.listHeader,
       }}
     >
+      {onOpenNavigation && <IconButton aria-label={strings.navigation} onClick={onOpenNavigation} sx={{ "@media (min-width:1024px)": { display: "none" } }}><MenuIcon /></IconButton>}
       <Typography
         variant="h6"
         sx={{
-          fontWeight: 700,
+          display: { xs: "none", sm: "block" },
+          fontWeight: 800,
           whiteSpace: "nowrap",
           color: "primary.main",
           letterSpacing: "-0.03em",
@@ -157,10 +162,12 @@ function Header({
           backgroundColor: "background.default",
           border: "1px solid",
           borderColor: "divider",
-          borderRadius: "999px",
+          borderRadius: "10px",
           padding: "4px 12px",
           marginLeft: 0.5,
-          maxWidth: 560,
+          maxWidth: 640,
+          flex: 1,
+          minWidth: 0,
           transition: "border-color 0.15s ease, box-shadow 0.15s ease",
           "&:hover": {
             borderColor: (theme) => `${theme.palette.primary.main}66`,
@@ -185,6 +192,7 @@ function Header({
       <Tooltip title={strings.language}>
         <IconButton
           aria-label={strings.language}
+          sx={{ display: { xs: "none", sm: "inline-flex" } }}
           onClick={(event) => setLangAnchor(event.currentTarget)}
         >
           <LanguageIcon />
@@ -217,6 +225,7 @@ function Header({
       <Tooltip title={strings.theme}>
         <IconButton
           aria-label={strings.theme}
+          sx={{ display: { xs: "none", sm: "inline-flex" } }}
           onClick={(event) => setThemeAnchor(event.currentTarget)}
         >
           <ThemeModeIcon />
@@ -267,6 +276,8 @@ function Header({
         open={Boolean(accountAnchor)}
         onClose={() => setAccountAnchor(null)}
       >
+        <MenuItem sx={{ display: { sm: "none" } }} onClick={() => { setLangAnchor(accountAnchor); setAccountAnchor(null); }}><LanguageIcon sx={{ mr: 1 }} />{strings.language}</MenuItem>
+        <MenuItem sx={{ display: { sm: "none" } }} onClick={() => { setThemeAnchor(accountAnchor); setAccountAnchor(null); }}><ThemeModeIcon sx={{ mr: 1 }} />{strings.theme}</MenuItem>
         {username && (
           <MenuItem disabled>
             <AccountCircleIcon sx={{ marginRight: 1 }} />

@@ -26,6 +26,8 @@ vi.mock("p-limit", () => ({
 
 vi.mock("../auth", () => ({
   authFetch: vi.fn(),
+  getCredentials: vi.fn(() => null),
+  getApiBase: vi.fn(() => "http://localhost"),
   basicAuthHeader: vi.fn(() => "Basic abc"),
 }));
 

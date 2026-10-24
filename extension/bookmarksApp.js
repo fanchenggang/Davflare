@@ -19,6 +19,11 @@ var COPY = {
     folders: "Folders",
     tags: "Tags",
     unfiled: "Unfiled",
+    appearance: "Appearance",
+    theme_system: "Follow system",
+    theme_light: "Light",
+    theme_dark: "Dark",
+    navigation: "Navigation",
     searchPlaceholder: "Search bookmarks… (pinyin supported)",
     allFolders: "All folders",
     sinceAll: "Any time",
@@ -369,6 +374,11 @@ var COPY = {
     folders: "分类",
     tags: "标签",
     unfiled: "未分类",
+    appearance: "外观",
+    theme_system: "跟随系统",
+    theme_light: "浅色",
+    theme_dark: "深色",
+    navigation: "导航",
     searchPlaceholder: "搜索书签…（支持拼音）",
     allFolders: "全部分类",
     sinceAll: "全部时间",
@@ -707,7 +717,6 @@ var ERROR_KEY = {
 };
 
 var CACHE_KEY = "bookmarksCache";
-var THEME_KEY = "davflare-theme";
 var VIEW_KEY = "davflare-bookmarks-view";
 var SORT_KEY = "davflare-bookmarks-sort";
 var FOLDER_TREE_KEY = "davflare-folder-tree-expanded";
@@ -812,67 +821,16 @@ function errorText(kind) {
 /* ---------- theme ---------- */
 
 function initTheme() {
-  var saved = null;
-  try {
-    saved = localStorage.getItem(THEME_KEY);
-  } catch (err) {
-    saved = null;
-  }
-  var theme = saved === "light" || saved === "dark" ? saved : null;
-  if (!theme) {
-    theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  applyTheme(theme);
+  if (typeof DavflareTheme === "undefined" || !DavflareTheme.subscribe) return;
+  DavflareTheme.subscribe(function (preference, effective) {
+    $("themeToggle").textContent = preference === "system" ? "◐" : effective === "dark" ? "☀" : "☾";
+    $("themeToggle").title = t.appearance + ": " + t["theme_" + preference];
+    if ($("themePreference")) $("themePreference").value = preference;
+  });
 }
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  $("themeToggle").textContent = theme === "dark" ? "☀" : "☾";
-}
-
-function toggleTheme(event) {
-  var next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // ham_home 式圆形扩散换肤：View Transitions 可用且未降级时，从点击处
-  // 扩散新主题；不支持/ reduced-motion 时静默瞬切。
-  var doc = document;
-  if (!reduce && typeof doc.startViewTransition === "function") {
-    var x = 0;
-    var y = 0;
-    if (event && event.clientX != null) {
-      x = event.clientX;
-      y = event.clientY;
-    } else {
-      var btn = $("themeToggle");
-      if (btn) {
-        var rect = btn.getBoundingClientRect();
-        x = rect.left + rect.width / 2;
-        y = rect.top + rect.height / 2;
-      }
-    }
-    var radius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y)
-    );
-    doc.startViewTransition(function () {
-      applyTheme(next);
-    });
-    doc.documentElement.animate(
-      { clipPath: ["circle(0px at " + x + "px " + y + "px)", "circle(" + radius + "px at " + x + "px " + y + "px)"] },
-      {
-        duration: 360,
-        easing: "ease-in-out",
-        pseudoElement: "::view-transition-new(root)",
-      }
-    );
-  } else {
-    applyTheme(next);
-  }
-  try {
-    localStorage.setItem(THEME_KEY, next);
-  } catch (err) {
-    /* private mode: theme just won't persist */
-  }
+function toggleTheme() {
+  var modes = ["system", "light", "dark"];
+  DavflareTheme.setPreference(modes[(modes.indexOf(DavflareTheme.getPreference()) + 1) % modes.length]);
 }
 
 /* ---------- data ---------- */
@@ -1263,7 +1221,16 @@ async function testConnection() {
 
 /* ---------- bookmarks render ---------- */
 
+function renderFilterSummary() {
+  var active = state.query || state.filter.kind !== "all" || state.since !== "all";
+  $("filterSummary").hidden = !active;
+  var filter = state.filter.kind === "pinned" ? t.navPinned : state.filter.kind === "folder" ? folderLabel(state.filter.value) : state.filter.value;
+  var since = $("sinceSelect").selectedOptions[0];
+  $("filterSummaryText").textContent = [state.query, state.filter.kind !== "all" ? filter : "", state.since !== "all" && since ? since.textContent : ""].filter(Boolean).join(" · ");
+}
+
 function renderAll() {
+  if ($("filterSummary")) renderFilterSummary();
   renderNav();
   renderFolderSelect();
   renderItems();
@@ -2702,6 +2669,7 @@ function onMasonryResize() {
 }
 
 function renderItems() {
+  if ($("filterSummary")) renderFilterSummary();
   var items = filteredItemsOrdered();
 
   var cards = $("cards");
@@ -5384,6 +5352,18 @@ function fillColorSelect() {
 }
 
 function applyCopy() {
+  $("appearanceLabel").textContent = t.appearance;
+  $("themePreference").innerHTML = "";
+  ["system", "light", "dark"].forEach(function (mode) {
+    var option = document.createElement("option"); option.value = mode; option.textContent = t["theme_" + mode]; $("themePreference").appendChild(option);
+  });
+  $("libraryMenu").textContent = t.moreLabel;
+  $("navigationToggle").textContent = "☰ " + t.navigation;
+  $("navigationClose").textContent = "✕";
+  $("navigationClose").setAttribute("aria-label", t.cancel);
+  $("navigationBackdrop").setAttribute("aria-label", t.cancel);
+  $("filterReset").textContent = t.clearFilter;
+
   document.title = t.title;
   $("brandSub").textContent = t.brandSub;
   $("switchBookmarks").textContent = t.viewBookmarks;
@@ -5733,6 +5713,39 @@ function wireEvents() {
     setView("list");
   });
   $("themeToggle").addEventListener("click", toggleTheme);
+  $("themePreference").addEventListener("change", function (event) { DavflareTheme.setPreference(event.target.value); });
+  function closeNavigation() {
+    document.body.classList.remove("navigationOpen");
+    $("navigationToggle").setAttribute("aria-expanded", "false");
+    document.querySelector(".main").inert = false;
+    $("navigationToggle").inert = false;
+    $("librarySidebar").removeAttribute("role");
+    $("librarySidebar").removeAttribute("aria-modal");
+  }
+  $("navigationToggle").addEventListener("click", function () { document.body.classList.add("navigationOpen"); $("navigationToggle").setAttribute("aria-expanded", "true"); document.querySelector(".main").inert = true; $("navigationToggle").inert = true; $("librarySidebar").setAttribute("role", "dialog"); $("librarySidebar").setAttribute("aria-modal", "true"); $("librarySidebar").setAttribute("aria-label", t.navigation); $("navigationClose").focus(); });
+  $("navigationClose").addEventListener("click", function () { closeNavigation(); $("navigationToggle").focus(); });
+  $("navigationBackdrop").addEventListener("click", function () { closeNavigation(); $("navigationToggle").focus(); });
+  document.querySelector(".sidebar").addEventListener("click", function (event) { if (event.target.closest(".navItem")) closeNavigation(); });
+  function navigationKeydown(event) {
+    if (!document.body.classList.contains("navigationOpen")) return;
+    if (event.key === "Escape") { closeNavigation(); $("navigationToggle").focus(); }
+    if (event.key === "Tab") {
+      var nodes = Array.from($("librarySidebar").querySelectorAll("button, a, input, select, [tabindex='0']")).filter(function (node) { return !node.disabled && node.getClientRects().length; });
+      var first = nodes[0], last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  }
+  window.addEventListener("resize", function () { if (window.innerWidth >= 1024) closeNavigation(); });
+  document.addEventListener("keydown", navigationKeydown);
+  $("filterReset").addEventListener("click", resetFilters);
+  $("libraryMenu").addEventListener("click", function () {
+    var menu = $("libraryActions"); var opening = menu.hidden; menu.hidden = !opening; $("libraryMenu").setAttribute("aria-expanded", String(opening));
+  });
+  $("libraryActions").addEventListener("click", function () { $("libraryActions").hidden = true; $("libraryMenu").setAttribute("aria-expanded", "false"); });
+  document.addEventListener("click", function (event) { if (!event.target.closest(".libraryMore")) { $("libraryActions").hidden = true; $("libraryMenu").setAttribute("aria-expanded", "false"); } });
+  function libraryActionsKeydown(event) { if (event.key === "Escape" && !$("libraryActions").hidden) { $("libraryActions").hidden = true; $("libraryMenu").setAttribute("aria-expanded", "false"); $("libraryMenu").focus(); } }
+  document.addEventListener("keydown", libraryActionsKeydown);
   $("addBtn").addEventListener("click", openAddDialog);
   $("addCancel").addEventListener("click", function () {
     $("addDialog").close();
@@ -5866,7 +5879,7 @@ function wireEvents() {
         target.isContentEditable ||
         (target instanceof HTMLElement && target.tagName === "SELECT"));
     var dialogOpen = Boolean(document.querySelector("dialog[open]"));
-    if (event.key === "/" && !typing && !dialogOpen) {
+    if (event.key === "/" && appState.view === "bookmarks" && !typing && !dialogOpen) {
       event.preventDefault();
       $("search").focus();
       return;

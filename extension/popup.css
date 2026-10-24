@@ -25,7 +25,7 @@ button {
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--orange);
-  color: #fff;
+  color: var(--on-orange);
   font: inherit;
   font-weight: 600;
   padding: 7px 14px;
@@ -44,6 +44,8 @@ button:disabled {
 button:focus-visible,
 input:focus-visible {
   outline: none;
+  outline: 2px solid var(--orange-dark);
+  outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--focus);
 }
 
@@ -301,3 +303,12 @@ button.ghost:hover {
   background: var(--muted);
   background-clip: content-box;
 }
+
+/* The popup uses the same surfaces and control geometry as the workspace. */
+body { padding: 20px; gap: 16px; background: var(--bg); }
+.popHead { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+input, textarea { border-radius: 8px; background: var(--paper); }
+.saveBtn { min-height: 40px; }
+.edgeSection { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+textarea:focus-visible { outline: 2px solid var(--orange-dark); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }

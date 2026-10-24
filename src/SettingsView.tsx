@@ -1,3 +1,4 @@
+import { ThemeModePreference } from "./app/prefs";
 import { useState } from "react";
 import {
   Alert,
@@ -8,6 +9,8 @@ import {
   Stack,
   Switch,
   Typography,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import ChecklistIcon from "@mui/icons-material/Checklist";
 import HubIcon from "@mui/icons-material/Hub";
@@ -35,10 +38,14 @@ const SWITCHES: Array<{
 
 function SettingsView({
   onNotify,
+  themeMode,
+  onThemeModeChange,
   onOpenSetup,
   onOpenMcp,
 }: {
   onNotify: NotifyFn;
+  themeMode?: ThemeModePreference;
+  onThemeModeChange?: (mode: ThemeModePreference) => void;
   onOpenSetup?: () => void;
   onOpenMcp?: () => void;
 }) {
@@ -58,13 +65,19 @@ function SettingsView({
   };
 
   return (
-    <Box sx={{ px: 2, py: 2, maxWidth: 640, minHeight: 0 }}>
+    <Box sx={{ px: { xs: 2, sm: 4 }, py: 3, maxWidth: 960, mx: "auto", minHeight: 0 }}>
       <Typography variant="h6" sx={{ mb: 0.5 }}>
         {strings.settingsTitle}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {strings.settingsHint}
       </Typography>
+      {onThemeModeChange && <Box sx={{ p: 2.5, mb: 3, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1.5 }}>{strings.appearance}</Typography>
+        <ToggleButtonGroup exclusive value={themeMode} onChange={(_, mode: ThemeModePreference | null) => mode && onThemeModeChange(mode)} size="small" aria-label={strings.theme}>
+          <ToggleButton value="system">{strings.themeSystem}</ToggleButton><ToggleButton value="light">{strings.themeLight}</ToggleButton><ToggleButton value="dark">{strings.themeDark}</ToggleButton>
+        </ToggleButtonGroup>
+      </Box>}
       {(onOpenSetup || onOpenMcp) && (
         <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
           {onOpenSetup && (
@@ -100,6 +113,7 @@ function SettingsView({
           <Typography variant="body2">{strings.imagesHostMissingHint}</Typography>
         </Alert>
       )}
+      <Typography variant="subtitle1" sx={{ mb: 1.5 }}>{strings.featureSettings}</Typography>
       <Stack spacing={1.5}>
         {SWITCHES.map((item) => (
           <Box
@@ -137,6 +151,7 @@ function SettingsView({
             />
           </Box>
         ))}
+        <Typography variant="subtitle1" sx={{ pt: 2 }}>{strings.clientConnections}</Typography>
         <McpExportCard onNotify={onNotify} />
         <BackupCronCard onNotify={onNotify} />
         <ImageHostExportCard onNotify={onNotify} />

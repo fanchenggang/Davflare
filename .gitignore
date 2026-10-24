@@ -34,3 +34,7 @@ cli/dist
 dist-extension/
 # 扩展网盘视图构建产物(vite.extension.config.ts → extension/drive/drive.js)
 /extension/drive/
+
+# Local redesign verification outputs
+/redesign-artifacts/
+/.playwright-mcp/

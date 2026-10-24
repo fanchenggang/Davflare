@@ -1,4 +1,5 @@
-import { authFetch } from "./auth";
+import { relocateShortcuts, shortcutScope } from "./shortcuts";
+import { getApiBase, getCredentials, authFetch } from "./auth";
 import { DownloadRequest, FileItem } from "./types";
 import { basename, encodeKey } from "./utils";
 import { translate } from "./strings";
@@ -302,6 +303,8 @@ export async function downloadSelectionArchive(keys: string[], cwd: string) {
 }
 
 export async function copyPaste(source: string, target: string, move = false) {
+  const owner = move ? getCredentials() : null;
+  const ownerScope = owner ? shortcutScope(getApiBase(), owner.username) : null;
   const uploadUrl = `${WEBDAV_ENDPOINT}${encodeKey(source)}`;
   const destinationUrl = new URL(
     `${WEBDAV_ENDPOINT}${encodeKey(target)}`,
@@ -314,6 +317,7 @@ export async function copyPaste(source: string, target: string, move = false) {
   if (!response.ok) {
     throw new Error(move ? translate("moveFailed") : translate("copyFailed2"));
   }
+  if (ownerScope) relocateShortcuts(ownerScope, source, target);
 }
 
 export async function createFolder(cwd: string, folderName: string) {

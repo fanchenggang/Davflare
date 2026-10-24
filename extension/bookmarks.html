@@ -6,22 +6,14 @@
     <title>Davflare Bookmarks</title>
     <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="bookmarks.css" />
-    <script>
-      (function () {
-        try {
-          var k = "davflare-theme";
-          var t = localStorage.getItem(k);
-          if (t !== "light" && t !== "dark") {
-            t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-          }
-          document.documentElement.dataset.theme = t;
-        } catch (e) {}
-      })();
-    </script>
+    <script src="theme.js"></script>
   </head>
   <body>
+    <button id="navigationToggle" class="navigationToggle ghost" type="button" aria-expanded="false" aria-controls="librarySidebar">☰</button>
+    <button id="navigationBackdrop" class="navigationBackdrop" type="button" tabindex="-1" aria-label="Close navigation"></button>
     <div class="app">
-      <aside class="sidebar">
+      <aside class="sidebar" id="librarySidebar">
+        <button id="navigationClose" class="navigationClose ghost" type="button" aria-label="Close navigation">✕</button>
         <header class="brand">
           <img src="icons/icon48.png" width="36" height="36" alt="" />
           <div>
@@ -105,8 +97,13 @@
               </div>
             </div>
             <div class="topbarActions">
-              <button id="publishNavBtn" class="ghost" type="button">Publish as nav</button>
-              <button id="selAllBtn" class="ghost" type="button">Select all</button>
+              <div class="libraryMore">
+                <button id="libraryMenu" class="ghost" type="button" aria-expanded="false" aria-controls="libraryActions">More</button>
+                <div id="libraryActions" class="libraryActions" hidden>
+                  <button id="publishNavBtn" class="ghost" type="button">Publish as nav</button>
+                  <button id="selAllBtn" class="ghost" type="button">Select all</button>
+                </div>
+              </div>
               <button id="libRefresh" class="ghost" type="button" title="Reload">Reload</button>
               <div class="viewToggle" role="group" aria-label="View">
                 <button id="viewGrid" class="active" type="button" title="Grid">▦</button>
@@ -116,6 +113,7 @@
             </div>
           </header>
 
+          <div id="filterSummary" class="filterSummary" hidden><span id="filterSummaryText"></span><button id="filterReset" class="quiet" type="button">Clear filters</button></div>
           <div id="batchBar" class="batchBar hidden">
             <span id="batchCount" class="batchCount"></span>
             <button id="batchMove" class="ghost" type="button">Move</button>
@@ -200,6 +198,7 @@
             <div class="spacer"></div>
           </header>
           <div id="bannerSettings" class="banner hidden"></div>
+          <section class="settingsCard appearanceCard"><label id="appearanceLabel" for="themePreference">Appearance</label><select id="themePreference"></select></section>
           <section class="settingsCard">
             <form id="settingsForm" novalidate>
               <label for="instanceUrl" id="urlLabel">Instance URL</label>

@@ -11,7 +11,6 @@
  * with a conditional GET so large libraries do not block the Save button.
  */
 
-var THEME_KEY = "davflare-theme";
 var LAST_FOLDER_KEY = "popupLastFolder";
 var CACHE_KEY = "bookmarksCache";
 
@@ -154,17 +153,9 @@ function errorText(kind) {
 }
 
 function applyTheme() {
-  var saved = null;
-  try {
-    saved = localStorage.getItem(THEME_KEY);
-  } catch (err) {
-    saved = null;
+  if (typeof DavflareTheme !== "undefined" && DavflareTheme.subscribe) {
+    DavflareTheme.subscribe(function (_, effective) { document.documentElement.dataset.theme = effective; });
   }
-  var theme = saved === "light" || saved === "dark" ? saved : null;
-  if (!theme) {
-    theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  }
-  document.documentElement.dataset.theme = theme;
 }
 
 function setStatus(text, kind) {

@@ -3,12 +3,20 @@ import {
   Box,
   Button,
   CssBaseline,
+  Drawer,
   Snackbar,
   Stack,
   ThemeProvider,
   useMediaQuery,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import WorkspaceNavigation from "./WorkspaceNavigation";
+import {
+  FolderShortcutsProvider,
+  FolderShortcut,
+  useFolderShortcuts,
+} from "./app/shortcuts";
+import { fetchPath } from "./app/transfer";
 import ApiKeysPanel from "./ApiKeysPanel";
 import CommandPalette from "./CommandPalette";
 import Header from "./Header";
@@ -19,7 +27,12 @@ import { AuthProvider, useAuth } from "./app/auth";
 import { installThumbnailCacheCleanup } from "./app/thumbnailCache";
 import { FeaturesProvider, useFeatures } from "./app/features";
 import { ClipboardProvider } from "./app/clipboard";
-import { NoticeAction, NoticeOptions, NoticeSeverity, NotifyFn } from "./app/notify";
+import {
+  NoticeAction,
+  NoticeOptions,
+  NoticeSeverity,
+  NotifyFn,
+} from "./app/notify";
 import { strings, translate, useLang } from "./app/strings";
 import {
   SortPref,
@@ -42,7 +55,7 @@ export interface SnackbarMessage {
 /** error 排队；success/info 立刻顶到队首并丢掉已排队的非 error。 */
 export function enqueueSnack(
   queue: SnackbarMessage[],
-  next: SnackbarMessage
+  next: SnackbarMessage,
 ): SnackbarMessage[] {
   if (next.severity === "error") {
     return [...queue, next];
@@ -58,14 +71,17 @@ function isTypingTarget(target: EventTarget | null) {
     target instanceof HTMLElement
       ? target
       : document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+        ? document.activeElement
+        : null;
   if (!el) return false;
   const field = el.closest("input, textarea, select, [contenteditable='true']");
   if (field instanceof HTMLInputElement) {
     return !["checkbox", "radio", "button", "submit"].includes(field.type);
   }
-  if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+  if (
+    field instanceof HTMLTextAreaElement ||
+    field instanceof HTMLSelectElement
+  ) {
     return true;
   }
   return Boolean(field) || el.isContentEditable;
@@ -74,7 +90,9 @@ function isTypingTarget(target: EventTarget | null) {
 function AppContent({
   themeMode,
   onThemeModeChange,
+  layout = "standalone",
 }: {
+  layout?: "standalone" | "embedded";
   themeMode: ThemeModePreference;
   onThemeModeChange: (mode: ThemeModePreference) => void;
 }) {
@@ -83,6 +101,13 @@ function AppContent({
   const { flags } = useFeatures();
   const transferQueue = useTransferQueue();
   const [route, navigate] = useHashRoute();
+  const [navOpen, setNavOpen] = useState(false);
+  const desktopNavigation = useMediaQuery("(min-width:1024px)");
+  const systemDark = useMediaQuery("(prefers-color-scheme: dark)");
+  useEffect(() => {
+    if (desktopNavigation) setNavOpen(false);
+  }, [desktopNavigation]);
+  const { remove: removeShortcut } = useFolderShortcuts();
   const [search, setSearch] = useState("");
   const [showTransfers, setShowTransfers] = useState(false);
   const [showApiKeys, setShowApiKeys] = useState(false);
@@ -92,7 +117,10 @@ function AppContent({
   const [snackOpen, setSnackOpen] = useState(false);
   const snackKeyRef = useRef(0);
   const currentSnack = snackQueue[0] ?? null;
-  const [view, setView] = usePersistedState<ViewMode>("flaredrive.view", "grid");
+  const [view, setView] = usePersistedState<ViewMode>(
+    "flaredrive.view",
+    "grid",
+  );
   const [sort, setSort] = usePersistedState<SortPref>("flaredrive.sort", {
     field: "name",
     order: "asc",
@@ -101,14 +129,11 @@ function AppContent({
   const notified = useRef(new Set<string>());
   const shownSnackKeyRef = useRef<number | null>(null);
 
-  const pushSnack = useCallback(
-    (snack: Omit<SnackbarMessage, "key">) => {
-      snackKeyRef.current += 1;
-      const next = { ...snack, key: snackKeyRef.current };
-      setSnackQueue((queue) => enqueueSnack(queue, next));
-    },
-    []
-  );
+  const pushSnack = useCallback((snack: Omit<SnackbarMessage, "key">) => {
+    snackKeyRef.current += 1;
+    const next = { ...snack, key: snackKeyRef.current };
+    setSnackQueue((queue) => enqueueSnack(queue, next));
+  }, []);
 
   // 队列化展示：上一条退出动画结束后再弹下一条，连续消息不再互相覆盖。
   // onExited 是队列消费点；退场期间队首仍是已展示过的消息，用 shownSnackKeyRef
@@ -136,7 +161,10 @@ function AppContent({
         pushSnack({
           message: translate("uploadFailedToast", { name: task.name }),
           severity: "error",
-          action: { label: translate("transfers"), onClick: () => setShowTransfers(true) },
+          action: {
+            label: translate("transfers"),
+            onClick: () => setShowTransfers(true),
+          },
         });
       }
     });
@@ -148,10 +176,39 @@ function AppContent({
         message,
         severity,
         action: options?.action,
-        duration: options?.duration ?? (severity === "error" ? ERROR_SNACK_MS : undefined),
+        duration:
+          options?.duration ??
+          (severity === "error" ? ERROR_SNACK_MS : undefined),
       });
     },
-    [pushSnack]
+    [pushSnack],
+  );
+
+  const goTo = (next: Parameters<typeof navigate>[0]) => {
+    navigate(next);
+    setSearch("");
+    setNavOpen(false);
+  };
+  const openShortcut = async (item: FolderShortcut) => {
+    setNavOpen(false);
+    try {
+      await fetchPath(item.path);
+      goTo({ kind: "folder", path: item.path });
+    } catch {
+      onNotify(strings.shortcutUnavailable, "error", {
+        action: {
+          label: strings.removeShortcut,
+          onClick: () => removeShortcut(item.path),
+        },
+      });
+    }
+  };
+  const navigation = (
+    <WorkspaceNavigation
+      route={route}
+      navigate={goTo}
+      onOpenShortcut={openShortcut}
+    />
   );
 
   useEffect(() => {
@@ -166,10 +223,14 @@ function AppContent({
         setShowPalette(true);
         return;
       }
-      if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
+      if (
+        isTypingTarget(event.target) ||
+        isTypingTarget(document.activeElement)
+      ) {
         return;
       }
-      const slash = event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
+      const slash =
+        event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
       if (slash) {
         event.preventDefault();
         searchInputRef.current?.focus();
@@ -181,7 +242,14 @@ function AppContent({
   }, []);
 
   return (
-    <Stack sx={{ height: "100%", minHeight: 0, overflow: "hidden", backgroundColor: "background.default" }}>
+    <Stack
+      sx={{
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+        backgroundColor: "background.default",
+      }}
+    >
       <Button
         href="#main-content"
         sx={{
@@ -196,6 +264,9 @@ function AppContent({
         {strings.skipToContent}
       </Button>
       <Header
+        onOpenNavigation={
+          layout === "standalone" ? () => setNavOpen(true) : undefined
+        }
         search={search}
         onSearchChange={setSearch}
         searchInputRef={searchInputRef}
@@ -208,37 +279,70 @@ function AppContent({
         onThemeModeChange={onThemeModeChange}
         elevated={contentScrolled}
       />
-      <Box
-        component="main"
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
-          minHeight: 0,
-          overflow: "hidden",
-        }}
-      >
-        <Main
-          search={search}
-        onSearchChange={setSearch}
-        onNotify={onNotify}
-        view={view}
-        onViewChange={setView}
-        sort={sort}
-        onSortChange={setSort}
-        route={route}
-        navigate={navigate}
-        onOpenApi={() => flags.apiKey && setShowApiKeys(true)}
-          onContentScroll={setContentScrolled}
-        />
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        {layout === "standalone" && (
+          <>
+            <Box
+              sx={{
+                display: "none",
+                "@media (min-width:1024px)": { display: "flex" },
+                flexShrink: 0,
+              }}
+            >
+              {navigation}
+            </Box>
+            <Drawer
+              open={navOpen && !desktopNavigation}
+              onClose={() => setNavOpen(false)}
+              sx={{ "@media (min-width:1024px)": { display: "none" } }}
+            >
+              {navigation}
+            </Drawer>
+          </>
+        )}
+        <Box
+          component="main"
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            flexGrow: 1,
+            minWidth: 0,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
+          <Main
+            compactNavigation={layout === "embedded"}
+            themeMode={themeMode}
+            onThemeModeChange={onThemeModeChange}
+            search={search}
+            onSearchChange={setSearch}
+            onNotify={onNotify}
+            view={view}
+            onViewChange={setView}
+            sort={sort}
+            onSortChange={setSort}
+            route={route}
+            navigate={navigate}
+            onOpenApi={() => flags.apiKey && setShowApiKeys(true)}
+            onContentScroll={setContentScrolled}
+          />
+        </Box>
       </Box>
       {username === null && <LoginDialog />}
       <Snackbar
         key={currentSnack?.key}
-        autoHideDuration={currentSnack?.duration ?? (currentSnack?.severity === "error" ? ERROR_SNACK_MS : DEFAULT_SNACK_MS)}
+        autoHideDuration={
+          currentSnack?.duration ??
+          (currentSnack?.severity === "error"
+            ? ERROR_SNACK_MS
+            : DEFAULT_SNACK_MS)
+        }
         open={snackOpen}
         onClose={() => setSnackOpen(false)}
-        TransitionProps={{ onExited: () => setSnackQueue((queue) => queue.slice(1)) }}
+        TransitionProps={{
+          onExited: () => setSnackQueue((queue) => queue.slice(1)),
+        }}
         anchorOrigin={{ vertical: "top", horizontal: "center" }}
         sx={{ top: { xs: 64, sm: 72 } }}
       >
@@ -265,7 +369,10 @@ function AppContent({
           {currentSnack?.message}
         </Alert>
       </Snackbar>
-      <TransferManager open={showTransfers} onClose={() => setShowTransfers(false)} />
+      <TransferManager
+        open={showTransfers}
+        onClose={() => setShowTransfers(false)}
+      />
       <CommandPalette
         open={showPalette}
         onClose={() => setShowPalette(false)}
@@ -273,7 +380,11 @@ function AppContent({
         onNotify={onNotify}
         onOpenTransfers={() => setShowTransfers(true)}
         onThemeToggle={() =>
-          onThemeModeChange(themeMode === "dark" ? "light" : "dark")
+          onThemeModeChange(
+            themeMode === "dark" || (themeMode === "system" && systemDark)
+              ? "light"
+              : "dark",
+          )
         }
       />
       {flags.apiKey && (
@@ -287,26 +398,28 @@ function AppContent({
   );
 }
 
-function ThemedApp() {
-  const [themeMode, setThemeMode] = usePersistedState<ThemeModePreference>(
-    "flaredrive.themeMode",
-    "system"
-  );
+export interface AppProps {
+  layout?: "standalone" | "embedded";
+  themeMode?: ThemeModePreference;
+  onThemeModeChange?: (mode: ThemeModePreference) => void;
+}
+function ThemedApp(props: AppProps) {
+  const [localThemeMode, setLocalThemeMode] =
+    usePersistedState<ThemeModePreference>("flaredrive.themeMode", "system");
+  const themeMode = props.themeMode ?? localThemeMode;
+  const setThemeMode = props.onThemeModeChange ?? setLocalThemeMode;
   const systemPrefersDark = useMediaQuery("(prefers-color-scheme: dark)", {
     noSsr: true,
   });
   const effectiveMode =
-    themeMode === "system"
-      ? systemPrefersDark
-        ? "dark"
-        : "light"
-      : themeMode;
+    themeMode === "system" ? (systemPrefersDark ? "dark" : "light") : themeMode;
   const theme = useMemo(() => createAppTheme(effectiveMode), [effectiveMode]);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AppContent
+        layout={props.layout}
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
       />
@@ -314,7 +427,7 @@ function ThemedApp() {
   );
 }
 
-function App() {
+function App(props: AppProps) {
   // 退出登录清缩略图缓存要在启动时就挂上，不能等第一次加载缩略图（#184）
   useEffect(() => {
     installThumbnailCacheCleanup();
@@ -324,7 +437,9 @@ function App() {
       <FeaturesProvider>
         <TransferQueueProvider>
           <ClipboardProvider>
-            <ThemedApp />
+            <FolderShortcutsProvider>
+              <ThemedApp {...props} />
+            </FolderShortcutsProvider>
           </ClipboardProvider>
         </TransferQueueProvider>
       </FeaturesProvider>

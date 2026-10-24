@@ -27,6 +27,8 @@ vi.mock("p-limit", () => ({
 vi.mock("../auth", () => ({
   authFetch: vi.fn(),
   basicAuthHeader: vi.fn(),
+  getCredentials: vi.fn(() => null),
+  getApiBase: vi.fn(() => "http://localhost"),
 }));
 
 const mockAuthFetch = asAuthFetchMock(authFetch);
@@ -238,4 +240,23 @@ describe("transfer / processTransferTask", () => {
       processTransferTask({ task: { type: "upload", remoteKey: "a.txt", file } as any, signal: controller.signal })
     ).rejects.toThrow("Aborted");
   });
+});
+
+test("successful MOVE updates pinned descendants, while COPY and failed MOVE leave them intact", async () => {
+  const { getCredentials } = await import("../auth");
+  const { loadShortcuts, saveShortcuts, shortcutScope } = await import("../shortcuts");
+  vi.mocked(getCredentials).mockReturnValue({username:"alice",password:"test"});
+  const scope = shortcutScope("http://localhost", "alice");
+  saveShortcuts(scope, [{path:"docs/",name:"Docs"},{path:"docs/sub/",name:"Sub"}]);
+  try {
+    mockAuthFetch.mockResolvedValue(new Response(null, {status:201}));
+    await copyPaste("docs", "copy", false);
+    expect(loadShortcuts(scope)[0].path).toBe("docs/");
+    mockAuthFetch.mockResolvedValue(new Response(null, {status:409}));
+    await expect(copyPaste("docs", "conflict", true)).rejects.toThrow();
+    expect(loadShortcuts(scope)[0].path).toBe("docs/");
+    mockAuthFetch.mockResolvedValue(new Response(null, {status:201}));
+    await copyPaste("docs", "renamed", true);
+    expect(loadShortcuts(scope)).toEqual([{path:"renamed/",name:"renamed"},{path:"renamed/sub/",name:"Sub"}]);
+  } finally { vi.mocked(getCredentials).mockReturnValue(null); }
 });

@@ -52,7 +52,7 @@ button {
   border: 0;
   border-radius: 8px;
   background: var(--orange);
-  color: #fff;
+  color: var(--on-orange);
   font: inherit;
   font-weight: 600;
   padding: 6px 14px;
@@ -67,6 +67,8 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible {
   outline: none;
+  outline: 2px solid var(--orange-dark);
+  outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--focus);
 }
 
@@ -87,6 +89,7 @@ button.ghost:hover {
 }
 
 button.danger {
+  color: var(--on-error);
   background: var(--err);
 }
 
@@ -1422,6 +1425,8 @@ dialog textarea {
 #viewSettings input:focus {
   outline: none;
   border-color: var(--orange);
+  outline: 2px solid var(--orange-dark);
+  outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--focus);
 }
 
@@ -2232,3 +2237,57 @@ dialog textarea {
   animation: none;
   mix-blend-mode: normal;
 }
+
+/* Unified workspace chrome. Keep menus outside clipped card surfaces. */
+.main { padding: 24px 32px 40px; }
+.brand { padding: 4px 10px 20px; }
+.brand h1 { font-size: 18px; font-weight: 800; }
+.navItem { min-height: 36px; }
+.topbar { padding: 12px; border-radius: 12px; box-shadow: none; gap: 12px; }
+.topbarSearch { max-width: none; flex-basis: 320px; }
+.topbarFilters { flex: 1 1 auto; }
+.topbarFilters select { min-width: 0; max-width: 170px; }
+.topbarActions { gap: 6px; }
+.card, .wsCard, .ruleCard, .settingsCard { border-color: var(--line-strong); }
+.card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.settingsCard + .settingsCard { margin-top: 20px; }
+#viewSettings .settingsCard { max-width: 800px; box-shadow: none; }
+#viewSettings .appearanceCard { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+#viewSettings .appearanceCard label { margin: 0; }
+#themePreference { background: var(--paper-soft); color: var(--text); border: 1px solid var(--line-strong); padding: 8px 12px; border-radius: 8px; font: inherit; }
+.filterSummary { display: flex; align-items: center; gap: 12px; padding: 0 4px 16px; color: var(--muted); font-size: 13px; }
+.filterSummary[hidden], .libraryActions[hidden] { display: none; }
+#filterSummaryText { overflow-wrap: anywhere; min-width: 0; }
+#filterReset { flex-shrink: 0; }
+.libraryMore { position: relative; }
+.libraryActions { position: absolute; right: 0; top: calc(100% + 8px); padding: 6px; min-width: 180px; display: grid; gap: 4px; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow-md); z-index: 20; }
+.libraryActions button { width: 100%; text-align: left; }
+.navigationToggle, .navigationClose, .navigationBackdrop { display: none; }
+#viewDrive { height: calc(100vh - 48px); }
+#driveRoot { min-height: 0; }
+#driveRoot button { font-family: inherit; }
+@media (max-width: 1023px) {
+  .app { grid-template-columns: 1fr; }
+  .main { padding: 16px 16px 32px; }
+  .navigationToggle { display: block; margin: 12px 16px 0; }
+  .navigationClose { display: block; align-self: flex-end; }
+  .sidebar { position: fixed; inset: 0 auto 0 0; width: min(300px, 85vw); height: 100dvh; z-index: 50; border-right: 1px solid var(--line); transform: translateX(-100%); visibility: hidden; transition: transform var(--dur-base) var(--ease-out), visibility var(--dur-base); }
+  .navigationOpen .sidebar { transform: none; visibility: visible; }
+  .navigationOpen .navigationBackdrop { display: block; position: fixed; inset: 0; z-index: 49; border-radius: 0; background: var(--overlay); padding: 0; }
+  .topbarSearch { min-width: 0; flex-basis: 100%; }
+  .topbarFilters { width: 100%; }
+  .topbarActions { margin-left: 0; }
+  .topbarFilters select { max-width: 140px; }
+  #viewDrive { height: calc(100dvh - 92px); }
+}
+@media (max-width: 599px) {
+  .main { padding: 12px; }
+  .topbar { position: relative; padding: 10px; gap: 10px; }
+  .topbarFilters { gap: 6px; }
+  .topbarFilters select { flex: 1; max-width: 100%; }
+  .presetWrap { max-width: 100%; }
+  .batchBar { flex-wrap: wrap; }
+  .settingsCard { padding: 16px !important; }
+}
+
+body.navigationOpen { overflow: hidden; }

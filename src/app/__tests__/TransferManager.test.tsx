@@ -75,7 +75,7 @@ describe("TransferManager", () => {
     expect(screen.getByText("boom")).toBeInTheDocument();
     fireEvent.click(screen.getByText(strings.retry));
     expect(actions.retry).toHaveBeenCalledWith("t1");
-    fireEvent.click(screen.getByText(strings.delete));
+    fireEvent.click(screen.getByText(strings.cancelTransfer));
     expect(actions.cancel).toHaveBeenCalledWith("t1");
   });
 
@@ -112,7 +112,7 @@ describe("TransferManager", () => {
     expect(screen.getByText(/等待中/)).toBeInTheDocument();
     fireEvent.click(screen.getByText(strings.pause));
     expect(actions.pause).toHaveBeenCalledWith("t2");
-    fireEvent.click(screen.getByText(strings.delete));
+    fireEvent.click(screen.getByText(strings.cancelTransfer));
     expect(actions.cancel).toHaveBeenCalledWith("t2");
   });
 
@@ -143,7 +143,7 @@ describe("TransferManager", () => {
     render(<TransferManager open onClose={vi.fn()} />);
     fireEvent.click(screen.getByText(strings.resume));
     expect(actions.resume).toHaveBeenCalledWith("t4");
-    fireEvent.click(screen.getByText(strings.delete));
+    fireEvent.click(screen.getByText(strings.cancelTransfer));
     expect(actions.cancel).toHaveBeenCalledWith("t4");
   });
 
@@ -220,4 +220,25 @@ describe("TransferManager", () => {
     render(<TransferManager open onClose={vi.fn()} />);
     expect(screen.getAllByText(/unknown/).length).toBeGreaterThan(0);
   });
+});
+
+test("status tabs filter tasks while totals still include the whole queue", () => {
+  mockQueue.mockReturnValue([failed, {...failed,id:"p",name:"pending.txt",status:"pending",loaded:0}, {...failed,id:"done",name:"done.txt",status:"completed",loaded:10}, {...failed,id:"c",name:"canceled.txt",status:"canceled"}]);
+  render(<TransferManager open onClose={vi.fn()} />);
+  expect(screen.getByRole("tab", {name:"全部 (4)"})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", {name:"失败 (1)"})); expect(screen.getByText("a.txt")).toBeInTheDocument(); expect(screen.queryByText("pending.txt")).not.toBeInTheDocument();
+  expect(screen.getByText(/40.0 B/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", {name:"进行中 (1)"})); expect(screen.getByText("pending.txt")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", {name:"已完成 (1)"})); expect(screen.getByText("done.txt")).toBeInTheDocument(); expect(screen.queryByText("canceled.txt")).not.toBeInTheDocument();
+});
+test("bulk retry only retries failed snapshots once and allows a later failure to be retried", () => {
+  const retry = vi.fn(); mockActionsHook.mockReturnValue({...mockActionsHook(),retry});
+  const tasks = [failed,{...failed,id:"f2",name:"b.txt"},{...failed,id:"done",status:"completed"}];
+  mockQueue.mockReturnValue(tasks);
+  const view = render(<TransferManager open onClose={vi.fn()} />);
+  fireEvent.click(screen.getByText(strings.retryAllFailed)); fireEvent.click(screen.getByText(strings.retryAllFailed));
+  expect(retry.mock.calls).toEqual([["t1"],["f2"]]);
+  mockQueue.mockReturnValue([{...failed}]); view.rerender(<TransferManager open onClose={vi.fn()} />);
+  fireEvent.click(screen.getByText(strings.retryAllFailed)); expect(retry).toHaveBeenCalledTimes(3);
+  fireEvent.click(screen.getByRole("tab", {name:"已完成 (0)"})); expect(screen.getByText(strings.noMatchingTransfers)).toBeInTheDocument();
 });

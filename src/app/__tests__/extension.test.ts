@@ -794,7 +794,7 @@ describe("Davflare Chrome extension / round 4: edge panel + save link + polish",
     expect(edgePanelJs).toContain("type: \"davflare-edge-save\"");
     expect(edgePanelJs).toContain("type: \"davflare-edge-meta\"");
     expect(edgePanelJs).toContain('"davflare-edge-toggle"');
-    expect(edgePanelJs).toContain("prefers-color-scheme:dark");
+    expect(edgePanelJs).toContain("prefers-color-scheme: dark");
     expect(edgePanelJs).toContain("prefers-reduced-motion:reduce");
     expect(edgePanelJs).toContain("popupLastFolder");
     expect(edgePanelJs).toContain("edgePanelSide");

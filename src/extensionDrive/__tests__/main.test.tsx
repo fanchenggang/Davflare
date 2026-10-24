@@ -5,8 +5,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 // 避免冷启动拉起 React+MUI 整树导致 CI 上偶发超过默认 5s timeout。
 // 完整渲染链路由手动用例覆盖（见 TESTING.md）。
 vi.mock("../../App", () => ({
-  default: function MockApp() {
-    return null;
+  default: function MockApp(props: {layout?:string;themeMode?:string;onThemeModeChange?:(mode:string)=>void}) {
+    return <button onClick={() => props.onThemeModeChange?.("light")}>{props.layout}:{props.themeMode}</button>;
   },
 }));
 
@@ -49,6 +49,7 @@ describe("DavflareDrive bridge", () => {
   afterEach(() => {
     delete (globalThis as unknown as { chrome?: unknown }).chrome;
     delete (window as unknown as { DavflareDrive?: unknown }).DavflareDrive;
+    delete window.DavflareTheme;
     vi.restoreAllMocks();
   });
 
@@ -94,4 +95,19 @@ describe("DavflareDrive bridge", () => {
       expect(window.localStorage.getItem("flaredrive.auth")).toContain("alice");
     });
   });
+
+it("embedded drive follows extension theme changes and writes selections back", async () => {
+  stubChrome({granted:true});
+  let callback: ((mode:"system"|"light"|"dark") => void) | undefined;
+  const write = vi.fn(async () => {}), dispose = vi.fn();
+  window.DavflareTheme = {getPreference:()=>"dark",setPreference:write,subscribe:fn=>{callback=fn;return dispose;}};
+  await import("../main");
+  const target=document.createElement("div");document.body.appendChild(target);
+  window.DavflareDrive!.mount(target,"https://drive.example.com");
+  await vi.waitFor(()=>expect(target.textContent).toBe("embedded:dark"));
+  callback!("system");await vi.waitFor(()=>expect(target.textContent).toBe("embedded:system"));
+  target.querySelector("button")!.click();expect(write).toHaveBeenCalledWith("light");
+  window.DavflareDrive!.reload();await vi.waitFor(()=>expect(dispose).toHaveBeenCalled());
+});
+
 });

@@ -22,6 +22,8 @@ export function setApiBase(base: string) {
   apiBase = (base || "").replace(/\/+$/, "");
 }
 
+export function getApiBase() { return apiBase || window.location.origin; }
+
 let current: Credentials | null = load();
 const listeners = new Set<() => void>();
 

@@ -44,7 +44,8 @@ import WebDavPanel from "./WebDavPanel";
 import { useClipboard } from "./app/clipboard";
 import { NotifyFn } from "./app/notify";
 import { Route } from "./app/route";
-import { Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { ThemeModePreference, Density, FileTypeFilter, SortPref, usePersistedState, ViewMode } from "./app/prefs";
+import { useFolderShortcuts, normalizeFolderPath } from "./app/shortcuts";
 import { Z_INDEX, warmShadow } from "./app/theme";
 import { pushRecent, RecentEntry, useRecent } from "./app/recent";
 import { strings, translate } from "./app/strings";
@@ -56,6 +57,7 @@ import {
 } from "./app/sites";
 import {
   createFolder,
+  fetchPath,
   downloadFolderArchive,
   downloadSelectionArchive,
   downloadFile,
@@ -95,6 +97,9 @@ function docsTitleFor(cwd: string): string {
 }
 
 function Main({
+  compactNavigation = true,
+  themeMode,
+  onThemeModeChange,
   search,
   onSearchChange,
   onNotify,
@@ -107,6 +112,9 @@ function Main({
   onOpenApi,
   onContentScroll,
 }: {
+  compactNavigation?: boolean;
+  themeMode?: ThemeModePreference;
+  onThemeModeChange?: (mode: ThemeModePreference) => void;
   search: string;
   onSearchChange: (search: string) => void;
   onNotify: NotifyFn;
@@ -126,6 +134,7 @@ function Main({
     clear: clearClipboard,
   } = useClipboard();
   const recents = useRecent();
+  const shortcuts = useFolderShortcuts();
   const { flags } = useFeatures();
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -420,6 +429,8 @@ function Main({
         if (action === "open") {
           if (file.isDir) navigateFolder(file.key);
           else handleOpen(file.key);
+        } else if (action === "shortcut") {
+          shortcuts.toggle(file.key, file.name);
         } else if (action === "download") {
           if (file.isDir) await downloadFolderArchive(file.key);
           else await downloadFile(file.key);
@@ -472,7 +483,7 @@ function Main({
         onNotify(errorMessage(error), "error");
       }
     },
-    [copyToClipboard, cutToClipboard, handleOpen, navigateFolder, onNotify]
+    [shortcuts, copyToClipboard, cutToClipboard, handleOpen, navigateFolder, onNotify]
   );
 
   const {
@@ -617,6 +628,11 @@ function Main({
         }}
       >
         <ExplorerBar
+          showSections={compactNavigation}
+          onOpenShortcut={async item => {
+            try { await fetchPath(item.path); onSearchChange(""); navigateFolder(item.path); }
+            catch { onNotify(strings.shortcutUnavailable, "error", { action: { label: strings.removeShortcut, onClick: () => shortcuts.remove(item.path) } }); }
+          }}
           section={section}
           onSectionChange={handleSectionChange}
           onUploadFile={openFilePicker}
@@ -706,6 +722,8 @@ function Main({
       {route.kind === "settings" && (
         <Box onScroll={handleContentScroll} sx={{ flexGrow: 1, minHeight: 0, overflowY: "auto", pb: { xs: 8, sm: 0 } }}>
           <SettingsView
+            themeMode={themeMode}
+            onThemeModeChange={onThemeModeChange}
             onNotify={onNotify}
             onOpenSetup={() => navigate({ kind: "setup" })}
             onOpenMcp={() => navigate({ kind: "mcp" })}
@@ -824,6 +842,7 @@ function Main({
       />
 
       <FileActionSheet
+        shortcutPinned={Boolean(contextMenu && shortcuts.items.some(item => item.path === normalizeFolderPath(contextMenu.file.key)))}
         file={contextMenu?.file ?? null}
         anchorPosition={
           contextMenu ? { top: contextMenu.y, left: contextMenu.x } : null

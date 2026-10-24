@@ -36,7 +36,7 @@ export function warmShadow(
 ): string {
   const color = dark
     ? `rgba(0, 0, 0, ${Math.min(0.6, alpha * 3)})`
-    : `rgba(26, 23, 20, ${alpha})`;
+    : `rgba(32, 36, 44, ${alpha})`;
   return `${geometry} ${color}`;
 }
 
@@ -84,38 +84,38 @@ const palettes: Record<
   }
 > = {
   light: {
-    backgroundDefault: "#f4f1ec",
+    backgroundDefault: "#f5f6f8",
     backgroundPaper: "#ffffff",
-    divider: "rgba(28, 22, 16, 0.08)",
-    textPrimary: "#1a1714",
-    textSecondary: "rgba(26, 23, 20, 0.64)",
-    textCaption: "rgba(26, 23, 20, 0.62)",
+    divider: "rgba(32, 36, 44, 0.08)",
+    textPrimary: "#20242c",
+    textSecondary: "rgba(32, 36, 44, 0.64)",
+    textCaption: "rgba(32, 36, 44, 0.62)",
     hover: "rgba(243, 128, 32, 0.06)",
     selected: "rgba(243, 128, 32, 0.12)",
     focusRing: "rgba(243, 128, 32, 0.16)",
-    secondary: "#8a5a2b",
-    linkColor: "#c45f10",
-    code: "#f7f5f1",
-    codeGutter: "#f0ece6",
+    secondary: "#626c7a",
+    linkColor: "#ad4c00",
+    code: "#f5f6f8",
+    codeGutter: "#e9ecf0",
     codeText: "#1f2328",
-    overlay: "rgba(244, 241, 236, 0.88)",
+    overlay: "rgba(245, 246, 248, 0.88)",
   },
   dark: {
-    backgroundDefault: "#171310",
-    backgroundPaper: "#211c17",
+    backgroundDefault: "#13161b",
+    backgroundPaper: "#1c2027",
     divider: "rgba(255, 255, 255, 0.09)",
-    textPrimary: "#f1ece5",
-    textSecondary: "rgba(241, 236, 229, 0.66)",
-    textCaption: "rgba(241, 236, 229, 0.6)",
+    textPrimary: "#edf0f5",
+    textSecondary: "rgba(237, 240, 245, 0.66)",
+    textCaption: "rgba(237, 240, 245, 0.6)",
     hover: "rgba(243, 128, 32, 0.12)",
     selected: "rgba(243, 128, 32, 0.22)",
     focusRing: "rgba(243, 128, 32, 0.28)",
-    secondary: "#c99b6a",
+    secondary: "#a6b0bf",
     linkColor: "#ff9a45",
-    code: "#1c1814",
-    codeGutter: "#15110e",
-    codeText: "#e4ded6",
-    overlay: "rgba(23, 19, 16, 0.82)",
+    code: "#171b21",
+    codeGutter: "#111419",
+    codeText: "#e1e6ed",
+    overlay: "rgba(19, 22, 27, 0.82)",
   },
 };
 
@@ -125,14 +125,14 @@ export function createAppTheme(mode: ThemeMode = "light"): Theme {
     palette: {
       mode,
       primary: {
-        main: ORANGE,
-        dark: "#d96e12",
+        main: mode === "dark" ? "#ff9a45" : "#bf510d",
+        dark: mode === "dark" ? "#ffb57a" : "#a94408",
         light: "#ff9a45",
-        contrastText: "#ffffff",
+        contrastText: mode === "dark" ? "#13161b" : "#ffffff",
       },
       secondary: { main: p.secondary },
-      success: { main: "#2e7d4f" },
-      error: { main: "#c4472c" },
+      success: { main: mode === "dark" ? "#71ce9a" : "#247348" },
+      error: { main: mode === "dark" ? "#ff9b89" : "#b6382a" },
       warning: { main: "#c47b1a" },
       info: { main: "#3d6b99" },
       background: {
@@ -192,13 +192,14 @@ export function createAppTheme(mode: ThemeMode = "light"): Theme {
             backgroundColor: p.backgroundDefault,
             color: p.textPrimary,
           },
+          ":focus-visible": { outline: `2px solid ${mode === "dark" ? "#ffae6b" : "#ad4c00"}`, outlineOffset: 3 },
           "::selection": {
             backgroundColor: "rgba(243, 128, 32, 0.28)",
           },
           // 细滚动条（亮暗双套），Firefox 走 scrollbar-width/-color
           "*": {
             scrollbarWidth: "thin",
-            scrollbarColor: `${mode === "dark" ? "rgba(255, 255, 255, 0.16)" : "rgba(28, 22, 16, 0.18)"} transparent`,
+            scrollbarColor: `${mode === "dark" ? "rgba(255, 255, 255, 0.16)" : "rgba(32, 36, 44, 0.18)"} transparent`,
           },
           "::-webkit-scrollbar": { width: 8, height: 8 },
           "::-webkit-scrollbar-track": { background: "transparent" },
@@ -207,13 +208,13 @@ export function createAppTheme(mode: ThemeMode = "light"): Theme {
             backgroundColor:
               mode === "dark"
                 ? "rgba(255, 255, 255, 0.16)"
-                : "rgba(28, 22, 16, 0.18)",
+                : "rgba(32, 36, 44, 0.18)",
           },
           "::-webkit-scrollbar-thumb:hover": {
             backgroundColor:
               mode === "dark"
                 ? "rgba(255, 255, 255, 0.26)"
-                : "rgba(28, 22, 16, 0.28)",
+                : "rgba(32, 36, 44, 0.28)",
           },
           // 全局减弱动态兜底：逐组件的 @media 覆盖之外的动画/过渡统一禁用
           "@media (prefers-reduced-motion: reduce)": {
@@ -229,7 +230,7 @@ export function createAppTheme(mode: ThemeMode = "light"): Theme {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          root: { borderRadius: 8 },
+          root: { borderRadius: 8, minHeight: 36 },
         },
       },
       MuiToggleButton: {
@@ -249,14 +250,19 @@ export function createAppTheme(mode: ThemeMode = "light"): Theme {
       },
       MuiPaper: {
         styleOverrides: {
+          root: { backgroundImage: "none" },
           rounded: { borderRadius: 12 },
         },
       },
       MuiDialog: {
         styleOverrides: {
-          paper: { borderRadius: 16 },
+          paper: { borderRadius: 16, border: `1px solid ${p.divider}`, boxShadow: warmShadow(mode === "dark", "0 24px 80px", 0.16) },
         },
       },
+      MuiDialogTitle: { styleOverrides: { root: { padding: "24px 24px 16px", fontWeight: 700 } } },
+      MuiDialogActions: { styleOverrides: { root: { padding: "16px 24px", gap: 8, flexWrap: "wrap", borderTop: `1px solid ${p.divider}` } } },
+      MuiMenu: { styleOverrides: { paper: { padding: 4, border: `1px solid ${p.divider}`, boxShadow: warmShadow(mode === "dark", "0 12px 40px", 0.12) } } },
+      MuiMenuItem: { styleOverrides: { root: { borderRadius: 6, minHeight: 36 } } },
       MuiTooltip: {
         defaultProps: { arrow: true },
       },

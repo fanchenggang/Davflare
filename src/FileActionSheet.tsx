@@ -12,6 +12,7 @@ import {
   useMediaQuery,
 } from "@mui/material";
 import {
+  PushPinOutlined,
   ContentCopy as CopyIcon,
   ContentCut as CutIcon,
   Delete as DeleteIcon,
@@ -35,6 +36,7 @@ import { FileItem } from "./app/types";
 import { strings } from "./app/strings";
 
 export type FileAction =
+  | "shortcut"
   | "open"
   | "download"
   | "details"
@@ -63,6 +65,7 @@ const ACTIONS: Array<{
   /** 文件夹或 .md 文件才显示 */
   markdownOrDir?: boolean;
 }> = [
+  { id: "shortcut", labelKey: "addShortcut", icon: <PushPinOutlined />, dirsOnly: true },
   { id: "open", labelKey: "open", icon: <OpenIcon /> },
   { id: "download", labelKey: "download", icon: <DownloadIcon /> },
   { id: "details", labelKey: "detailsOpen", icon: <DetailsIcon /> },
@@ -123,12 +126,14 @@ function FileActionSheet({
   onClose,
   onAction,
   sitesEnabled = false,
+  shortcutPinned = false,
 }: {
   file: FileItem | null;
   anchorPosition: { top: number; left: number } | null;
   onClose: () => void;
   onAction: (action: FileAction, file: FileItem) => void;
   sitesEnabled?: boolean;
+  shortcutPinned?: boolean;
 }) {
   const isPhone = useMediaQuery("(max-width:600px)");
   const open = Boolean(file);
@@ -138,7 +143,7 @@ function FileActionSheet({
     if (action.sitesOnly && !sitesEnabled) return false;
     if (action.markdownOrDir && (!file || (!file.isDir && !isMarkdownName(file.name)))) return false;
     return true;
-  }).map((action) => ({ ...action, label: strings[action.labelKey] }));
+  }).map((action) => ({ ...action, label: strings[action.id === "shortcut" && shortcutPinned ? "removeShortcut" : action.labelKey] }));
 
   const run = (action: FileAction) => {
     if (!file) return;

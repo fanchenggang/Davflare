@@ -1,6 +1,6 @@
 import { vi, type Mock } from "vitest";
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import ExplorerBar from "../../ExplorerBar";
 import { DEFAULT_FEATURE_FLAGS, useFeatures } from "../features";
@@ -187,4 +187,18 @@ describe("ExplorerBar", () => {
     fireEvent.click(screen.getByText(/按日期排序/));
     expect(props.onSortChange).toHaveBeenCalledWith({ field: "date", order: "asc" });
   });
+});
+
+
+test("mobile more menu opens WebDAV, API and recent entries", () => {
+  const { props } = renderBar();
+  fireEvent.click(screen.getByLabelText(strings.more));
+  fireEvent.click(within(screen.getByRole("menu")).getByText(strings.webdav));
+  expect(props.onOpenWebDav).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByLabelText(strings.more));
+  fireEvent.click(within(screen.getByRole("menu")).getByText(strings.api));
+  expect(props.onOpenApi).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByLabelText(strings.more));
+  fireEvent.click(within(screen.getByRole("menu")).getByText(strings.recent));
+  expect(screen.getByText(strings.noRecent)).toBeInTheDocument();
 });

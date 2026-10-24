@@ -1,6 +1,6 @@
 import { vi, type Mock } from "vitest";
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import Header from "../../Header";
 import { useTransferQueue } from "../transferQueue";
@@ -106,4 +106,16 @@ describe("Header", () => {
     renderHeader({ elevated: true });
     expect(screen.getByLabelText(strings.searchShortcutHint)).toBeInTheDocument();
   });
+});
+
+
+test("mobile account menu exposes appearance and language controls", () => {
+  renderHeader();
+  fireEvent.click(screen.getByLabelText(strings.account));
+  fireEvent.click(within(screen.getByRole("menu")).getByText(strings.theme));
+  expect(screen.getByRole("menuitem", {name:strings.themeSystem})).toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole("menu"), {key:"Escape"});
+  fireEvent.click(screen.getByLabelText(strings.account));
+  fireEvent.click(within(screen.getByRole("menu")).getByText(strings.language));
+  expect(screen.getByRole("menuitem", {name:strings.langEn})).toBeInTheDocument();
 });
