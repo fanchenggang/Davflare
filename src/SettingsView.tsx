@@ -22,6 +22,7 @@ import { errorMessage } from "./app/utils";
 import BackupCronCard from "./BackupCronCard";
 import ImageHostExportCard from "./ImageHostExportCard";
 import McpExportCard from "./McpExportCard";
+import AgentsSkillCard from "./AgentsSkillCard";
 import MobileUploadCard from "./MobileUploadCard";
 
 const SWITCHES: Array<{
@@ -153,6 +154,7 @@ function SettingsView({
         ))}
         <Typography variant="subtitle1" sx={{ pt: 2 }}>{strings.clientConnections}</Typography>
         <McpExportCard onNotify={onNotify} />
+        <AgentsSkillCard onNotify={onNotify} />
         <BackupCronCard onNotify={onNotify} />
         <ImageHostExportCard onNotify={onNotify} />
         <MobileUploadCard onNotify={onNotify} />

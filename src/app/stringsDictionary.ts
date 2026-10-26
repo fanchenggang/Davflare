@@ -275,6 +275,28 @@ const entries: Record<string, DictionaryEntry> = {
   mcpExportDownloaded: { zh: "配置已下载", en: "Config downloaded" },
   mcpExportCopyFailed: { zh: "复制失败", en: "Copy failed" },
   mcpExportDownloadFailed: { zh: "下载失败", en: "Download failed" },
+  agentsSkillTitle: {
+    zh: "Agents 技能（官方 skill）",
+    en: "Agents skill (official)",
+  },
+  agentsSkillHint: {
+    zh: "复制或下载官方 SKILL.md，教 Cursor / Claude / Codex 用现有 /mcp（约 25 个工具）与 Open API：存文件、建分享、publish_site、图床。不新增接口。",
+    en: "Copy or download the official SKILL.md so Cursor / Claude / Codex can use existing /mcp (~25 tools) and Open API: files, shares, publish_site, image host. No new APIs.",
+  },
+  agentsSkillEnvHint: {
+    zh: "Skill 与 mcp.json 里只用 ${env:{env}} 占位；先在设置里创建 API Key，再 export {env}=fd_…。",
+    en: "Skill and mcp.json use ${env:{env}} only; create an API Key in Settings, then export {env}=fd_….",
+  },
+  agentsSkillVsMcpHint: {
+    zh: "与上方「接入 Claude / Cursor MCP」不同：那边导出 mcp.json 接线；这里是给 agent 看的使用说明书。",
+    en: "Separate from “Connect Claude / Cursor MCP” above: that card exports mcp.json wiring; this card is the agent playbook.",
+  },
+  agentsSkillCopy: { zh: "复制 skill", en: "Copy skill" },
+  agentsSkillDownload: { zh: "下载 {filename}", en: "Download {filename}" },
+  agentsSkillCopied: { zh: "Agents skill 已复制", en: "Agents skill copied" },
+  agentsSkillDownloaded: { zh: "SKILL.md 已下载", en: "SKILL.md downloaded" },
+  agentsSkillCopyFailed: { zh: "复制失败", en: "Copy failed" },
+  agentsSkillDownloadFailed: { zh: "下载失败", en: "Download failed" },
   backupCronTitle: {
     zh: "定时备份",
     en: "Scheduled backup",

@@ -1,6 +1,6 @@
 # Davflare agent layouts (v2)
 
-Repo-only demos (not the R2 tree): [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook; [`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) — Obsidian (Remotely Save) sync setup and WebDAV self-check; [`agents/examples/mcp-export/`](../agents/examples/mcp-export/) — Cursor / Claude Desktop MCP client configs (env placeholders only); [`agents/examples/backup-cron/`](../agents/examples/backup-cron/) — crontab + GitHub Actions for `davflare sync` (secrets `DAVFLARE_SERVER` / `DAVFLARE_KEY`, no live keys in files).
+Repo-only demos (not the R2 tree): [`skills/davflare/`](../skills/davflare/) — **official Agent Skill** (`npx skills add fanchenggang/Davflare --skill davflare`); [`agents/examples/davflare-skill/`](../agents/examples/davflare-skill/) — install notes; [`agents/examples/hello-site/`](../agents/examples/hello-site/) — reproducible `publish_site` / `image_upload` playbook; [`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) — Obsidian (Remotely Save) sync setup and WebDAV self-check; [`agents/examples/mcp-export/`](../agents/examples/mcp-export/) — Cursor / Claude Desktop MCP client configs (env placeholders only); [`agents/examples/backup-cron/`](../agents/examples/backup-cron/) — crontab + GitHub Actions for `davflare sync` (secrets `DAVFLARE_SERVER` / `DAVFLARE_KEY`, no live keys in files).
 
 Store Cursor (and later Codex / Claude / OpenCode) **skills**, **rules**, and **MCP** snippets on R2 using a fixed directory tree. v2 adds MCP `pull` / `push` that walk this tree (the web UI still works). No file watcher. Secrets are not stored as files.
 
@@ -76,6 +76,20 @@ The depth-1 `list` + `download` / `upload` recipe still works if you need it. MC
 
 v3 may add other agents and conflict policy. Do not auto-sync and do not watch the local disk.
 
+
+
+## Official skill
+
+Installable playbook so Cursor / Claude / Codex use existing `/mcp` (~25 tools) and Open API — **no new APIs**.
+
+```bash
+npx skills add fanchenggang/Davflare --skill davflare
+npx skills add fanchenggang/Davflare --skill davflare -g -a cursor
+```
+
+Or copy [`skills/davflare/SKILL.md`](../skills/davflare/SKILL.md) to `~/.cursor/skills/davflare/SKILL.md`. On a live drive, Settings → **Agents skill (official)** copies/downloads the same text (with your origin filled in).
+
+That Settings card is **not** the MCP config export: use **Connect Claude / Cursor MCP** to wire `mcp.json`; use **Agents skill** to teach the agent what to do afterward. Details: [`agents/examples/davflare-skill/`](../agents/examples/davflare-skill/).
 
 ## 2 minutes: connect Davflare to an AI assistant
 

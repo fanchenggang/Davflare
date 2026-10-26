@@ -43,7 +43,7 @@ Share (expiry + extract code):
 - API keys for scripted upload / download / sync, plus remote MCP at `/mcp` (25 tools)
 - Static sites and image host on a separate hostname (`SITES_HOST`), plus a GitHub Action to deploy from CI
 - Owner Settings with five persistent feature switches
-- `davflare-cli`, optional Chrome MV3 extension, and agent layouts on R2
+- `davflare-cli`, optional Chrome MV3 extension, agent layouts on R2, and an **official Agent Skill** (`skills/davflare/`)
 - Chinese / English UI
 
 ## Quick start
@@ -89,6 +89,22 @@ Point Cursor or Claude Desktop at the same-origin `POST /mcp` with an API key. N
 3. Restart the client and ask it to call `tools/list`.
 
 Details and samples: [docs/agents.md#2-minutes-connect-davflare-to-an-ai-assistant](docs/agents.md#2-minutes-connect-davflare-to-an-ai-assistant) · [`agents/examples/mcp-export/`](agents/examples/mcp-export/).
+
+
+## Free R2 AI workspace in 2 minutes (official skill)
+
+Point Cursor / Claude / Codex at your Davflare drive so the agent can store files, create share links, and `publish_site` to `sites/{slug}/` — same-origin `/mcp` (~25 tools) + Open API, **no new APIs**.
+
+1. Deploy Davflare; `#/settings` → leave **API Key** + **MCP** on; create a key.
+2. Wire the client: Settings → **Connect Claude / Cursor MCP** (or [`agents/examples/mcp-export/`](agents/examples/mcp-export/)). Set `DAVFLARE_API_KEY` — never paste a raw `fd_…` into files.
+3. Install the skill:
+   ```bash
+   npx skills add fanchenggang/Davflare --skill davflare -g -a cursor
+   ```
+   Or Settings → **Agents skill (official)** → Copy / Download `SKILL.md` into `~/.cursor/skills/davflare/`.
+4. Ask the agent to `tools/list`, then try `list` / `publish_site` (see [`agents/examples/hello-site/`](agents/examples/hello-site/)).
+
+**Agents skill** teaches the agent how to use Davflare; **Connect Claude / Cursor MCP** only exports `mcp.json`. Details: [docs/agents.md#official-skill](docs/agents.md#official-skill) · [`agents/examples/davflare-skill/`](agents/examples/davflare-skill/) · [`skills/davflare/`](skills/davflare/).
 
 ## 10-minute self-hosted Pastebin (Quick paste)
 
@@ -179,7 +195,7 @@ Details: [docs/sites.md#markdown-image-host-in-10-minutes](docs/sites.md#markdow
 | Open API & MCP (incl. chat share / zip folder examples) | [docs/API.md](docs/API.md) |
 | Static sites & image host; **podcast RSS / download page / paste screenshot / PicGo / phone upload** | [docs/sites.md](docs/sites.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/folder-bookshelf/](agents/examples/folder-bookshelf/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
 | GitHub Action — deploy a build dir to a site (`uses: fanchenggang/Davflare@main`) | [docs/sites.md#github-action-deploy-to-davflare-site](docs/sites.md#github-action-deploy-to-davflare-site) |
-| Agent layouts (`pull` / `push`); MCP one-click export (Cursor / Claude Desktop) | [docs/agents.md](docs/agents.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
+| Agent layouts (`pull` / `push`); MCP one-click export; **official Agents skill** | [docs/agents.md](docs/agents.md) · [skills/davflare/](skills/davflare/) · [agents/examples/davflare-skill/](agents/examples/davflare-skill/) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | CLI (`davflare-cli`); scheduled backup (crontab + Actions) | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |
 | Chrome extension (install + bookmarks) | [extension/README.md](extension/README.md) |
 | Bookmark portability | [docs/bookmarks-portability.md](docs/bookmarks-portability.md) |

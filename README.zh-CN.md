@@ -42,7 +42,7 @@
 - API Key 支持脚本上传 / 下载 / 同步，远程 MCP 在 `/mcp`（25 个工具）
 - 静态站点与图床走单独域名（`SITES_HOST`），并提供 GitHub Action 从 CI 一步发布
 - 拥有者设置页五个持久化功能开关
-- `davflare-cli`、可选 Chrome MV3 扩展，以及 R2 上的 Agent 目录约定
+- `davflare-cli`、可选 Chrome MV3 扩展、R2 上的 Agent 目录约定，以及**官方 Agent Skill**（`skills/davflare/`）
 - 中 / 英界面
 
 ## 快速开始
@@ -88,6 +88,22 @@
 3. 重启客户端，让它调用 `tools/list`。
 
 说明与样例：[docs/agents.zh-CN.md#2-分钟把-davflare-接到-ai-助手](docs/agents.zh-CN.md#2-分钟把-davflare-接到-ai-助手) · [`agents/examples/mcp-export/`](agents/examples/mcp-export/)。
+
+
+## 两分钟免费 R2 AI 工作区（官方 skill）
+
+让 Cursor / Claude / Codex 把你的 Davflare 网盘当工作区：存文件、建分享链接、`publish_site` 发布到 `sites/{slug}/`——同源 `/mcp`（约 25 个工具）+ Open API，**不新增接口**。
+
+1. 部署 Davflare；`#/settings` 保持 **API Key** + **MCP** 开启并创建密钥。
+2. 先接线：设置页 → **接入 Claude / Cursor MCP**（或 [`agents/examples/mcp-export/`](agents/examples/mcp-export/)）。设置 `DAVFLARE_API_KEY`，文件里不要写明文 `fd_…`。
+3. 安装技能：
+   ```bash
+   npx skills add fanchenggang/Davflare --skill davflare -g -a cursor
+   ```
+   或设置页 → **Agents 技能（官方 skill）** → 复制 / 下载 `SKILL.md` 到 `~/.cursor/skills/davflare/`。
+4. 让助手执行 `tools/list`，再试 `list` / `publish_site`（见 [`agents/examples/hello-site/`](agents/examples/hello-site/)）。
+
+**Agents 技能**教 agent 怎么用；**接入 Claude / Cursor MCP** 只导出 `mcp.json`。说明：[docs/agents.zh-CN.md#官方-skill](docs/agents.zh-CN.md#官方-skill) · [`agents/examples/davflare-skill/`](agents/examples/davflare-skill/) · [`skills/davflare/`](skills/davflare/)。
 
 ## 10 分钟自建 Pastebin（文本快传）
 
@@ -178,7 +194,7 @@
 | 开放接口与 MCP（含对话分享 / 目录打 zip 示例） | [docs/API.zh-CN.md](docs/API.zh-CN.md) |
 | 静态站点与图床；**播客 RSS / 软件下载页 / 粘贴截图 / PicGo / 手机上传** | [docs/sites.zh-CN.md](docs/sites.zh-CN.md) · [agents/examples/podcast-rss/](agents/examples/podcast-rss/) · [agents/examples/folder-downloads/](agents/examples/folder-downloads/) · [agents/examples/folder-bookshelf/](agents/examples/folder-bookshelf/) · [agents/examples/paste-image-host/](agents/examples/paste-image-host/) · [picgo-plugin-davflare/](picgo-plugin-davflare/) · [agents/examples/image-host-export/](agents/examples/image-host-export/) · [agents/examples/mobile-upload/](agents/examples/mobile-upload/) |
 | GitHub Action —— CI 一步发布构建目录为静态站（`uses: fanchenggang/Davflare@main`） | [docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site](docs/sites.zh-CN.md#github-actiondeploy-to-davflare-site) |
-| Agent 目录约定（`pull` / `push`）；MCP 一键导出（Cursor / Claude Desktop） | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
+| Agent 目录约定（`pull` / `push`）；MCP 一键导出；**官方 Agents 技能** | [docs/agents.zh-CN.md](docs/agents.zh-CN.md) · [skills/davflare/](skills/davflare/) · [agents/examples/davflare-skill/](agents/examples/davflare-skill/) · [agents/examples/mcp-export/](agents/examples/mcp-export/) |
 | 命令行（`davflare-cli`）；定时备份（crontab + Actions） | [cli/README.md](cli/README.md) · [agents/examples/backup-cron/](agents/examples/backup-cron/) |
 | Chrome 扩展（安装 + 书签） | [extension/README.zh-CN.md](extension/README.zh-CN.md) |
 | 书签可移植性 | [docs/bookmarks-portability.zh-CN.md](docs/bookmarks-portability.zh-CN.md) |

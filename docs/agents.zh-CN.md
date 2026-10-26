@@ -1,6 +1,6 @@
 # Davflare Agent 目录约定（v2）
 
-仓库示例（不在 R2 树里）：[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本；[`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) —— Obsidian（Remotely Save）同步配置与 WebDAV 自检；[`agents/examples/mcp-export/`](../agents/examples/mcp-export/) —— Cursor / Claude Desktop MCP 客户端配置（仅环境变量占位）；[`agents/examples/backup-cron/`](../agents/examples/backup-cron/) —— `davflare sync` 的 crontab + GitHub Actions（Secrets：`DAVFLARE_SERVER` / `DAVFLARE_KEY`，文件里不写明文密钥）。
+仓库示例（不在 R2 树里）：[`skills/davflare/`](../skills/davflare/) —— **官方 Agent Skill**（`npx skills add fanchenggang/Davflare --skill davflare`）；[`agents/examples/davflare-skill/`](../agents/examples/davflare-skill/) —— 安装说明；[`agents/examples/hello-site/`](../agents/examples/hello-site/) —— 可复现的 `publish_site` / `image_upload` 剧本；[`agents/examples/obsidian-sync/`](../agents/examples/obsidian-sync/) —— Obsidian（Remotely Save）同步配置与 WebDAV 自检；[`agents/examples/mcp-export/`](../agents/examples/mcp-export/) —— Cursor / Claude Desktop MCP 客户端配置（仅环境变量占位）；[`agents/examples/backup-cron/`](../agents/examples/backup-cron/) —— `davflare sync` 的 crontab + GitHub Actions（Secrets：`DAVFLARE_SERVER` / `DAVFLARE_KEY`，文件里不写明文密钥）。
 
 把 Cursor（以及后续 Codex / Claude / OpenCode）的 **skills**、**rules**、**MCP 片段**按固定目录放进 R2。v2 增加 MCP `pull` / `push` 自动走这棵树（网页端仍可用）。不做文件监听。密钥不当文件存。
 
@@ -76,6 +76,20 @@ Cursor 的 `mcp.json` 支持在 `headers` / `url` 里写 `${env:NAME}`。用这�
 
 v3 可能再接其它 agent 和冲突策略。不要自动同步、不要监听本地磁盘。
 
+
+
+## 官方 skill
+
+可安装的说明书：让 Cursor / Claude / Codex 用现有 `/mcp`（约 25 个工具）与 Open API——**不新增接口**。
+
+```bash
+npx skills add fanchenggang/Davflare --skill davflare
+npx skills add fanchenggang/Davflare --skill davflare -g -a cursor
+```
+
+或把 [`skills/davflare/SKILL.md`](../skills/davflare/SKILL.md) 拷到 `~/.cursor/skills/davflare/SKILL.md`。已上线的网盘可在设置页 → **Agents 技能（官方 skill）** 复制/下载同一份文案（会填入你的域名）。
+
+该卡片与 **接入 Claude / Cursor MCP** 不同：后者导出 `mcp.json` 接线；前者教 agent 接好后怎么用。说明见 [`agents/examples/davflare-skill/`](../agents/examples/davflare-skill/)。
 
 ## 2 分钟把 Davflare 接到 AI 助手
 
