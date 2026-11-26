@@ -1,5 +1,9 @@
 # Davflare
 
+<!-- yarkr:badges:start -->
+[![Indexed on Yarkr](https://api.yarkr.com/functions/v1/api/api/v1/badges/repos/fanchenggang/Davflare/version.svg)](https://yarkr.com/arks/fanchenggang/davflare)
+<!-- yarkr:badges:end -->
+
 [English](README.md) | [中文](README.zh-CN.md)
 
 [![Deploy to Cloudflare Pages](https://img.shields.io/badge/Deploy%20to%20Cloudflare-Pages-F38020?logo=cloudflare&logoColor=white)](https://dash.cloudflare.com/?to=/:account/workers-and-pages/create) · [Deploy guide](docs/deploy.md)
@@ -55,6 +59,40 @@ Share (expiry + extract code):
 5. Optional: add a custom domain for the drive UI.
 
 Full Pages / Wrangler steps and the five feature switches: [docs/deploy.md](docs/deploy.md).
+
+<!-- yarkr:install:start -->
+## Install with Yarkr
+
+This repo is indexed on [Yarkr](https://yarkr.com/arks/fanchenggang/davflare) as the ark [fanchenggang/davflare](https://yarkr.com/arks/fanchenggang/davflare), so its skills install into Claude Code, Codex, Cursor and other agent harnesses with one command.
+
+### CLI
+
+Install the whole ark, which Yarkr keeps equal to this repo:
+
+```bash
+npx yarkr-cli sync fanchenggang/davflare
+```
+
+Or add individual skills:
+
+```bash
+npx yarkr-cli add skill:fanchenggang/davflare/davflare
+npx yarkr-cli add skill:fanchenggang/davflare/davflare-skill-install
+npx yarkr-cli add skill:fanchenggang/davflare/hello-site
+```
+
+No Node.js? `curl -fsSL https://yarkr.com/install.sh | sh` (macOS, Linux) or `irm https://yarkr.com/install.ps1 | iex` (Windows PowerShell) installs `yarkr` as a standalone binary; then type `yarkr` in place of `npx yarkr-cli`.
+
+### MCP
+
+Connect your agent to the ark over MCP:
+
+```bash
+npx yarkr-cli mcp add fanchenggang/davflare
+```
+
+Or point any MCP client at `https://api.yarkr.com/functions/v1/api/mcp/o/fanchenggang/davflare`.
+<!-- yarkr:install:end -->
 
 ## Free Obsidian sync in 10 minutes
 
